@@ -1,0 +1,72 @@
+import { registerView } from '../core/view-registry'
+
+/**
+ * Placeholder views for the sections that land in later milestones.
+ *
+ * They exist now for one reason: every section is a registered view type from
+ * day one, so filling one in later is implementing `render`, not restructuring
+ * the app.
+ */
+
+type Stub = {
+  type: string
+  title: string
+  milestone: string
+  blurb: string
+}
+
+const STUBS: Stub[] = [
+  {
+    type: 'home',
+    title: 'Home',
+    milestone: 'milestone 7',
+    blurb: 'Stat tiles over the append-only events table: notes created, tasks done, streaks, time in app.',
+  },
+  {
+    type: 'chat',
+    title: 'AI',
+    milestone: 'milestone 4',
+    blurb: 'Claude, streaming over IPC from the main process. Conversations saved as markdown in the vault.',
+  },
+  {
+    type: 'board',
+    title: 'Tasks',
+    milestone: 'milestone 5',
+    blurb: 'Kanban over notes — a card is a real .md file, so clicking one opens the ordinary editor.',
+  },
+  {
+    type: 'graph',
+    title: 'Graph',
+    milestone: 'milestone 6',
+    blurb: 'd3-force in a worker, drawn by Pixi on the GPU, with the note you are in lit up.',
+  },
+  {
+    type: 'settings',
+    title: 'Settings',
+    milestone: 'milestone 2',
+    blurb: 'Appearance, the hotkey editor over hotkeys.json, and vault management.',
+  },
+  {
+    type: 'markdown',
+    title: 'Editor',
+    milestone: 'milestone 1.6',
+    blurb: 'CodeMirror 6 in source mode, with the shortcut set wired to the command registry.',
+  },
+]
+
+export function registerStubViews(): () => void {
+  const offs = STUBS.map((stub) =>
+    registerView({
+      type: stub.type,
+      title: stub.title,
+      render: () => (
+        <div className="stub">
+          <h2 className="stub__title">{stub.title}</h2>
+          <p className="stub__blurb">{stub.blurb}</p>
+          <span className="stub__badge">{stub.milestone}</span>
+        </div>
+      ),
+    }),
+  )
+  return () => offs.forEach((off) => off())
+}

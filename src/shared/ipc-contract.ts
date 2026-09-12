@@ -22,6 +22,13 @@ export type OpenVaultResult =
   | { ok: false; error: string }
   | { ok: false; cancelled: true }
 
+/**
+ * One JSON file per feature inside `.obsidian-like/`, named by feature id.
+ * Human-editable, individually deletable, diffable in git - Obsidian's pattern.
+ * The id is a bare name: no slashes, no dots, no traversal.
+ */
+export type StateFeature = string
+
 /** Invoke channels: renderer -> main, request/response. */
 export type IpcApi = {
   'app:startup-state': () => StartupState
@@ -30,6 +37,8 @@ export type IpcApi = {
   'vault:open': (path: string) => OpenVaultResult
   'vault:close': () => StartupState
   'shell:open-external': (url: string) => { ok: boolean }
+  'state:read': (feature: StateFeature) => unknown
+  'state:write': (feature: StateFeature, data: unknown) => { ok: boolean; error?: string }
 }
 
 export type IpcChannel = keyof IpcApi
@@ -48,4 +57,6 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'vault:open',
   'vault:close',
   'shell:open-external',
+  'state:read',
+  'state:write',
 ] as const
