@@ -2206,3 +2206,162 @@ body.is-resizing {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+
+/* ---------- properties ---------- */
+
+.props {
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.props__head {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--size-2) var(--size-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.props__head:hover {
+  color: var(--text-secondary);
+}
+
+.props__body {
+  padding: 0 var(--size-3) var(--size-2);
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.prop {
+  display: grid;
+  grid-template-columns: minmax(90px, 180px) 1fr auto;
+  align-items: center;
+  gap: var(--size-2);
+  padding: 2px 0;
+}
+
+.prop__key {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-muted);
+}
+
+.prop__keyname {
+  all: unset;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop__rename,
+.prop__input {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  background: transparent;
+  transition: background var(--anim-fast) var(--ease), box-shadow var(--anim-fast) var(--ease);
+}
+.prop__input::placeholder {
+  color: var(--text-muted);
+}
+.prop__input:hover {
+  background: var(--bg-hover);
+}
+.prop__input:focus,
+.prop__rename:focus {
+  background: var(--bg-elevated);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.prop__input--key {
+  grid-column: 1;
+}
+
+.prop__remove {
+  all: unset;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--anim-fast) var(--ease), background var(--anim-fast) var(--ease);
+}
+.prop:hover .prop__remove {
+  opacity: 1;
+}
+.prop__remove:hover {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+
+.toggle--sm {
+  width: 30px;
+  height: 17px;
+}
+.toggle--sm .toggle__knob {
+  width: 13px;
+  height: 13px;
+}
+.toggle--sm.is-on .toggle__knob {
+  transform: translateX(13px);
+}
+
+/* Frontmatter this editor deliberately does not touch. */
+.prop--opaque {
+  grid-template-columns: 1fr;
+  gap: 2px;
+  margin: var(--size-1) 0;
+  padding: var(--size-2);
+  border-radius: var(--radius-s);
+  background: var(--bg-hover);
+}
+
+.prop__opaque {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.prop__opaque-note {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.props__add {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--size-1);
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.props__add:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
