@@ -26,6 +26,7 @@ export type CommandContext = {
   openGraphFull: () => void
   openExtension: (type: string) => void
   openSearch: () => void
+  openSwitcher: () => void
   reindex: () => void
 }
 
@@ -69,6 +70,20 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       section: 'App',
       hotkey: 'Mod+B',
       run: ctx.toggleSidebar,
+    }),
+    registry.register({
+      id: 'search:quick-switcher',
+      name: 'Go to note',
+      section: 'Search',
+      icon: 'search',
+      hotkey: 'Mod+O',
+      run: ctx.openSwitcher,
+    }),
+    registry.register({
+      id: 'links:unresolved',
+      name: 'Show unresolved links',
+      section: 'Search',
+      run: () => ctx.openExtension('unresolved'),
     }),
     registry.register({
       id: 'search:open',

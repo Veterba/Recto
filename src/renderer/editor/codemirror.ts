@@ -11,7 +11,9 @@ import {
   keymap,
   rectangularSelection,
 } from '@codemirror/view'
-import { markdownDecorations, setUnresolvedTargets } from './decorations'
+import { markdownDecorations, setUnresolvedTargets, unresolvedField } from './decorations'
+import { livePreview, livePreviewCompartment, setLivePreview } from './live-preview'
+import { linkCompletion, type LinkCandidate } from './link-complete'
 import { editorTheme, markdownHighlighting } from './theme'
 
 /**
@@ -38,6 +40,10 @@ export type EditorHandle = {
   run: (action: (state: EditorState) => TransactionSpec | null) => boolean
   /** Mark these link targets as pointing at nothing, so they render as broken. */
   setUnresolved: (targets: readonly string[]) => void
+  /** Scroll to a heading by its text. False if the note has no such heading. */
+  revealHeading: (heading: string) => boolean
+  /** Live Preview hides markdown markers away from the cursor. */
+  setLivePreview: (on: boolean) => void
   focus: () => void
   undo: () => void
   redo: () => void
@@ -50,9 +56,11 @@ export type EditorOptions = {
   onChange: (value: string) => void
   /** Cmd+S. Autosave already runs, so this is a "flush now" affordance. */
   onSave: () => void
-  /** Called when a wikilink is clicked, with the raw target text. */
-  onOpenLink: (target: string) => void
+  /** Called when a wikilink is clicked, with the target and any `#heading`. */
+  onOpenLink: (target: string, heading: string | null) => void
   readOnly?: boolean
+  /** Note names offered after typing `[[`. Read lazily, so it stays current. */
+  getLinkCandidates?: () => readonly LinkCandidate[]
 }
 
 const editable = new Compartment()
@@ -63,13 +71,14 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
     mousedown: (event, view) => {
       const target = event.target as HTMLElement | null
       if (!target?.classList.contains('cm-wikilink')) return false
-      const pos = view.posAtDOM(target)
-      const line = view.state.doc.lineAt(pos)
-      const match = /\[\[([^\]|#]+)/.exec(line.text.slice(Math.max(0, pos - line.from - 40)))
-      const name = match?.[1]?.trim() ?? target.textContent?.trim()
+      // The decoration spans the whole inside of the brackets, so the element's
+      // own text is the link - no need to re-scan the line and guess.
+      const inner = target.textContent ?? ''
+      const parsed = /^([^#|]+)(?:#([^|]+))?/.exec(inner.trim())
+      const name = parsed?.[1]?.trim()
       if (name === undefined || name === '') return false
       event.preventDefault()
-      options.onOpenLink(name)
+      options.onOpenLink(name, parsed?.[2]?.trim() ?? null)
       return true
     },
   })
@@ -88,12 +97,18 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         indentOnInput(),
         foldGutter(),
         search({ top: true }),
+        ...(options.getLinkCandidates === undefined ? [] : [linkCompletion(options.getLinkCandidates)]),
         EditorState.allowMultipleSelections.of(true),
         // Markdown with GFM-ish extensions; the grammar is CM's own, so
         // highlighting stays incremental as you type.
         markdown({ base: markdownLanguage, codeLanguages: [], addKeymap: true }),
         markdownHighlighting(),
         markdownDecorations(),
+        // Live Preview sits in a compartment so the mode can be switched at
+        // runtime without rebuilding the editor and losing undo history.
+        livePreviewCompartment.of(
+          livePreview((v) => v.state.field(unresolvedField, false) ?? new Set<string>()),
+        ),
         editorTheme(),
         linkClick,
         EditorView.lineWrapping,
@@ -139,6 +154,33 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
 
     setUnresolved: (targets) => {
       view.dispatch({ effects: setUnresolvedTargets.of(targets) })
+    },
+
+      /**
+     * Put the cursor on a heading and centre it.
+     *
+     * Matched on text rather than a stored position because the note may have
+     * been edited since the link was written; a missing heading is a no-op
+     * rather than a jump to the wrong place.
+     */
+    revealHeading: (heading) => {
+      const wanted = heading.trim().toLowerCase()
+      for (let n = 1; n <= view.state.doc.lines; n++) {
+        const line = view.state.doc.line(n)
+        const match = /^#{1,6}\s+(.*)$/.exec(line.text)
+        if (match?.[1]?.trim().toLowerCase() !== wanted) continue
+        view.dispatch({
+          selection: { anchor: line.from },
+          effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
+        })
+        view.focus()
+        return true
+      }
+      return false
+    },
+
+    setLivePreview: (on) => {
+      view.dispatch({ effects: setLivePreview.of(on) })
     },
 
     focus: () => view.focus(),

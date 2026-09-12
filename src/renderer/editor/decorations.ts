@@ -27,7 +27,7 @@ const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
  */
 export const setUnresolvedTargets = StateEffect.define<readonly string[]>()
 
-const unresolvedField = StateField.define<ReadonlySet<string>>({
+export const unresolvedField = StateField.define<ReadonlySet<string>>({
   create: () => new Set(),
   update: (value, transaction) => {
     for (const effect of transaction.effects) {
