@@ -381,8 +381,7 @@ code {
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--size-2);
+  gap: var(--size-1);
   padding: var(--size-2);
   border-top: 1px solid var(--border);
 }
@@ -390,7 +389,8 @@ code {
 .sidebar__new {
   all: unset;
   box-sizing: border-box;
-  flex: 1;
+  /* Two of these share the row; let the labels shrink before the icons do. */
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -404,9 +404,18 @@ code {
   overflow: hidden;
   transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
 }
+.sidebar__new span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .sidebar__new:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+/* Archive and settings stay pinned to the right edge of the footer. */
+.sidebar__footer .icon-btn:first-of-type {
+  margin-left: auto;
 }
 
 .sidebar__resize {
@@ -1749,4 +1758,68 @@ body.is-resizing {
 /* In Live Preview a link is a widget, not text, so it needs its own cursor. */
 .cm-content .cm-wikilink {
   cursor: pointer;
+}
+
+/* ---------- formatting toolbar ---------- */
+
+.formatbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: var(--size-1) var(--size-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.formatbar::-webkit-scrollbar {
+  display: none;
+}
+
+.formatbar__sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 var(--size-1);
+  background: var(--border);
+}
+
+.formatbar__btn {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  width: 28px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-s);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.formatbar__btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.formatbar__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Lit when the format applies at the cursor - the point of the toolbar for
+   anyone who does not know the shortcuts. */
+.formatbar__btn.is-active {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+/* 'H1' reads better than any icon for a heading level. */
+.formatbar__btn--text {
+  width: auto;
+  min-width: 28px;
+  padding: 0 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }

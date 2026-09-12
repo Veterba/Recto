@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { Backlinks } from '../components/Backlinks'
+import { FormatBar } from '../components/FormatBar'
+import { commands } from '../core/commands'
+import { formatChord } from '../core/hotkeys'
 import { extractTargets } from '../core/link-targets'
 import { Editor } from '../editor/Editor'
 import type { EditorHandle } from '../editor/codemirror'
 import type { LinkCandidate } from '../editor/link-complete'
+import type { Format } from '../editor/markdown-actions'
 import { registerView } from '../core/view-registry'
 
 /**
@@ -46,6 +50,7 @@ function MarkdownEditor({
   const handle = useRef<EditorHandle | null>(null)
   /** Bumped after each save, so the backlinks list refreshes. */
   const [savedAt, setSavedAt] = useState(0)
+  const [active, setActive] = useState<ReadonlySet<Format>>(new Set())
   /** What we last wrote, so our own watcher echo is not mistaken for an edit. */
   const lastWritten = useRef<string | null>(null)
 
@@ -111,6 +116,10 @@ function MarkdownEditor({
     [save, refreshUnresolved],
   )
 
+  const syncFormats = useCallback(() => {
+    setActive(handle.current?.getActiveFormats() ?? new Set())
+  }, [])
+
   const flush = useCallback(() => {
     window.clearTimeout(saveTimer.current)
     const value = handle.current?.getValue()
@@ -159,6 +168,17 @@ function MarkdownEditor({
 
   return (
     <div className="md">
+      <FormatBar
+        active={active}
+        onRun={(id) => {
+          void commands.run(id)
+          handle.current?.focus()
+        }}
+        shortcutFor={(id) => {
+          const binding = commands.bindingFor(id)
+          return binding === null ? null : formatChord(binding)
+        }}
+      />
       <div className="md__bar">
         <span className="md__path">{path}</span>
         <span className="md__mode">{livePreview ? 'Live Preview' : 'Source'}</span>
@@ -173,10 +193,12 @@ function MarkdownEditor({
         onSave={flush}
         onOpenLink={onOpenLink}
         getLinkCandidates={getLinkCandidates}
+        onSelectionChange={syncFormats}
         onReady={(editor: EditorHandle) => {
           handle.current = editor
           activeHandle = editor
           editor.setLivePreview(livePreview)
+          setActive(editor.getActiveFormats())
           refreshUnresolved(initial)
           // A link with a #heading opened this note; land on that heading.
           if (heading !== null && heading !== '') editor.revealHeading(heading)

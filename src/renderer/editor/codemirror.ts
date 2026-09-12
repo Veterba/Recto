@@ -11,6 +11,7 @@ import {
   keymap,
   rectangularSelection,
 } from '@codemirror/view'
+import { activeFormats, type Format } from './markdown-actions'
 import { markdownDecorations, setUnresolvedTargets, unresolvedField } from './decorations'
 import { livePreview, livePreviewCompartment, setLivePreview } from './live-preview'
 import { linkCompletion, type LinkCandidate } from './link-complete'
@@ -44,6 +45,8 @@ export type EditorHandle = {
   revealHeading: (heading: string) => boolean
   /** Live Preview hides markdown markers away from the cursor. */
   setLivePreview: (on: boolean) => void
+  /** Formats applying at the cursor, for the toolbar's pressed state. */
+  getActiveFormats: () => ReadonlySet<Format>
   focus: () => void
   undo: () => void
   redo: () => void
@@ -61,6 +64,8 @@ export type EditorOptions = {
   readOnly?: boolean
   /** Note names offered after typing `[[`. Read lazily, so it stays current. */
   getLinkCandidates?: () => readonly LinkCandidate[]
+  /** Fires when the cursor moves, so the toolbar can update. */
+  onSelectionChange?: () => void
 }
 
 const editable = new Compartment()
@@ -124,6 +129,9 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         ]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) options.onChange(update.state.doc.toString())
+          // The toolbar needs to know on both, because typing can enter or
+          // leave a format without the cursor being moved by hand.
+          if (update.docChanged || update.selectionSet) options.onSelectionChange?.()
         }),
       ],
     }),
@@ -178,6 +186,8 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       }
       return false
     },
+
+    getActiveFormats: () => activeFormats(view.state),
 
     setLivePreview: (on) => {
       view.dispatch({ effects: setLivePreview.of(on) })
