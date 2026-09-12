@@ -20,9 +20,10 @@ export function useWorkspace(): { workspace: Workspace | null; revision: number 
     void api.invoke('state:read', 'workspace').then((saved) => {
       if (cancelled) return
       const layout = isLayout(saved) ? saved : undefined
-      const ws = new Workspace(layout)
-      if (ws.leaves().length === 0) ws.openView('home')
-      setWorkspace(ws)
+      // Deliberately no default tab. The rail falls back to Data when nothing
+      // is open, so a first boot shows the file tree and an empty pane rather
+      // than a dead "Editor" tab with no file in it.
+      setWorkspace(new Workspace(layout))
     })
 
     return () => {

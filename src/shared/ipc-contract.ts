@@ -29,6 +29,34 @@ export type OpenVaultResult =
  */
 export type StateFeature = string
 
+/** A node in the vault tree. Paths are vault-relative, POSIX-separated. */
+export type FileNode = {
+  /** Vault-relative path, e.g. 'work/nordicsync.md'. '' is the root. */
+  path: string
+  name: string
+  kind: 'file' | 'folder'
+  /** Present on folders only. */
+  children?: FileNode[]
+  /** Present on files only; used to decide whether a reindex is needed. */
+  mtime?: number
+  size?: number
+}
+
+/** What the watcher reports. One event per path, already debounced by chokidar. */
+export type VaultChange =
+  | { type: 'add' | 'change' | 'unlink'; path: string; mtime?: number; size?: number }
+  | { type: 'addDir' | 'unlinkDir'; path: string }
+  | { type: 'ready' }
+
+/** Push channels: main -> renderer. Subscribed through `api.on`. */
+export type IpcEvents = {
+  'vault:changed': (changes: VaultChange[]) => void
+}
+
+export type IpcEventChannel = keyof IpcEvents
+
+export const IPC_EVENT_CHANNELS: readonly IpcEventChannel[] = ['vault:changed'] as const
+
 /** Invoke channels: renderer -> main, request/response. */
 export type IpcApi = {
   'app:startup-state': () => StartupState
@@ -39,6 +67,18 @@ export type IpcApi = {
   'shell:open-external': (url: string) => { ok: boolean }
   'state:read': (feature: StateFeature) => unknown
   'state:write': (feature: StateFeature, data: unknown) => { ok: boolean; error?: string }
+  'fs:tree': () => FileNode[]
+  'fs:read': (path: string) => { ok: true; content: string } | { ok: false; error: string }
+  'fs:write': (path: string, content: string) => { ok: boolean; error?: string }
+  'fs:create': (
+    parentPath: string,
+    name: string,
+    kind: 'file' | 'folder',
+  ) => { ok: true; path: string } | { ok: false; error: string }
+  'fs:rename': (path: string, newName: string) => { ok: true; path: string } | { ok: false; error: string }
+  'fs:trash': (path: string) => { ok: boolean; error?: string }
+  'fs:move': (path: string, newParent: string) => { ok: true; path: string } | { ok: false; error: string }
+  'fs:reveal': (path: string) => { ok: boolean }
 }
 
 export type IpcChannel = keyof IpcApi
@@ -48,6 +88,8 @@ export type IpcResponse<C extends IpcChannel> = Awaited<ReturnType<IpcApi[C]>>
 /** The single object exposed on `window.api`. Keep this surface small. */
 export type ExposedApi = {
   invoke<C extends IpcChannel>(channel: C, ...args: IpcRequest<C>): Promise<IpcResponse<C>>
+  /** Subscribe to a push channel. Returns an unsubscribe function. */
+  on<C extends IpcEventChannel>(channel: C, listener: IpcEvents[C]): () => void
 }
 
 export const IPC_CHANNELS: readonly IpcChannel[] = [
@@ -59,4 +101,12 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'shell:open-external',
   'state:read',
   'state:write',
+  'fs:tree',
+  'fs:read',
+  'fs:write',
+  'fs:create',
+  'fs:rename',
+  'fs:trash',
+  'fs:move',
+  'fs:reveal',
 ] as const

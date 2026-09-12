@@ -138,7 +138,9 @@ function EmptyPane(): React.ReactElement {
   return (
     <div className="pane-empty">
       <p>
-        Nothing open. Press <kbd>⌘P</kbd> for the command palette.
+        Pick a note from the sidebar, or press <kbd>⌘N</kbd> for a new one.
+        <br />
+        <kbd>⌘P</kbd> opens the command palette.
       </p>
     </div>
   )

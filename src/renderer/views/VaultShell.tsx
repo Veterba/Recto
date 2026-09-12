@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { CommandPalette } from '../components/CommandPalette'
+import { FileTree } from '../components/FileTree'
+import { Icon } from '../components/Icon'
 import { Rail } from '../components/Rail'
 import { Sidebar } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
@@ -10,7 +12,9 @@ import { useAppearance, type Theme } from '../core/appearance'
 import { commands } from '../core/commands'
 import { registerAppCommands } from '../core/register-commands'
 import { getSection, sectionForViewType, type Section, type SectionId } from '../core/sections'
+import { useVault } from '../core/vault-store'
 import { useWorkspace } from '../core/use-workspace'
+import { registerMarkdownView } from './MarkdownView'
 import { registerStubViews } from './stubs'
 
 type Props = {
@@ -21,13 +25,16 @@ type Props = {
 // Views register once per module load, before any layout is restored - otherwise
 // a saved leaf would resolve to "unknown" on first paint.
 registerStubViews()
+registerMarkdownView()
 
 const THEME_CYCLE: readonly Theme[] = ['system', 'light', 'dark']
 
 export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   const { workspace, revision } = useWorkspace()
   const { appearance, ready, update } = useAppearance()
+  const { tree, refresh } = useVault(true)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const openPalette = useCallback(() => setPaletteOpen(true), [])
 
@@ -67,6 +74,46 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
   const onRailSelect = useCallback((section: Section) => goToSection(section.id), [goToSection])
 
+  const activePath = useMemo(() => {
+    const state = workspace?.activeLeaf?.state
+    const path = state?.['path']
+    return typeof path === 'string' ? path : null
+  }, [workspace, revision])
+
+  const openFile = useCallback(
+    (path: string) => {
+      workspace?.openView('markdown', { path })
+    },
+    [workspace],
+  )
+
+  const toggleFolder = useCallback((path: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }, [])
+
+  /**
+   * New items land next to whatever is selected: inside the active folder, or
+   * alongside the open note. Creating at the root when you are three folders
+   * deep is the behaviour everyone complains about.
+   */
+  const createIn = useCallback(
+    async (kind: 'file' | 'folder') => {
+      const parent = activePath === null ? '' : activePath.slice(0, Math.max(0, activePath.lastIndexOf('/')))
+      const name = kind === 'file' ? 'Untitled.md' : 'New folder'
+      const result = await api.invoke('fs:create', parent, name, kind)
+      if (!result.ok) return
+      await refresh()
+      if (kind === 'file') openFile(result.path)
+      else setExpanded((prev) => new Set(prev).add(result.path))
+    },
+    [activePath, refresh, openFile],
+  )
+
   useEffect(() => {
     if (!workspace) return
     return registerAppCommands(commands, {
@@ -74,11 +121,16 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       openPalette,
       closeVault: onCloseVault,
       toggleSidebar,
+      newNote: () => void createIn('file'),
+      newFolder: () => void createIn('folder'),
+      revealActive: () => {
+        if (activePath !== null) void api.invoke('fs:reveal', activePath)
+      },
       setTheme: (theme) => update({ theme }),
       cycleTheme,
       goToSection,
     })
-  }, [workspace, openPalette, onCloseVault, toggleSidebar, cycleTheme, goToSection, update])
+  }, [workspace, openPalette, onCloseVault, toggleSidebar, cycleTheme, goToSection, update, createIn, activePath])
 
   // User hotkey overrides, if hotkeys.json exists.
   useEffect(() => {
@@ -120,7 +172,30 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
             section={activeSection}
             width={appearance.sidebarWidth}
             onResize={(sidebarWidth) => update({ sidebarWidth })}
-          />
+            actions={
+              activeSection.id === 'data' ? (
+                <div className="sidebar__actions">
+                  <button className="icon-btn" title="New note (⌘N)" onClick={() => void createIn('file')}>
+                    <Icon name="file-plus" size={15} />
+                  </button>
+                  <button className="icon-btn" title="New folder" onClick={() => void createIn('folder')}>
+                    <Icon name="folder-plus" size={15} />
+                  </button>
+                </div>
+              ) : undefined
+            }
+          >
+            {activeSection.id === 'data' ? (
+              <FileTree
+                tree={tree}
+                activePath={activePath}
+                expanded={expanded}
+                onToggleFolder={toggleFolder}
+                onOpenFile={openFile}
+                onChanged={() => void refresh()}
+              />
+            ) : undefined}
+          </Sidebar>
         )}
 
         <main className="shell__content">

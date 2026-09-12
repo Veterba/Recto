@@ -16,6 +16,9 @@ export type CommandContext = {
   openPalette: () => void
   closeVault: () => void
   toggleSidebar: () => void
+  newNote: () => void
+  newFolder: () => void
+  revealActive: () => void
   setTheme: (theme: 'system' | 'light' | 'dark') => void
   cycleTheme: () => void
   goToSection: (id: SectionId) => void
@@ -34,6 +37,26 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       section: 'App',
       hotkey: 'Mod+P',
       run: ctx.openPalette,
+    }),
+    registry.register({
+      id: 'vault:new-note',
+      name: 'New note',
+      section: 'Vault',
+      hotkey: 'Mod+N',
+      run: ctx.newNote,
+    }),
+    registry.register({
+      id: 'vault:new-folder',
+      name: 'New folder',
+      section: 'Vault',
+      run: ctx.newFolder,
+    }),
+    registry.register({
+      id: 'vault:reveal',
+      name: 'Show in Finder',
+      section: 'Vault',
+      isAvailable: () => typeof workspace.activeLeaf?.state['path'] === 'string',
+      run: ctx.revealActive,
     }),
     registry.register({
       id: 'app:toggle-sidebar',

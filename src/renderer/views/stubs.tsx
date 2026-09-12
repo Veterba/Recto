@@ -52,12 +52,6 @@ const STUBS: Stub[] = [
     milestone: 'milestone 7',
     blurb: 'Who you are in the app: name, avatar, and the totals behind the home dashboard.',
   },
-  {
-    type: 'markdown',
-    title: 'Editor',
-    milestone: 'milestone 1.6',
-    blurb: 'CodeMirror 6 in source mode, with the shortcut set wired to the command registry.',
-  },
 ]
 
 export function registerStubViews(): () => void {
