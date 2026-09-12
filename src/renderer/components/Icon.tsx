@@ -5,6 +5,7 @@ import {
   Braces,
   Code,
   Calendar,
+  CircleDashed,
   Hash,
   Highlighter,
   History as HistoryIcon,
@@ -14,7 +15,9 @@ import {
   ListChecks,
   ListOrdered,
   Minus,
+  MoveDiagonal,
   Quote,
+  RefreshCw,
   SquareCode,
   Strikethrough,
   Tags,
@@ -88,6 +91,9 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   search: Search,
   plus: Plus,
   x: X,
+  'circle-dashed': CircleDashed,
+  'refresh-cw': RefreshCw,
+  'move-diagonal': MoveDiagonal,
 }
 
 type Props = {

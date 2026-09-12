@@ -86,6 +86,7 @@ export type IpcApi = {
   'index:resolve-link': (target: string) => string | null
   'index:resolve-links': (targets: string[]) => Record<string, string | null>
   'index:unresolved': () => { target: string; sources: string[] }[]
+  'index:graph': () => GraphInfo
   'links:undo-rename': (undoId: string) => { ok: boolean; restored: number; error?: string }
   'history:list': (path: string) => SnapshotInfo[]
   'history:get': (id: number) => SnapshotInfo | null
@@ -112,6 +113,11 @@ export type ArchiveState = {
   retentionDays: number
   entries: ArchiveEntry[]
 }
+
+/** The link graph, for the graph view. */
+export type GraphNodeInfo = { path: string; name: string; title: string | null; degree: number }
+export type GraphEdgeInfo = { source: string; target: string }
+export type GraphInfo = { nodes: GraphNodeInfo[]; edges: GraphEdgeInfo[] }
 
 /** One stored version of a note. `content` is present only for a single fetch. */
 export type SnapshotInfo = { id: number; path: string; ts: number; bytes: number; content?: string }
@@ -173,6 +179,7 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'index:resolve-link',
   'index:resolve-links',
   'index:unresolved',
+  'index:graph',
   'links:undo-rename',
   'history:list',
   'history:get',

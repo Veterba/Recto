@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FileNode } from '@shared/ipc-contract'
 import { api } from '../api'
 import { applyChanges, indexTree, type VaultTree } from './file-tree-ops'
+import { noteIndexChanged } from './note-bus'
 
 /** Subscribes React to the vault and keeps the tree in sync with disk. */
 
@@ -21,6 +22,9 @@ export function useVault(enabled: boolean): VaultApi {
     if (mounted.current) {
       setRoots(next)
       setLoading(false)
+      // The tree being reloaded means files were created, renamed or deleted,
+      // so anything derived from the index (the graph, for one) is now stale.
+      noteIndexChanged()
     }
   }, [])
 
@@ -36,6 +40,7 @@ export function useVault(enabled: boolean): VaultApi {
     void refresh()
     return api.on('vault:changed', (changes) => {
       setRoots((prev) => applyChanges(prev, changes))
+      noteIndexChanged()
     })
   }, [enabled, refresh])
 
