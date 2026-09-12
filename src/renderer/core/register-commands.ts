@@ -25,6 +25,8 @@ export type CommandContext = {
   toggleGraph: () => void
   openGraphFull: () => void
   openExtension: (type: string) => void
+  openSearch: () => void
+  reindex: () => void
 }
 
 export function registerAppCommands(registry: CommandRegistry, ctx: CommandContext): () => void {
@@ -67,6 +69,20 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       section: 'App',
       hotkey: 'Mod+B',
       run: ctx.toggleSidebar,
+    }),
+    registry.register({
+      id: 'search:open',
+      name: 'Search all notes',
+      section: 'Search',
+      icon: 'search',
+      hotkey: 'Mod+Shift+F',
+      run: ctx.openSearch,
+    }),
+    registry.register({
+      id: 'index:rebuild',
+      name: 'Rebuild search index',
+      section: 'Search',
+      run: ctx.reindex,
     }),
     registry.register({
       id: 'graph:toggle',

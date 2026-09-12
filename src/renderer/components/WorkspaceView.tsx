@@ -7,16 +7,34 @@ import type { SplitNode, TabsNode, Workspace, WorkspaceNode } from '../core/work
  * mutators, it never owns layout state itself.
  */
 
-type Props = { workspace: Workspace; node?: WorkspaceNode }
+type Props = {
+  workspace: Workspace
+  node?: WorkspaceNode
+  /**
+   * Bumped on every layout change. Passed as a prop rather than used as a
+   * `key`: keying here would remount the whole tree on every change, which
+   * destroys each view's internal state - cursor position, scroll, and (from
+   * 1.6) CodeMirror's undo history - every time you click into another pane.
+   */
+  revision?: number | undefined
+}
 
-export function WorkspaceView({ workspace, node }: Props): React.ReactElement | null {
+export function WorkspaceView({ workspace, node, revision }: Props): React.ReactElement | null {
   const target = node ?? workspace.getRoot()
-  if (target.kind === 'split') return <Split workspace={workspace} node={target} />
-  if (target.kind === 'tabs') return <Tabs workspace={workspace} node={target} />
+  if (target.kind === 'split') return <Split workspace={workspace} node={target} revision={revision} />
+  if (target.kind === 'tabs') return <Tabs workspace={workspace} node={target} revision={revision} />
   return null
 }
 
-function Split({ workspace, node }: { workspace: Workspace; node: SplitNode }): React.ReactElement {
+function Split({
+  workspace,
+  node,
+  revision,
+}: {
+  workspace: Workspace
+  node: SplitNode
+  revision?: number | undefined
+}): React.ReactElement {
   const ref = useRef<HTMLDivElement | null>(null)
   const horizontal = node.direction === 'horizontal'
 
@@ -56,7 +74,7 @@ function Split({ workspace, node }: { workspace: Workspace; node: SplitNode }): 
     <div ref={ref} className={`split split--${node.direction}`}>
       {node.children.map((child, i) => (
         <div key={child.id} className="split__pane" style={{ flexBasis: `${(node.sizes[i] ?? 0) * 100}%` }}>
-          <WorkspaceView workspace={workspace} node={child} />
+          <WorkspaceView workspace={workspace} node={child} revision={revision} />
           {i < node.children.length - 1 && (
             <div
               className="split__divider"
@@ -71,7 +89,15 @@ function Split({ workspace, node }: { workspace: Workspace; node: SplitNode }): 
   )
 }
 
-function Tabs({ workspace, node }: { workspace: Workspace; node: TabsNode }): React.ReactElement {
+function Tabs({
+  workspace,
+  node,
+  revision,
+}: {
+  workspace: Workspace
+  node: TabsNode
+  revision?: number | undefined
+}): React.ReactElement {
   const active = node.children[node.active]
   const activeLeafId = workspace.activeLeaf?.id
   const isFocusedGroup = active !== undefined && active.id === activeLeafId
@@ -110,7 +136,7 @@ function Tabs({ workspace, node }: { workspace: Workspace; node: TabsNode }): Re
         ))}
       </div>
       <div className="tabs__content" role="tabpanel">
-        {active ? <Leaf workspace={workspace} leafId={active.id} /> : <EmptyPane />}
+        {active ? <Leaf key={active.id} workspace={workspace} leafId={active.id} /> : <EmptyPane />}
       </div>
     </div>
   )

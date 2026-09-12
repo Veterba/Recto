@@ -5,6 +5,7 @@ import { Breadcrumb } from '../components/Breadcrumb'
 import { CommandPalette } from '../components/CommandPalette'
 import { FileTree } from '../components/FileTree'
 import { GraphDock } from '../components/GraphDock'
+import { SearchPanel } from '../components/SearchPanel'
 import { Sidebar, SidebarStub } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
 import { WorkspaceView } from '../components/WorkspaceView'
@@ -37,6 +38,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   const { appearance, ready, update } = useAppearance()
   const { tree, refresh } = useVault(true)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
 
@@ -136,6 +138,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       toggleGraph: () => setGraphDock({ open: !graphDock.open }),
       openGraphFull: () => openExtension('graph'),
       openExtension,
+      openSearch: () => setSearchOpen(true),
+      reindex: () => void api.invoke('index:reindex'),
     })
   }, [
     active,
@@ -162,15 +166,16 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
   useEffect(() => {
     const onKeyDown = (ev: KeyboardEvent): void => {
-      if (ev.key === 'Escape' && paletteOpen) {
+      if (ev.key === 'Escape' && (paletteOpen || searchOpen)) {
         setPaletteOpen(false)
+        setSearchOpen(false)
         return
       }
       if (commands.handleKeyEvent(ev)) ev.preventDefault()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [paletteOpen])
+  }, [paletteOpen, searchOpen])
 
   const graphView = getView('graph')
 
@@ -217,7 +222,9 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
         <main className="shell__content">
           {active ? (
-            <WorkspaceView key={`${activeSection}-${revision}`} workspace={active} />
+            // Keyed by section only: switching workspace is a genuine remount,
+            // a layout change inside one is not.
+            <WorkspaceView key={activeSection} workspace={active} revision={revision} />
           ) : (
             <div className="pane-empty">
               <p>Restoring layout…</p>
@@ -248,6 +255,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
         onOpenPalette={openPalette}
       />
       <CommandPalette registry={commands} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={openFile} />
     </div>
   )
 }

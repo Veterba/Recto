@@ -79,7 +79,16 @@ export type IpcApi = {
   'fs:trash': (path: string) => { ok: boolean; error?: string }
   'fs:move': (path: string, newParent: string) => { ok: true; path: string } | { ok: false; error: string }
   'fs:reveal': (path: string) => { ok: boolean }
+  'index:search': (query: string, limit?: number) => SearchResult[]
+  'index:backlinks': (path: string) => BacklinkResult[]
+  'index:stats': () => IndexStats
+  'index:reindex': () => { ok: boolean }
 }
+
+/** A full-text hit. `snippet` marks matches with << >> for the UI to highlight. */
+export type SearchResult = { path: string; snippet: string; score: number }
+export type BacklinkResult = { path: string; line: number; alias: string | null }
+export type IndexStats = { notes: number; links: number; unresolved: number; tags: number }
 
 export type IpcChannel = keyof IpcApi
 export type IpcRequest<C extends IpcChannel> = Parameters<IpcApi[C]>
@@ -109,4 +118,8 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'fs:trash',
   'fs:move',
   'fs:reveal',
+  'index:search',
+  'index:backlinks',
+  'index:stats',
+  'index:reindex',
 ] as const

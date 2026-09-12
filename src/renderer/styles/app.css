@@ -720,6 +720,9 @@ body.is-resizing {
   z-index: 100;
   display: flex;
   justify-content: center;
+  /* Without this the flex default (stretch) makes the panel full height, so a
+     single search result sat in an 800px-tall white box. */
+  align-items: flex-start;
   padding-top: 14vh;
   background: rgb(0 0 0 / 0.4);
   animation: fade var(--anim-fast) var(--ease);
@@ -1022,4 +1025,49 @@ body.is-resizing {
 .tree__row.is-drop {
   background: var(--accent-muted);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* ---------- search results ---------- */
+
+.palette--search {
+  max-height: 66vh;
+}
+
+.result {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'name path' 'snippet snippet';
+  gap: 2px var(--size-2);
+  align-items: baseline;
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  cursor: default;
+}
+.result.is-active {
+  background: var(--accent-muted);
+}
+
+.result__name {
+  grid-area: name;
+  font-weight: 500;
+}
+
+.result__path {
+  grid-area: path;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result__snippet {
+  grid-area: snippet;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
