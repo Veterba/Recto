@@ -1,0 +1,151 @@
+.boot {
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  font: inherit;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  padding: var(--size-2) var(--size-4);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), border-color var(--anim-fast) var(--ease);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: #fff;
+  padding: 10px var(--size-6);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+.btn--ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ---------- first run ---------- */
+
+.firstrun {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--size-8);
+  background:
+    radial-gradient(120% 90% at 50% -10%, var(--accent-muted), transparent 60%),
+    var(--bg-primary);
+  -webkit-app-region: drag;
+}
+
+.firstrun__card {
+  max-width: 460px;
+  text-align: center;
+  -webkit-app-region: no-drag;
+}
+
+.firstrun__mark {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto var(--size-6);
+  border-radius: 12px;
+  background: linear-gradient(150deg, var(--accent), hsl(calc(var(--accent-h) + 40) var(--accent-s) var(--accent-l)));
+  box-shadow: var(--shadow-lg);
+}
+
+.firstrun h1 {
+  margin: 0 0 var(--size-3);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.firstrun__lede {
+  margin: 0 0 var(--size-6);
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+
+.firstrun__last,
+.firstrun__fine {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.firstrun__last {
+  margin: 0 0 var(--size-3);
+}
+.firstrun__fine {
+  margin: var(--size-4) 0 0;
+}
+
+.firstrun__error {
+  margin: 0 0 var(--size-4);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+/* ---------- shell ---------- */
+
+.shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.shell__bar {
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4);
+  padding: 0 var(--size-3) 0 88px; /* clears the macOS traffic lights */
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  -webkit-app-region: drag;
+}
+.shell__bar .btn {
+  -webkit-app-region: no-drag;
+}
+
+.shell__vault {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.shell__body {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--size-8);
+}
+
+.shell__todo {
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.8;
+}
