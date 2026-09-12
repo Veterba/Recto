@@ -1,5 +1,5 @@
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
-import { RangeSetBuilder, type Extension } from '@codemirror/state'
+import { RangeSetBuilder, StateEffect, StateField, type Extension } from '@codemirror/state'
 
 /**
  * Decorations for the syntax the markdown grammar does not know about:
@@ -18,7 +18,29 @@ const WIKILINK = /\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g
 const TAG = /(^|[\s(<])(#[\p{L}\p{N}][\p{L}\p{N}_/-]*)/gu
 const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
 
+/**
+ * Which link targets point at nothing.
+ *
+ * Held in editor state rather than a module variable so that two notes open in
+ * a split do not share one set - and so an update to it re-renders decorations
+ * through the normal CodeMirror path.
+ */
+export const setUnresolvedTargets = StateEffect.define<readonly string[]>()
+
+const unresolvedField = StateField.define<ReadonlySet<string>>({
+  create: () => new Set(),
+  update: (value, transaction) => {
+    for (const effect of transaction.effects) {
+      if (effect.is(setUnresolvedTargets)) {
+        return new Set(effect.value.map((t) => t.normalize('NFC').toLowerCase()))
+      }
+    }
+    return value
+  },
+})
+
 const wikiMark = Decoration.mark({ class: 'cm-wikilink' })
+const wikiMarkUnresolved = Decoration.mark({ class: 'cm-wikilink cm-wikilink-unresolved' })
 const wikiBracket = Decoration.mark({ class: 'cm-wikilink-bracket' })
 const tagMark = Decoration.mark({ class: 'cm-tag' })
 const taskDone = Decoration.mark({ class: 'cm-task-done' })
@@ -27,6 +49,7 @@ const lineDone = Decoration.line({ class: 'cm-line-done' })
 
 function build(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
+  const unresolved = view.state.field(unresolvedField, false) ?? new Set<string>()
 
   for (const { from, to } of view.visibleRanges) {
     const startLine = view.state.doc.lineAt(from).number
@@ -53,8 +76,13 @@ function build(view: EditorView): DecorationSet {
       for (const match of text.matchAll(WIKILINK)) {
         const start = line.from + (match.index ?? 0)
         const end = start + match[0].length
+        const target = match[1]?.trim().normalize('NFC').toLowerCase() ?? ''
         ranges.push({ from: start, to: start + 2, deco: wikiBracket })
-        ranges.push({ from: start + 2, to: end - 2, deco: wikiMark })
+        ranges.push({
+          from: start + 2,
+          to: end - 2,
+          deco: unresolved.has(target) ? wikiMarkUnresolved : wikiMark,
+        })
         ranges.push({ from: end - 2, to: end, deco: wikiBracket })
       }
 
@@ -81,7 +109,8 @@ function build(view: EditorView): DecorationSet {
   return builder.finish()
 }
 
-export const markdownDecorations = (): Extension =>
+export const markdownDecorations = (): Extension => [
+  unresolvedField,
   ViewPlugin.fromClass(
     class {
       decorations: DecorationSet
@@ -91,10 +120,14 @@ export const markdownDecorations = (): Extension =>
       }
 
       update(update: ViewUpdate): void {
-        if (update.docChanged || update.viewportChanged || update.selectionSet) {
+        const unresolvedChanged = update.transactions.some((tr) =>
+          tr.effects.some((effect) => effect.is(setUnresolvedTargets)),
+        )
+        if (update.docChanged || update.viewportChanged || update.selectionSet || unresolvedChanged) {
           this.decorations = build(update.view)
         }
       }
     },
     { decorations: (plugin) => plugin.decorations },
-  )
+  ),
+]

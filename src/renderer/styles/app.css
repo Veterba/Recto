@@ -127,7 +127,10 @@ code {
   flex: none;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--size-3);
   padding-left: 84px; /* clears the macOS traffic lights */
+  padding-right: var(--size-2);
   border-bottom: 1px solid var(--border);
   background: var(--bg-secondary);
   -webkit-app-region: drag;
@@ -144,6 +147,16 @@ code {
   flex: 1;
   min-height: 0;
   display: flex;
+  /*
+   * The floating graph positions against THIS, not against the editor pane.
+   *
+   * It has to be free to move over the sidebar as well - that is what makes it
+   * a floating window rather than a docked panel. But it must stay below the
+   * titlebar, because on macOS that strip holds the traffic lights and is a
+   * window drag region that swallows clicks from anything drawn over it.
+   * `.shell__main` starts exactly below the titlebar, so it is the right frame.
+   */
+  position: relative;
 }
 
 .shell__content {
@@ -151,11 +164,49 @@ code {
   min-width: 0;
   display: flex;
   background: var(--bg-primary);
+  /* Views scroll their own content. */
+  overflow: hidden;
 }
 .shell__content > .split,
 .shell__content > .tabs {
   flex: 1;
   min-width: 0;
+}
+
+.shell__titlebar-actions {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  /* Interactive controls must opt out of the window drag region, or macOS
+     swallows their clicks. */
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.titlebar-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.titlebar-btn.is-on {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.titlebar-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /* ---------- breadcrumbs ---------- */
@@ -587,10 +638,8 @@ body.is-resizing {
   flex: 1;
   min-height: 0;
   background: var(--bg-primary);
-  /* The floating graph window is positioned against this. */
-  position: relative;
-  /* Views scroll their own content (the editor's textarea, the tree). Letting
-     this scroll too put a stray horizontal scrollbar under the editor. */
+  /* Views scroll their own content (the editor, the tree). Letting this scroll
+     too put a stray horizontal scrollbar under the editor. */
   overflow: hidden;
 }
 
@@ -1148,6 +1197,9 @@ body.is-resizing {
 .float {
   position: absolute;
   z-index: 40;
+  /* Anything overlapping a -webkit-app-region: drag area stops receiving mouse
+     events unless it opts out. That is what made the close button dead. */
+  -webkit-app-region: no-drag;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -1449,4 +1501,161 @@ body.is-resizing {
   color: var(--text-muted);
   text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, var(--text-muted) 50%, transparent);
+}
+
+/* An unresolved link points at nothing yet. Dashed rather than red: writing a
+   link before the note exists is a normal way to work, not an error. */
+.cm-wikilink-unresolved {
+  color: var(--text-muted);
+  text-decoration-style: dashed;
+  text-decoration-color: var(--text-muted);
+}
+
+/* ---------- backlinks ---------- */
+
+.backlinks {
+  flex: none;
+  max-height: 40%;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.backlinks.is-collapsed {
+  max-height: none;
+}
+
+.backlinks__head {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--size-2) var(--size-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.backlinks__head:hover {
+  color: var(--text-secondary);
+}
+
+.backlinks__chevron {
+  width: 12px;
+  text-align: center;
+  transition: transform var(--anim-fast) var(--ease);
+}
+.backlinks__chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.backlinks__count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.backlinks__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--size-2) var(--size-2);
+}
+
+.backlinks__empty {
+  margin: 0;
+  padding: 0 var(--size-1) var(--size-2);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.backlinks__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.backlink {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 var(--size-2);
+  padding: var(--size-2) var(--size-2);
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease);
+}
+.backlink:hover {
+  background: var(--bg-hover);
+}
+
+.backlink__name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backlink__context {
+  grid-column: 1;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.backlink__go {
+  grid-row: 1;
+  grid-column: 2;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--anim-fast) var(--ease);
+}
+.backlink:hover .backlink__go {
+  opacity: 1;
+}
+
+/* ---------- rename notice ---------- */
+
+.tree__notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--size-1) var(--size-2);
+  margin: 0 0 var(--size-2);
+  padding: var(--size-2);
+  border-radius: var(--radius-s);
+  background: var(--accent-muted);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.tree__undo {
+  all: unset;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+.tree__undo:hover {
+  background: var(--bg-elevated);
 }

@@ -3,6 +3,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { shell } from 'electron'
 import { VAULT_STATE_DIR, type FileNode } from '../shared/ipc-contract'
+import { rewriteWikiLinks } from './link-rewrite'
 import { resolveInVault } from './paths'
 import { currentVault } from './vault'
 
@@ -177,6 +178,61 @@ export async function move(
   } catch (err) {
     return { ok: false, error: message(err) }
   }
+}
+
+/**
+ * Rewrite `[[links]]` in a set of files so they point at a note's new path.
+ *
+ * Returns enough to undo it: the files touched and their previous contents.
+ * Editing files the user is not looking at without an undo would be reckless.
+ */
+export async function rewriteLinksTo(
+  sources: readonly string[],
+  oldPath: string,
+  newPath: string,
+): Promise<{ changed: { path: string; before: string }[]; links: number }> {
+  const root = requireVault()
+  const changed: { path: string; before: string }[] = []
+  let links = 0
+
+  for (const source of sources) {
+    let absolute: string
+    try {
+      absolute = resolveInVault(root, source)
+    } catch {
+      continue
+    }
+    let before: string
+    try {
+      before = await fsp.readFile(absolute, 'utf8')
+    } catch {
+      continue
+    }
+
+    const result = rewriteWikiLinks(before, oldPath, newPath)
+    if (result.count === 0 || result.text === before) continue
+
+    await fsp.writeFile(absolute, result.text, 'utf8')
+    changed.push({ path: source, before })
+    links += result.count
+  }
+
+  return { changed, links }
+}
+
+/** Put back the contents captured by `rewriteLinksTo`. */
+export async function restoreContents(entries: readonly { path: string; before: string }[]): Promise<number> {
+  const root = requireVault()
+  let restored = 0
+  for (const entry of entries) {
+    try {
+      await fsp.writeFile(resolveInVault(root, entry.path), entry.before, 'utf8')
+      restored++
+    } catch {
+      // The file has since been deleted; nothing to put back.
+    }
+  }
+  return restored
 }
 
 /**

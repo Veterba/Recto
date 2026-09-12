@@ -11,7 +11,7 @@ import {
   keymap,
   rectangularSelection,
 } from '@codemirror/view'
-import { markdownDecorations } from './decorations'
+import { markdownDecorations, setUnresolvedTargets } from './decorations'
 import { editorTheme, markdownHighlighting } from './theme'
 
 /**
@@ -36,6 +36,8 @@ export type EditorHandle = {
   setValue: (next: string) => void
   /** Run one of the markdown actions against the live state. */
   run: (action: (state: EditorState) => TransactionSpec | null) => boolean
+  /** Mark these link targets as pointing at nothing, so they render as broken. */
+  setUnresolved: (targets: readonly string[]) => void
   focus: () => void
   undo: () => void
   redo: () => void
@@ -133,6 +135,10 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       view.dispatch(spec)
       view.focus()
       return true
+    },
+
+    setUnresolved: (targets) => {
+      view.dispatch({ effects: setUnresolvedTargets.of(targets) })
     },
 
     focus: () => view.focus(),

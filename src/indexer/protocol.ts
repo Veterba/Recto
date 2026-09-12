@@ -13,7 +13,14 @@ export type SearchHit = {
   score: number
 }
 
-export type Backlink = { path: string; line: number; alias: string | null }
+export type Backlink = {
+  path: string
+  line: number
+  alias: string | null
+  /** The source line, so the list shows why the note is linked. */
+  context: string | null
+  title: string | null
+}
 
 export type NoteChange = { type: 'upserted' | 'removed'; path: string }
 
@@ -24,6 +31,8 @@ export type IndexRequest =
   | { kind: 'search'; query: string; limit?: number }
   | { kind: 'backlinks'; path: string }
   | { kind: 'resolve-link'; target: string }
+  | { kind: 'resolve-links'; targets: string[] }
+  | { kind: 'unresolved' }
   | { kind: 'stats' }
   | { kind: 'close' }
 
@@ -34,6 +43,8 @@ export type IndexResponse =
   | { kind: 'search-result'; hits: SearchHit[] }
   | { kind: 'backlinks-result'; links: Backlink[] }
   | { kind: 'resolve-link-result'; path: string | null }
+  | { kind: 'resolve-links-result'; resolved: Record<string, string | null> }
+  | { kind: 'unresolved-result'; entries: { target: string; sources: string[] }[] }
   | { kind: 'stats-result'; notes: number; links: number; unresolved: number; tags: number }
   | { kind: 'closed' }
   | { kind: 'error'; message: string }

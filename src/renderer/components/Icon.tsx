@@ -1,5 +1,6 @@
 import {
   Archive,
+  ArrowRight,
   BookOpen,
   CircleUser,
   FilePlus,
@@ -45,6 +46,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   maximize: Maximize2,
   minimize: Minimize2,
   archive: Archive,
+  'arrow-right': ArrowRight,
   search: Search,
   plus: Plus,
   x: X,

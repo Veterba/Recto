@@ -75,7 +75,7 @@ export type IpcApi = {
     name: string,
     kind: 'file' | 'folder',
   ) => { ok: true; path: string } | { ok: false; error: string }
-  'fs:rename': (path: string, newName: string) => { ok: true; path: string } | { ok: false; error: string }
+  'fs:rename': (path: string, newName: string) => RenameOutcome | { ok: false; error: string }
   'fs:trash': (path: string) => { ok: boolean; error?: string }
   'fs:move': (path: string, newParent: string) => { ok: true; path: string } | { ok: false; error: string }
   'fs:reveal': (path: string) => { ok: boolean }
@@ -84,6 +84,9 @@ export type IpcApi = {
   'index:stats': () => IndexStats
   'index:reindex': () => { ok: boolean }
   'index:resolve-link': (target: string) => string | null
+  'index:resolve-links': (targets: string[]) => Record<string, string | null>
+  'index:unresolved': () => { target: string; sources: string[] }[]
+  'links:undo-rename': (undoId: string) => { ok: boolean; restored: number; error?: string }
   'archive:add': (path: string) => { ok: true; id: string } | { ok: false; error: string }
   'archive:list': () => ArchiveState
   'archive:restore': (id: string) => { ok: true; path: string } | { ok: false; error: string }
@@ -109,7 +112,24 @@ export type ArchiveState = {
 
 /** A full-text hit. `snippet` marks matches with << >> for the UI to highlight. */
 export type SearchResult = { path: string; snippet: string; score: number }
-export type BacklinkResult = { path: string; line: number; alias: string | null }
+export type BacklinkResult = {
+  path: string
+  line: number
+  alias: string | null
+  context: string | null
+  title: string | null
+}
+
+/** What a rename did to other notes, so the UI can report and offer undo. */
+export type RenameOutcome = {
+  ok: true
+  path: string
+  /** Files whose links were rewritten, and how many links in total. */
+  rewrittenFiles: number
+  rewrittenLinks: number
+  /** Present when something was rewritten; pass to `links:undo-rename`. */
+  undoId?: string
+}
 export type IndexStats = { notes: number; links: number; unresolved: number; tags: number }
 
 export type IpcChannel = keyof IpcApi
@@ -145,6 +165,9 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'index:stats',
   'index:reindex',
   'index:resolve-link',
+  'index:resolve-links',
+  'index:unresolved',
+  'links:undo-rename',
   'archive:add',
   'archive:list',
   'archive:restore',

@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { runMigrations } from './migrations'
 import { normalizeName, parseNote, resolveLink } from './parse'
-import type { IndexRequest, IndexResponse, SearchHit } from './protocol'
+import type { Backlink, IndexRequest, IndexResponse, SearchHit } from './protocol'
 
 /**
  * The indexer, running in its own process.
@@ -97,10 +97,14 @@ function writeNote(relative: string, content: string, mtime: number, size: numbe
   }
 
   const insertLink = handle.prepare(
-    'INSERT INTO links (source_path, target_text, target_path, heading, alias, line) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO links (source_path, target_text, target_path, heading, alias, line, context) VALUES (?, ?, ?, ?, ?, ?, ?)',
   )
+  const bodyLines = parsed.body.split('\n')
   for (const link of parsed.links) {
-    insertLink.run(relative, link.target, null, link.heading, link.alias, link.line)
+    // Trim the context: a backlinks row shows a sentence, not a paragraph.
+    const raw = bodyLines[link.line] ?? ''
+    const context = raw.trim().slice(0, 300)
+    insertLink.run(relative, link.target, null, link.heading, link.alias, link.line, context)
   }
 
   const insertTag = handle.prepare('INSERT INTO tags (path, tag, line) VALUES (?, ?, ?)')
@@ -246,13 +250,33 @@ function search(query: string, limit: number): SearchHit[] {
   }
 }
 
-function backlinks(target: string): { path: string; line: number; alias: string | null }[] {
+function backlinks(target: string): Backlink[] {
   return requireDb()
     .prepare(
-      `SELECT l.source_path AS path, l.line, l.alias
-       FROM links l WHERE l.target_path = ? ORDER BY l.source_path, l.line`,
+      `SELECT l.source_path AS path, l.line, l.alias, l.context, n.title
+       FROM links l LEFT JOIN notes n ON n.path = l.source_path
+       WHERE l.target_path = ? ORDER BY l.source_path, l.line`,
     )
-    .all(target) as { path: string; line: number; alias: string | null }[]
+    .all(target) as Backlink[]
+}
+
+/** Every link in the vault that resolves to nothing, grouped by target. */
+function unresolved(): { target: string; sources: string[] }[] {
+  const rows = requireDb()
+    .prepare(
+      `SELECT target_text AS target, source_path AS source
+       FROM links WHERE target_path IS NULL ORDER BY target_text, source_path`,
+    )
+    .all() as { target: string; source: string }[]
+
+  const grouped = new Map<string, string[]>()
+  for (const row of rows) {
+    const list = grouped.get(row.target)
+    if (list) {
+      if (!list.includes(row.source)) list.push(row.source)
+    } else grouped.set(row.target, [row.source])
+  }
+  return [...grouped.entries()].map(([target, sources]) => ({ target, sources }))
 }
 
 /**
@@ -290,6 +314,24 @@ function handle(request: IndexRequest): IndexResponse {
       return { kind: 'backlinks-result', links: backlinks(request.path) }
     case 'resolve-link':
       return { kind: 'resolve-link-result', path: resolveOne(request.target) }
+    case 'resolve-links': {
+      // One lookup table for the whole batch: the editor asks about every link
+      // in a document at once, and rebuilding the index per target is O(n*m).
+      const rows = requireDb().prepare('SELECT path FROM notes').all() as { path: string }[]
+      const allPaths = new Set(rows.map((r) => r.path))
+      const byName = new Map<string, string[]>()
+      for (const { path: notePath } of rows) {
+        const key = normalizeName(notePath.slice(notePath.lastIndexOf('/') + 1))
+        const list = byName.get(key)
+        if (list) list.push(notePath)
+        else byName.set(key, [notePath])
+      }
+      const resolved: Record<string, string | null> = {}
+      for (const target of request.targets) resolved[target] = resolveLink(target, byName, allPaths)
+      return { kind: 'resolve-links-result', resolved }
+    }
+    case 'unresolved':
+      return { kind: 'unresolved-result', entries: unresolved() }
     case 'stats': {
       const handleDb = requireDb()
       const notes = (handleDb.prepare('SELECT COUNT(*) AS n FROM notes').get() as { n: number }).n
