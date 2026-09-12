@@ -107,6 +107,15 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 3,
+    name: 'link-context',
+    sql: `
+      -- The source line of each link, so a backlinks list can show why a note
+      -- is linked without opening every referring file.
+      ALTER TABLE links ADD COLUMN context TEXT;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

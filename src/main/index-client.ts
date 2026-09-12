@@ -106,12 +106,17 @@ export async function openIndexForVault(): Promise<void> {
     return
   }
 
-  await send({
+  const opened = await send({
     kind: 'open',
     vaultPath: vault.path,
     dbPath: path.join(vault.path, VAULT_STATE_DIR, 'index.db'),
   })
-  await send({ kind: 'reindex' })
+
+  // A migration means existing rows are missing the new columns - and since
+  // (mtime, size) have not changed, an ordinary reindex would skip every file
+  // and the new data would stay empty until each note happened to be edited.
+  const migrated = opened.kind === 'opened' && opened.migratedTo > opened.migratedFrom
+  await send({ kind: 'reindex', force: migrated })
 }
 
 export function stopIndexer(): void {

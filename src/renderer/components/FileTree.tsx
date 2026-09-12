@@ -53,6 +53,8 @@ export function FileTree({
   const [error, setError] = useState<string | null>(null)
   /** Folder currently hovered as a drop target, or '' for the vault root. */
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  /** "Renamed, and N links in M notes were updated" - with an undo. */
+  const [rewrite, setRewrite] = useState<{ files: number; links: number; undoId: string } | null>(null)
 
   const rows = useMemo(() => flatten(tree.roots, expanded), [tree.roots, expanded])
 
@@ -87,10 +89,15 @@ export function FileTree({
       const current = path.slice(path.lastIndexOf('/') + 1)
       if (name.trim() === '' || name === current) return
       const result = await api.invoke('fs:rename', path, name)
-      if (!result.ok) setError(result.error)
-      else {
-        setSelected(result.path)
-        onChanged()
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setSelected(result.path)
+      onChanged()
+      // Renaming silently rewrote other notes. Tell the user, and offer undo.
+      if (result.undoId !== undefined && result.rewrittenLinks > 0) {
+        setRewrite({ files: result.rewrittenFiles, links: result.rewrittenLinks, undoId: result.undoId })
       }
     },
     [onChanged],
@@ -206,6 +213,30 @@ export function FileTree({
       {error !== null && (
         <p className="tree__error" role="alert" onClick={() => setError(null)}>
           {error}
+        </p>
+      )}
+      {rewrite !== null && (
+        <p className="tree__notice" role="status">
+          <span>
+            Updated {rewrite.links} {rewrite.links === 1 ? 'link' : 'links'} in {rewrite.files}{' '}
+            {rewrite.files === 1 ? 'note' : 'notes'}.
+          </span>
+          <button
+            className="tree__undo"
+            onClick={() => {
+              const id = rewrite.undoId
+              setRewrite(null)
+              void api.invoke('links:undo-rename', id).then((res) => {
+                if (!res.ok) setError(res.error ?? 'Could not undo.')
+                onChanged()
+              })
+            }}
+          >
+            Undo
+          </button>
+          <button className="tree__undo" onClick={() => setRewrite(null)}>
+            Dismiss
+          </button>
         </p>
       )}
       <div

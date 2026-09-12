@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain, shell } from 'electron'
-import type { IpcApi } from '../shared/ipc-contract'
+import type { IpcApi, RenameOutcome } from '../shared/ipc-contract'
 import * as archive from './archive'
 import { openIndexForVault, send, stopIndexer } from './index-client'
 import { readState, writeState } from './state'
@@ -14,6 +14,14 @@ function handle<C extends keyof IpcApi>(
 ): void {
   ipcMain.handle(channel, (_event, ...args) => fn(...(args as Parameters<IpcApi[C]>)))
 }
+
+/**
+ * Undo state for link rewrites, keyed by an opaque id.
+ *
+ * In memory only and capped: this is for "that rename was a mistake, put it
+ * back" in the next minute, not a history feature.
+ */
+const renameUndo = new Map<string, { from: string; to: string; entries: { path: string; before: string }[] }>()
 
 /** Restart the watcher and the index whenever the open vault changes. */
 function rewatch(): void {
@@ -60,7 +68,52 @@ export function registerIpc(): void {
     markSelfWrite(parent === '' ? name : `${parent}/${name}`)
     return vaultFs.create(parent, name, kind)
   })
-  handle('fs:rename', (p, newName) => vaultFs.rename(p, newName))
+  handle('fs:rename', async (p, newName) => {
+    // Collect the referring notes BEFORE the rename: afterwards the index no
+    // longer knows anything points at the old path.
+    let sources: string[] = []
+    try {
+      const response = await send({ kind: 'backlinks', path: p }, 15_000)
+      if (response.kind === 'backlinks-result') {
+        sources = [...new Set(response.links.map((link) => link.path))]
+      }
+    } catch {
+      // No index: the rename still happens, links just are not rewritten. Said
+      // so in the result rather than silently pretending it worked.
+    }
+
+    const renamed = await vaultFs.rename(p, newName)
+    if (!renamed.ok) return renamed
+
+    const rewrite = await vaultFs.rewriteLinksTo(sources, p, renamed.path)
+    let undoId: string | undefined
+    if (rewrite.changed.length > 0) {
+      undoId = `undo-${Date.now().toString(36)}`
+      renameUndo.set(undoId, { from: renamed.path, to: p, entries: rewrite.changed })
+      // One level of undo is enough for an accident; keeping every rename
+      // forever would be an unbounded in-memory copy of the vault.
+      if (renameUndo.size > 10) renameUndo.delete([...renameUndo.keys()][0] ?? '')
+    }
+
+    const outcome: RenameOutcome = {
+      ok: true,
+      path: renamed.path,
+      rewrittenFiles: rewrite.changed.length,
+      rewrittenLinks: rewrite.links,
+      ...(undoId === undefined ? {} : { undoId }),
+    }
+    return outcome
+  })
+
+  handle('links:undo-rename', async (undoId) => {
+    const entry = renameUndo.get(undoId)
+    if (!entry) return { ok: false, restored: 0, error: 'That undo is no longer available.' }
+    renameUndo.delete(undoId)
+    // Put the note name back too, or the restored links would point at nothing.
+    const back = await vaultFs.rename(entry.from, entry.to.slice(entry.to.lastIndexOf('/') + 1))
+    const restored = await vaultFs.restoreContents(entry.entries)
+    return { ok: back.ok, restored }
+  })
   // Deleting from the UI archives; `fs:trash` remains for a real, immediate delete.
   handle('fs:trash', (p) => vaultFs.trash(p))
   handle('archive:add', (p) => archive.archive(p))
@@ -88,6 +141,15 @@ export function registerIpc(): void {
   handle('index:resolve-link', async (target) => {
     const response = await send({ kind: 'resolve-link', target }, 15_000)
     return response.kind === 'resolve-link-result' ? response.path : null
+  })
+  handle('index:resolve-links', async (targets) => {
+    if (targets.length === 0) return {}
+    const response = await send({ kind: 'resolve-links', targets }, 15_000)
+    return response.kind === 'resolve-links-result' ? response.resolved : {}
+  })
+  handle('index:unresolved', async () => {
+    const response = await send({ kind: 'unresolved' }, 15_000)
+    return response.kind === 'unresolved-result' ? response.entries : []
   })
   handle('index:reindex', async () => {
     await send({ kind: 'reindex', force: true })

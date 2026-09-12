@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { Breadcrumb } from '../components/Breadcrumb'
+import { Icon } from '../components/Icon'
 import { CommandPalette } from '../components/CommandPalette'
 import { FileTree } from '../components/FileTree'
 import { FloatingWindow } from '../components/FloatingWindow'
@@ -13,6 +14,7 @@ import { useAppearance, type Theme } from '../core/appearance'
 import { commands } from '../core/commands'
 import { allFolderPaths, filterTree } from '../core/file-tree-ops'
 import { fuzzyMatch } from '../core/fuzzy'
+import { formatChord } from '../core/hotkeys'
 import { registerEditorCommands } from '../core/editor-commands'
 import { registerAppCommands } from '../core/register-commands'
 import { getSection, type SectionId } from '../core/sections'
@@ -82,11 +84,14 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   const markdownRegistered = useRef(false)
   if (!markdownRegistered.current) {
     markdownRegistered.current = true
-    registerMarkdownView((target) => {
-      void api.invoke('index:resolve-link', target).then((resolved) => {
-        if (resolved !== null) openFileRef.current(resolved)
-      })
-    })
+    registerMarkdownView(
+      (target) => {
+        void api.invoke('index:resolve-link', target).then((resolved) => {
+          if (resolved !== null) openFileRef.current(resolved)
+        })
+      },
+      (p) => openFileRef.current(p),
+    )
   }
 
   const openFile = useCallback(
@@ -207,6 +212,22 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     <div className={`shell${ready ? '' : ' is-booting'}`}>
       <div className="shell__titlebar">
         <Breadcrumb path={activePath} fallback={vault.name} />
+        {/*
+          A permanent, visible toggle. Closing the graph used to leave no way
+          back except a shortcut nobody had been told about - "it just
+          disappears" is a fair description of that.
+        */}
+        <div className="shell__titlebar-actions">
+          <button
+            className={`titlebar-btn${graphWindow.open ? ' is-on' : ''}`}
+            onClick={() => setGraphWindow({ open: !graphWindow.open })}
+            title={`${graphWindow.open ? 'Hide' : 'Show'} graph (${formatChord('Mod+G')})`}
+            aria-pressed={graphWindow.open}
+          >
+            <Icon name="git-fork" size={14} />
+            <span>Graph</span>
+          </button>
+        </div>
       </div>
 
       <div className="shell__main">

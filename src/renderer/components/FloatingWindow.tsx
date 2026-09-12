@@ -65,6 +65,25 @@ export function FloatingWindow({
     return { width: parent?.clientWidth ?? window.innerWidth, height: parent?.clientHeight ?? window.innerHeight }
   }, [])
 
+  /**
+   * The panel must be positioned against a real container, not the viewport.
+   *
+   * When it wasn't, a maximised panel covered the entire window - its header
+   * landing on the macOS traffic lights, and its close button inside the
+   * titlebar's drag region, where clicks never arrive. Silent, and only visible
+   * in a screenshot; so it complains now instead.
+   */
+  useEffect(() => {
+    const parent = ref.current?.offsetParent
+    if (parent === null || parent === document.body) {
+      console.error(
+        '[FloatingWindow] no positioned ancestor: the panel will be placed against the viewport ' +
+          'and can cover the titlebar, where a drag region swallows its clicks. Give its ' +
+          'container `position: relative`.',
+      )
+    }
+  }, [])
+
   // A panel left off-screen after the window shrinks would be unrecoverable.
   useEffect(() => {
     const onResize = (): void => {

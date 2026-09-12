@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { Backlinks } from '../components/Backlinks'
+import { extractTargets } from '../core/link-targets'
 import { Editor } from '../editor/Editor'
 import type { EditorHandle } from '../editor/codemirror'
 import { registerView } from '../core/view-registry'
@@ -20,12 +22,22 @@ type State = { path?: unknown }
 let activeHandle: EditorHandle | null = null
 export const getActiveEditor = (): EditorHandle | null => activeHandle
 
-function MarkdownEditor({ path, onOpenLink }: { path: string; onOpenLink: (t: string) => void }): React.ReactElement {
+function MarkdownEditor({
+  path,
+  onOpenLink,
+  onOpenPath,
+}: {
+  path: string
+  onOpenLink: (t: string) => void
+  onOpenPath: (p: string) => void
+}): React.ReactElement {
   const [initial, setInitial] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<'loaded' | 'dirty' | 'saving' | 'saved'>('loaded')
   const saveTimer = useRef<number | undefined>(undefined)
   const handle = useRef<EditorHandle | null>(null)
+  /** Bumped after each save, so the backlinks list refreshes. */
+  const [savedAt, setSavedAt] = useState(0)
   /** What we last wrote, so our own watcher echo is not mistaken for an edit. */
   const lastWritten = useRef<string | null>(null)
 
@@ -53,19 +65,42 @@ function MarkdownEditor({ path, onOpenLink }: { path: string; onOpenLink: (t: st
       setStatus('saving')
       lastWritten.current = next
       const result = await api.invoke('fs:write', path, next)
-      if (result.ok) setStatus('saved')
-      else setError(result.error ?? 'Could not save.')
+      if (result.ok) {
+        setStatus('saved')
+        setSavedAt(Date.now())
+      } else setError(result.error ?? 'Could not save.')
     },
     [path],
   )
+
+  /**
+   * Ask the index which of this note's links point at nothing, and tell the
+   * editor so they render as broken.
+   *
+   * Debounced and batched: one round trip for the whole document rather than
+   * one per link, and not on every keystroke.
+   */
+  const refreshUnresolved = useCallback((text: string) => {
+    const targets = extractTargets(text)
+    if (targets.length === 0) {
+      handle.current?.setUnresolved([])
+      return
+    }
+    void api.invoke('index:resolve-links', targets).then((resolved) => {
+      handle.current?.setUnresolved(targets.filter((target) => resolved[target] == null))
+    })
+  }, [])
 
   const onChange = useCallback(
     (next: string) => {
       setStatus('dirty')
       window.clearTimeout(saveTimer.current)
-      saveTimer.current = window.setTimeout(() => void save(next), SAVE_DEBOUNCE_MS)
+      saveTimer.current = window.setTimeout(() => {
+        void save(next)
+        refreshUnresolved(next)
+      }, SAVE_DEBOUNCE_MS)
     },
-    [save],
+    [save, refreshUnresolved],
   )
 
   const flush = useCallback(() => {
@@ -125,13 +160,18 @@ function MarkdownEditor({ path, onOpenLink }: { path: string; onOpenLink: (t: st
         onReady={(editor: EditorHandle) => {
           handle.current = editor
           activeHandle = editor
+          refreshUnresolved(initial)
         }}
       />
+      <Backlinks path={path} revision={savedAt} onOpen={onOpenPath} />
     </div>
   )
 }
 
-export function registerMarkdownView(onOpenLink: (target: string) => void): () => void {
+export function registerMarkdownView(
+  onOpenLink: (target: string) => void,
+  onOpenPath: (path: string) => void,
+): () => void {
   return registerView({
     type: 'markdown',
     title: 'Editor',
@@ -151,7 +191,7 @@ export function registerMarkdownView(onOpenLink: (target: string) => void): () =
           </div>
         )
       }
-      return <MarkdownEditor path={path} onOpenLink={onOpenLink} />
+      return <MarkdownEditor path={path} onOpenLink={onOpenLink} onOpenPath={onOpenPath} />
     },
   })
 }
