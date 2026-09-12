@@ -87,6 +87,9 @@ export type IpcApi = {
   'index:resolve-links': (targets: string[]) => Record<string, string | null>
   'index:unresolved': () => { target: string; sources: string[] }[]
   'links:undo-rename': (undoId: string) => { ok: boolean; restored: number; error?: string }
+  'history:list': (path: string) => SnapshotInfo[]
+  'history:get': (id: number) => SnapshotInfo | null
+  'history:restore': (id: number) => { ok: boolean; path?: string; error?: string }
   'archive:add': (path: string) => { ok: true; id: string } | { ok: false; error: string }
   'archive:list': () => ArchiveState
   'archive:restore': (id: string) => { ok: true; path: string } | { ok: false; error: string }
@@ -109,6 +112,9 @@ export type ArchiveState = {
   retentionDays: number
   entries: ArchiveEntry[]
 }
+
+/** One stored version of a note. `content` is present only for a single fetch. */
+export type SnapshotInfo = { id: number; path: string; ts: number; bytes: number; content?: string }
 
 /** A full-text hit. `snippet` marks matches with << >> for the UI to highlight. */
 export type SearchResult = { path: string; snippet: string; score: number }
@@ -168,6 +174,9 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'index:resolve-links',
   'index:unresolved',
   'links:undo-rename',
+  'history:list',
+  'history:get',
+  'history:restore',
   'archive:add',
   'archive:list',
   'archive:restore',

@@ -116,6 +116,27 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE links ADD COLUMN context TEXT;
     `,
   },
+  {
+    version: 4,
+    name: 'snapshots',
+    sql: `
+      -- Periodic copies of note content, so an edit can be undone days later.
+      --
+      -- This is the ONE exception to "the database is a cache": a snapshot
+      -- cannot be rebuilt from the files, because it is what the file used to
+      -- be. Deleting index.db therefore loses version history - which is
+      -- acceptable, and stated plainly in the UI, because the alternative is
+      -- thousands of tiny files cluttering the vault.
+      CREATE TABLE snapshots (
+        id      INTEGER PRIMARY KEY AUTOINCREMENT,
+        path    TEXT NOT NULL,
+        content TEXT NOT NULL,
+        bytes   INTEGER NOT NULL,
+        ts      REAL NOT NULL
+      );
+      CREATE INDEX idx_snapshots_path_ts ON snapshots(path, ts DESC);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

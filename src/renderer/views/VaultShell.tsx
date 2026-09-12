@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon'
 import { CommandPalette } from '../components/CommandPalette'
 import { FileTree } from '../components/FileTree'
 import { FloatingWindow } from '../components/FloatingWindow'
+import { History } from '../components/History'
 import { QuickSwitcher } from '../components/QuickSwitcher'
 import type { LinkCandidate } from '../editor/link-complete'
 import { SearchPanel } from '../components/SearchPanel'
@@ -41,8 +42,17 @@ registerArchiveView()
 const THEME_CYCLE: readonly Theme[] = ['system', 'light', 'dark']
 
 export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
-  const { sections, active, activeSection, setActiveSection, graphWindow, setGraphWindow, revision } =
-    useWorkspace()
+  const {
+    sections,
+    active,
+    activeSection,
+    setActiveSection,
+    graphWindow,
+    setGraphWindow,
+    historyWindow,
+    setHistoryWindow,
+    revision,
+  } = useWorkspace()
   const { appearance, ready, update } = useAppearance()
   const { tree, refresh } = useVault(true)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -209,6 +219,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       openExtension,
       openSearch: () => setSearchOpen(true),
       openSwitcher: () => setSwitcherOpen(true),
+      toggleHistory: () => setHistoryWindow({ open: !historyWindow.open }),
       reindex: () => void api.invoke('index:reindex'),
     })
     return () => {
@@ -227,6 +238,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     activePath,
     graphWindow.open,
     setGraphWindow,
+    historyWindow.open,
+    setHistoryWindow,
     appearance.livePreview,
     openExtension,
   ])
@@ -325,6 +338,23 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
             </div>
           )}
         </main>
+
+        {historyWindow.open && activePath !== null && (
+          <FloatingWindow
+            title={`History — ${activePath.slice(activePath.lastIndexOf('/') + 1).replace(/\.md$/, '')}`}
+            geometry={historyWindow}
+            onChange={setHistoryWindow}
+            onClose={() => setHistoryWindow({ open: false })}
+            closeHint="Close history"
+          >
+            <History
+              path={activePath}
+              // A restore rewrites the file; the editor picks that up through
+              // the watcher, so nothing to do here but refresh the list.
+              onRestored={() => void refresh()}
+            />
+          </FloatingWindow>
+        )}
 
         {graphWindow.open && (
           <FloatingWindow
