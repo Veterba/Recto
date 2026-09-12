@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import type { IpcApi } from '../shared/ipc-contract'
+import * as archive from './archive'
 import { openIndexForVault, send, stopIndexer } from './index-client'
 import { readState, writeState } from './state'
 import * as vaultFs from './vault-fs'
@@ -19,6 +20,9 @@ function rewatch(): void {
   const window = BrowserWindow.getAllWindows()[0]
   if (window) startWatching(window)
   void openIndexForVault().catch((err: unknown) => console.error('[indexer]', err))
+  // Retention is enforced on open rather than on a timer: the app may not be
+  // running on the day something expires, and a check at open always catches up.
+  void archive.purgeExpired().catch((err: unknown) => console.error('[archive]', err))
 }
 
 export function registerIpc(): void {
@@ -57,7 +61,13 @@ export function registerIpc(): void {
     return vaultFs.create(parent, name, kind)
   })
   handle('fs:rename', (p, newName) => vaultFs.rename(p, newName))
+  // Deleting from the UI archives; `fs:trash` remains for a real, immediate delete.
   handle('fs:trash', (p) => vaultFs.trash(p))
+  handle('archive:add', (p) => archive.archive(p))
+  handle('archive:list', () => archive.list())
+  handle('archive:restore', (id) => archive.restore(id))
+  handle('archive:purge', (id) => archive.purge(id))
+  handle('archive:set-retention', (days) => archive.setRetention(days))
   handle('fs:move', (p, newParent) => vaultFs.move(p, newParent))
   handle('fs:reveal', (p) => vaultFs.reveal(p))
 

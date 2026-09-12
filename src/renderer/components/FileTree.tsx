@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { FileNode } from '@shared/ipc-contract'
 import { api } from '../api'
 import type { VaultTree } from '../core/file-tree-ops'
+import { Icon } from './Icon'
 
 /**
  * The file explorer.
@@ -95,10 +96,12 @@ export function FileTree({
     [onChanged],
   )
 
+  // Deleting archives rather than destroying: recoverable in-app for the
+  // retention window, then it goes to the OS trash.
   const remove = useCallback(
     async (path: string) => {
-      const result = await api.invoke('fs:trash', path)
-      if (!result.ok) setError(result.error ?? 'Could not move to trash.')
+      const result = await api.invoke('archive:add', path)
+      if (!result.ok) setError(result.error)
       else onChanged()
     },
     [onChanged],
@@ -255,6 +258,7 @@ export function FileTree({
                       : row.node.path.slice(0, Math.max(0, row.node.path.lastIndexOf('/'))),
                   )
                 }}
+                onDelete={() => void remove(row.node.path)}
                 onDropRow={(ev) => {
                   ev.preventDefault()
                   ev.stopPropagation()
@@ -285,6 +289,7 @@ type RowProps = {
   onCommitRename: (name: string) => void
   onCancelRename: () => void
   isDropTarget: boolean
+  onDelete: () => void
   onDragStart: (ev: React.DragEvent) => void
   onDragOverRow: (ev: React.DragEvent) => void
   onDropRow: (ev: React.DragEvent) => void
@@ -301,6 +306,7 @@ function TreeRow({
   onCommitRename,
   onCancelRename,
   isDropTarget,
+  onDelete,
   onDragStart,
   onDragOverRow,
   onDropRow,
@@ -338,7 +344,21 @@ function TreeRow({
       {isRenaming ? (
         <RenameInput initial={node.name} onCommit={onCommitRename} onCancel={onCancelRename} />
       ) : (
-        <span className="tree__name">{label}</span>
+        <>
+          <span className="tree__name">{label}</span>
+          <button
+            className="tree__delete"
+            aria-label={`Delete ${node.name}`}
+            title="Move to archive"
+            onMouseDown={(ev) => ev.stopPropagation()}
+            onClick={(ev) => {
+              ev.stopPropagation()
+              onDelete()
+            }}
+          >
+            <Icon name="x" size={13} />
+          </button>
+        </>
       )}
     </div>
   )

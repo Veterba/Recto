@@ -83,6 +83,27 @@ export type IpcApi = {
   'index:backlinks': (path: string) => BacklinkResult[]
   'index:stats': () => IndexStats
   'index:reindex': () => { ok: boolean }
+  'archive:add': (path: string) => { ok: true; id: string } | { ok: false; error: string }
+  'archive:list': () => ArchiveState
+  'archive:restore': (id: string) => { ok: true; path: string } | { ok: false; error: string }
+  'archive:purge': (id: string) => { ok: boolean; error?: string }
+  'archive:set-retention': (days: number) => ArchiveState
+}
+
+/** One archived item. `originalPath` is where restore puts it back. */
+export type ArchiveEntry = {
+  id: string
+  originalPath: string
+  name: string
+  kind: 'file' | 'folder'
+  deletedAt: number
+  size: number
+}
+
+export type ArchiveState = {
+  /** Days before an archived item goes to the OS trash. 0 means keep forever. */
+  retentionDays: number
+  entries: ArchiveEntry[]
 }
 
 /** A full-text hit. `snippet` marks matches with << >> for the UI to highlight. */
@@ -122,4 +143,9 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'index:backlinks',
   'index:stats',
   'index:reindex',
+  'archive:add',
+  'archive:list',
+  'archive:restore',
+  'archive:purge',
+  'archive:set-retention',
 ] as const

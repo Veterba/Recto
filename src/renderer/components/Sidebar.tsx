@@ -24,6 +24,7 @@ type Props = {
   width: number
   onResize: (width: number) => void
   onNew: () => void
+  onOpenArchive: () => void
   onOpenSettings: () => void
   onCollapse: () => void
   children?: React.ReactNode
@@ -38,6 +39,7 @@ export function Sidebar({
   width,
   onResize,
   onNew,
+  onOpenArchive,
   onOpenSettings,
   onCollapse,
   children,
@@ -117,6 +119,9 @@ export function Sidebar({
         <button className="sidebar__new" onClick={onNew}>
           <Icon name="plus" size={15} />
           <span>{section.newLabel}</span>
+        </button>
+        <button className="icon-btn" onClick={onOpenArchive} title="Archive">
+          <Icon name="archive" size={15} />
         </button>
         <button className="icon-btn" onClick={onOpenSettings} title="Settings">
           <Icon name="settings" size={15} />
