@@ -23,6 +23,7 @@ export type IndexRequest =
   | { kind: 'note-changed'; changes: NoteChange[] }
   | { kind: 'search'; query: string; limit?: number }
   | { kind: 'backlinks'; path: string }
+  | { kind: 'resolve-link'; target: string }
   | { kind: 'stats' }
   | { kind: 'close' }
 
@@ -32,6 +33,7 @@ export type IndexResponse =
   | { kind: 'note-changed-done' }
   | { kind: 'search-result'; hits: SearchHit[] }
   | { kind: 'backlinks-result'; links: Backlink[] }
+  | { kind: 'resolve-link-result'; path: string | null }
   | { kind: 'stats-result'; notes: number; links: number; unresolved: number; tags: number }
   | { kind: 'closed' }
   | { kind: 'error'; message: string }

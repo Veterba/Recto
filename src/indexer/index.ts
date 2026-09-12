@@ -255,6 +255,25 @@ function backlinks(target: string): { path: string; line: number; alias: string 
     .all(target) as { path: string; line: number; alias: string | null }[]
 }
 
+/**
+ * Resolve a single wikilink target on demand.
+ *
+ * Reads the notes table rather than the links table, because a link may be
+ * typed and clicked before the note containing it has been saved and indexed.
+ */
+function resolveOne(target: string): string | null {
+  const rows = requireDb().prepare('SELECT path FROM notes').all() as { path: string }[]
+  const allPaths = new Set(rows.map((r) => r.path))
+  const byName = new Map<string, string[]>()
+  for (const { path: notePath } of rows) {
+    const key = normalizeName(notePath.slice(notePath.lastIndexOf('/') + 1))
+    const list = byName.get(key)
+    if (list) list.push(notePath)
+    else byName.set(key, [notePath])
+  }
+  return resolveLink(target, byName, allPaths)
+}
+
 function handle(request: IndexRequest): IndexResponse {
   switch (request.kind) {
     case 'open': {
@@ -269,6 +288,8 @@ function handle(request: IndexRequest): IndexResponse {
       return { kind: 'search-result', hits: search(request.query, request.limit ?? 50) }
     case 'backlinks':
       return { kind: 'backlinks-result', links: backlinks(request.path) }
+    case 'resolve-link':
+      return { kind: 'resolve-link-result', path: resolveOne(request.target) }
     case 'stats': {
       const handleDb = requireDb()
       const notes = (handleDb.prepare('SELECT COUNT(*) AS n FROM notes').get() as { n: number }).n

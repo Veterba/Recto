@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { Breadcrumb } from '../components/Breadcrumb'
@@ -13,6 +13,7 @@ import { useAppearance, type Theme } from '../core/appearance'
 import { commands } from '../core/commands'
 import { allFolderPaths, filterTree } from '../core/file-tree-ops'
 import { fuzzyMatch } from '../core/fuzzy'
+import { registerEditorCommands } from '../core/editor-commands'
 import { registerAppCommands } from '../core/register-commands'
 import { getSection, type SectionId } from '../core/sections'
 import { useVault } from '../core/vault-store'
@@ -30,7 +31,6 @@ type Props = {
 // Views register once per module load, before any layout is restored - otherwise
 // a saved leaf would resolve to "unknown" on first paint.
 registerStubViews()
-registerMarkdownView()
 registerArchiveView()
 
 const THEME_CYCLE: readonly Theme[] = ['system', 'light', 'dark']
@@ -77,6 +77,18 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     })
   }, [])
 
+  // Registered here rather than at module scope because the markdown view needs
+  // a callback into the shell to follow a wikilink.
+  const markdownRegistered = useRef(false)
+  if (!markdownRegistered.current) {
+    markdownRegistered.current = true
+    registerMarkdownView((target) => {
+      void api.invoke('index:resolve-link', target).then((resolved) => {
+        if (resolved !== null) openFileRef.current(resolved)
+      })
+    })
+  }
+
   const openFile = useCallback(
     (path: string) => {
       // Opening a note always lands in Data, even if you clicked from elsewhere.
@@ -87,6 +99,10 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   )
 
   // --- actions ------------------------------------------------------------
+
+  // The link handler is created once, so it reads the current openFile via a ref.
+  const openFileRef = useRef(openFile)
+  openFileRef.current = openFile
 
   const createIn = useCallback(
     async (kind: 'file' | 'folder') => {
@@ -125,7 +141,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
   useEffect(() => {
     if (!active) return
-    return registerAppCommands(commands, {
+    const offEditor = registerEditorCommands(commands)
+    const offApp = registerAppCommands(commands, {
       workspace: active,
       openPalette,
       closeVault: onCloseVault,
@@ -144,6 +161,10 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       openSearch: () => setSearchOpen(true),
       reindex: () => void api.invoke('index:reindex'),
     })
+    return () => {
+      offApp()
+      offEditor()
+    }
   }, [
     active,
     openPalette,

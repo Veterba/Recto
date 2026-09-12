@@ -83,6 +83,7 @@ export type IpcApi = {
   'index:backlinks': (path: string) => BacklinkResult[]
   'index:stats': () => IndexStats
   'index:reindex': () => { ok: boolean }
+  'index:resolve-link': (target: string) => string | null
   'archive:add': (path: string) => { ok: true; id: string } | { ok: false; error: string }
   'archive:list': () => ArchiveState
   'archive:restore': (id: string) => { ok: true; path: string } | { ok: false; error: string }
@@ -143,6 +144,7 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'index:backlinks',
   'index:stats',
   'index:reindex',
+  'index:resolve-link',
   'archive:add',
   'archive:list',
   'archive:restore',
