@@ -41,12 +41,6 @@ const STUBS: Stub[] = [
     blurb: 'd3-force in a worker, drawn by Pixi on the GPU, with the note you are in lit up.',
   },
   {
-    type: 'settings',
-    title: 'Settings',
-    milestone: 'milestone 2',
-    blurb: 'Appearance, the hotkey editor over hotkeys.json, and vault management.',
-  },
-  {
     type: 'profile',
     title: 'Profile',
     milestone: 'milestone 7',

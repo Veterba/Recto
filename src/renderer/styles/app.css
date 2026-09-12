@@ -1931,3 +1931,278 @@ body.is-resizing {
   padding: var(--size-2) var(--size-3);
   border-top: 1px solid var(--border);
 }
+
+/* ---------- settings ---------- */
+
+.settings {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.settings__tabs {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: var(--size-3) var(--size-6) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings__tab {
+  all: unset;
+  box-sizing: border-box;
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s) var(--radius-s) 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--anim-fast) var(--ease);
+}
+.settings__tab:hover {
+  color: var(--text-secondary);
+}
+.settings__tab.is-active {
+  color: var(--text-primary);
+  font-weight: 500;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.settings__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--size-6);
+}
+
+.setting {
+  max-width: 72ch;
+  margin: 0 auto var(--size-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-6);
+}
+
+.setting__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.setting__label {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.setting__hint {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.setting__control {
+  flex: none;
+}
+
+.setting__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-1);
+  justify-content: flex-end;
+}
+
+.setting__note {
+  max-width: 72ch;
+  margin: var(--size-6) auto 0;
+  padding: var(--size-3);
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.setting__note svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+/* An inline variant of the sidebar's segmented control. */
+.segmented--inline {
+  grid-template-columns: none;
+  display: inline-grid;
+  grid-auto-flow: column;
+  margin: 0;
+}
+.segmented--inline .segmented__tab {
+  flex-direction: row;
+  padding: 4px var(--size-3);
+  text-transform: capitalize;
+  letter-spacing: 0;
+  font-size: 12px;
+}
+
+.hues {
+  display: flex;
+  gap: 6px;
+}
+
+.hue {
+  all: unset;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--border) inset;
+  transition: transform var(--anim-fast) var(--ease), box-shadow var(--anim-fast) var(--ease);
+}
+.hue:hover {
+  transform: scale(1.12);
+}
+.hue.is-active {
+  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent);
+}
+
+.toggle {
+  all: unset;
+  width: 38px;
+  height: 22px;
+  display: block;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  cursor: pointer;
+  transition: background var(--anim-base) var(--ease);
+}
+.toggle.is-on {
+  background: var(--accent);
+}
+
+.toggle__knob {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: transform var(--anim-base) var(--ease);
+}
+.toggle.is-on .toggle__knob {
+  transform: translateX(16px);
+}
+
+.slider {
+  width: 160px;
+  accent-color: var(--accent);
+}
+
+/* ---------- hotkey editor ---------- */
+
+.hotkeys {
+  max-width: 72ch;
+  margin: 0 auto;
+}
+
+.hotkeys__search {
+  display: flex;
+  /* Default `stretch` made the input grow to match a two-line button. */
+  align-items: center;
+  gap: var(--size-2);
+  margin-bottom: var(--size-3);
+}
+.hotkeys__search .sidebar__search-input {
+  padding-left: var(--size-2);
+}
+.hotkeys__search .btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.hotkeys__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hotkeys__row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.hotkeys__name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+}
+
+.hotkeys__section {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Two commands may share a chord; the registry picks by context. Shown rather
+   than hidden, because a binding that quietly does nothing is the bad case. */
+.hotkeys__shared {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: help;
+}
+
+.hotkeys__chord {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  min-width: 92px;
+  padding: 3px var(--size-2);
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.hotkeys__chord:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.hotkeys__chord.is-custom {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.hotkeys__chord.is-recording {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.hotkeys__clear {
+  all: unset;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.hotkeys__clear:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}

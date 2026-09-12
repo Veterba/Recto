@@ -26,6 +26,7 @@ import { useWorkspace } from '../core/use-workspace'
 import { getView } from '../core/view-registry'
 import { registerArchiveView } from './ArchiveView'
 import { registerMarkdownView } from './MarkdownView'
+import { registerSettingsView } from './SettingsView'
 import { registerStubViews } from './stubs'
 import { registerUnresolvedView } from './UnresolvedView'
 
@@ -109,6 +110,9 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       () => livePreviewRef.current,
     )
     registerUnresolvedView((p) => openFileRef.current(p))
+    // Read lazily: settings renders from the live appearance state, so there is
+    // no copy to keep in sync and no "apply" step.
+    registerSettingsView(() => settingsDepsRef.current)
   }
 
   const openFile = useCallback(
@@ -140,6 +144,14 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
    */
   const livePreviewRef = useRef(appearance.livePreview)
   livePreviewRef.current = appearance.livePreview
+
+  const settingsDepsRef = useRef({
+    appearance,
+    update,
+    vault,
+    onCloseVault,
+  })
+  settingsDepsRef.current = { appearance, update, vault, onCloseVault }
 
   const linkCandidatesRef = useRef<LinkCandidate[]>([])
   linkCandidatesRef.current = useMemo(() => {
