@@ -193,6 +193,8 @@ describe('sections', () => {
     for (const section of SECTIONS) {
       expect(section.searchPlaceholder.length).toBeGreaterThan(0)
       expect(section.newLabel.length).toBeGreaterThan(0)
+      // Short enough to sit beside the "Folder" button without truncating.
+      expect(section.newLabel.length).toBeLessThanOrEqual(6)
     }
   })
 })

@@ -24,6 +24,8 @@ type Props = {
   width: number
   onResize: (width: number) => void
   onNew: () => void
+  /** Only the Data section has folders; omitted elsewhere. */
+  onNewFolder?: (() => void) | undefined
   onOpenArchive: () => void
   onOpenSettings: () => void
   onCollapse: () => void
@@ -39,6 +41,7 @@ export function Sidebar({
   width,
   onResize,
   onNew,
+  onNewFolder,
   onOpenArchive,
   onOpenSettings,
   onCollapse,
@@ -116,10 +119,16 @@ export function Sidebar({
       <div className="sidebar__body">{children}</div>
 
       <footer className="sidebar__footer">
-        <button className="sidebar__new" onClick={onNew}>
+        <button className="sidebar__new" onClick={onNew} title={`New ${section.newLabel.toLowerCase()}`}>
           <Icon name="plus" size={15} />
           <span>{section.newLabel}</span>
         </button>
+        {onNewFolder !== undefined && (
+          <button className="sidebar__new" onClick={onNewFolder} title="New folder">
+            <Icon name="folder-plus" size={15} />
+            <span>Folder</span>
+          </button>
+        )}
         <button className="icon-btn" onClick={onOpenArchive} title="Archive">
           <Icon name="archive" size={15} />
         </button>

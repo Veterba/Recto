@@ -203,3 +203,61 @@ describe('moving lines', () => {
     expect(plain(s, md.moveLines(s, 1))).toBe('a\nd\nb\nc')
   })
 })
+
+describe('active formats at the cursor', () => {
+  const formats = (input: string): string[] => [...md.activeFormats(make(input))].sort()
+
+  it('reports the heading level of the cursor line', () => {
+    expect(formats('## he|ading')).toEqual(['heading-2'])
+    expect(formats('###### de|ep')).toEqual(['heading-6'])
+    expect(formats('plain |line')).toEqual([])
+  })
+
+  it('reports block formats', () => {
+    expect(formats('- item|')).toEqual(['bullet'])
+    expect(formats('1. item|')).toEqual(['numbered'])
+    expect(formats('> quote|')).toEqual(['quote'])
+  })
+
+  it('reports a task, not a bullet, for a checklist line', () => {
+    // A task line starts with '- ', so a naive check reports both.
+    expect(formats('- [ ] item|')).toEqual(['task'])
+    expect(formats('- [x] item|')).toEqual(['task'])
+  })
+
+  it('reports bold for a wrapped selection', () => {
+    expect(formats('say |**hi**| there')).toEqual(['bold'])
+    expect(formats('say **|hi|** there')).toEqual(['bold'])
+  })
+
+  it('reports bold for a bare cursor inside the markers', () => {
+    expect(formats('say **h|i** there')).toEqual(['bold'])
+  })
+
+  it('does not report italic inside bold', () => {
+    // '**bold**' starts and ends with '*', so the italic check must not fire.
+    expect(formats('**b|old**')).toEqual(['bold'])
+  })
+
+  it('reports italic, code, strike and highlight', () => {
+    expect(formats('*i|t*')).toEqual(['italic'])
+    expect(formats('`co|de`')).toEqual(['code'])
+    expect(formats('~~go|ne~~')).toEqual(['strikethrough'])
+    expect(formats('==li|t==')).toEqual(['highlight'])
+  })
+
+  it('combines a block and an inline format', () => {
+    expect(formats('## a **b|old** heading')).toEqual(['bold', 'heading-2'])
+  })
+
+  it('reports nothing outside any markers', () => {
+    expect(formats('**bold** then pl|ain')).toEqual([])
+  })
+
+  it('agrees with the toggles: toggling off clears the active format', () => {
+    const state = make('say |**hi**| there')
+    expect(md.activeFormats(state).has('bold')).toBe(true)
+    const next = state.update(md.toggleBold(state)).state
+    expect(md.activeFormats(next).has('bold')).toBe(false)
+  })
+})

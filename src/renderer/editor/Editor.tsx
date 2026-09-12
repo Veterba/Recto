@@ -18,6 +18,7 @@ export type EditorProps = {
   onSave: () => void
   onOpenLink: (target: string, heading: string | null) => void
   getLinkCandidates?: () => readonly LinkCandidate[]
+  onSelectionChange?: () => void
   onReady?: (handle: EditorHandle) => void
 }
 
@@ -28,6 +29,7 @@ export function Editor({
   onSave,
   onOpenLink,
   getLinkCandidates,
+  onSelectionChange,
   onReady,
 }: EditorProps): React.ReactElement {
   const host = useRef<HTMLDivElement | null>(null)
@@ -35,8 +37,8 @@ export function Editor({
 
   // Latest callbacks, read through the ref, so identity changes on re-render
   // cannot cause a remount.
-  const callbacks = useRef({ onChange, onSave, onOpenLink, onReady, getLinkCandidates })
-  callbacks.current = { onChange, onSave, onOpenLink, onReady, getLinkCandidates }
+  const callbacks = useRef({ onChange, onSave, onOpenLink, onReady, getLinkCandidates, onSelectionChange })
+  callbacks.current = { onChange, onSave, onOpenLink, onReady, getLinkCandidates, onSelectionChange }
 
   useEffect(() => {
     const parent = host.current
@@ -48,6 +50,7 @@ export function Editor({
       onSave: () => callbacks.current.onSave(),
       onOpenLink: (target, heading) => callbacks.current.onOpenLink(target, heading),
       getLinkCandidates: () => callbacks.current.getLinkCandidates?.() ?? [],
+      onSelectionChange: () => callbacks.current.onSelectionChange?.(),
     })
     handle.current = editor
     callbacks.current.onReady?.(editor)

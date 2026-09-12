@@ -288,6 +288,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
             width={appearance.sidebarWidth}
             onResize={(sidebarWidth) => update({ sidebarWidth })}
             onNew={onNew}
+            onNewFolder={activeSection === 'data' ? () => void createIn('folder') : undefined}
             onOpenArchive={() => openExtension('archive')}
             onOpenSettings={() => openExtension('settings')}
             onCollapse={toggleSidebar}

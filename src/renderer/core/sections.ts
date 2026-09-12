@@ -22,7 +22,10 @@ export type Section = {
   viewType: string
   /** Placeholder in the sidebar's search box. */
   searchPlaceholder: string
-  /** Label on the sidebar's bottom-left "new" button. */
+  /**
+   * Label on the sidebar's "new" button. Kept short: it sits beside a second
+   * button, and "New note" truncates to "New n..." at the default width.
+   */
   newLabel: string
 }
 
@@ -33,7 +36,7 @@ export const SECTIONS: readonly Section[] = [
     icon: 'book-open',
     viewType: 'markdown',
     searchPlaceholder: 'Search files…',
-    newLabel: 'New note',
+    newLabel: 'Note',
   },
   {
     id: 'ai',
@@ -41,7 +44,7 @@ export const SECTIONS: readonly Section[] = [
     icon: 'sparkles',
     viewType: 'chat',
     searchPlaceholder: 'Search chats…',
-    newLabel: 'New chat',
+    newLabel: 'Chat',
   },
   {
     id: 'tasks',
@@ -49,7 +52,7 @@ export const SECTIONS: readonly Section[] = [
     icon: 'square-kanban',
     viewType: 'board',
     searchPlaceholder: 'Search tasks…',
-    newLabel: 'New task',
+    newLabel: 'Task',
   },
 ]
 
