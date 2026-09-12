@@ -16,12 +16,12 @@ export const editorTheme = (): Extension =>
   EditorView.theme({
     '&': {
       height: '100%',
-      fontSize: '14px',
+      fontSize: 'var(--editor-font-size, 14px)',
       color: 'var(--text-primary)',
       backgroundColor: 'transparent',
     },
     '.cm-scroller': {
-      fontFamily: 'var(--font-mono)',
+      fontFamily: 'var(--font-editor, var(--font-mono))',
       lineHeight: '1.75',
       padding: '0 var(--size-6) 40vh',
       overflow: 'auto',

@@ -14,6 +14,9 @@
 
   --font-ui: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  /* Set at runtime from appearance.json; these are the fallbacks. */
+  --font-editor: var(--font-mono);
+  --editor-font-size: 14px;
 
   --size-1: 4px;
   --size-2: 8px;

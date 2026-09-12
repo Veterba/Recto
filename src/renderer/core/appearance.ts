@@ -19,6 +19,10 @@ export type Appearance = {
   sidebarOpen: boolean
   /** Live Preview hides markdown markers away from the cursor. */
   livePreview: boolean
+  /** Editor font size in px. */
+  fontSize: number
+  /** Monospace suits markdown source; serif/sans suit long-form reading. */
+  editorFont: 'mono' | 'sans' | 'serif'
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -27,14 +31,26 @@ export const DEFAULT_APPEARANCE: Appearance = {
   sidebarWidth: 260,
   sidebarOpen: true,
   livePreview: true,
+  fontSize: 14,
+  editorFont: 'mono',
 }
 
 /** Apply to the document. Theme is an attribute; accent is a variable override. */
+const FONT_STACKS: Record<Appearance['editorFont'], string> = {
+  mono: 'var(--font-mono)',
+  sans: 'var(--font-ui)',
+  serif: 'ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", serif',
+}
+
 export function applyAppearance(appearance: Appearance): void {
   const root = document.documentElement
   if (appearance.theme === 'system') root.removeAttribute('data-theme')
   else root.setAttribute('data-theme', appearance.theme)
   root.style.setProperty('--accent-h', String(appearance.accentHue))
+  // The editor reads these two through the theme, so changing them repaints it
+  // without the editor being rebuilt.
+  root.style.setProperty('--editor-font-size', `${appearance.fontSize}px`)
+  root.style.setProperty('--font-editor', FONT_STACKS[appearance.editorFont])
 }
 
 function coerce(value: unknown): Appearance {
@@ -47,6 +63,14 @@ function coerce(value: unknown): Appearance {
     sidebarWidth: typeof v.sidebarWidth === 'number' ? Math.min(520, Math.max(180, v.sidebarWidth)) : DEFAULT_APPEARANCE.sidebarWidth,
     sidebarOpen: typeof v.sidebarOpen === 'boolean' ? v.sidebarOpen : DEFAULT_APPEARANCE.sidebarOpen,
     livePreview: typeof v.livePreview === 'boolean' ? v.livePreview : DEFAULT_APPEARANCE.livePreview,
+    fontSize:
+      typeof v.fontSize === 'number' && v.fontSize >= 11 && v.fontSize <= 24
+        ? v.fontSize
+        : DEFAULT_APPEARANCE.fontSize,
+    editorFont:
+      v.editorFont === 'mono' || v.editorFont === 'sans' || v.editorFont === 'serif'
+        ? v.editorFont
+        : DEFAULT_APPEARANCE.editorFont,
   }
 }
 
