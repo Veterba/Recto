@@ -1,4 +1,5 @@
 import {
+  Archive,
   BookOpen,
   CircleUser,
   FilePlus,
@@ -6,6 +7,7 @@ import {
   GitFork,
   House,
   Maximize2,
+  Minimize2,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -41,6 +43,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   'panel-left-open': PanelLeftOpen,
   'panel-right-close': PanelRightClose,
   maximize: Maximize2,
+  minimize: Minimize2,
+  archive: Archive,
   search: Search,
   plus: Plus,
   x: X,

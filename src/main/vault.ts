@@ -36,7 +36,7 @@ function scaffold(dir: string): boolean {
   fs.writeFileSync(
     path.join(stateDir, '.gitignore'),
     // The index is a cache: it must never be committed, and deleting it is safe.
-    'index.db\nindex.db-wal\nindex.db-shm\n.trash/\n',
+    'index.db\nindex.db-wal\nindex.db-shm\n.trash/\narchive/\n',
     'utf8',
   )
   return true

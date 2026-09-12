@@ -4,7 +4,7 @@ import { api } from '../api'
 import { Breadcrumb } from '../components/Breadcrumb'
 import { CommandPalette } from '../components/CommandPalette'
 import { FileTree } from '../components/FileTree'
-import { GraphDock } from '../components/GraphDock'
+import { FloatingWindow } from '../components/FloatingWindow'
 import { SearchPanel } from '../components/SearchPanel'
 import { Sidebar, SidebarStub } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
@@ -18,6 +18,7 @@ import { getSection, type SectionId } from '../core/sections'
 import { useVault } from '../core/vault-store'
 import { useWorkspace } from '../core/use-workspace'
 import { getView } from '../core/view-registry'
+import { registerArchiveView } from './ArchiveView'
 import { registerMarkdownView } from './MarkdownView'
 import { registerStubViews } from './stubs'
 
@@ -30,11 +31,13 @@ type Props = {
 // a saved leaf would resolve to "unknown" on first paint.
 registerStubViews()
 registerMarkdownView()
+registerArchiveView()
 
 const THEME_CYCLE: readonly Theme[] = ['system', 'light', 'dark']
 
 export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
-  const { sections, active, activeSection, setActiveSection, graphDock, setGraphDock, revision } = useWorkspace()
+  const { sections, active, activeSection, setActiveSection, graphWindow, setGraphWindow, revision } =
+    useWorkspace()
   const { appearance, ready, update } = useAppearance()
   const { tree, refresh } = useVault(true)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -135,8 +138,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       setTheme: (theme) => update({ theme }),
       cycleTheme,
       goToSection: setActiveSection,
-      toggleGraph: () => setGraphDock({ open: !graphDock.open }),
-      openGraphFull: () => openExtension('graph'),
+      toggleGraph: () => setGraphWindow({ open: !graphWindow.open }),
+      openGraphFull: () => setGraphWindow({ open: true, maximized: true }),
       openExtension,
       openSearch: () => setSearchOpen(true),
       reindex: () => void api.invoke('index:reindex'),
@@ -151,8 +154,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     update,
     createIn,
     activePath,
-    graphDock.open,
-    setGraphDock,
+    graphWindow.open,
+    setGraphWindow,
     openExtension,
   ])
 
@@ -196,6 +199,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
             width={appearance.sidebarWidth}
             onResize={(sidebarWidth) => update({ sidebarWidth })}
             onNew={onNew}
+            onOpenArchive={() => openExtension('archive')}
             onOpenSettings={() => openExtension('settings')}
             onCollapse={toggleSidebar}
           >
@@ -232,26 +236,28 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
           )}
         </main>
 
-        {graphDock.open && (
-          <GraphDock
-            width={graphDock.width}
-            onResize={(width) => setGraphDock({ width })}
-            onClose={() => setGraphDock({ open: false })}
-            onOpenFull={() => {
-              setGraphDock({ open: false })
-              openExtension('graph')
-            }}
+        {graphWindow.open && (
+          <FloatingWindow
+            title="Graph"
+            geometry={graphWindow}
+            onChange={setGraphWindow}
+            onClose={() => setGraphWindow({ open: false })}
+            closeHint="Close graph (⌘G)"
           >
-            {graphView?.render({ state: { docked: true }, setState: () => {}, leafId: 'graph-dock' })}
-          </GraphDock>
+            {graphView?.render({
+              state: { floating: true },
+              setState: () => {},
+              leafId: 'graph-window',
+            })}
+          </FloatingWindow>
         )}
       </div>
 
       <StatusBar
         workspace={active}
         vaultName={vault.name}
-        graphOpen={graphDock.open}
-        onToggleGraph={() => setGraphDock({ open: !graphDock.open })}
+        graphOpen={graphWindow.open}
+        onToggleGraph={() => setGraphWindow({ open: !graphWindow.open })}
         onOpenPalette={openPalette}
       />
       <CommandPalette registry={commands} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
