@@ -24,6 +24,9 @@ export type Backlink = {
 
 export type NoteChange = { type: 'upserted' | 'removed'; path: string }
 
+/** One stored version of a note. `content` is omitted when listing. */
+export type Snapshot = { id: number; path: string; ts: number; bytes: number; content?: string }
+
 export type IndexRequest =
   | { kind: 'open'; vaultPath: string; dbPath: string }
   | { kind: 'reindex'; force?: boolean }
@@ -33,6 +36,9 @@ export type IndexRequest =
   | { kind: 'resolve-link'; target: string }
   | { kind: 'resolve-links'; targets: string[] }
   | { kind: 'unresolved' }
+  | { kind: 'history'; path: string }
+  | { kind: 'history-get'; id: number }
+  | { kind: 'history-prune' }
   | { kind: 'stats' }
   | { kind: 'close' }
 
@@ -45,6 +51,9 @@ export type IndexResponse =
   | { kind: 'resolve-link-result'; path: string | null }
   | { kind: 'resolve-links-result'; resolved: Record<string, string | null> }
   | { kind: 'unresolved-result'; entries: { target: string; sources: string[] }[] }
+  | { kind: 'history-result'; snapshots: Snapshot[] }
+  | { kind: 'history-get-result'; snapshot: Snapshot | null }
+  | { kind: 'history-prune-result'; removed: number }
   | { kind: 'stats-result'; notes: number; links: number; unresolved: number; tags: number }
   | { kind: 'closed' }
   | { kind: 'error'; message: string }

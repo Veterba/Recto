@@ -27,6 +27,7 @@ export type CommandContext = {
   openExtension: (type: string) => void
   openSearch: () => void
   openSwitcher: () => void
+  toggleHistory: () => void
   reindex: () => void
 }
 
@@ -98,6 +99,18 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       name: 'Rebuild search index',
       section: 'Search',
       run: ctx.reindex,
+    }),
+    registry.register({
+      id: 'history:toggle',
+      name: 'Version history',
+      section: 'Vault',
+      icon: 'history',
+      // Not Mod+Shift+H: that is the editor's highlight command, and an
+      // editor-scoped binding wins whenever a note has focus - which is
+      // exactly when you would reach for version history.
+      hotkey: 'Mod+Shift+Y',
+      isAvailable: () => typeof workspace.activeLeaf?.state['path'] === 'string',
+      run: ctx.toggleHistory,
     }),
     registry.register({
       id: 'graph:toggle',

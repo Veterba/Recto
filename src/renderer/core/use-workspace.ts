@@ -21,6 +21,8 @@ type SavedFile = {
   activeSection: SectionId
   /** Floating graph window, shared across sections. */
   graphWindow?: { open: boolean } & Partial<WindowGeometry>
+  /** Floating version-history window. */
+  historyWindow?: { open: boolean } & Partial<WindowGeometry>
 }
 
 export type GraphWindowState = { open: boolean } & WindowGeometry
@@ -34,12 +36,27 @@ export const GRAPH_WINDOW_DEFAULT: GraphWindowState = {
   maximized: false,
 }
 
+export const HISTORY_WINDOW_DEFAULT: GraphWindowState = {
+  open: false,
+  x: 180,
+  y: 80,
+  width: 620,
+  height: 460,
+  maximized: false,
+}
+
 function parse(saved: unknown): {
   layouts: Partial<Record<SectionId, WorkspaceLayout>>
   active: SectionId
   graphWindow: GraphWindowState
+  historyWindow: GraphWindowState
 } {
-  const fallback = { layouts: {}, active: DEFAULT_SECTION, graphWindow: GRAPH_WINDOW_DEFAULT }
+  const fallback = {
+    layouts: {},
+    active: DEFAULT_SECTION,
+    graphWindow: GRAPH_WINDOW_DEFAULT,
+    historyWindow: HISTORY_WINDOW_DEFAULT,
+  }
   if (typeof saved !== 'object' || saved === null) return fallback
 
   const file = saved as Partial<SavedFile>
@@ -48,14 +65,14 @@ function parse(saved: unknown): {
   // one click. Silently mis-homing someone's tabs is worse than a clean start.
   if (file.version !== 2) return fallback
 
-  const saved_window = file.graphWindow
   return {
     layouts: file.sections ?? {},
     active: isSectionId(file.activeSection) ? file.activeSection : DEFAULT_SECTION,
-    graphWindow: {
-      ...GRAPH_WINDOW_DEFAULT,
-      ...saved_window,
-      open: saved_window?.open ?? false,
+    graphWindow: { ...GRAPH_WINDOW_DEFAULT, ...file.graphWindow, open: file.graphWindow?.open ?? false },
+    historyWindow: {
+      ...HISTORY_WINDOW_DEFAULT,
+      ...file.historyWindow,
+      open: file.historyWindow?.open ?? false,
     },
   }
 }
@@ -67,6 +84,8 @@ export type WorkspaceApi = {
   setActiveSection: (id: SectionId) => void
   graphWindow: GraphWindowState
   setGraphWindow: (next: Partial<GraphWindowState>) => void
+  historyWindow: GraphWindowState
+  setHistoryWindow: (next: Partial<GraphWindowState>) => void
   revision: number
 }
 
@@ -74,6 +93,7 @@ export function useWorkspace(): WorkspaceApi {
   const [sections, setSections] = useState<Sections | null>(null)
   const [activeSection, setActive] = useState<SectionId>(DEFAULT_SECTION)
   const [graphWindow, setWindow] = useState(GRAPH_WINDOW_DEFAULT)
+  const [historyWindow, setHistory] = useState(HISTORY_WINDOW_DEFAULT)
   const [revision, setRevision] = useState(0)
   const saveTimer = useRef<number | undefined>(undefined)
 
@@ -81,13 +101,14 @@ export function useWorkspace(): WorkspaceApi {
     let cancelled = false
     void api.invoke('state:read', 'workspace').then((saved) => {
       if (cancelled) return
-      const { layouts, active, graphWindow: win } = parse(saved)
+      const { layouts, active, graphWindow: win, historyWindow: hist } = parse(saved)
       const built = Object.fromEntries(
         SECTIONS.map((section) => [section.id, new Workspace(layouts[section.id])]),
       ) as Sections
       setSections(built)
       setActive(active)
       setWindow(win)
+      setHistory(hist)
     })
     return () => {
       cancelled = true
@@ -95,22 +116,23 @@ export function useWorkspace(): WorkspaceApi {
   }, [])
 
   const serialize = useCallback(
-    (current: Sections, active: SectionId, win: GraphWindowState): SavedFile => ({
+    (current: Sections, active: SectionId, windows: { graph: GraphWindowState; history: GraphWindowState }): SavedFile => ({
       version: 2,
       sections: Object.fromEntries(
         SECTIONS.map((section) => [section.id, current[section.id].serialize()]),
       ) as SavedFile['sections'],
       activeSection: active,
-      graphWindow: win,
+      graphWindow: windows.graph,
+      historyWindow: windows.history,
     }),
     [],
   )
 
   const save = useCallback(
-    (current: Sections, active: SectionId, win: GraphWindowState) => {
+    (current: Sections, active: SectionId, windows: { graph: GraphWindowState; history: GraphWindowState }) => {
       window.clearTimeout(saveTimer.current)
       saveTimer.current = window.setTimeout(() => {
-        void api.invoke('state:write', 'workspace', serialize(current, active, win))
+        void api.invoke('state:write', 'workspace', serialize(current, active, windows))
       }, 400)
     },
     [serialize],
@@ -127,8 +149,14 @@ export function useWorkspace(): WorkspaceApi {
    * persisted the *previous* state. A "never lose the last change" safety net
    * that reliably lost the last change.
    */
-  const latest = useRef({ sections, activeSection, graphWindow })
-  latest.current = { sections, activeSection, graphWindow }
+  const latest = useRef({ sections, activeSection, graphWindow, historyWindow })
+  latest.current = { sections, activeSection, graphWindow, historyWindow }
+
+  /** Both floating windows, as the save functions want them. */
+  const windowsOf = (state: typeof latest.current): { graph: GraphWindowState; history: GraphWindowState } => ({
+    graph: state.graphWindow,
+    history: state.historyWindow,
+  })
 
   useEffect(() => {
     if (!sections) return
@@ -136,7 +164,7 @@ export function useWorkspace(): WorkspaceApi {
       sections[section.id].on('layout-change', () => {
         setRevision((n) => n + 1)
         const now = latest.current
-        if (now.sections) save(now.sections, now.activeSection, now.graphWindow)
+        if (now.sections) save(now.sections, now.activeSection, windowsOf(now))
       }),
     )
     return () => {
@@ -146,7 +174,7 @@ export function useWorkspace(): WorkspaceApi {
       // so it is the newest state and not whatever this closure captured.
       const now = latest.current
       if (now.sections) {
-        void api.invoke('state:write', 'workspace', serialize(now.sections, now.activeSection, now.graphWindow))
+        void api.invoke('state:write', 'workspace', serialize(now.sections, now.activeSection, windowsOf(now)))
       }
     }
   }, [sections, save, serialize])
@@ -155,26 +183,48 @@ export function useWorkspace(): WorkspaceApi {
     (id: SectionId) => {
       setActive(id)
       setRevision((n) => n + 1)
-      if (sections) save(sections, id, graphWindow)
+      if (sections) save(sections, id, { graph: graphWindow, history: historyWindow })
     },
-    [sections, graphWindow, save],
+    [sections, graphWindow, historyWindow, save],
   )
 
-  const setGraphWindow = useCallback(
-    (patch: Partial<GraphWindowState>) => {
-      setWindow((prev) => {
+  /** Shared by both floating windows; they differ only in which state they set. */
+  const makeSetter = (
+    setter: typeof setWindow,
+    pick: (next: GraphWindowState) => { graph: GraphWindowState; history: GraphWindowState },
+  ) =>
+    (patch: Partial<GraphWindowState>): void => {
+      setter((prev) => {
         // Clamp on write, not just on drag: a hand-edited workspace.json could
-        // otherwise park the window permanently off-screen.
+        // otherwise park a window permanently off-screen.
         const next = clampGeometry({ ...prev, ...patch }, { width: window.innerWidth, height: window.innerHeight })
         const merged = { ...next, open: patch.open ?? prev.open }
-        if (sections) save(sections, activeSection, merged)
+        if (sections) save(sections, activeSection, pick(merged))
         return merged
       })
-    },
+    }
+
+  const setGraphWindow = useCallback(
+    makeSetter(setWindow, (next) => ({ graph: next, history: latest.current.historyWindow })),
+    [sections, activeSection, save],
+  )
+
+  const setHistoryWindow = useCallback(
+    makeSetter(setHistory, (next) => ({ graph: latest.current.graphWindow, history: next })),
     [sections, activeSection, save],
   )
 
   const active = useMemo(() => (sections ? sections[activeSection] : null), [sections, activeSection])
 
-  return { sections, active, activeSection, setActiveSection, graphWindow, setGraphWindow, revision }
+  return {
+    sections,
+    active,
+    activeSection,
+    setActiveSection,
+    graphWindow,
+    setGraphWindow,
+    historyWindow,
+    setHistoryWindow,
+    revision,
+  }
 }

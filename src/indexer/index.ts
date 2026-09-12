@@ -3,8 +3,14 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { runMigrations } from './migrations'
+import {
+  getSnapshot,
+  listSnapshots,
+  pruneSnapshots,
+  takeSnapshot,
+} from './snapshots'
 import { normalizeName, parseNote, resolveLink } from './parse'
-import type { Backlink, IndexRequest, IndexResponse, SearchHit } from './protocol'
+import type { Backlink, IndexRequest, IndexResponse, SearchHit, Snapshot } from './protocol'
 
 /**
  * The indexer, running in its own process.
@@ -202,6 +208,11 @@ async function reindex(force: boolean): Promise<{ indexed: number; removed: numb
       for (const entry of contents) {
         if (entry === null) continue
         writeNote(entry.file.path, entry.content, entry.file.mtime, entry.file.size)
+        // Snapshot here too, not only on change. Otherwise history begins at
+        // your FIRST edit and the content you had before it - the version you
+        // are most likely to want back - is never captured. The
+        // identical-content check makes a repeat reindex free.
+        takeSnapshot(handle, entry.file.path, entry.content)
         indexed++
       }
     })()
@@ -332,6 +343,12 @@ function handle(request: IndexRequest): IndexResponse {
     }
     case 'unresolved':
       return { kind: 'unresolved-result', entries: unresolved() }
+    case 'history':
+      return { kind: 'history-result', snapshots: listSnapshots(requireDb(), request.path) }
+    case 'history-get':
+      return { kind: 'history-get-result', snapshot: getSnapshot(requireDb(), request.id) }
+    case 'history-prune':
+      return { kind: 'history-prune-result', removed: pruneSnapshots(requireDb()) }
     case 'stats': {
       const handleDb = requireDb()
       const notes = (handleDb.prepare('SELECT COUNT(*) AS n FROM notes').get() as { n: number }).n
@@ -369,7 +386,10 @@ process.parentPort?.on('message', (event) => {
           const absolute = path.join(vaultRoot, change.path)
           const stat = fs.statSync(absolute)
           const content = fs.readFileSync(absolute, 'utf8')
-          handleDb.transaction(() => writeNote(change.path, content, stat.mtimeMs, stat.size))()
+          handleDb.transaction(() => {
+            writeNote(change.path, content, stat.mtimeMs, stat.size)
+            takeSnapshot(handleDb, change.path, content)
+          })()
         } catch {
           // The file changed and then disappeared; the next reconcile catches it.
         }

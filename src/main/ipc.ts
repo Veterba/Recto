@@ -31,6 +31,9 @@ function rewatch(): void {
   // Retention is enforced on open rather than on a timer: the app may not be
   // running on the day something expires, and a check at open always catches up.
   void archive.purgeExpired().catch((err: unknown) => console.error('[archive]', err))
+  // Old snapshots go on vault open, for the same reason archive retention does:
+  // the app may not be running on the day something expires.
+  void send({ kind: 'history-prune' }, 30_000).catch(() => undefined)
 }
 
 export function registerIpc(): void {
@@ -137,6 +140,28 @@ export function registerIpc(): void {
   })
   // Deleting from the UI archives; `fs:trash` remains for a real, immediate delete.
   handle('fs:trash', (p) => vaultFs.trash(p))
+  handle('history:list', async (p) => {
+    const response = await send({ kind: 'history', path: p }, 15_000)
+    return response.kind === 'history-result' ? response.snapshots : []
+  })
+  handle('history:get', async (id) => {
+    const response = await send({ kind: 'history-get', id }, 15_000)
+    return response.kind === 'history-get-result' ? response.snapshot : null
+  })
+  handle('history:restore', async (id) => {
+    const response = await send({ kind: 'history-get', id }, 15_000)
+    if (response.kind !== 'history-get-result' || response.snapshot?.content === undefined) {
+      return { ok: false, error: 'That version is no longer stored.' }
+    }
+    const { path: notePath, content } = response.snapshot
+    // Marked as a self-write so the editor does not treat the restore as an
+    // external edit and fight it - and the index still sees it, which also
+    // snapshots the pre-restore content so the restore itself is undoable.
+    markSelfWrite(notePath)
+    const written = await vaultFs.writeFile(notePath, content)
+    if (!written.ok) return { ok: false, error: written.error ?? 'Could not restore.' }
+    return { ok: true, path: notePath }
+  })
   handle('archive:add', (p) => archive.archive(p))
   handle('archive:list', () => archive.list())
   handle('archive:restore', (id) => archive.restore(id))

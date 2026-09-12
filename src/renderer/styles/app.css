@@ -1823,3 +1823,111 @@ body.is-resizing {
   font-weight: 700;
   letter-spacing: 0.02em;
 }
+
+/* ---------- version history ---------- */
+
+.history {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  min-height: 0;
+}
+
+.history__empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--size-4);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+.history__list {
+  margin: 0;
+  padding: var(--size-1);
+  list-style: none;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+
+.history__item {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--size-2);
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease);
+}
+.history__item:hover {
+  background: var(--bg-hover);
+}
+.history__item.is-active {
+  background: var(--accent-muted);
+}
+
+.history__when {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.history__badge {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.history__bytes {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.history__preview {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.history__notice {
+  margin: 0;
+  padding: var(--size-2) var(--size-3);
+  background: var(--accent-muted);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.history__text {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--size-3);
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.history__actions {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--size-2) var(--size-3);
+  border-top: 1px solid var(--border);
+}
