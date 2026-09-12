@@ -113,75 +113,221 @@ code {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
 }
 
-.shell__bar {
-  height: 44px;
+/* Hide the first paint until appearance.json has been applied, so the app never
+   flashes dark-then-light on a light-themed machine. */
+.shell.is-booting {
+  visibility: hidden;
+}
+
+.shell__titlebar {
+  height: 38px;
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--size-4);
-  padding: 0 var(--size-3) 0 88px; /* clears the macOS traffic lights */
+  padding-left: 84px; /* clears the macOS traffic lights */
   border-bottom: 1px solid var(--border);
   background: var(--bg-secondary);
   -webkit-app-region: drag;
 }
-.shell__bar .btn {
-  -webkit-app-region: no-drag;
-}
 
 .shell__vault {
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.shell__body {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  padding: var(--size-8);
-}
-
-.shell__todo {
-  color: var(--text-muted);
-  text-align: center;
-  line-height: 1.8;
-}
-
-/* ---------- shell additions ---------- */
-
-.shell__actions {
-  display: flex;
-  gap: var(--size-2);
-  -webkit-app-region: no-drag;
-}
-
-.btn--sm {
-  padding: 4px var(--size-2);
   font-size: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
 }
 
-.shell__body {
+.shell__main {
   flex: 1;
   min-height: 0;
-  display: block;
-  padding: 0;
-  place-items: initial;
+  display: flex;
 }
 
-kbd {
-  font-family: var(--font-ui);
-  font-size: 11px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
+.shell__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  background: var(--bg-primary);
+}
+.shell__content > .split,
+.shell__content > .tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- rail ---------- */
+
+.rail {
+  flex: none;
+  width: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--size-2) 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.rail__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+
+.rail__btn {
+  all: unset;
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--anim-fast) var(--ease), background var(--anim-fast) var(--ease);
+}
+.rail__btn:hover {
+  background: var(--bg-hover);
   color: var(--text-secondary);
+}
+.rail__btn.is-active {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.rail__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Tooltip on hover, built here rather than pulled in as a dependency. */
+.rail__tip {
+  position: absolute;
+  left: calc(100% + 8px);
+  z-index: 50;
+  padding: 3px 8px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-4px);
+  pointer-events: none;
+  transition: opacity var(--anim-fast) var(--ease), transform var(--anim-fast) var(--ease);
+  box-shadow: var(--shadow-lg);
+}
+.rail__btn:hover .rail__tip,
+.rail__btn:focus-visible .rail__tip {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ---------- sidebar ---------- */
+
+.sidebar {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.sidebar__head {
+  flex: none;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--size-3);
+}
+
+.sidebar__title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+
+.sidebar__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--size-3) var(--size-3);
+}
+
+.sidebar__empty {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+.sidebar__resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 7px;
+  z-index: 3;
+  cursor: col-resize;
+  background: transparent;
+  transition: background var(--anim-fast) var(--ease);
+}
+.sidebar__resize:hover,
+body.is-resizing .sidebar__resize {
+  background: var(--accent-muted);
+}
+
+/* ---------- status bar ---------- */
+
+.status {
+  flex: none;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: 0 var(--size-2) 0 var(--size-3);
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.status__item--vault {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.status__item--muted {
+  color: var(--text-muted);
+}
+
+.status__sep {
+  width: 1px;
+  height: 12px;
+  background: var(--border);
+}
+
+.status__spacer {
+  flex: 1;
+}
+
+.status__btn {
+  all: unset;
+  padding: 0 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.status__btn:hover {
+  background: var(--bg-hover);
 }
 
 /* ---------- splits ---------- */
@@ -251,6 +397,8 @@ body.is-resizing {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+.split .tabs {
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
@@ -258,10 +406,12 @@ body.is-resizing {
 .tabs__bar {
   flex: none;
   display: flex;
+  flex-direction: row;
   align-items: stretch;
   gap: 2px;
   padding: var(--size-1) var(--size-1) 0;
   background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -270,11 +420,12 @@ body.is-resizing {
 }
 
 .tab {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: var(--size-1);
   max-width: 200px;
-  padding: 5px var(--size-2) 5px var(--size-3);
+  padding: 5px var(--size-1) 5px var(--size-3);
   border-radius: var(--radius-s) var(--radius-s) 0 0;
   font-size: 12px;
   color: var(--text-muted);
@@ -289,6 +440,12 @@ body.is-resizing {
 .tab.is-active {
   background: var(--bg-primary);
   color: var(--text-primary);
+  /* Bridge the tab into the content area below it. Fill alone is invisible in
+     light mode, where the tab and the content are both white. */
+  box-shadow:
+    inset 1px 0 0 var(--border),
+    inset -1px 0 0 var(--border),
+    inset 0 1px 0 var(--border);
 }
 
 .tab__title {
@@ -298,16 +455,18 @@ body.is-resizing {
 
 .tab__close {
   all: unset;
+  flex: none;
   width: 16px;
   height: 16px;
   display: grid;
   place-items: center;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
   color: var(--text-muted);
   opacity: 0;
   cursor: pointer;
+  transition: opacity var(--anim-fast) var(--ease), background var(--anim-fast) var(--ease);
 }
 .tab:hover .tab__close,
 .tab.is-active .tab__close {
@@ -326,7 +485,7 @@ body.is-resizing {
 }
 
 /* The focused group gets a hairline accent, so splits are never ambiguous. */
-.tabs.is-focused > .tabs__bar {
+.split .tabs.is-focused > .tabs__bar {
   box-shadow: inset 0 2px 0 -1px var(--accent);
 }
 
@@ -442,6 +601,16 @@ body.is-resizing {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.palette__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+.palette__item.is-active .palette__icon {
+  color: var(--accent);
 }
 
 .palette__section {

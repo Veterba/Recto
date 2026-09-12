@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CommandRegistry } from '../core/commands'
 import { fuzzyFilter, toSegments, type MatchRange } from '../core/fuzzy'
 import { formatChord } from '../core/hotkeys'
+import { Icon } from './Icon'
 
 /**
  * The command palette. Reads the registry and nothing else - so every command
@@ -95,6 +96,11 @@ export function CommandPalette({ registry, open, onClose }: Props): React.ReactE
                     commit(i)
                   }}
                 >
+                  {hit.item.icon !== undefined && (
+                    <span className="palette__icon">
+                      <Icon name={hit.item.icon} size={15} />
+                    </span>
+                  )}
                   <span className="palette__name">
                     <Highlight text={hit.item.name} ranges={hit.match.ranges} />
                   </span>

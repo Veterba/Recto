@@ -15,6 +15,8 @@ export type Command = {
   name: string
   /** Grouping label in the palette, e.g. 'Editor', 'Vault'. */
   section?: string
+  /** Lucide icon name, shown in the palette. */
+  icon?: string
   /** Default binding, e.g. 'Mod+Shift+1'. Overridable via hotkeys.json. */
   hotkey?: string
   /**
