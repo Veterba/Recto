@@ -33,8 +33,24 @@
   --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
-:root,
-:root[data-theme='dark'] {
+/*
+ * The light surfaces are deliberately far apart in value: an earlier pass had
+ * the chrome 9 units off the content area and the whole window read as one flat
+ * sheet. Content is pure white, chrome is warm grey.
+ *
+ * Theme resolution, in precedence order:
+ *   1. an explicit [data-theme] wins, always (the user chose);
+ *   2. otherwise follow the OS via prefers-color-scheme;
+ *   3. dark is the base, so "system" on a dark Mac needs no override.
+ *
+ * The light palette is written twice on purpose - CSS has no way to share a
+ * declaration block between a media query and an attribute selector, and the
+ * alternative (a second indirection layer of tokens) is harder to read than
+ * twelve duplicated lines.
+ */
+
+:root {
+  color-scheme: dark;
   --bg-primary: #16161a;
   --bg-secondary: #1c1c21;
   --bg-elevated: #24242b;
@@ -48,18 +64,51 @@
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.45);
 }
 
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+    --bg-primary: #ffffff;
+    --bg-secondary: #f1f0ed;
+    --bg-elevated: #ffffff;
+    --bg-hover: #e4e3df;
+    --border: #dededa;
+    --border-strong: #c3c2bc;
+    --text-primary: #1a1a18;
+    --text-secondary: #57574f;
+    --text-muted: #85847c;
+    --danger: #c2352b;
+    --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
+  }
+}
+
 :root[data-theme='light'] {
-  --bg-primary: #fdfdfc;
-  --bg-secondary: #f5f5f4;
+  color-scheme: light;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f1f0ed;
   --bg-elevated: #ffffff;
-  --bg-hover: #ececea;
-  --border: #e3e3e0;
-  --border-strong: #cfcfcb;
-  --text-primary: #1b1b19;
-  --text-secondary: #5f5f5a;
-  --text-muted: #8e8e88;
-  --danger: #c8372d;
+  --bg-hover: #e4e3df;
+  --border: #dededa;
+  --border-strong: #c3c2bc;
+  --text-primary: #1a1a18;
+  --text-secondary: #57574f;
+  --text-muted: #85847c;
+  --danger: #c2352b;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg-primary: #16161a;
+  --bg-secondary: #1c1c21;
+  --bg-elevated: #24242b;
+  --bg-hover: #2c2c34;
+  --border: #2e2e37;
+  --border-strong: #3d3d48;
+  --text-primary: #e9e9ee;
+  --text-secondary: #a6a6b2;
+  --text-muted: #6f6f7d;
+  --danger: #f4736b;
+  --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {

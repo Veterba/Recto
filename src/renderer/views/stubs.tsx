@@ -47,6 +47,12 @@ const STUBS: Stub[] = [
     blurb: 'Appearance, the hotkey editor over hotkeys.json, and vault management.',
   },
   {
+    type: 'profile',
+    title: 'Profile',
+    milestone: 'milestone 7',
+    blurb: 'Who you are in the app: name, avatar, and the totals behind the home dashboard.',
+  },
+  {
     type: 'markdown',
     title: 'Editor',
     milestone: 'milestone 1.6',

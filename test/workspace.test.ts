@@ -6,6 +6,7 @@ import {
   type SplitNode,
   type WorkspaceLayout,
 } from '../src/renderer/core/workspace'
+import { SECTIONS, sectionForViewType } from '../src/renderer/core/sections'
 
 /** Narrow the root to a split, failing the test if it is not one. */
 function asSplit(node: { kind: string }): SplitNode {
@@ -159,5 +160,24 @@ describe('Workspace tree', () => {
     ws.openView('graph')
     expect(layouts).toBeGreaterThanOrEqual(2)
     expect(actives).toEqual(['home', 'graph'])
+  })
+})
+
+describe('sections', () => {
+  it('every section maps to a distinct view type, so deriving the rail is unambiguous', () => {
+    const types = SECTIONS.map((s) => s.viewType)
+    expect(new Set(types).size).toBe(types.length)
+  })
+
+  it('resolves a view type back to its section', () => {
+    expect(sectionForViewType('markdown')?.id).toBe('data')
+    expect(sectionForViewType('chat')?.id).toBe('chat')
+    expect(sectionForViewType('nonexistent')).toBeUndefined()
+  })
+
+  it('footer sections sort after the rest, so the rail order is stable', () => {
+    const firstFooter = SECTIONS.findIndex((s) => s.footer === true)
+    const lastMain = SECTIONS.map((s) => s.footer === true).lastIndexOf(false)
+    expect(firstFooter).toBeGreaterThan(lastMain)
   })
 })
