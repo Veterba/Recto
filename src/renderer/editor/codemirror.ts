@@ -88,10 +88,30 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
     },
   })
 
+  /**
+   * Open with the cursor at the start of the body, past any frontmatter.
+   *
+   * The cursor defaults to position 0, which is inside the frontmatter block -
+   * so Live Preview's reveal rule would show raw YAML every time a note opened,
+   * which is both ugly and not where anyone wants to start typing.
+   */
+  const bodyStart = ((): number => {
+    const lines = options.doc.split('\n')
+    if (!/^---\s*$/.test(lines[0] ?? '')) return 0
+    for (let i = 1; i < lines.length; i++) {
+      if (/^---\s*$/.test(lines[i] ?? '')) {
+        // Sum the lines consumed, plus their newlines.
+        return lines.slice(0, i + 1).reduce((total, line) => total + line.length + 1, 0)
+      }
+    }
+    return 0
+  })()
+
   const view = new EditorView({
     parent,
     state: EditorState.create({
       doc: options.doc,
+      selection: { anchor: Math.min(bodyStart, options.doc.length) },
       extensions: [
         history(),
         drawSelection(),

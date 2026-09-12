@@ -97,8 +97,7 @@ class LinkLabel extends WidgetType {
 
 const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
 const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
-
-export const setLivePreview = StateEffect.define<boolean>()
+const FENCE_LINE = /^---\s*$/
 
 const livePreviewEnabled = StateField.define<boolean>({
   create: () => true,
@@ -109,6 +108,54 @@ const livePreviewEnabled = StateField.define<boolean>({
     return value
   },
 })
+
+/**
+ * Hiding the frontmatter block needs a *block* decoration, because it replaces
+ * whole lines rather than a range inside one.
+ *
+ * CodeMirror refuses block decorations from a ViewPlugin ("Block decorations
+ * may not be specified via plugins") - they have to come from a StateField, so
+ * that the editor can account for their height before it renders. Hence a
+ * second, tiny decoration source alongside the main plugin.
+ */
+const frontmatterHiding = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update: (value, transaction) => {
+    if (!transaction.docChanged && transaction.selection === undefined && value !== Decoration.none) {
+      return value.map(transaction.changes)
+    }
+
+    const state = transaction.state
+    if (!(state.field(livePreviewEnabled, false) ?? false)) return Decoration.none
+
+    const doc = state.doc
+    if (doc.lines < 2 || !FENCE_LINE.test(doc.line(1).text)) return Decoration.none
+
+    let close = -1
+    for (let n = 2; n <= doc.lines; n++) {
+      if (FENCE_LINE.test(doc.line(n).text)) {
+        close = n
+        break
+      }
+    }
+    if (close === -1) return Decoration.none
+
+    // The cursor anywhere in the block brings the raw YAML back.
+    for (const range of state.selection.ranges) {
+      const from = doc.lineAt(range.from).number
+      const to = doc.lineAt(range.to).number
+      if (from <= close && to >= 1) return Decoration.none
+    }
+
+    // A block decoration must span whole lines: `from` at a line start and
+    // `to` at a line END. Using the next line's start instead includes the
+    // newline, which is not a line end, and CodeMirror silently ignores it.
+    return Decoration.set([Decoration.replace({ block: true }).range(0, doc.line(close).to)])
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
+
+export const setLivePreview = StateEffect.define<boolean>()
 
 export const isLivePreviewOn = (view: EditorView): boolean =>
   view.state.field(livePreviewEnabled, false) ?? false
@@ -209,6 +256,7 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
 export function livePreview(getUnresolved: (view: EditorView) => ReadonlySet<string>): Extension {
   return [
     livePreviewEnabled,
+    frontmatterHiding,
     ViewPlugin.fromClass(
       class {
         decorations: DecorationSet

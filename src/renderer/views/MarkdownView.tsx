@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { Backlinks } from '../components/Backlinks'
 import { FormatBar } from '../components/FormatBar'
+import { Properties } from '../components/Properties'
 import { commands } from '../core/commands'
 import { formatChord } from '../core/hotkeys'
 import { extractTargets } from '../core/link-targets'
@@ -51,6 +52,8 @@ function MarkdownEditor({
   /** Bumped after each save, so the backlinks list refreshes. */
   const [savedAt, setSavedAt] = useState(0)
   const [active, setActive] = useState<ReadonlySet<Format>>(new Set())
+  /** Live document text, so the Properties panel reflects unsaved edits. */
+  const [text, setText] = useState('')
   /** What we last wrote, so our own watcher echo is not mistaken for an edit. */
   const lastWritten = useRef<string | null>(null)
 
@@ -62,6 +65,7 @@ function MarkdownEditor({
       if (cancelled) return
       if (result.ok) {
         setInitial(result.content)
+        setText(result.content)
         lastWritten.current = result.content
         setStatus('loaded')
       } else {
@@ -106,6 +110,7 @@ function MarkdownEditor({
 
   const onChange = useCallback(
     (next: string) => {
+      setText(next)
       setStatus('dirty')
       window.clearTimeout(saveTimer.current)
       saveTimer.current = window.setTimeout(() => {
@@ -145,6 +150,7 @@ function MarkdownEditor({
         void api.invoke('fs:read', path).then((result) => {
           if (!result.ok || result.content === lastWritten.current) return
           lastWritten.current = result.content
+          setText(result.content)
           handle.current?.setValue(result.content)
           setStatus('loaded')
         })
@@ -177,6 +183,16 @@ function MarkdownEditor({
         shortcutFor={(id) => {
           const binding = commands.bindingFor(id)
           return binding === null ? null : formatChord(binding)
+        }}
+      />
+      <Properties
+        text={text}
+        onChange={(next) => {
+          // Written through the editor, not straight to disk: that way the
+          // change is one undoable edit and the cursor is preserved.
+          handle.current?.setValue(next)
+          setText(next)
+          onChange(next)
         }}
       />
       <div className="md__bar">
