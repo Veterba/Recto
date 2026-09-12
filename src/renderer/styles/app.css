@@ -149,3 +149,331 @@ code {
   text-align: center;
   line-height: 1.8;
 }
+
+/* ---------- shell additions ---------- */
+
+.shell__actions {
+  display: flex;
+  gap: var(--size-2);
+  -webkit-app-region: no-drag;
+}
+
+.btn--sm {
+  padding: 4px var(--size-2);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shell__body {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  padding: 0;
+  place-items: initial;
+}
+
+kbd {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+/* ---------- splits ---------- */
+
+.split {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+.split--vertical {
+  flex-direction: row;
+}
+.split--horizontal {
+  flex-direction: column;
+}
+
+.split__pane {
+  position: relative;
+  flex-grow: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.split__pane > .split,
+.split__pane > .tabs {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The grab area is wider than the visible line, or it is unhittable. */
+.split__divider {
+  position: absolute;
+  z-index: 2;
+  background: transparent;
+  transition: background var(--anim-fast) var(--ease);
+}
+.split--vertical > .split__pane > .split__divider {
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 7px;
+  cursor: col-resize;
+}
+.split--horizontal > .split__pane > .split__divider {
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 7px;
+  cursor: row-resize;
+}
+.split__divider:hover,
+body.is-resizing .split__divider {
+  background: var(--accent-muted);
+}
+
+body.is-resizing {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* ---------- tabs ---------- */
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs__bar {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: var(--size-1) var(--size-1) 0;
+  background: var(--bg-secondary);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs__bar::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-1);
+  max-width: 200px;
+  padding: 5px var(--size-2) 5px var(--size-3);
+  border-radius: var(--radius-s) var(--radius-s) 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: default;
+  white-space: nowrap;
+  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+.tab.is-active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.tab__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab__close {
+  all: unset;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+}
+.tab:hover .tab__close,
+.tab.is-active .tab__close {
+  opacity: 1;
+}
+.tab__close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tabs__content {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-primary);
+  overflow: auto;
+}
+
+/* The focused group gets a hairline accent, so splits are never ambiguous. */
+.tabs.is-focused > .tabs__bar {
+  box-shadow: inset 0 2px 0 -1px var(--accent);
+}
+
+.leaf {
+  height: 100%;
+}
+
+.pane-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--size-6);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ---------- stub views ---------- */
+
+.stub {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-3);
+  padding: var(--size-8);
+  text-align: center;
+}
+.stub__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.stub__blurb {
+  margin: 0;
+  max-width: 42ch;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+.stub__badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+/* ---------- command palette ---------- */
+
+.palette__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  padding-top: 14vh;
+  background: rgb(0 0 0 / 0.4);
+  animation: fade var(--anim-fast) var(--ease);
+}
+
+.palette {
+  width: min(560px, calc(100vw - 32px));
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-l);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  animation: rise var(--anim-base) var(--ease);
+}
+
+.palette__input {
+  all: unset;
+  flex: none;
+  padding: var(--size-4);
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+.palette__input::placeholder {
+  color: var(--text-muted);
+}
+
+.palette__list {
+  margin: 0;
+  padding: var(--size-1);
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.palette__item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  cursor: default;
+}
+.palette__item.is-active {
+  background: var(--accent-muted);
+}
+
+.palette__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette__section {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.palette__key {
+  flex: none;
+}
+
+.palette__empty {
+  margin: 0;
+  padding: var(--size-6);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.hl {
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}

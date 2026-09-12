@@ -1,5 +1,6 @@
 import { ipcMain, shell } from 'electron'
 import type { IpcApi } from '../shared/ipc-contract'
+import { readState, writeState } from './state'
 import { closeVault, openVault, pickVault, startupState } from './vault'
 
 /** Typed handler registration - the channel name and its signature stay in sync. */
@@ -16,6 +17,8 @@ export function registerIpc(): void {
   handle('vault:pick', () => pickVault())
   handle('vault:open', (dir) => openVault(dir))
   handle('vault:close', () => closeVault())
+  handle('state:read', (feature) => readState(feature))
+  handle('state:write', (feature, data) => writeState(feature, data))
   handle('shell:open-external', async (url) => {
     if (!/^https?:\/\//.test(url)) return { ok: false }
     await shell.openExternal(url)
