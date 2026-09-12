@@ -1,5 +1,7 @@
 import {
   CircleUser,
+  FilePlus,
+  FolderPlus,
   FolderTree,
   GitFork,
   House,
@@ -26,6 +28,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   'git-fork': GitFork,
   'circle-user': CircleUser,
   settings: Settings,
+  'file-plus': FilePlus,
+  'folder-plus': FolderPlus,
 }
 
 type Props = {

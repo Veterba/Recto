@@ -481,7 +481,9 @@ body.is-resizing {
   flex: 1;
   min-height: 0;
   background: var(--bg-primary);
-  overflow: auto;
+  /* Views scroll their own content (the editor's textarea, the tree). Letting
+     this scroll too put a stray horizontal scrollbar under the editor. */
+  overflow: hidden;
 }
 
 /* The focused group gets a hairline accent, so splits are never ambiguous. */
@@ -563,6 +565,8 @@ body.is-resizing {
 
 .palette__input {
   all: unset;
+  /* `all: unset` resets box-sizing too, so width + padding would overflow. */
+  box-sizing: border-box;
   flex: none;
   padding: var(--size-4);
   font: inherit;
@@ -645,4 +649,202 @@ body.is-resizing {
     opacity: 0;
     transform: translateY(-6px);
   }
+}
+
+/* ---------- sidebar header actions ---------- */
+
+.sidebar__head {
+  justify-content: space-between;
+}
+
+.sidebar__actions {
+  display: flex;
+  gap: 2px;
+}
+
+.icon-btn {
+  all: unset;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---------- file tree ---------- */
+
+.tree {
+  height: 100%;
+  overflow: auto;
+  outline: none;
+}
+
+/* Full-height spacer gives a real scrollbar while only the visible window is
+   in the DOM. */
+.tree__sizer {
+  position: relative;
+}
+.tree__window {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  will-change: transform;
+}
+
+.tree__row {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: default;
+  user-select: none;
+}
+.tree__row:hover {
+  background: var(--bg-hover);
+}
+.tree__row.is-cursor {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.tree__row.is-active {
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.tree__chevron {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-muted);
+  transition: transform var(--anim-fast) var(--ease);
+}
+.tree__chevron.is-open {
+  transform: rotate(90deg);
+}
+.tree__chevron.is-hidden {
+  visibility: hidden;
+}
+
+.tree__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree__rename {
+  all: unset;
+  /* `all: unset` resets box-sizing too, so width + padding would overflow. */
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  padding: 0 4px;
+  border-radius: 4px;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.tree__error {
+  margin: 0 0 var(--size-2);
+  padding: var(--size-1) var(--size-2);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ---------- markdown view (temporary until CM6 in 1.6) ---------- */
+
+.md {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.md__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-3);
+  padding: var(--size-2) var(--size-4);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.md__path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.md__status {
+  flex: none;
+  transition: color var(--anim-base) var(--ease);
+}
+.md__status.is-dirty {
+  color: var(--text-secondary);
+}
+.md__status.is-saved {
+  color: var(--accent);
+}
+
+.md__area {
+  all: unset;
+  overflow-x: hidden;
+  /* `all: unset` resets box-sizing too, so width + padding would overflow. */
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 0 var(--size-6) var(--size-6);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-y: auto;
+  resize: none;
+  tab-size: 2;
+}
+.md__area::placeholder {
+  color: var(--text-muted);
+}
+
+.md__note {
+  flex: none;
+  margin: 0;
+  padding: var(--size-1) var(--size-4) var(--size-2);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Drop target during a drag. Folders highlight themselves; dragging over a file
+   highlights nothing, because the drop lands in that file's folder. */
+.tree__row.is-drop {
+  background: var(--accent-muted);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }

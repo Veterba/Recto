@@ -9,13 +9,15 @@ type Props = {
   section: Section
   width: number
   onResize: (width: number) => void
+  /** Buttons in the panel header, e.g. "new note". */
+  actions?: React.ReactNode
   children?: React.ReactNode
 }
 
 export const SIDEBAR_MIN = 180
 export const SIDEBAR_MAX = 520
 
-export function Sidebar({ section, width, onResize, children }: Props): React.ReactElement {
+export function Sidebar({ section, width, onResize, actions, children }: Props): React.ReactElement {
   const ref = useRef<HTMLElement | null>(null)
 
   const startDrag = useCallback(
@@ -44,6 +46,7 @@ export function Sidebar({ section, width, onResize, children }: Props): React.Re
     <aside ref={ref} className="sidebar" style={{ width }} aria-label={`${section.label} panel`}>
       <header className="sidebar__head">
         <h2 className="sidebar__title">{section.label}</h2>
+        {actions}
       </header>
       <div className="sidebar__body">{children ?? <SidebarPlaceholder section={section} />}</div>
       <div
@@ -58,7 +61,6 @@ export function Sidebar({ section, width, onResize, children }: Props): React.Re
 }
 
 const PLACEHOLDER: Record<string, string> = {
-  data: 'The file tree lands in 1.4 — virtualised, drag-drop, inline rename.',
   chat: 'Conversation list. Each one is a markdown file in the vault.',
   board: 'Your boards. Each card is a real note.',
 }
