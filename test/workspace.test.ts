@@ -6,7 +6,7 @@ import {
   type SplitNode,
   type WorkspaceLayout,
 } from '../src/renderer/core/workspace'
-import { SECTIONS, sectionForViewType } from '../src/renderer/core/sections'
+import { DEFAULT_SECTION, SECTIONS, getSection, isSectionId } from '../src/renderer/core/sections'
 
 /** Narrow the root to a split, failing the test if it is not one. */
 function asSplit(node: { kind: string }): SplitNode {
@@ -164,20 +164,35 @@ describe('Workspace tree', () => {
 })
 
 describe('sections', () => {
-  it('every section maps to a distinct view type, so deriving the rail is unambiguous', () => {
+  it('is exactly three workspaces - Home and Graph are extensions, not sections', () => {
+    expect(SECTIONS.map((s) => s.id)).toEqual(['data', 'ai', 'tasks'])
+  })
+
+  it('every section maps to a distinct view type', () => {
     const types = SECTIONS.map((s) => s.viewType)
     expect(new Set(types).size).toBe(types.length)
   })
 
-  it('resolves a view type back to its section', () => {
-    expect(sectionForViewType('markdown')?.id).toBe('data')
-    expect(sectionForViewType('chat')?.id).toBe('chat')
-    expect(sectionForViewType('nonexistent')).toBeUndefined()
+  it('getSection falls back rather than returning undefined', () => {
+    expect(getSection('ai').label).toBe('AI')
+    expect(getSection('nope' as never).id).toBe('data')
   })
 
-  it('footer sections sort after the rest, so the rail order is stable', () => {
-    const firstFooter = SECTIONS.findIndex((s) => s.footer === true)
-    const lastMain = SECTIONS.map((s) => s.footer === true).lastIndexOf(false)
-    expect(firstFooter).toBeGreaterThan(lastMain)
+  it('isSectionId rejects anything not a section', () => {
+    expect(isSectionId('data')).toBe(true)
+    expect(isSectionId('graph')).toBe(false)
+    expect(isSectionId('home')).toBe(false)
+    expect(isSectionId(null)).toBe(false)
+  })
+
+  it('the default section is one of the three', () => {
+    expect(SECTIONS.some((s) => s.id === DEFAULT_SECTION)).toBe(true)
+  })
+
+  it('each section carries its own search placeholder and new-item label', () => {
+    for (const section of SECTIONS) {
+      expect(section.searchPlaceholder.length).toBeGreaterThan(0)
+      expect(section.newLabel.length).toBeGreaterThan(0)
+    }
   })
 })

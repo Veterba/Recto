@@ -1,5 +1,7 @@
+import { formatChord } from '../core/hotkeys'
 import { viewTitle } from '../core/view-registry'
 import type { Workspace } from '../core/workspace'
+import { Icon } from './Icon'
 
 /**
  * Bottom strip. Deliberately sparse: it shows what is open and offers the
@@ -9,10 +11,18 @@ import type { Workspace } from '../core/workspace'
 type Props = {
   workspace: Workspace | null
   vaultName: string
+  graphOpen: boolean
+  onToggleGraph: () => void
   onOpenPalette: () => void
 }
 
-export function StatusBar({ workspace, vaultName, onOpenPalette }: Props): React.ReactElement {
+export function StatusBar({
+  workspace,
+  vaultName,
+  graphOpen,
+  onToggleGraph,
+  onOpenPalette,
+}: Props): React.ReactElement {
   const leaf = workspace?.activeLeaf ?? null
   const openCount = workspace?.leaves().length ?? 0
 
@@ -25,7 +35,14 @@ export function StatusBar({ workspace, vaultName, onOpenPalette }: Props): React
       <span className="status__item status__item--muted">
         {openCount} {openCount === 1 ? 'tab' : 'tabs'}
       </span>
-      <button className="status__btn" onClick={onOpenPalette}>
+      <button
+        className={`status__btn${graphOpen ? ' is-on' : ''}`}
+        onClick={onToggleGraph}
+        title={`Graph (${formatChord('Mod+G')})`}
+      >
+        <Icon name="git-fork" size={13} />
+      </button>
+      <button className="status__btn" onClick={onOpenPalette} title="Command palette">
         <kbd>⌘P</kbd>
       </button>
     </footer>

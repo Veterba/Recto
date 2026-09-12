@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
+import { Breadcrumb } from '../components/Breadcrumb'
 import { CommandPalette } from '../components/CommandPalette'
 import { FileTree } from '../components/FileTree'
-import { Icon } from '../components/Icon'
-import { Rail } from '../components/Rail'
-import { Sidebar } from '../components/Sidebar'
+import { GraphDock } from '../components/GraphDock'
+import { Sidebar, SidebarStub } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
 import { WorkspaceView } from '../components/WorkspaceView'
 import { useAppearance, type Theme } from '../core/appearance'
 import { commands } from '../core/commands'
+import { allFolderPaths, filterTree } from '../core/file-tree-ops'
+import { fuzzyMatch } from '../core/fuzzy'
 import { registerAppCommands } from '../core/register-commands'
-import { getSection, sectionForViewType, type Section, type SectionId } from '../core/sections'
+import { getSection, type SectionId } from '../core/sections'
 import { useVault } from '../core/vault-store'
 import { useWorkspace } from '../core/use-workspace'
+import { getView } from '../core/view-registry'
 import { registerMarkdownView } from './MarkdownView'
 import { registerStubViews } from './stubs'
 
@@ -30,61 +33,34 @@ registerMarkdownView()
 const THEME_CYCLE: readonly Theme[] = ['system', 'light', 'dark']
 
 export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
-  const { workspace, revision } = useWorkspace()
+  const { sections, active, activeSection, setActiveSection, graphDock, setGraphDock, revision } = useWorkspace()
   const { appearance, ready, update } = useAppearance()
   const { tree, refresh } = useVault(true)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [query, setQuery] = useState('')
 
   const openPalette = useCallback(() => setPaletteOpen(true), [])
-
-  // Derived from the open tab, so the rail can never contradict the content.
-  // `revision` is in the deps because Workspace mutates in place.
-  const activeSection = useMemo(() => {
-    const leaf = workspace?.activeLeaf
-    const fromLeaf = leaf ? sectionForViewType(leaf.type) : undefined
-    return fromLeaf ?? getSection('data')!
-  }, [workspace, revision])
-
-  const toggleSidebar = useCallback(() => {
-    update({ sidebarOpen: !appearance.sidebarOpen })
-  }, [appearance.sidebarOpen, update])
-
-  const goToSection = useCallback(
-    (id: SectionId) => {
-      const section = getSection(id)
-      if (!section || !workspace) return
-      // Re-selecting the current section collapses its panel; selecting a new
-      // one always reveals it. Matches every editor that has a rail.
-      const sameSection = id === activeSection.id
-      if (section.noPanel !== true) {
-        // Re-selecting the section you are already in collapses its panel;
-        // moving to a new section always reveals it.
-        update({ sidebarOpen: sameSection ? !appearance.sidebarOpen : true })
-      }
-      workspace.openView(section.viewType)
-    },
-    [workspace, activeSection.id, appearance.sidebarOpen, update],
-  )
-
-  const cycleTheme = useCallback(() => {
-    const at = THEME_CYCLE.indexOf(appearance.theme)
-    update({ theme: THEME_CYCLE[(at + 1) % THEME_CYCLE.length] ?? 'system' })
-  }, [appearance.theme, update])
-
-  const onRailSelect = useCallback((section: Section) => goToSection(section.id), [goToSection])
+  const section = getSection(activeSection)
 
   const activePath = useMemo(() => {
-    const state = workspace?.activeLeaf?.state
-    const path = state?.['path']
+    const path = active?.activeLeaf?.state['path']
     return typeof path === 'string' ? path : null
-  }, [workspace, revision])
+  }, [active, revision])
 
-  const openFile = useCallback(
-    (path: string) => {
-      workspace?.openView('markdown', { path })
-    },
-    [workspace],
+  // --- sidebar list -------------------------------------------------------
+
+  const visibleTree = useMemo(() => {
+    if (query.trim() === '') return tree
+    const roots = filterTree(tree.roots, query, (name) => fuzzyMatch(query, name) !== null)
+    return { roots, byPath: tree.byPath }
+  }, [tree, query])
+
+  // A search result is useless collapsed, so while searching every folder is
+  // open; the user's own expansion state is untouched underneath.
+  const effectiveExpanded = useMemo(
+    () => (query.trim() === '' ? expanded : new Set(allFolderPaths(visibleTree.roots))),
+    [query, expanded, visibleTree.roots],
   )
 
   const toggleFolder = useCallback((path: string) => {
@@ -96,11 +72,17 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     })
   }, [])
 
-  /**
-   * New items land next to whatever is selected: inside the active folder, or
-   * alongside the open note. Creating at the root when you are three folders
-   * deep is the behaviour everyone complains about.
-   */
+  const openFile = useCallback(
+    (path: string) => {
+      // Opening a note always lands in Data, even if you clicked from elsewhere.
+      setActiveSection('data')
+      sections?.data.openView('markdown', { path })
+    },
+    [sections, setActiveSection],
+  )
+
+  // --- actions ------------------------------------------------------------
+
   const createIn = useCallback(
     async (kind: 'file' | 'folder') => {
       const parent = activePath === null ? '' : activePath.slice(0, Math.max(0, activePath.lastIndexOf('/')))
@@ -114,10 +96,32 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     [activePath, refresh, openFile],
   )
 
+  /** The sidebar's bottom-left button means something different per section. */
+  const onNew = useCallback(() => {
+    if (activeSection === 'data') void createIn('file')
+    else active?.openView(section.viewType, { draft: Date.now() }, { reuse: false })
+  }, [activeSection, createIn, active, section.viewType])
+
+  const openExtension = useCallback(
+    (type: string) => {
+      active?.openView(type)
+    },
+    [active],
+  )
+
+  const toggleSidebar = useCallback(() => {
+    update({ sidebarOpen: !appearance.sidebarOpen })
+  }, [appearance.sidebarOpen, update])
+
+  const cycleTheme = useCallback(() => {
+    const at = THEME_CYCLE.indexOf(appearance.theme)
+    update({ theme: THEME_CYCLE[(at + 1) % THEME_CYCLE.length] ?? 'system' })
+  }, [appearance.theme, update])
+
   useEffect(() => {
-    if (!workspace) return
+    if (!active) return
     return registerAppCommands(commands, {
-      workspace,
+      workspace: active,
       openPalette,
       closeVault: onCloseVault,
       toggleSidebar,
@@ -128,11 +132,26 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       },
       setTheme: (theme) => update({ theme }),
       cycleTheme,
-      goToSection,
+      goToSection: setActiveSection,
+      toggleGraph: () => setGraphDock({ open: !graphDock.open }),
+      openGraphFull: () => openExtension('graph'),
+      openExtension,
     })
-  }, [workspace, openPalette, onCloseVault, toggleSidebar, cycleTheme, goToSection, update, createIn, activePath])
+  }, [
+    active,
+    openPalette,
+    onCloseVault,
+    toggleSidebar,
+    cycleTheme,
+    setActiveSection,
+    update,
+    createIn,
+    activePath,
+    graphDock.open,
+    setGraphDock,
+    openExtension,
+  ])
 
-  // User hotkey overrides, if hotkeys.json exists.
   useEffect(() => {
     void api.invoke('state:read', 'hotkeys').then((saved) => {
       if (saved !== null && typeof saved === 'object') {
@@ -141,7 +160,6 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     })
   }, [])
 
-  // One keydown listener for the whole app; everything routes through the registry.
   useEffect(() => {
     const onKeyDown = (ev: KeyboardEvent): void => {
       if (ev.key === 'Escape' && paletteOpen) {
@@ -154,64 +172,81 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [paletteOpen])
 
-  const showSidebar = appearance.sidebarOpen && activeSection.noPanel !== true
+  const graphView = getView('graph')
 
   return (
     <div className={`shell${ready ? '' : ' is-booting'}`}>
       <div className="shell__titlebar">
-        <span className="shell__vault" title={vault.path}>
-          {vault.name}
-        </span>
+        <Breadcrumb path={activePath} fallback={vault.name} />
       </div>
 
       <div className="shell__main">
-        <Rail active={activeSection.id} sidebarOpen={appearance.sidebarOpen} onSelect={onRailSelect} />
-
-        {showSidebar && (
+        {appearance.sidebarOpen ? (
           <Sidebar
-            section={activeSection}
+            vaultName={vault.name}
+            activeSection={activeSection}
+            onSelectSection={(id: SectionId) => setActiveSection(id)}
+            query={query}
+            onQueryChange={setQuery}
             width={appearance.sidebarWidth}
             onResize={(sidebarWidth) => update({ sidebarWidth })}
-            actions={
-              activeSection.id === 'data' ? (
-                <div className="sidebar__actions">
-                  <button className="icon-btn" title="New note (⌘N)" onClick={() => void createIn('file')}>
-                    <Icon name="file-plus" size={15} />
-                  </button>
-                  <button className="icon-btn" title="New folder" onClick={() => void createIn('folder')}>
-                    <Icon name="folder-plus" size={15} />
-                  </button>
-                </div>
-              ) : undefined
-            }
+            onNew={onNew}
+            onOpenSettings={() => openExtension('settings')}
+            onCollapse={toggleSidebar}
           >
-            {activeSection.id === 'data' ? (
+            {activeSection === 'data' ? (
               <FileTree
-                tree={tree}
+                tree={visibleTree}
                 activePath={activePath}
-                expanded={expanded}
+                expanded={effectiveExpanded}
                 onToggleFolder={toggleFolder}
                 onOpenFile={openFile}
                 onChanged={() => void refresh()}
               />
-            ) : undefined}
+            ) : (
+              <p className="sidebar__empty">
+                {activeSection === 'ai'
+                  ? 'Your conversations. Each one is a markdown file in the vault.'
+                  : 'Your boards. Each card is a real note.'}
+              </p>
+            )}
           </Sidebar>
+        ) : (
+          <SidebarStub onExpand={toggleSidebar} />
         )}
 
         <main className="shell__content">
-          {workspace ? (
-            // `revision` is the subscription: Workspace is mutable, so React
-            // needs an explicit signal that the tree changed.
-            <WorkspaceView key={revision} workspace={workspace} />
+          {active ? (
+            <WorkspaceView key={`${activeSection}-${revision}`} workspace={active} />
           ) : (
             <div className="pane-empty">
               <p>Restoring layout…</p>
             </div>
           )}
         </main>
+
+        {graphDock.open && (
+          <GraphDock
+            width={graphDock.width}
+            onResize={(width) => setGraphDock({ width })}
+            onClose={() => setGraphDock({ open: false })}
+            onOpenFull={() => {
+              setGraphDock({ open: false })
+              openExtension('graph')
+            }}
+          >
+            {graphView?.render({ state: { docked: true }, setState: () => {}, leafId: 'graph-dock' })}
+          </GraphDock>
+        )}
       </div>
 
-      <StatusBar workspace={workspace} vaultName={vault.name} onOpenPalette={openPalette} />
+      <StatusBar
+        workspace={active}
+        vaultName={vault.name}
+        graphOpen={graphDock.open}
+        onToggleGraph={() => setGraphDock({ open: !graphDock.open })}
+        onOpenPalette={openPalette}
+      />
       <CommandPalette registry={commands} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   )

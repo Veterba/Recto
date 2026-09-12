@@ -131,3 +131,42 @@ export function applyChanges(roots: FileNode[], changes: readonly VaultChange[])
 
 
 export { index as indexTree }
+
+/**
+ * Filter the tree to nodes matching a query, keeping the folders that lead to
+ * each hit so the result is still a tree and not a flat list of orphans.
+ *
+ * Uses the same fuzzy matcher as the palette, so "26w37" finds `2026-W37`.
+ */
+export function filterTree(roots: readonly FileNode[], query: string, match: (text: string) => boolean): FileNode[] {
+  if (query.trim() === '') return [...roots]
+
+  const keep = (nodes: readonly FileNode[]): FileNode[] => {
+    const out: FileNode[] = []
+    for (const node of nodes) {
+      if (node.kind === 'file') {
+        if (match(node.name)) out.push(node)
+        continue
+      }
+      const children = keep(node.children ?? [])
+      // A folder survives if it matches itself (then it keeps everything) or if
+      // anything inside it matched.
+      if (match(node.name)) out.push({ ...node, children: node.children ?? [] })
+      else if (children.length > 0) out.push({ ...node, children })
+    }
+    return out
+  }
+
+  return keep(roots)
+}
+
+/** Every folder path in the tree - what a search result expands to. */
+export function allFolderPaths(roots: readonly FileNode[], out: string[] = []): string[] {
+  for (const node of roots) {
+    if (node.kind === 'folder') {
+      out.push(node.path)
+      allFolderPaths(node.children ?? [], out)
+    }
+  }
+  return out
+}

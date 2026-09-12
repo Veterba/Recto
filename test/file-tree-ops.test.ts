@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyChanges } from '../src/renderer/core/file-tree-ops'
+import { allFolderPaths, applyChanges, filterTree } from '../src/renderer/core/file-tree-ops'
 import type { FileNode, VaultChange } from '../src/shared/ipc-contract'
 
 const file = (p: string): FileNode => ({ path: p, name: p.slice(p.lastIndexOf('/') + 1), kind: 'file', mtime: 1, size: 0 })
@@ -79,5 +79,53 @@ describe('applying watcher changes', () => {
     const snapshot = JSON.stringify(before)
     applyChanges(before, [{ type: 'add', path: 'work/b.md', mtime: 1, size: 0 }])
     expect(JSON.stringify(before)).toBe(snapshot)
+  })
+})
+
+describe('filtering the tree', () => {
+  const tree = [
+    folder('work', [
+      folder('work/2026', [file('work/2026/2026-09-12.md'), file('work/2026/notes.md')]),
+      file('work/nordicsync.md'),
+    ]),
+    file('index.md'),
+  ]
+  const contains = (q: string) => (text: string) => text.toLowerCase().includes(q.toLowerCase())
+
+  it('returns everything for an empty query', () => {
+    expect(paths(filterTree(tree, '', contains('')))).toEqual(paths(tree))
+  })
+
+  it('keeps the folders leading to a hit, so results stay a tree', () => {
+    expect(paths(filterTree(tree, 'nordic', contains('nordic')))).toEqual(['work', 'work/nordicsync.md'])
+  })
+
+  it('keeps a deep hit with its whole ancestry', () => {
+    expect(paths(filterTree(tree, '09-12', contains('09-12')))).toEqual([
+      'work',
+      'work/2026',
+      'work/2026/2026-09-12.md',
+    ])
+  })
+
+  it('a matching folder keeps all of its children', () => {
+    expect(paths(filterTree(tree, '2026', contains('2026')))).toEqual([
+      'work',
+      'work/2026',
+      'work/2026/2026-09-12.md',
+      'work/2026/notes.md',
+    ])
+  })
+
+  it('drops branches with no hits entirely', () => {
+    expect(paths(filterTree(tree, 'index', contains('index')))).toEqual(['index.md'])
+  })
+
+  it('returns nothing when nothing matches', () => {
+    expect(filterTree(tree, 'zzzz', contains('zzzz'))).toEqual([])
+  })
+
+  it('allFolderPaths lists every folder, so a search can auto-expand', () => {
+    expect(allFolderPaths(tree)).toEqual(['work', 'work/2026'])
   })
 })

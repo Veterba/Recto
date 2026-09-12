@@ -123,7 +123,7 @@ code {
 }
 
 .shell__titlebar {
-  height: 38px;
+  height: 36px;
   flex: none;
   display: flex;
   align-items: center;
@@ -158,73 +158,41 @@ code {
   min-width: 0;
 }
 
-/* ---------- rail ---------- */
+/* ---------- breadcrumbs ---------- */
 
-.rail {
-  flex: none;
-  width: 48px;
+.crumbs {
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: var(--size-2) 0;
-  border-right: 1px solid var(--border);
-  background: var(--bg-secondary);
-}
-
-.rail__group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
   align-items: center;
-}
-
-.rail__btn {
-  all: unset;
-  position: relative;
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-s);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color var(--anim-fast) var(--ease), background var(--anim-fast) var(--ease);
-}
-.rail__btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-.rail__btn.is-active {
-  background: var(--accent-muted);
-  color: var(--accent);
-}
-.rail__btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-/* Tooltip on hover, built here rather than pulled in as a dependency. */
-.rail__tip {
-  position: absolute;
-  left: calc(100% + 8px);
-  z-index: 50;
-  padding: 3px 8px;
-  border-radius: var(--radius-s);
-  border: 1px solid var(--border-strong);
-  background: var(--bg-elevated);
-  color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
   font-size: 12px;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateX(-4px);
-  pointer-events: none;
-  transition: opacity var(--anim-fast) var(--ease), transform var(--anim-fast) var(--ease);
-  box-shadow: var(--shadow-lg);
+  color: var(--text-muted);
+  -webkit-app-region: no-drag;
 }
-.rail__btn:hover .rail__tip,
-.rail__btn:focus-visible .rail__tip {
-  opacity: 1;
-  transform: translateX(0);
+
+.crumbs__group {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.crumbs__sep {
+  padding: 0 6px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.crumbs__item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crumbs__item.is-current {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.crumbs__item--muted {
+  font-weight: 600;
 }
 
 /* ---------- sidebar ---------- */
@@ -239,36 +207,155 @@ code {
   background: var(--bg-secondary);
 }
 
-.sidebar__head {
+.sidebar__vault {
   flex: none;
-  height: 34px;
   display: flex;
   align-items: center;
-  padding: 0 var(--size-3);
+  justify-content: space-between;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-2) var(--size-2) var(--size-3);
 }
 
-.sidebar__title {
-  margin: 0;
+.sidebar__vault-name {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- section tabs ---------- */
+
+.segmented {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  margin: 0 var(--size-2) var(--size-2);
+  padding: 3px;
+  border-radius: var(--radius-m);
+  background: var(--bg-hover);
+}
+
+.segmented__tab {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: var(--size-2) 2px;
+  border-radius: var(--radius-s);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.segmented__tab:hover {
+  color: var(--text-secondary);
+}
+.segmented__tab.is-active {
+  background: var(--bg-elevated);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.1);
+}
+.segmented__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---------- search ---------- */
+
+.sidebar__search {
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0 var(--size-2) var(--size-2);
+}
+
+.sidebar__search-icon {
+  position: absolute;
+  left: var(--size-2);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.sidebar__search-input {
+  all: unset;
+  /* `all: unset` resets box-sizing too, so width + padding would overflow. */
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px var(--size-2) 6px 28px;
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  transition: box-shadow var(--anim-fast) var(--ease);
+}
+.sidebar__search-input::placeholder {
+  color: var(--text-muted);
+}
+.sidebar__search-input:focus {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.sidebar__search-input::-webkit-search-cancel-button {
+  appearance: none;
 }
 
 .sidebar__body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 0 var(--size-3) var(--size-3);
+  padding: 0 var(--size-2) var(--size-2);
 }
 
 .sidebar__empty {
   margin: 0;
+  padding: 0 var(--size-1);
   font-size: 12px;
   line-height: 1.6;
   color: var(--text-muted);
   text-wrap: pretty;
+}
+
+.sidebar__footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-2);
+  padding: var(--size-2);
+  border-top: 1px solid var(--border);
+}
+
+.sidebar__new {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.sidebar__new:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .sidebar__resize {
@@ -285,6 +372,74 @@ code {
 .sidebar__resize:hover,
 body.is-resizing .sidebar__resize {
   background: var(--accent-muted);
+}
+
+/* The strip left behind when the sidebar is collapsed. */
+.sidebar-stub {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  padding: var(--size-2) 6px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+/* ---------- graph dock ---------- */
+
+.dock {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.dock__resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 7px;
+  z-index: 3;
+  cursor: col-resize;
+  background: transparent;
+  transition: background var(--anim-fast) var(--ease);
+}
+.dock__resize:hover,
+body.is-resizing .dock__resize {
+  background: var(--accent-muted);
+}
+
+.dock__head {
+  flex: none;
+  height: 33px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--size-1) 0 var(--size-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.dock__title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dock__actions {
+  display: flex;
+  gap: 2px;
+}
+
+.dock__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ---------- status bar ---------- */
@@ -326,8 +481,17 @@ body.is-resizing .sidebar__resize {
   border-radius: 4px;
   cursor: pointer;
 }
+.status__btn {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+}
 .status__btn:hover {
   background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.status__btn.is-on {
+  color: var(--accent);
 }
 
 /* ---------- splits ---------- */
@@ -528,6 +692,17 @@ body.is-resizing {
   color: var(--text-secondary);
   text-wrap: pretty;
 }
+.stub--compact {
+  gap: var(--size-2);
+  padding: var(--size-4);
+}
+.stub--compact .stub__title {
+  font-size: 15px;
+}
+.stub--compact .stub__blurb {
+  font-size: 12px;
+}
+
 .stub__badge {
   font-size: 11px;
   font-weight: 500;
