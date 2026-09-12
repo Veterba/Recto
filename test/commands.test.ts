@@ -174,3 +174,64 @@ describe('shifted punctuation bindings', () => {
     expect(normalizeChord('Ctrl+Shift+Tab', true)).toBe('ctrl+shift+tab')
   })
 })
+
+describe('chord conflicts between scopes', () => {
+  /** Two commands on one chord: editor-scoped wins when the editor has focus. */
+  const build = (editorFocused: () => boolean): CommandRegistry => {
+    const reg = new CommandRegistry()
+    reg.register({ id: 'app:sidebar', name: 'Toggle sidebar', hotkey: 'Mod+B', run: () => { ran.push('app') } })
+    reg.register({
+      id: 'editor:bold',
+      name: 'Bold',
+      hotkey: 'Mod+B',
+      scope: 'editor',
+      isAvailable: editorFocused,
+      run: () => { ran.push('editor') },
+    })
+    return reg
+  }
+  let ran: string[] = []
+  const modB = () => key({ key: 'b', code: 'KeyB', metaKey: true })
+
+  it('routes the chord to the editor when it has focus', async () => {
+    ran = []
+    const reg = build(() => true)
+    expect(reg.handleKeyEvent(modB())).toBe(true)
+    await vi.waitFor(() => expect(ran).toEqual(['editor']))
+  })
+
+  it('falls through to the app command when the editor does not', async () => {
+    ran = []
+    const reg = build(() => false)
+    expect(reg.handleKeyEvent(modB())).toBe(true)
+    await vi.waitFor(() => expect(ran).toEqual(['app']))
+  })
+
+  it('registration order does not decide the winner', async () => {
+    // The bug this replaced: the last registration silently took the chord.
+    ran = []
+    const reg = new CommandRegistry()
+    reg.register({
+      id: 'editor:bold',
+      name: 'Bold',
+      hotkey: 'Mod+B',
+      scope: 'editor',
+      isAvailable: () => true,
+      run: () => { ran.push('editor') },
+    })
+    reg.register({ id: 'app:sidebar', name: 'Toggle sidebar', hotkey: 'Mod+B', run: () => { ran.push('app') } })
+    expect(reg.handleKeyEvent(modB())).toBe(true)
+    await vi.waitFor(() => expect(ran).toEqual(['editor']))
+  })
+
+  it('reports the conflict so a hotkey editor can show it', () => {
+    const reg = build(() => true)
+    expect(reg.conflicts()).toEqual([{ chord: 'meta+b', ids: ['editor:bold', 'app:sidebar'] }])
+  })
+
+  it('a chord with no available command falls through entirely', () => {
+    const reg = new CommandRegistry()
+    reg.register({ id: 'a', name: 'A', hotkey: 'Mod+B', isAvailable: () => false, run: () => {} })
+    expect(reg.handleKeyEvent(modB())).toBe(false)
+  })
+})

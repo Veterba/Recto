@@ -1,36 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { Editor } from '../editor/Editor'
+import type { EditorHandle } from '../editor/codemirror'
 import { registerView } from '../core/view-registry'
 
 /**
- * Reads and writes one note.
+ * One note, in CodeMirror.
  *
- * The textarea is TEMPORARY. CodeMirror 6 replaces it wholesale in 1.6; it
- * exists now because the risky part of this milestone is the write path, not
- * the editing experience, and a plain textarea exercises it exactly:
- * load -> edit -> debounced save -> watcher echo that must NOT reload the buffer.
+ * The buffer IS the file: no conversion on open, none on save, so whatever the
+ * file contains is what you see and what gets written back. That losslessness
+ * is the entire reason for choosing CodeMirror over a rich-text model.
  */
 
 const SAVE_DEBOUNCE_MS = 500
 
 type State = { path?: unknown }
 
-function MarkdownEditor({ path }: { path: string }): React.ReactElement {
-  const [content, setContent] = useState<string | null>(null)
+/** The live editor handle, so app commands can reach the focused editor. */
+let activeHandle: EditorHandle | null = null
+export const getActiveEditor = (): EditorHandle | null => activeHandle
+
+function MarkdownEditor({ path, onOpenLink }: { path: string; onOpenLink: (t: string) => void }): React.ReactElement {
+  const [initial, setInitial] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<'loaded' | 'dirty' | 'saving' | 'saved'>('loaded')
   const saveTimer = useRef<number | undefined>(undefined)
-  /** What is on disk as far as we know. Used to ignore our own echo. */
+  const handle = useRef<EditorHandle | null>(null)
+  /** What we last wrote, so our own watcher echo is not mistaken for an edit. */
   const lastWritten = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    setContent(null)
+    setInitial(null)
     setError(null)
     void api.invoke('fs:read', path).then((result) => {
       if (cancelled) return
       if (result.ok) {
-        setContent(result.content)
+        setInitial(result.content)
         lastWritten.current = result.content
         setStatus('loaded')
       } else {
@@ -55,7 +61,6 @@ function MarkdownEditor({ path }: { path: string }): React.ReactElement {
 
   const onChange = useCallback(
     (next: string) => {
-      setContent(next)
       setStatus('dirty')
       window.clearTimeout(saveTimer.current)
       saveTimer.current = window.setTimeout(() => void save(next), SAVE_DEBOUNCE_MS)
@@ -63,26 +68,26 @@ function MarkdownEditor({ path }: { path: string }): React.ReactElement {
     [save],
   )
 
-  // Flush on unmount so closing a tab never drops the last keystrokes.
-  useEffect(
-    () => () => {
-      window.clearTimeout(saveTimer.current)
-    },
-    [],
-  )
+  const flush = useCallback(() => {
+    window.clearTimeout(saveTimer.current)
+    const value = handle.current?.getValue()
+    if (value !== undefined && value !== lastWritten.current) void save(value)
+  }, [save])
 
-  // An external edit reloads the buffer. Our own save comes back through the
-  // watcher too, so compare against what we last wrote before clobbering.
+  // Flush on unmount so closing a tab never drops the last keystrokes.
+  useEffect(() => () => flush(), [flush])
+
+  // An external edit reloads the buffer; our own save comes back through the
+  // watcher too, so compare against what we last wrote before replacing it.
   useEffect(
     () =>
       api.on('vault:changed', (changes) => {
         const touched = changes.some((c) => 'path' in c && c.path === path && c.type === 'change')
         if (!touched) return
         void api.invoke('fs:read', path).then((result) => {
-          if (!result.ok) return
-          if (result.content === lastWritten.current) return
-          setContent(result.content)
+          if (!result.ok || result.content === lastWritten.current) return
           lastWritten.current = result.content
+          handle.current?.setValue(result.content)
           setStatus('loaded')
         })
       }),
@@ -101,7 +106,7 @@ function MarkdownEditor({ path }: { path: string }): React.ReactElement {
     )
   }
 
-  if (content === null) return <div className="pane-empty" />
+  if (initial === null) return <div className="pane-empty" />
 
   return (
     <div className="md">
@@ -111,19 +116,22 @@ function MarkdownEditor({ path }: { path: string }): React.ReactElement {
           {status === 'dirty' ? 'Unsaved' : status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : ''}
         </span>
       </div>
-      <textarea
-        className="md__area"
-        value={content}
-        spellCheck={false}
-        placeholder="Start writing…"
-        onChange={(ev) => onChange(ev.target.value)}
+      <Editor
+        docKey={path}
+        initialValue={initial}
+        onChange={onChange}
+        onSave={flush}
+        onOpenLink={onOpenLink}
+        onReady={(editor: EditorHandle) => {
+          handle.current = editor
+          activeHandle = editor
+        }}
       />
-      <p className="md__note">Plain textarea for now — CodeMirror 6 with live preview lands in 1.6.</p>
     </div>
   )
 }
 
-export function registerMarkdownView(): () => void {
+export function registerMarkdownView(onOpenLink: (target: string) => void): () => void {
   return registerView({
     type: 'markdown',
     title: 'Editor',
@@ -143,7 +151,7 @@ export function registerMarkdownView(): () => void {
           </div>
         )
       }
-      return <MarkdownEditor path={path} />
+      return <MarkdownEditor path={path} onOpenLink={onOpenLink} />
     },
   })
 }

@@ -17,6 +17,12 @@ export type Command = {
   section?: string
   /** Lucide icon name, shown in the palette. */
   icon?: string
+  /**
+   * Where the binding applies. An `editor` command wins its chord whenever the
+   * editor has focus, which is how `⌘B` can mean bold in a note and "toggle
+   * sidebar" everywhere else.
+   */
+  scope?: 'app' | 'editor'
   /** Default binding, e.g. 'Mod+Shift+1'. Overridable via hotkeys.json. */
   hotkey?: string
   /**
@@ -34,8 +40,15 @@ type RegistryEvents = {
 
 export class CommandRegistry extends Events<RegistryEvents> {
   private commands = new Map<string, Command>()
-  /** chord -> command id. Rebuilt on any change; lookup must be O(1). */
-  private chords = new Map<Chord, string>()
+  /**
+   * chord -> command ids, editor-scoped first.
+   *
+   * A list rather than a single id: two commands genuinely may share a chord
+   * (bold in the editor, toggle-sidebar elsewhere). An earlier version stored
+   * one id and silently let the last registration win, which made ⌘B collapse
+   * the sidebar while you were typing.
+   */
+  private chords = new Map<Chord, string[]>()
   /** User overrides from hotkeys.json: command id -> binding (or null to unbind). */
   private overrides = new Map<string, string | null>()
 
@@ -93,14 +106,28 @@ export class CommandRegistry extends Events<RegistryEvents> {
   /**
    * Dispatch a keyboard event. Returns true if a command handled it, so the
    * caller knows whether to preventDefault.
+   *
+   * Candidates are tried in order - editor scope first - and the first
+   * available one wins. So a chord shared between an editor command and an app
+   * command resolves by context rather than by registration order.
    */
   handleKeyEvent(ev: KeyboardEvent): boolean {
-    const id = this.chords.get(chordFromEvent(ev))
-    if (id === undefined) return false
-    const command = this.commands.get(id)
-    if (!command || !(command.isAvailable?.() ?? true)) return false
-    void this.run(id)
-    return true
+    const ids = this.chords.get(chordFromEvent(ev))
+    if (ids === undefined) return false
+    for (const id of ids) {
+      const command = this.commands.get(id)
+      if (!command || !(command.isAvailable?.() ?? true)) continue
+      void this.run(id)
+      return true
+    }
+    return false
+  }
+
+  /** Every command bound to a chord, for a hotkey editor to show conflicts. */
+  conflicts(): { chord: Chord; ids: string[] }[] {
+    return [...this.chords.entries()]
+      .filter(([, ids]) => ids.length > 1)
+      .map(([chord, ids]) => ({ chord, ids }))
   }
 
   private reindex(): void {
@@ -108,9 +135,12 @@ export class CommandRegistry extends Events<RegistryEvents> {
     for (const command of this.commands.values()) {
       const binding = this.bindingFor(command.id)
       if (binding === null) continue
-      // Last registration wins; a real conflict is a bug we want visible in the
-      // hotkey editor rather than silently swallowed here.
-      this.chords.set(normalizeChord(binding), command.id)
+      const chord = normalizeChord(binding)
+      const list = this.chords.get(chord) ?? []
+      // Editor-scoped first, so it gets the chord when a note has focus.
+      if (command.scope === 'editor') list.unshift(command.id)
+      else list.push(command.id)
+      this.chords.set(chord, list)
     }
     this.trigger('change')
   }
