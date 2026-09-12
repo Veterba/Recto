@@ -59,8 +59,8 @@ export function registerStubViews(): () => void {
     registerView({
       type: stub.type,
       title: stub.title,
-      render: () => (
-        <div className="stub">
+      render: ({ state }) => (
+        <div className={`stub${state['docked'] === true ? ' stub--compact' : ''}`}>
           <h2 className="stub__title">{stub.title}</h2>
           <p className="stub__blurb">{stub.blurb}</p>
           <span className="stub__badge">{stub.milestone}</span>

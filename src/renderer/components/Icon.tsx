@@ -1,13 +1,20 @@
 import {
+  BookOpen,
   CircleUser,
   FilePlus,
   FolderPlus,
-  FolderTree,
   GitFork,
   House,
+  Maximize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  Plus,
+  Search,
   Settings,
   Sparkles,
   SquareKanban,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -21,15 +28,22 @@ import {
  * Add a line here when a new icon is needed.
  */
 const ICONS: Readonly<Record<string, LucideIcon>> = {
-  house: House,
-  'folder-tree': FolderTree,
+  'book-open': BookOpen,
   sparkles: Sparkles,
   'square-kanban': SquareKanban,
+  house: House,
   'git-fork': GitFork,
   'circle-user': CircleUser,
   settings: Settings,
   'file-plus': FilePlus,
   'folder-plus': FolderPlus,
+  'panel-left-close': PanelLeftClose,
+  'panel-left-open': PanelLeftOpen,
+  'panel-right-close': PanelRightClose,
+  maximize: Maximize2,
+  search: Search,
+  plus: Plus,
+  x: X,
 }
 
 type Props = {

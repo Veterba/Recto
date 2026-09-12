@@ -1,24 +1,48 @@
 import { useCallback, useRef } from 'react'
-import type { Section } from '../core/sections'
+import { formatChord } from '../core/hotkeys'
+import { SECTIONS, type SectionId } from '../core/sections'
+import { Icon } from './Icon'
 
 /**
- * The contextual panel next to the rail. Its width is dragged, clamped, and
- * persisted by the shell - this component only renders.
+ * The whole left column: vault header, the three section tabs, a search box,
+ * the section's list, and a footer.
+ *
+ * The section tabs live here rather than in a separate icon rail because
+ * switching section switches the entire workspace - it is a mode change, and it
+ * belongs at the top of the thing whose contents it changes.
  */
+
+export const SIDEBAR_MIN = 200
+export const SIDEBAR_MAX = 520
+
 type Props = {
-  section: Section
+  vaultName: string
+  activeSection: SectionId
+  onSelectSection: (id: SectionId) => void
+  query: string
+  onQueryChange: (query: string) => void
   width: number
   onResize: (width: number) => void
-  /** Buttons in the panel header, e.g. "new note". */
-  actions?: React.ReactNode
+  onNew: () => void
+  onOpenSettings: () => void
+  onCollapse: () => void
   children?: React.ReactNode
 }
 
-export const SIDEBAR_MIN = 180
-export const SIDEBAR_MAX = 520
-
-export function Sidebar({ section, width, onResize, actions, children }: Props): React.ReactElement {
-  const ref = useRef<HTMLElement | null>(null)
+export function Sidebar({
+  vaultName,
+  activeSection,
+  onSelectSection,
+  query,
+  onQueryChange,
+  width,
+  onResize,
+  onNew,
+  onOpenSettings,
+  onCollapse,
+  children,
+}: Props): React.ReactElement {
+  const searchRef = useRef<HTMLInputElement | null>(null)
 
   const startDrag = useCallback(
     (ev: React.PointerEvent) => {
@@ -27,8 +51,7 @@ export function Sidebar({ section, width, onResize, actions, children }: Props):
       const startWidth = width
 
       const onMove = (move: PointerEvent): void => {
-        const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidth + move.clientX - startX))
-        onResize(next)
+        onResize(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidth + move.clientX - startX)))
       }
       const onUp = (): void => {
         window.removeEventListener('pointermove', onMove)
@@ -42,13 +65,64 @@ export function Sidebar({ section, width, onResize, actions, children }: Props):
     [width, onResize],
   )
 
+  const section = SECTIONS.find((s) => s.id === activeSection) ?? SECTIONS[0]!
+
   return (
-    <aside ref={ref} className="sidebar" style={{ width }} aria-label={`${section.label} panel`}>
-      <header className="sidebar__head">
-        <h2 className="sidebar__title">{section.label}</h2>
-        {actions}
+    <aside className="sidebar" style={{ width }} aria-label="Sidebar">
+      <header className="sidebar__vault">
+        <span className="sidebar__vault-name" title={vaultName}>
+          {vaultName}
+        </span>
+        <button className="icon-btn" onClick={onCollapse} title={`Hide sidebar (${formatChord('Mod+B')})`}>
+          <Icon name="panel-left-close" size={15} />
+        </button>
       </header>
-      <div className="sidebar__body">{children ?? <SidebarPlaceholder section={section} />}</div>
+
+      <div className="segmented" role="tablist" aria-label="Workspace">
+        {SECTIONS.map((item, i) => (
+          <button
+            key={item.id}
+            role="tab"
+            aria-selected={item.id === activeSection}
+            className={`segmented__tab${item.id === activeSection ? ' is-active' : ''}`}
+            title={`${item.label} — ${formatChord(`Mod+${i + 1}`)}`}
+            onClick={() => onSelectSection(item.id)}
+          >
+            <Icon name={item.icon} size={17} />
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="sidebar__search">
+        <Icon name="search" size={14} className="sidebar__search-icon" />
+        <input
+          ref={searchRef}
+          className="sidebar__search-input"
+          type="search"
+          spellCheck={false}
+          placeholder={section.searchPlaceholder}
+          value={query}
+          onChange={(ev) => onQueryChange(ev.target.value)}
+          onKeyDown={(ev) => {
+            ev.stopPropagation()
+            if (ev.key === 'Escape') onQueryChange('')
+          }}
+        />
+      </div>
+
+      <div className="sidebar__body">{children}</div>
+
+      <footer className="sidebar__footer">
+        <button className="sidebar__new" onClick={onNew}>
+          <Icon name="plus" size={15} />
+          <span>{section.newLabel}</span>
+        </button>
+        <button className="icon-btn" onClick={onOpenSettings} title="Settings">
+          <Icon name="settings" size={15} />
+        </button>
+      </footer>
+
       <div
         className="sidebar__resize"
         role="separator"
@@ -60,11 +134,13 @@ export function Sidebar({ section, width, onResize, actions, children }: Props):
   )
 }
 
-const PLACEHOLDER: Record<string, string> = {
-  chat: 'Conversation list. Each one is a markdown file in the vault.',
-  board: 'Your boards. Each card is a real note.',
-}
-
-function SidebarPlaceholder({ section }: { section: Section }): React.ReactElement {
-  return <p className="sidebar__empty">{PLACEHOLDER[section.id] ?? 'Nothing here yet.'}</p>
+/** The thin strip that brings the sidebar back when it is collapsed. */
+export function SidebarStub({ onExpand }: { onExpand: () => void }): React.ReactElement {
+  return (
+    <div className="sidebar-stub">
+      <button className="icon-btn" onClick={onExpand} title={`Show sidebar (${formatChord('Mod+B')})`}>
+        <Icon name="panel-left-open" size={16} />
+      </button>
+    </div>
+  )
 }

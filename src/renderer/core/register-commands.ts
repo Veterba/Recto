@@ -1,5 +1,5 @@
 import type { CommandRegistry } from './commands'
-import { SECTIONS, type SectionId } from './sections'
+import { EXTENSION_VIEWS, SECTIONS, type SectionId } from './sections'
 import { listViews } from './view-registry'
 import type { Workspace } from './workspace'
 
@@ -22,6 +22,9 @@ export type CommandContext = {
   setTheme: (theme: 'system' | 'light' | 'dark') => void
   cycleTheme: () => void
   goToSection: (id: SectionId) => void
+  toggleGraph: () => void
+  openGraphFull: () => void
+  openExtension: (type: string) => void
 }
 
 export function registerAppCommands(registry: CommandRegistry, ctx: CommandContext): () => void {
@@ -64,6 +67,21 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       section: 'App',
       hotkey: 'Mod+B',
       run: ctx.toggleSidebar,
+    }),
+    registry.register({
+      id: 'graph:toggle',
+      name: 'Toggle graph panel',
+      section: 'Graph',
+      icon: 'git-fork',
+      hotkey: 'Mod+G',
+      run: ctx.toggleGraph,
+    }),
+    registry.register({
+      id: 'graph:open-full',
+      name: 'Open graph as a tab',
+      section: 'Graph',
+      icon: 'git-fork',
+      run: ctx.openGraphFull,
     }),
     registry.register({
       id: 'appearance:cycle-theme',
@@ -147,33 +165,33 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     }),
   )
 
-  // One command per section, with Mod+1..7 - generated from SECTIONS rather than
-  // listed, so adding a section makes it reachable without touching this file.
+  // Mod+1..3 switch workspace. Generated from SECTIONS, so the keys and the
+  // sidebar tabs can never disagree about their order.
   SECTIONS.forEach((section, i) => {
     offs.push(
       registry.register({
         id: `section:${section.id}`,
         name: `Go to ${section.label}`,
-        section: 'Sections',
+        section: 'Workspace',
         icon: section.icon,
-        ...(i < 9 ? { hotkey: `Mod+${i + 1}` } : {}),
+        hotkey: `Mod+${i + 1}`,
         run: () => ctx.goToSection(section.id),
       }),
     )
   })
 
-  // Any view type that is not a section still needs a way to be opened.
-  const sectionViews = new Set(SECTIONS.map((s) => s.viewType))
+  // Extensions (Home, Settings, Profile) open as a tab inside whichever section
+  // you are in. Graph has its own commands above, because its normal home is
+  // the dock rather than a tab.
+  const extensions = new Set<string>(EXTENSION_VIEWS)
   for (const view of listViews()) {
-    if (sectionViews.has(view.type)) continue
+    if (!extensions.has(view.type) || view.type === 'graph') continue
     offs.push(
       registry.register({
         id: `workspace:open-${view.type}`,
         name: `Open ${view.title}`,
         section: 'Open',
-        run: () => {
-          workspace.openView(view.type)
-        },
+        run: () => ctx.openExtension(view.type),
       }),
     )
   }
