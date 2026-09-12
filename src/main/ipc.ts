@@ -68,49 +68,70 @@ export function registerIpc(): void {
     markSelfWrite(parent === '' ? name : `${parent}/${name}`)
     return vaultFs.create(parent, name, kind)
   })
-  handle('fs:rename', async (p, newName) => {
-    // Collect the referring notes BEFORE the rename: afterwards the index no
-    // longer knows anything points at the old path.
+  /**
+   * Rename and move are the same operation to a user: the note ends up
+   * somewhere else and every link to it must follow. They were not sharing
+   * this, so dragging a file into a folder silently broke its links while
+   * renaming it fixed them.
+   */
+  async function relocate(
+    from: string,
+    apply: () => Promise<{ ok: true; path: string } | { ok: false; error: string }>,
+  ): Promise<RenameOutcome | { ok: false; error: string }> {
+    // Collect referrers BEFORE the move: afterwards the index no longer knows
+    // anything pointed at the old path.
     let sources: string[] = []
     try {
-      const response = await send({ kind: 'backlinks', path: p }, 15_000)
+      const response = await send({ kind: 'backlinks', path: from }, 15_000)
       if (response.kind === 'backlinks-result') {
         sources = [...new Set(response.links.map((link) => link.path))]
       }
     } catch {
-      // No index: the rename still happens, links just are not rewritten. Said
-      // so in the result rather than silently pretending it worked.
+      // No index: the move still happens, links just are not rewritten. Said in
+      // the result rather than silently pretending it worked.
     }
 
-    const renamed = await vaultFs.rename(p, newName)
-    if (!renamed.ok) return renamed
+    const moved = await apply()
+    if (!moved.ok) return moved
 
-    const rewrite = await vaultFs.rewriteLinksTo(sources, p, renamed.path)
+    const rewrite = await vaultFs.rewriteLinksTo(sources, from, moved.path)
     let undoId: string | undefined
     if (rewrite.changed.length > 0) {
       undoId = `undo-${Date.now().toString(36)}`
-      renameUndo.set(undoId, { from: renamed.path, to: p, entries: rewrite.changed })
-      // One level of undo is enough for an accident; keeping every rename
-      // forever would be an unbounded in-memory copy of the vault.
+      renameUndo.set(undoId, { from: moved.path, to: from, entries: rewrite.changed })
+      // One level of undo per action, capped: enough for an accident, not an
+      // unbounded in-memory copy of the vault.
       if (renameUndo.size > 10) renameUndo.delete([...renameUndo.keys()][0] ?? '')
     }
 
     const outcome: RenameOutcome = {
       ok: true,
-      path: renamed.path,
+      path: moved.path,
       rewrittenFiles: rewrite.changed.length,
       rewrittenLinks: rewrite.links,
       ...(undoId === undefined ? {} : { undoId }),
     }
     return outcome
-  })
+  }
+
+  handle('fs:rename', (p, newName) => relocate(p, () => vaultFs.rename(p, newName)))
+  handle('fs:move', (p, newParent) => relocate(p, () => vaultFs.move(p, newParent)))
 
   handle('links:undo-rename', async (undoId) => {
     const entry = renameUndo.get(undoId)
     if (!entry) return { ok: false, restored: 0, error: 'That undo is no longer available.' }
     renameUndo.delete(undoId)
     // Put the note name back too, or the restored links would point at nothing.
-    const back = await vaultFs.rename(entry.from, entry.to.slice(entry.to.lastIndexOf('/') + 1))
+    // `to` is the original full path: a move needs the folder back as well as
+    // the name, so undo it as a move followed by a rename.
+    const originalParent = entry.to.slice(0, Math.max(0, entry.to.lastIndexOf('/')))
+    const currentParent = entry.from.slice(0, Math.max(0, entry.from.lastIndexOf('/')))
+    let current = entry.from
+    if (originalParent !== currentParent) {
+      const moved = await vaultFs.move(current, originalParent)
+      if (moved.ok) current = moved.path
+    }
+    const back = await vaultFs.rename(current, entry.to.slice(entry.to.lastIndexOf('/') + 1))
     const restored = await vaultFs.restoreContents(entry.entries)
     return { ok: back.ok, restored }
   })
@@ -121,7 +142,6 @@ export function registerIpc(): void {
   handle('archive:restore', (id) => archive.restore(id))
   handle('archive:purge', (id) => archive.purge(id))
   handle('archive:set-retention', (days) => archive.setRetention(days))
-  handle('fs:move', (p, newParent) => vaultFs.move(p, newParent))
   handle('fs:reveal', (p) => vaultFs.reveal(p))
 
   handle('index:search', async (query, limit) => {

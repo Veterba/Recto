@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createEditor, type EditorHandle } from './codemirror'
+import type { LinkCandidate } from './link-complete'
 
 /**
  * React wrapper for the editor.
@@ -15,7 +16,8 @@ export type EditorProps = {
   initialValue: string
   onChange: (value: string) => void
   onSave: () => void
-  onOpenLink: (target: string) => void
+  onOpenLink: (target: string, heading: string | null) => void
+  getLinkCandidates?: () => readonly LinkCandidate[]
   onReady?: (handle: EditorHandle) => void
 }
 
@@ -25,6 +27,7 @@ export function Editor({
   onChange,
   onSave,
   onOpenLink,
+  getLinkCandidates,
   onReady,
 }: EditorProps): React.ReactElement {
   const host = useRef<HTMLDivElement | null>(null)
@@ -32,8 +35,8 @@ export function Editor({
 
   // Latest callbacks, read through the ref, so identity changes on re-render
   // cannot cause a remount.
-  const callbacks = useRef({ onChange, onSave, onOpenLink, onReady })
-  callbacks.current = { onChange, onSave, onOpenLink, onReady }
+  const callbacks = useRef({ onChange, onSave, onOpenLink, onReady, getLinkCandidates })
+  callbacks.current = { onChange, onSave, onOpenLink, onReady, getLinkCandidates }
 
   useEffect(() => {
     const parent = host.current
@@ -43,7 +46,8 @@ export function Editor({
       doc: initialValue,
       onChange: (value) => callbacks.current.onChange(value),
       onSave: () => callbacks.current.onSave(),
-      onOpenLink: (target) => callbacks.current.onOpenLink(target),
+      onOpenLink: (target, heading) => callbacks.current.onOpenLink(target, heading),
+      getLinkCandidates: () => callbacks.current.getLinkCandidates?.() ?? [],
     })
     handle.current = editor
     callbacks.current.onReady?.(editor)

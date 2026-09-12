@@ -4,6 +4,7 @@ import { Backlinks } from '../components/Backlinks'
 import { extractTargets } from '../core/link-targets'
 import { Editor } from '../editor/Editor'
 import type { EditorHandle } from '../editor/codemirror'
+import type { LinkCandidate } from '../editor/link-complete'
 import { registerView } from '../core/view-registry'
 
 /**
@@ -16,7 +17,7 @@ import { registerView } from '../core/view-registry'
 
 const SAVE_DEBOUNCE_MS = 500
 
-type State = { path?: unknown }
+type State = { path?: unknown; heading?: unknown }
 
 /** The live editor handle, so app commands can reach the focused editor. */
 let activeHandle: EditorHandle | null = null
@@ -24,12 +25,19 @@ export const getActiveEditor = (): EditorHandle | null => activeHandle
 
 function MarkdownEditor({
   path,
+  heading,
   onOpenLink,
   onOpenPath,
+  getLinkCandidates,
+  livePreview,
 }: {
   path: string
-  onOpenLink: (t: string) => void
-  onOpenPath: (p: string) => void
+  /** A `#heading` from the link that opened this note, to scroll to. */
+  heading: string | null
+  onOpenLink: (t: string, h: string | null) => void
+  onOpenPath: (p: string, h?: string | null) => void
+  getLinkCandidates: () => readonly LinkCandidate[]
+  livePreview: boolean
 }): React.ReactElement {
   const [initial, setInitial] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -112,6 +120,12 @@ function MarkdownEditor({
   // Flush on unmount so closing a tab never drops the last keystrokes.
   useEffect(() => () => flush(), [flush])
 
+  // Mode changes are pushed into the live editor rather than remounting it, so
+  // toggling Live Preview keeps your cursor, scroll and undo history.
+  useEffect(() => {
+    handle.current?.setLivePreview(livePreview)
+  }, [livePreview])
+
   // An external edit reloads the buffer; our own save comes back through the
   // watcher too, so compare against what we last wrote before replacing it.
   useEffect(
@@ -147,6 +161,7 @@ function MarkdownEditor({
     <div className="md">
       <div className="md__bar">
         <span className="md__path">{path}</span>
+        <span className="md__mode">{livePreview ? 'Live Preview' : 'Source'}</span>
         <span className={`md__status is-${status}`}>
           {status === 'dirty' ? 'Unsaved' : status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : ''}
         </span>
@@ -157,10 +172,14 @@ function MarkdownEditor({
         onChange={onChange}
         onSave={flush}
         onOpenLink={onOpenLink}
+        getLinkCandidates={getLinkCandidates}
         onReady={(editor: EditorHandle) => {
           handle.current = editor
           activeHandle = editor
+          editor.setLivePreview(livePreview)
           refreshUnresolved(initial)
+          // A link with a #heading opened this note; land on that heading.
+          if (heading !== null && heading !== '') editor.revealHeading(heading)
         }}
       />
       <Backlinks path={path} revision={savedAt} onOpen={onOpenPath} />
@@ -169,8 +188,10 @@ function MarkdownEditor({
 }
 
 export function registerMarkdownView(
-  onOpenLink: (target: string) => void,
-  onOpenPath: (path: string) => void,
+  onOpenLink: (target: string, heading: string | null) => void,
+  onOpenPath: (path: string, heading?: string | null) => void,
+  getLinkCandidates: () => readonly LinkCandidate[],
+  getLivePreview: () => boolean,
 ): () => void {
   return registerView({
     type: 'markdown',
@@ -182,6 +203,9 @@ export function registerMarkdownView(
     },
     render: ({ state }) => {
       const path = (state as State).path
+      const livePreview = getLivePreview()
+      const rawHeading = (state as State).heading
+      const heading = typeof rawHeading === 'string' && rawHeading !== '' ? rawHeading : null
       if (typeof path !== 'string' || path === '') {
         return (
           <div className="pane-empty">
@@ -191,7 +215,17 @@ export function registerMarkdownView(
           </div>
         )
       }
-      return <MarkdownEditor path={path} onOpenLink={onOpenLink} onOpenPath={onOpenPath} />
+      return (
+        <MarkdownEditor
+          key={path}
+          path={path}
+          heading={heading}
+          onOpenLink={onOpenLink}
+          onOpenPath={onOpenPath}
+          getLinkCandidates={getLinkCandidates}
+          livePreview={livePreview}
+        />
+      )
     },
   })
 }

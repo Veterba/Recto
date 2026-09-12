@@ -17,6 +17,8 @@ export type Appearance = {
   accentHue: number
   sidebarWidth: number
   sidebarOpen: boolean
+  /** Live Preview hides markdown markers away from the cursor. */
+  livePreview: boolean
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -24,6 +26,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   accentHue: 258,
   sidebarWidth: 260,
   sidebarOpen: true,
+  livePreview: true,
 }
 
 /** Apply to the document. Theme is an attribute; accent is a variable override. */
@@ -43,6 +46,7 @@ function coerce(value: unknown): Appearance {
     accentHue: typeof v.accentHue === 'number' && v.accentHue >= 0 && v.accentHue < 360 ? v.accentHue : DEFAULT_APPEARANCE.accentHue,
     sidebarWidth: typeof v.sidebarWidth === 'number' ? Math.min(520, Math.max(180, v.sidebarWidth)) : DEFAULT_APPEARANCE.sidebarWidth,
     sidebarOpen: typeof v.sidebarOpen === 'boolean' ? v.sidebarOpen : DEFAULT_APPEARANCE.sidebarOpen,
+    livePreview: typeof v.livePreview === 'boolean' ? v.livePreview : DEFAULT_APPEARANCE.livePreview,
   }
 }
 

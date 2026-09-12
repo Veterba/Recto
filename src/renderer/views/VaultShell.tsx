@@ -6,6 +6,8 @@ import { Icon } from '../components/Icon'
 import { CommandPalette } from '../components/CommandPalette'
 import { FileTree } from '../components/FileTree'
 import { FloatingWindow } from '../components/FloatingWindow'
+import { QuickSwitcher } from '../components/QuickSwitcher'
+import type { LinkCandidate } from '../editor/link-complete'
 import { SearchPanel } from '../components/SearchPanel'
 import { Sidebar, SidebarStub } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
@@ -24,6 +26,7 @@ import { getView } from '../core/view-registry'
 import { registerArchiveView } from './ArchiveView'
 import { registerMarkdownView } from './MarkdownView'
 import { registerStubViews } from './stubs'
+import { registerUnresolvedView } from './UnresolvedView'
 
 type Props = {
   vault: VaultInfo
@@ -44,6 +47,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   const { tree, refresh } = useVault(true)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [switcherOpen, setSwitcherOpen] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
 
@@ -85,20 +89,25 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   if (!markdownRegistered.current) {
     markdownRegistered.current = true
     registerMarkdownView(
-      (target) => {
+      (target, heading) => {
         void api.invoke('index:resolve-link', target).then((resolved) => {
-          if (resolved !== null) openFileRef.current(resolved)
+          if (resolved !== null) openFileRef.current(resolved, heading)
         })
       },
-      (p) => openFileRef.current(p),
+      (p, heading) => openFileRef.current(p, heading ?? null),
+      () => linkCandidatesRef.current,
+      () => livePreviewRef.current,
     )
+    registerUnresolvedView((p) => openFileRef.current(p))
   }
 
   const openFile = useCallback(
-    (path: string) => {
+    (path: string, heading?: string | null) => {
       // Opening a note always lands in Data, even if you clicked from elsewhere.
       setActiveSection('data')
-      sections?.data.openView('markdown', { path })
+      // The heading is part of the leaf state, so reopening the tab from a
+      // saved layout lands in the same place.
+      sections?.data.openView('markdown', heading ? { path, heading } : { path })
     },
     [sections, setActiveSection],
   )
@@ -108,6 +117,39 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   // The link handler is created once, so it reads the current openFile via a ref.
   const openFileRef = useRef(openFile)
   openFileRef.current = openFile
+
+  /**
+   * Note names for `[[` autocomplete.
+   *
+   * Held in a ref and read lazily by the editor, so the list is current without
+   * the editor being rebuilt every time a file appears in the vault.
+   */
+  /**
+   * Read lazily by the markdown view, so the mode is current without the view
+   * being re-registered every time it changes.
+   */
+  const livePreviewRef = useRef(appearance.livePreview)
+  livePreviewRef.current = appearance.livePreview
+
+  const linkCandidatesRef = useRef<LinkCandidate[]>([])
+  linkCandidatesRef.current = useMemo(() => {
+    const out: LinkCandidate[] = []
+    const walk = (nodes: readonly typeof tree.roots[number][]): void => {
+      for (const node of nodes) {
+        if (node.kind === 'folder') walk(node.children ?? [])
+        else if (node.name.toLowerCase().endsWith('.md')) {
+          const at = node.path.lastIndexOf('/')
+          out.push({
+            path: node.path,
+            name: node.name.replace(/\.md$/i, ''),
+            folder: at === -1 ? '' : node.path.slice(0, at),
+          })
+        }
+      }
+    }
+    walk(tree.roots)
+    return out
+  }, [tree.roots])
 
   const createIn = useCallback(
     async (kind: 'file' | 'folder') => {
@@ -146,7 +188,9 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
   useEffect(() => {
     if (!active) return
-    const offEditor = registerEditorCommands(commands)
+    const offEditor = registerEditorCommands(commands, () => {
+      update({ livePreview: !appearance.livePreview })
+    })
     const offApp = registerAppCommands(commands, {
       workspace: active,
       openPalette,
@@ -164,6 +208,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       openGraphFull: () => setGraphWindow({ open: true, maximized: true }),
       openExtension,
       openSearch: () => setSearchOpen(true),
+      openSwitcher: () => setSwitcherOpen(true),
       reindex: () => void api.invoke('index:reindex'),
     })
     return () => {
@@ -182,6 +227,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     activePath,
     graphWindow.open,
     setGraphWindow,
+    appearance.livePreview,
     openExtension,
   ])
 
@@ -195,16 +241,17 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
   useEffect(() => {
     const onKeyDown = (ev: KeyboardEvent): void => {
-      if (ev.key === 'Escape' && (paletteOpen || searchOpen)) {
+      if (ev.key === 'Escape' && (paletteOpen || searchOpen || switcherOpen)) {
         setPaletteOpen(false)
         setSearchOpen(false)
+        setSwitcherOpen(false)
         return
       }
       if (commands.handleKeyEvent(ev)) ev.preventDefault()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [paletteOpen, searchOpen])
+  }, [paletteOpen, searchOpen, switcherOpen])
 
   const graphView = getView('graph')
 
@@ -304,6 +351,12 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       />
       <CommandPalette registry={commands} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={openFile} />
+      <QuickSwitcher
+        open={switcherOpen}
+        roots={tree.roots}
+        onClose={() => setSwitcherOpen(false)}
+        onOpen={openFile}
+      />
     </div>
   )
 }

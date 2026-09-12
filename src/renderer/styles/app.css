@@ -1659,3 +1659,94 @@ body.is-resizing {
 .tree__undo:hover {
   background: var(--bg-elevated);
 }
+
+/* ---------- unresolved links ---------- */
+
+.unresolved__item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'target action' 'sources action';
+  align-items: center;
+  gap: 2px var(--size-3);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+}
+.unresolved__item.is-busy {
+  opacity: 0.5;
+}
+
+.unresolved__target {
+  grid-area: target;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.unresolved__sources {
+  grid-area: sources;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.unresolved__link {
+  all: unset;
+  color: var(--accent);
+  cursor: pointer;
+}
+.unresolved__link:hover {
+  text-decoration: underline;
+}
+
+.unresolved__item .btn {
+  grid-area: action;
+}
+
+/* ---------- live preview ---------- */
+
+.md__mode {
+  flex: none;
+  margin-left: auto;
+  margin-right: var(--size-3);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* A real checkbox in place of the `[ ]` markers. */
+.cm-task-checkbox {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0 2px -2px 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  vertical-align: baseline;
+  transition: background var(--anim-fast) var(--ease), border-color var(--anim-fast) var(--ease);
+}
+.cm-task-checkbox:hover {
+  border-color: var(--accent);
+}
+.cm-task-checkbox:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+/* The tick is drawn rather than an image, so it inherits the theme. */
+.cm-task-checkbox:checked::after {
+  content: '';
+  display: block;
+  width: 3.5px;
+  height: 7px;
+  margin: 0.5px auto 0;
+  border: solid #fff;
+  border-width: 0 1.75px 1.75px 0;
+  transform: rotate(45deg);
+}
+
+/* In Live Preview a link is a widget, not text, so it needs its own cursor. */
+.cm-content .cm-wikilink {
+  cursor: pointer;
+}

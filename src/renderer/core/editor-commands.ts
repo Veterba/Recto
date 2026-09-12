@@ -43,7 +43,10 @@ function editorCommand(
   }
 }
 
-export function registerEditorCommands(registry: CommandRegistry): () => void {
+export function registerEditorCommands(
+  registry: CommandRegistry,
+  onToggleLivePreview: () => void,
+): () => void {
   const commands: Command[] = [
     // Headings: Mod+Shift+1..6, matching the request.
     ...([1, 2, 3, 4, 5, 6] as const).map((level) =>
@@ -69,6 +72,14 @@ export function registerEditorCommands(registry: CommandRegistry): () => void {
     editorCommand('editor:horizontal-rule', 'Insert horizontal rule', 'Mod+Shift+Minus', md.insertHorizontalRule),
     editorCommand('editor:move-line-up', 'Move line up', 'Alt+ArrowUp', (state) => md.moveLines(state, -1)),
     editorCommand('editor:move-line-down', 'Move line down', 'Alt+ArrowDown', (state) => md.moveLines(state, 1)),
+    {
+      id: 'editor:toggle-live-preview',
+      name: 'Toggle Live Preview (show markdown syntax)',
+      section: 'Editor',
+      hotkey: 'Mod+Shift+P',
+      isAvailable: () => getActiveEditor() !== null,
+      run: () => onToggleLivePreview(),
+    },
     {
       id: 'editor:find',
       name: 'Find in note',

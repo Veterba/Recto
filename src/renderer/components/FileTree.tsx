@@ -122,10 +122,14 @@ export function FileTree({
       const currentParent = from.slice(0, Math.max(0, from.lastIndexOf('/')))
       if (currentParent === toParent) return
       const result = await api.invoke('fs:move', from, toParent)
-      if (!result.ok) setError(result.error)
-      else {
-        setSelected(result.path)
-        onChanged()
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setSelected(result.path)
+      onChanged()
+      if (result.undoId !== undefined && result.rewrittenLinks > 0) {
+        setRewrite({ files: result.rewrittenFiles, links: result.rewrittenLinks, undoId: result.undoId })
       }
     },
     [onChanged],
