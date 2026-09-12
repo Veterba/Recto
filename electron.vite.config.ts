@@ -5,7 +5,17 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    build: { rollupOptions: { input: { index: resolve('src/main/index.ts') } } },
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/main/index.ts'),
+          // The indexer runs as a utilityProcess, so it is a second entry point
+          // in the same (Node) build - not a renderer and not a worker.
+          'indexer/index': resolve('src/indexer/index.ts'),
+        },
+        output: { entryFileNames: '[name].js' },
+      },
+    },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],

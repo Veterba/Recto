@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import type { IpcApi } from '../shared/ipc-contract'
+import { openIndexForVault, send, stopIndexer } from './index-client'
 import { readState, writeState } from './state'
 import * as vaultFs from './vault-fs'
 import { closeVault, openVault, pickVault, startupState } from './vault'
@@ -13,10 +14,11 @@ function handle<C extends keyof IpcApi>(
   ipcMain.handle(channel, (_event, ...args) => fn(...(args as Parameters<IpcApi[C]>)))
 }
 
-/** Restart the watcher whenever the open vault changes. */
+/** Restart the watcher and the index whenever the open vault changes. */
 function rewatch(): void {
   const window = BrowserWindow.getAllWindows()[0]
   if (window) startWatching(window)
+  void openIndexForVault().catch((err: unknown) => console.error('[indexer]', err))
 }
 
 export function registerIpc(): void {
@@ -38,6 +40,7 @@ export function registerIpc(): void {
   })
   handle('vault:close', () => {
     stopWatching()
+    stopIndexer()
     return closeVault()
   })
 
@@ -57,6 +60,25 @@ export function registerIpc(): void {
   handle('fs:trash', (p) => vaultFs.trash(p))
   handle('fs:move', (p, newParent) => vaultFs.move(p, newParent))
   handle('fs:reveal', (p) => vaultFs.reveal(p))
+
+  handle('index:search', async (query, limit) => {
+    const response = await send({ kind: 'search', query, ...(limit === undefined ? {} : { limit }) }, 15_000)
+    return response.kind === 'search-result' ? response.hits : []
+  })
+  handle('index:backlinks', async (p) => {
+    const response = await send({ kind: 'backlinks', path: p }, 15_000)
+    return response.kind === 'backlinks-result' ? response.links : []
+  })
+  handle('index:stats', async () => {
+    const response = await send({ kind: 'stats' }, 15_000)
+    return response.kind === 'stats-result'
+      ? { notes: response.notes, links: response.links, unresolved: response.unresolved, tags: response.tags }
+      : { notes: 0, links: 0, unresolved: 0, tags: 0 }
+  })
+  handle('index:reindex', async () => {
+    await send({ kind: 'reindex', force: true })
+    return { ok: true }
+  })
   handle('state:read', (feature) => readState(feature))
   handle('state:write', (feature, data) => writeState(feature, data))
   handle('shell:open-external', async (url) => {

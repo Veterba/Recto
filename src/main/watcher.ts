@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { VAULT_STATE_DIR, type VaultChange } from '../shared/ipc-contract'
+import { send } from './index-client'
 import { currentVault } from './vault'
 
 /**
@@ -53,13 +54,27 @@ function isSelfWrite(absolute: string): boolean {
 
 function flush(): void {
   flushTimer = null
-  if (queue.length === 0 || !target || target.isDestroyed()) {
-    queue = []
-    return
-  }
+  if (queue.length === 0) return
   const batch = queue
   queue = []
-  target.webContents.send('vault:changed', batch)
+
+  if (target && !target.isDestroyed()) target.webContents.send('vault:changed', batch)
+
+  // Feed the same batch to the index. Only markdown matters to it, and only
+  // content changes - a directory event carries no note to parse.
+  const changes = batch
+    .filter((change) => 'path' in change && change.path.toLowerCase().endsWith('.md'))
+    .map((change) => ({
+      type: change.type === 'unlink' ? ('removed' as const) : ('upserted' as const),
+      path: 'path' in change ? change.path : '',
+    }))
+    .filter((change) => change.path !== '')
+
+  if (changes.length > 0) {
+    void send({ kind: 'note-changed', changes }, 30_000).catch((err: unknown) => {
+      console.error('[indexer] note-changed failed', err)
+    })
+  }
 }
 
 function enqueue(change: VaultChange): void {
@@ -96,8 +111,18 @@ export function startWatching(window: BrowserWindow): void {
       enqueue({ type: 'add', path: toRelative(absolute), mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })
     })
     .on('change', (absolute, stat) => {
-      if (isSelfWrite(absolute)) return
-      enqueue({ type: 'change', path: toRelative(absolute), mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })
+      const relative = toRelative(absolute)
+      if (isSelfWrite(absolute)) {
+        // Suppression stops the EDITOR reloading its buffer. The index still
+        // has to see the new content, or search goes stale on every save.
+        if (relative.toLowerCase().endsWith('.md')) {
+          void send({ kind: 'note-changed', changes: [{ type: 'upserted', path: relative }] }, 30_000).catch(
+            () => undefined,
+          )
+        }
+        return
+      }
+      enqueue({ type: 'change', path: relative, mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })
     })
     .on('unlink', (absolute) => {
       if (isSelfWrite(absolute)) return
