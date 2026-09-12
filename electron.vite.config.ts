@@ -30,6 +30,11 @@ export default defineConfig({
       },
     },
     build: { rollupOptions: { input: { index: resolve('src/renderer/index.html') } } },
+    // The graph's physics worker is loaded as `new Worker(url, { type: 'module' })`.
+    // Vite's default worker format is iife, which cannot code-split - and the
+    // worker imports d3-force, so it must. Dev works either way; this is what
+    // stops the packaged build being the first place it breaks.
+    worker: { format: 'es' },
     plugins: [react()],
   },
 })

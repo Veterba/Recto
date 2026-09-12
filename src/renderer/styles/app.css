@@ -2365,3 +2365,119 @@ body.is-resizing {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+
+/* ---------- graph ---------- */
+
+.graph {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-primary);
+}
+
+/* The canvas is absolutely positioned inside this box on purpose. Sized in the
+   flow, it would grow the box that the ResizeObserver measures, and the two
+   would chase each other a pixel at a time forever. */
+.graph__canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+}
+.graph__canvas:active {
+  cursor: grabbing;
+}
+.graph__canvas > canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.graph__empty {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--size-6);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  pointer-events: none;
+}
+
+.graph__bar {
+  flex: none;
+  display: flex;
+  /* center, not the flex default: stretch has twice made a control grow to the
+     height of its container in this codebase. */
+  align-items: center;
+  gap: var(--size-1);
+  padding: 5px var(--size-2);
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.graph__btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.graph__btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.graph__btn.is-on {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.graph__sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--size-1);
+  background: var(--border);
+}
+
+.graph__slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+}
+.graph__slider input[type='range'] {
+  width: 72px;
+  height: 3px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.graph__spacer {
+  flex: 1;
+}
+
+.graph__stat {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* In the floating window the sliders are hidden, so the bar is only controls. */
+.graph--compact .graph__bar {
+  padding: 4px 6px;
+}
+.graph--compact .graph__btn {
+  width: 22px;
+  height: 22px;
+}

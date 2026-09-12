@@ -13,6 +13,11 @@ export type SearchHit = {
   score: number
 }
 
+/** The link graph. Degree is precomputed so the renderer can size nodes. */
+export type GraphNode = { path: string; name: string; title: string | null; degree: number }
+export type GraphEdge = { source: string; target: string }
+export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[] }
+
 export type Backlink = {
   path: string
   line: number
@@ -36,6 +41,7 @@ export type IndexRequest =
   | { kind: 'resolve-link'; target: string }
   | { kind: 'resolve-links'; targets: string[] }
   | { kind: 'unresolved' }
+  | { kind: 'graph' }
   | { kind: 'history'; path: string }
   | { kind: 'history-get'; id: number }
   | { kind: 'history-prune' }
@@ -51,6 +57,7 @@ export type IndexResponse =
   | { kind: 'resolve-link-result'; path: string | null }
   | { kind: 'resolve-links-result'; resolved: Record<string, string | null> }
   | { kind: 'unresolved-result'; entries: { target: string; sources: string[] }[] }
+  | { kind: 'graph-result'; graph: GraphData }
   | { kind: 'history-result'; snapshots: Snapshot[] }
   | { kind: 'history-get-result'; snapshot: Snapshot | null }
   | { kind: 'history-prune-result'; removed: number }

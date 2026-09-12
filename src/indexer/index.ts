@@ -10,7 +10,16 @@ import {
   takeSnapshot,
 } from './snapshots'
 import { normalizeName, parseNote, resolveLink } from './parse'
-import type { Backlink, IndexRequest, IndexResponse, SearchHit, Snapshot } from './protocol'
+import type {
+  Backlink,
+  GraphData,
+  GraphEdge,
+  GraphNode,
+  IndexRequest,
+  IndexResponse,
+  SearchHit,
+  Snapshot,
+} from './protocol'
 
 /**
  * The indexer, running in its own process.
@@ -309,6 +318,57 @@ function resolveOne(target: string): string | null {
   return resolveLink(target, byName, allPaths)
 }
 
+/**
+ * The link graph: one node per note, one edge per resolved link.
+ *
+ * Unresolved links are excluded - an edge to a note that does not exist has no
+ * node to attach to, and inventing placeholder nodes would make the graph a
+ * picture of your typos. They are listed on the Unresolved screen instead.
+ *
+ * Self-links and duplicate pairs are collapsed, because the force simulation
+ * treats a duplicated edge as a stronger spring and two notes that link each
+ * other five times are not five times closer.
+ */
+function graph(): GraphData {
+  const handleDb = requireDb()
+
+  const rows = handleDb.prepare('SELECT path, name, title FROM notes ORDER BY path').all() as {
+    path: string
+    name: string
+    title: string | null
+  }[]
+
+  const links = handleDb
+    .prepare('SELECT DISTINCT source_path AS source, target_path AS target FROM links WHERE target_path IS NOT NULL')
+    .all() as { source: string; target: string }[]
+
+  const known = new Set(rows.map((row) => row.path))
+  const degree = new Map<string, number>()
+  const seen = new Set<string>()
+  const edges: GraphEdge[] = []
+
+  for (const link of links) {
+    if (link.source === link.target) continue
+    if (!known.has(link.source) || !known.has(link.target)) continue
+    // Undirected for layout purposes: A->B and B->A are one spring.
+    const key = link.source < link.target ? `${link.source}\u0000${link.target}` : `${link.target}\u0000${link.source}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    edges.push({ source: link.source, target: link.target })
+    degree.set(link.source, (degree.get(link.source) ?? 0) + 1)
+    degree.set(link.target, (degree.get(link.target) ?? 0) + 1)
+  }
+
+  const nodes: GraphNode[] = rows.map((row) => ({
+    path: row.path,
+    name: row.name.replace(/\.md$/i, ''),
+    title: row.title,
+    degree: degree.get(row.path) ?? 0,
+  }))
+
+  return { nodes, edges }
+}
+
 function handle(request: IndexRequest): IndexResponse {
   switch (request.kind) {
     case 'open': {
@@ -343,6 +403,8 @@ function handle(request: IndexRequest): IndexResponse {
     }
     case 'unresolved':
       return { kind: 'unresolved-result', entries: unresolved() }
+    case 'graph':
+      return { kind: 'graph-result', graph: graph() }
     case 'history':
       return { kind: 'history-result', snapshots: listSnapshots(requireDb(), request.path) }
     case 'history-get':

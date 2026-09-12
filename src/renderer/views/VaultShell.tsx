@@ -24,6 +24,8 @@ import { getSection, type SectionId } from '../core/sections'
 import { useVault } from '../core/vault-store'
 import { useWorkspace } from '../core/use-workspace'
 import { getView } from '../core/view-registry'
+import { registerGraphView } from '../graph/GraphView'
+import { setActiveNote, noteIndexChanged } from '../core/note-bus'
 import { registerArchiveView } from './ArchiveView'
 import { registerMarkdownView } from './MarkdownView'
 import { registerSettingsView } from './SettingsView'
@@ -70,6 +72,10 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     return typeof path === 'string' ? path : null
   }, [active, revision])
 
+  // Published rather than passed down: the graph is a floating window, not a
+  // child of the tab that knows which note is open.
+  useEffect(() => setActiveNote(activePath), [activePath])
+
   // --- sidebar list -------------------------------------------------------
 
   const visibleTree = useMemo(() => {
@@ -110,6 +116,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       () => livePreviewRef.current,
     )
     registerUnresolvedView((p) => openFileRef.current(p))
+    registerGraphView((p) => openFileRef.current(p))
     // Read lazily: settings renders from the live appearance state, so there is
     // no copy to keep in sync and no "apply" step.
     registerSettingsView(() => settingsDepsRef.current)

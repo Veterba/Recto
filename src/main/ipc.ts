@@ -196,6 +196,10 @@ export function registerIpc(): void {
     const response = await send({ kind: 'unresolved' }, 15_000)
     return response.kind === 'unresolved-result' ? response.entries : []
   })
+  handle('index:graph', async () => {
+    const response = await send({ kind: 'graph' }, 30_000)
+    return response.kind === 'graph-result' ? response.graph : { nodes: [], edges: [] }
+  })
   handle('index:reindex', async () => {
     await send({ kind: 'reindex', force: true })
     return { ok: true }

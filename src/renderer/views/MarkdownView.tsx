@@ -10,6 +10,7 @@ import { Editor } from '../editor/Editor'
 import type { EditorHandle } from '../editor/codemirror'
 import type { LinkCandidate } from '../editor/link-complete'
 import type { Format } from '../editor/markdown-actions'
+import { noteIndexChanged } from '../core/note-bus'
 import { registerView } from '../core/view-registry'
 
 /**
@@ -85,6 +86,10 @@ function MarkdownEditor({
       if (result.ok) {
         setStatus('saved')
         setSavedAt(Date.now())
+        // A save can have added or removed a `[[link]]`, which is a change to
+        // the graph. Self-writes are suppressed in the watcher, so nothing else
+        // would ever tell it.
+        noteIndexChanged()
       } else setError(result.error ?? 'Could not save.')
     },
     [path],

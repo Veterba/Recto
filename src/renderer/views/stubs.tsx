@@ -35,12 +35,6 @@ const STUBS: Stub[] = [
     blurb: 'Kanban over notes — a card is a real .md file, so clicking one opens the ordinary editor.',
   },
   {
-    type: 'graph',
-    title: 'Graph',
-    milestone: 'milestone 6',
-    blurb: 'd3-force in a worker, drawn by Pixi on the GPU, with the note you are in lit up.',
-  },
-  {
     type: 'profile',
     title: 'Profile',
     milestone: 'milestone 7',
