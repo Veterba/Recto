@@ -3053,21 +3053,6 @@ body.is-resizing {
 
 /* ---------- sidebar search row + footer ---------- */
 
-.sidebar__searchrow {
-  flex: none;
-  display: flex;
-  /* center, not stretch: a 30px input next to a 24px button is what stretch
-     produces, and it has bitten this codebase twice already. */
-  align-items: center;
-  gap: 2px;
-  margin: 0 var(--size-2) var(--size-2);
-}
-.sidebar__searchrow .sidebar__search {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-}
-
 .icon-btn--sm {
   width: 26px;
   height: 26px;
@@ -3250,4 +3235,167 @@ body.is-resizing {
 .dialog__submit[disabled] {
   opacity: 0.4;
   cursor: default;
+}
+
+/* ---------- sidebar tools row ---------- */
+
+.sidebar__tools {
+  flex: none;
+  display: flex;
+  /* center, not stretch — this row mixes a labelled button with two icon
+     buttons, and stretch makes them different heights. */
+  align-items: center;
+  gap: 2px;
+  margin: 0 var(--size-2) var(--size-2);
+}
+
+.sidebar__tools-gap {
+  flex: 1;
+}
+
+.tool-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.tool-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.tool-btn--label {
+  padding: 0 var(--size-2);
+}
+
+/* ---------- tidy preview ---------- */
+
+.dialog--wide {
+  width: min(620px, calc(100vw - 2 * var(--size-6)));
+}
+
+.dialog__lede {
+  margin: 2px 0 var(--size-3);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.dialog__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--size-2);
+  margin-top: var(--size-4);
+}
+
+.dialog__ghost {
+  all: unset;
+  box-sizing: border-box;
+  padding: 9px var(--size-3);
+  border-radius: var(--radius-m);
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+.dialog__ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tidy__plan {
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  margin: 0 calc(-1 * var(--size-1));
+  padding: 0 var(--size-1);
+}
+
+.tidy__group + .tidy__group {
+  margin-top: var(--size-3);
+}
+
+.tidy__folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.tidy__folder svg {
+  color: var(--text-muted);
+}
+
+.tidy__new {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.tidy__notes {
+  margin: 0;
+  padding: 0 0 0 var(--size-4);
+  list-style: none;
+}
+.tidy__notes--skipped {
+  margin-top: var(--size-2);
+  opacity: 0.75;
+}
+
+.tidy__note {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-2);
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+
+.tidy__name {
+  flex: none;
+  max-width: 55%;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tidy__reason {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tidy__toggle {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--size-3);
+  padding: 4px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.tidy__toggle:hover {
+  color: var(--text-primary);
 }

@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Bold,
   Braces,
+  Brush,
   ChevronsDownUp,
   ChevronsUpDown,
   Code,
@@ -120,6 +121,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   'chevrons-up-down': ChevronsUpDown,
   'chevrons-down-up': ChevronsDownUp,
   crosshair: Crosshair,
+  brush: Brush,
 }
 
 type Props = {
