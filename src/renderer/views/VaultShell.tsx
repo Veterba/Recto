@@ -24,6 +24,10 @@ import { getSection, type SectionId } from '../core/sections'
 import { useVault } from '../core/vault-store'
 import { useWorkspace } from '../core/use-workspace'
 import { getView } from '../core/view-registry'
+import { BoardList } from '../board/BoardList'
+import { registerBoardView } from '../board/BoardView'
+import { createCard } from '../board/create-card'
+import { useBoards } from '../board/use-boards'
 import { registerGraphView } from '../graph/GraphView'
 import { setActiveNote, noteIndexChanged } from '../core/note-bus'
 import { registerArchiveView } from './ArchiveView'
@@ -57,6 +61,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     revision,
   } = useWorkspace()
   const { appearance, ready, update } = useAppearance()
+  const boards = useBoards()
   const { tree, refresh } = useVault(true)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -75,6 +80,35 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   // Published rather than passed down: the graph is a floating window, not a
   // child of the tab that knows which note is open.
   useEffect(() => setActiveNote(activePath), [activePath])
+
+  /** Which board the Tasks workspace is showing, from its own active leaf. */
+  const activeBoard = useMemo(() => {
+    const leaf = sections?.tasks.activeLeaf
+    const id = leaf?.type === 'board' ? leaf.state['board'] : undefined
+    return typeof id === 'string' ? id : null
+  }, [sections, revision])
+
+  /**
+   * An empty Tasks workspace opens its first board.
+   *
+   * Without this, switching to Tasks the first time shows an empty pane and
+   * leaves you to work out that a board lives in the sidebar.
+   */
+  useEffect(() => {
+    if (activeSection !== 'tasks') return
+    const tasks = sections?.tasks
+    if (tasks === undefined || tasks.activeLeaf !== null) return
+    const first = boards.boards[0]
+    if (first !== undefined) tasks.openView('board', { board: first.id })
+  }, [activeSection, sections, revision, boards])
+
+  const openBoard = useCallback(
+    (id: string) => {
+      setActiveSection('tasks')
+      sections?.tasks.openView('board', { board: id })
+    },
+    [sections, setActiveSection],
+  )
 
   // --- sidebar list -------------------------------------------------------
 
@@ -117,6 +151,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     )
     registerUnresolvedView((p) => openFileRef.current(p))
     registerGraphView((p) => openFileRef.current(p))
+    registerBoardView((p) => openBoardCardRef.current(p))
     // Read lazily: settings renders from the live appearance state, so there is
     // no copy to keep in sync and no "apply" step.
     registerSettingsView(() => settingsDepsRef.current)
@@ -133,11 +168,27 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     [sections, setActiveSection],
   )
 
+  /**
+   * A card opens in the Tasks workspace, not in Data.
+   *
+   * Sending you to another section to read the task you just clicked would
+   * throw away the board you were looking at - and it is the same editor either
+   * way, because a card is a note.
+   */
+  const openBoardCard = useCallback(
+    (path: string) => {
+      sections?.tasks.openView('markdown', { path })
+    },
+    [sections],
+  )
+
   // --- actions ------------------------------------------------------------
 
   // The link handler is created once, so it reads the current openFile via a ref.
   const openFileRef = useRef(openFile)
   openFileRef.current = openFile
+  const openBoardCardRef = useRef(openBoardCard)
+  openBoardCardRef.current = openBoardCard
 
   /**
    * Note names for `[[` autocomplete.
@@ -195,9 +246,24 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
   /** The sidebar's bottom-left button means something different per section. */
   const onNew = useCallback(() => {
-    if (activeSection === 'data') void createIn('file')
-    else active?.openView(section.viewType, { draft: Date.now() }, { reuse: false })
-  }, [activeSection, createIn, active, section.viewType])
+    if (activeSection === 'data') {
+      void createIn('file')
+      return
+    }
+    if (activeSection === 'tasks') {
+      // It used to open another copy of the board, which is not what a button
+      // labelled "Task" promises. Now it makes a card on the board you are
+      // looking at and opens it, so you can start typing.
+      const board = boards.boards.find((entry) => entry.id === activeBoard) ?? boards.boards[0]
+      const column = board?.columns[0]
+      if (board === undefined || column === undefined) return
+      void createCard(board.id, column.id, 'New task').then((created) => {
+        if (created.ok) openBoardCard(created.path)
+      })
+      return
+    }
+    active?.openView(section.viewType, { draft: Date.now() }, { reuse: false })
+  }, [activeSection, createIn, active, section.viewType, boards, activeBoard, openBoardCard])
 
   const openExtension = useCallback(
     (type: string) => {
@@ -334,11 +400,11 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
                 onOpenFile={openFile}
                 onChanged={() => void refresh()}
               />
+            ) : activeSection === 'tasks' ? (
+              <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} />
             ) : (
               <p className="sidebar__empty">
-                {activeSection === 'ai'
-                  ? 'Your conversations. Each one is a markdown file in the vault.'
-                  : 'Your boards. Each card is a real note.'}
+                Your conversations. Each one is a markdown file in the vault.
               </p>
             )}
           </Sidebar>

@@ -200,6 +200,14 @@ export function registerIpc(): void {
     const response = await send({ kind: 'graph' }, 30_000)
     return response.kind === 'graph-result' ? response.graph : { nodes: [], edges: [] }
   })
+  handle('index:board', async (board) => {
+    const response = await send({ kind: 'board', board }, 30_000)
+    return response.kind === 'board-result' ? response.cards : []
+  })
+  handle('index:boards', async () => {
+    const response = await send({ kind: 'boards' }, 30_000)
+    return response.kind === 'boards-result' ? response.boards : []
+  })
   handle('index:reindex', async () => {
     await send({ kind: 'reindex', force: true })
     return { ok: true }

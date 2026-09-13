@@ -87,6 +87,8 @@ export type IpcApi = {
   'index:resolve-links': (targets: string[]) => Record<string, string | null>
   'index:unresolved': () => { target: string; sources: string[] }[]
   'index:graph': () => GraphInfo
+  'index:board': (board: string) => BoardCardInfo[]
+  'index:boards': () => { board: string; count: number }[]
   'links:undo-rename': (undoId: string) => { ok: boolean; restored: number; error?: string }
   'history:list': (path: string) => SnapshotInfo[]
   'history:get': (id: number) => SnapshotInfo | null
@@ -118,6 +120,19 @@ export type ArchiveState = {
 export type GraphNodeInfo = { path: string; name: string; title: string | null; degree: number }
 export type GraphEdgeInfo = { source: string; target: string }
 export type GraphInfo = { nodes: GraphNodeInfo[]; edges: GraphEdgeInfo[] }
+
+/**
+ * One card on a kanban board - which is just a note whose frontmatter says so.
+ * There is no card record: these fields come back out of the property index.
+ */
+export type BoardCardInfo = {
+  path: string
+  title: string
+  status: string | null
+  order: number | null
+  due: string | null
+  priority: string | null
+}
 
 /** One stored version of a note. `content` is present only for a single fetch. */
 export type SnapshotInfo = { id: number; path: string; ts: number; bytes: number; content?: string }
@@ -180,6 +195,8 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'index:resolve-links',
   'index:unresolved',
   'index:graph',
+  'index:board',
+  'index:boards',
   'links:undo-rename',
   'history:list',
   'history:get',

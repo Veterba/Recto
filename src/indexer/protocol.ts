@@ -27,6 +27,20 @@ export type Backlink = {
   title: string | null
 }
 
+/**
+ * One card on a board. A card IS a note - these fields are frontmatter, read
+ * back out of the properties table rather than stored anywhere of their own.
+ */
+export type BoardCard = {
+  path: string
+  title: string
+  status: string | null
+  /** Fractional index within its column; null for a card never dragged. */
+  order: number | null
+  due: string | null
+  priority: string | null
+}
+
 export type NoteChange = { type: 'upserted' | 'removed'; path: string }
 
 /** One stored version of a note. `content` is omitted when listing. */
@@ -42,6 +56,8 @@ export type IndexRequest =
   | { kind: 'resolve-links'; targets: string[] }
   | { kind: 'unresolved' }
   | { kind: 'graph' }
+  | { kind: 'board'; board: string }
+  | { kind: 'boards' }
   | { kind: 'history'; path: string }
   | { kind: 'history-get'; id: number }
   | { kind: 'history-prune' }
@@ -58,6 +74,8 @@ export type IndexResponse =
   | { kind: 'resolve-links-result'; resolved: Record<string, string | null> }
   | { kind: 'unresolved-result'; entries: { target: string; sources: string[] }[] }
   | { kind: 'graph-result'; graph: GraphData }
+  | { kind: 'board-result'; cards: BoardCard[] }
+  | { kind: 'boards-result'; boards: { board: string; count: number }[] }
   | { kind: 'history-result'; snapshots: Snapshot[] }
   | { kind: 'history-get-result'; snapshot: Snapshot | null }
   | { kind: 'history-prune-result'; removed: number }
