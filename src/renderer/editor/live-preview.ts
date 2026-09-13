@@ -219,7 +219,19 @@ const blockHiding = StateField.define<DecorationSet>({
 
     return Decoration.set(ranges.map((range) => range.deco.range(range.from, range.to)), true)
   },
-  provide: (field) => EditorView.decorations.from(field),
+  provide: (field) => [
+    EditorView.decorations.from(field),
+    /**
+     * Atomic, or the cursor walks INTO a hidden block.
+     *
+     * A replaced block still occupies document positions. Without this, arrowing
+     * up out of the body put the caret inside the hidden frontmatter or a hidden
+     * code fence - which renders as nothing, so it looked like the cursor had
+     * jumped to an empty row and then refused to move line by line. Atomic
+     * ranges make the whole block one step.
+     */
+    EditorView.atomicRanges.from(field, (value) => () => value),
+  ],
 })
 
 export const setLivePreview = StateEffect.define<boolean>()
@@ -277,6 +289,11 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
       const task = TASK.exec(line.text)
       if (task?.[1] !== undefined && task[2] !== undefined) {
         const boxFrom = line.from + task[1].length
+        // The `- ` goes too. A checkbox already reads as a list item, so the
+        // dash beside it is a second bullet for the same thing - and it left a
+        // gap to the left of every box.
+        const indent = task[1].length - task[1].trimStart().length
+        ranges.push({ from: line.from + indent, to: boxFrom, deco: hidden })
         ranges.push({
           from: boxFrom,
           to: boxFrom + task[2].length,

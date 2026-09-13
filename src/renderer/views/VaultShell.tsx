@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { VaultInfo } from '@shared/ipc-contract'
+import type { FileNode, VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { Breadcrumb } from '../components/Breadcrumb'
 import { Icon } from '../components/Icon'
@@ -12,7 +12,9 @@ import type { LinkCandidate } from '../editor/link-complete'
 import { SearchPanel } from '../components/SearchPanel'
 import { Sidebar, SidebarStub } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
+import { TidyDialog } from '../components/TidyDialog'
 import { Tip } from '../components/Tip'
+import { planTidy, type TidyPlan } from '../core/tidy'
 import { WorkspaceView } from '../components/WorkspaceView'
 import { useAppearance, type Theme } from '../core/appearance'
 import { commands } from '../core/commands'
@@ -134,6 +136,58 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
   /** Every folder in the vault, for expand-all. */
   const allFolders = useMemo(() => allFolderPaths(tree.roots), [tree.roots])
+
+  // --- tidy ---------------------------------------------------------------
+  const [tidy, setTidy] = useState<TidyPlan | null>(null)
+  const [tidyBusy, setTidyBusy] = useState(false)
+
+  /**
+   * Build the plan, then show it. Nothing moves until the dialog is confirmed -
+   * this rewrites links across the vault, and a reorganisation you did not get
+   * to read first is one you cannot trust.
+   */
+  const openTidy = useCallback(async () => {
+    const context = await api.invoke('index:context')
+    const notes: string[] = []
+    const walk = (nodes: readonly FileNode[]): void => {
+      for (const node of nodes) {
+        if (node.kind === 'folder') walk(node.children ?? [])
+        else if (node.name.toLowerCase().endsWith('.md')) notes.push(node.path)
+      }
+    }
+    walk(tree.roots)
+
+    setTidy(
+      planTidy({
+        notes,
+        folders: allFolders,
+        context: new Map(context.map((entry) => [entry.path, { tags: entry.tags, links: entry.links }])),
+        // The board owns this folder; a stray note landing in it would appear
+        // on a kanban nobody put it on.
+        reserved: [CARD_FOLDER],
+      }),
+    )
+  }, [tree.roots, allFolders])
+
+  const runTidy = useCallback(async () => {
+    if (tidy === null) return
+    setTidyBusy(true)
+    // Create each new folder once, even when several notes are headed for it.
+    const created = new Set<string>()
+    for (const move of tidy.moves) {
+      if (!move.creates || created.has(move.into)) continue
+      created.add(move.into)
+      await api.invoke('fs:create', '', move.into, 'folder')
+    }
+    for (const move of tidy.moves) {
+      // `fs:move` is the same path as a drag in the tree, so links follow.
+      await api.invoke('fs:move', move.path, move.into)
+    }
+    await refresh()
+    noteIndexChanged()
+    setTidyBusy(false)
+    setTidy(null)
+  }, [tidy, refresh])
 
   // A search result is useless collapsed, so while searching every folder is
   // open; the user's own expansion state is untouched underneath.
@@ -417,6 +471,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
             onNewFolder={activeSection === 'data' ? () => void createIn('folder') : undefined}
             onExpandAll={activeSection === 'data' ? () => setExpanded(new Set(allFolders)) : undefined}
             onCollapseAll={activeSection === 'data' ? () => setExpanded(new Set()) : undefined}
+            onTidy={activeSection === 'data' ? () => void openTidy() : undefined}
             onOpenArchive={() => openExtension('archive')}
             onOpenSettings={() => openExtension('settings')}
             onCollapse={toggleSidebar}
@@ -497,6 +552,14 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
         onToggleGraph={() => setGraphWindow({ open: !graphWindow.open })}
         onOpenPalette={openPalette}
       />
+      {tidy !== null && (
+        <TidyDialog
+          plan={tidy}
+          busy={tidyBusy}
+          onConfirm={() => void runTidy()}
+          onCancel={() => setTidy(null)}
+        />
+      )}
       <CommandPalette registry={commands} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={openFile} />
       <QuickSwitcher

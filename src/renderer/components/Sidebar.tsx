@@ -29,6 +29,7 @@ type Props = {
   onNewFolder?: (() => void) | undefined
   onExpandAll?: (() => void) | undefined
   onCollapseAll?: (() => void) | undefined
+  onTidy?: (() => void) | undefined
   onOpenArchive: () => void
   onOpenSettings: () => void
   onCollapse: () => void
@@ -47,6 +48,7 @@ export function Sidebar({
   onNewFolder,
   onExpandAll,
   onCollapseAll,
+  onTidy,
   onOpenArchive,
   onOpenSettings,
   onCollapse,
@@ -106,41 +108,54 @@ export function Sidebar({
         ))}
       </div>
 
-      <div className="sidebar__searchrow">
-        <div className="sidebar__search">
-          <Icon name="search" size={14} className="sidebar__search-icon" />
-          <input
-            ref={searchRef}
-            className="sidebar__search-input"
-            type="search"
-            spellCheck={false}
-            placeholder={section.searchPlaceholder}
-            value={query}
-            onChange={(ev) => onQueryChange(ev.target.value)}
-            onKeyDown={(ev) => {
-              ev.stopPropagation()
-              if (ev.key === 'Escape') onQueryChange('')
-            }}
-          />
-        </div>
-
-        {/* Folder state only. Nothing is opened in the editor - these move the
-            tree, not the workspace. */}
-        {onExpandAll !== undefined && (
-          <Tip label="Expand all folders" hint="Sidebar only — opens nothing">
-            <button className="icon-btn icon-btn--sm" onClick={onExpandAll} aria-label="Expand all folders">
-              <Icon name="chevrons-up-down" size={14} />
-            </button>
-          </Tip>
-        )}
-        {onCollapseAll !== undefined && (
-          <Tip label="Collapse all folders" hint="Sidebar only — closes nothing">
-            <button className="icon-btn icon-btn--sm" onClick={onCollapseAll} aria-label="Collapse all folders">
-              <Icon name="chevrons-down-up" size={14} />
-            </button>
-          </Tip>
-        )}
+      <div className="sidebar__search">
+        <Icon name="search" size={14} className="sidebar__search-icon" />
+        <input
+          ref={searchRef}
+          className="sidebar__search-input"
+          type="search"
+          spellCheck={false}
+          placeholder={section.searchPlaceholder}
+          value={query}
+          onChange={(ev) => onQueryChange(ev.target.value)}
+          onKeyDown={(ev) => {
+            ev.stopPropagation()
+            if (ev.key === 'Escape') onQueryChange('')
+          }}
+        />
       </div>
+
+      {/* Tools sit under the search rather than beside it: three controls
+          crammed against a text field left none of them room to be read. */}
+      {(onExpandAll !== undefined || onTidy !== undefined) && (
+        <div className="sidebar__tools">
+          {onExpandAll !== undefined && (
+            <Tip label="Expand all folders" hint="Sidebar only — opens nothing">
+              <button className="tool-btn" onClick={onExpandAll} aria-label="Expand all folders">
+                <Icon name="chevrons-up-down" size={14} />
+              </button>
+            </Tip>
+          )}
+          {onCollapseAll !== undefined && (
+            <Tip label="Collapse all folders" hint="Sidebar only — closes nothing">
+              <button className="tool-btn" onClick={onCollapseAll} aria-label="Collapse all folders">
+                <Icon name="chevrons-down-up" size={14} />
+              </button>
+            </Tip>
+          )}
+
+          <span className="sidebar__tools-gap" />
+
+          {onTidy !== undefined && (
+            <Tip label="Tidy" hint="File loose notes into folders — shows a preview first">
+              <button className="tool-btn tool-btn--label" onClick={onTidy}>
+                <Icon name="brush" size={14} />
+                <span>Tidy</span>
+              </button>
+            </Tip>
+          )}
+        </div>
+      )}
 
       <div className="sidebar__body">{children}</div>
 
