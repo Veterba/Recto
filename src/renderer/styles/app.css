@@ -2481,3 +2481,333 @@ body.is-resizing {
   width: 22px;
   height: 22px;
 }
+
+/* ---------- board ---------- */
+
+.board {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-primary);
+}
+
+.board__error {
+  flex: none;
+  margin: 0;
+  padding: var(--size-2) var(--size-4);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.board__columns {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  /* flex-start, not the stretch default: a column must size to its own cards,
+     not to the tallest one. Stretch here is the same mistake that made the
+     search panel fill the window. */
+  align-items: flex-start;
+  gap: var(--size-3);
+  padding: var(--size-4);
+  overflow: auto;
+}
+
+.board__col {
+  flex: none;
+  box-sizing: border-box;
+  width: 260px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-m);
+  background: var(--bg-secondary);
+  transition: border-color var(--anim-fast) var(--ease), background var(--anim-fast) var(--ease);
+}
+.board__col.is-target {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+.board__col--ghost {
+  background: transparent;
+  border: 1px dashed var(--border);
+}
+
+.board__colhead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-2) var(--size-2) var(--size-3);
+}
+
+.board__colname,
+.board__rename {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.board__rename {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-primary);
+  cursor: text;
+}
+
+.board__count {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.board__colremove,
+.board__add,
+.board__newcol {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.board__colremove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--anim-fast) var(--ease);
+}
+.board__colhead:hover .board__colremove {
+  opacity: 1;
+}
+.board__colremove:hover {
+  background: var(--bg-hover);
+  color: var(--danger);
+}
+
+.board__cards {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 var(--size-2) var(--size-2);
+  overflow-y: auto;
+}
+
+.board__card {
+  box-sizing: border-box;
+  padding: var(--size-2) var(--size-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: border-color var(--anim-fast) var(--ease), transform var(--anim-fast) var(--ease);
+}
+.board__card:hover {
+  border-color: var(--border-strong);
+}
+.board__card.is-dragging {
+  opacity: 0.4;
+}
+/* The gap the card would drop into, drawn on the card it would push down. */
+.board__card.is-before {
+  box-shadow: 0 -3px 0 -1px var(--accent);
+}
+
+.board__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.board__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  margin: 5px 0 0;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.board__due {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.board__pri {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  text-transform: lowercase;
+}
+.board__pri--high {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
+}
+
+.board__path {
+  margin: 4px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board__add {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border-radius: var(--radius-s);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.board__add:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.board__new,
+.board__newcol {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--size-2) var(--size-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-s);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+.board__newcol {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: text;
+}
+.board__newcol:focus {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.board__empty {
+  flex: none;
+  margin: 0;
+  padding: 0 var(--size-4) var(--size-4);
+  max-width: 60ch;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  text-wrap: pretty;
+}
+.board__empty code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+/* ---------- board list (Tasks sidebar) ---------- */
+
+.boards {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--size-2);
+}
+
+.boards__row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-s);
+}
+.boards__row:hover {
+  background: var(--bg-hover);
+}
+.boards__row.is-active {
+  background: var(--accent-muted);
+}
+.boards__row.is-active .boards__name {
+  color: var(--accent);
+}
+
+.boards__name,
+.boards__add,
+.boards__remove {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.boards__name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: 6px var(--size-2);
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.boards__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 2px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  opacity: 0;
+}
+.boards__row:hover .boards__remove {
+  opacity: 1;
+}
+.boards__remove:hover {
+  color: var(--danger);
+}
+
+.boards__rename {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px var(--size-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-s);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.boards__add {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--size-1);
+  padding: 6px var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.boards__add:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}

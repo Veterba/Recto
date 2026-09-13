@@ -29,12 +29,6 @@ const STUBS: Stub[] = [
     blurb: 'Claude, streaming over IPC from the main process. Conversations saved as markdown in the vault.',
   },
   {
-    type: 'board',
-    title: 'Tasks',
-    milestone: 'milestone 5',
-    blurb: 'Kanban over notes — a card is a real .md file, so clicking one opens the ordinary editor.',
-  },
-  {
     type: 'profile',
     title: 'Profile',
     milestone: 'milestone 7',

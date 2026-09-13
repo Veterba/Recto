@@ -77,6 +77,14 @@ function flush(): void {
   }
 }
 
+/** Feed one note to the index without telling the renderer anything changed. */
+function indexNote(relative: string): void {
+  if (!relative.toLowerCase().endsWith('.md')) return
+  void send({ kind: 'note-changed', changes: [{ type: 'upserted', path: relative }] }, 30_000).catch(
+    () => undefined,
+  )
+}
+
 function enqueue(change: VaultChange): void {
   queue.push(change)
   if (flushTimer === null) flushTimer = setTimeout(flush, BATCH_MS)
@@ -107,19 +115,23 @@ export function startWatching(window: BrowserWindow): void {
 
   watcher
     .on('add', (absolute, stat) => {
-      if (isSelfWrite(absolute)) return
-      enqueue({ type: 'add', path: toRelative(absolute), mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })
+      const relative = toRelative(absolute)
+      // A file the app created lands here, not in 'change': chokidar coalesces
+      // the create and the first write into one 'add'. Suppressing it outright
+      // meant a note created in the app was never indexed at all - it had no
+      // backlinks and did not appear on a board until something edited it again.
+      if (isSelfWrite(absolute)) {
+        indexNote(relative)
+        return
+      }
+      enqueue({ type: 'add', path: relative, mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })
     })
     .on('change', (absolute, stat) => {
       const relative = toRelative(absolute)
       if (isSelfWrite(absolute)) {
         // Suppression stops the EDITOR reloading its buffer. The index still
         // has to see the new content, or search goes stale on every save.
-        if (relative.toLowerCase().endsWith('.md')) {
-          void send({ kind: 'note-changed', changes: [{ type: 'upserted', path: relative }] }, 30_000).catch(
-            () => undefined,
-          )
-        }
+        indexNote(relative)
         return
       }
       enqueue({ type: 'change', path: relative, mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })

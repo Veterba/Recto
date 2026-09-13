@@ -12,6 +12,7 @@ import {
 import { normalizeName, parseNote, resolveLink } from './parse'
 import type {
   Backlink,
+  BoardCard,
   GraphData,
   GraphEdge,
   GraphNode,
@@ -369,6 +370,50 @@ function graph(): GraphData {
   return { nodes, edges }
 }
 
+/**
+ * Every card on one board.
+ *
+ * A card is a note, so this is a join over the frontmatter rows rather than a
+ * table of its own - there is no card record anywhere, and deleting the .md
+ * file deletes the card. `board` is the required key: a note without it is not
+ * on any board, which is what keeps the board from swallowing the whole vault.
+ *
+ * Cards with no `order` sort last, by name, so a note that was hand-written
+ * into a column still appears somewhere stable rather than jumping about.
+ */
+function board(name: string): BoardCard[] {
+  const rows = requireDb()
+    .prepare(
+      `SELECT n.path                       AS path,
+              COALESCE(n.title, n.name)    AS title,
+              s.value                      AS status,
+              o.num                        AS "order",
+              d.value                      AS due,
+              p.value                      AS priority
+       FROM notes n
+       JOIN properties b ON b.path = n.path AND b.key = 'board' AND b.value = ?
+       LEFT JOIN properties s ON s.path = n.path AND s.key = 'status'
+       LEFT JOIN properties o ON o.path = n.path AND o.key = 'order'
+       LEFT JOIN properties d ON d.path = n.path AND d.key = 'due'
+       LEFT JOIN properties p ON p.path = n.path AND p.key = 'priority'
+       ORDER BY o.num IS NULL, o.num, n.name`,
+    )
+    .all(name) as BoardCard[]
+
+  return rows.map((row) => ({ ...row, title: row.title.replace(/\.md$/i, '') }))
+}
+
+/** Board names that actually occur in the vault, with their card counts. */
+function boards(): { board: string; count: number }[] {
+  return requireDb()
+    .prepare(
+      `SELECT value AS board, COUNT(*) AS count
+       FROM properties WHERE key = 'board' AND value IS NOT NULL AND value <> ''
+       GROUP BY value ORDER BY value`,
+    )
+    .all() as { board: string; count: number }[]
+}
+
 function handle(request: IndexRequest): IndexResponse {
   switch (request.kind) {
     case 'open': {
@@ -405,6 +450,10 @@ function handle(request: IndexRequest): IndexResponse {
       return { kind: 'unresolved-result', entries: unresolved() }
     case 'graph':
       return { kind: 'graph-result', graph: graph() }
+    case 'board':
+      return { kind: 'board-result', cards: board(request.board) }
+    case 'boards':
+      return { kind: 'boards-result', boards: boards() }
     case 'history':
       return { kind: 'history-result', snapshots: listSnapshots(requireDb(), request.path) }
     case 'history-get':

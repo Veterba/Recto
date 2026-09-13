@@ -51,7 +51,9 @@ export const SECTIONS: readonly Section[] = [
     label: 'Tasks',
     icon: 'square-kanban',
     viewType: 'board',
-    searchPlaceholder: 'Search tasks…',
+    // Boards, not cards: the box filters the list beside it, the same as it
+    // does in Data. Finding a card by name is what the quick switcher is for.
+    searchPlaceholder: 'Search boards…',
     newLabel: 'Task',
   },
 ]
