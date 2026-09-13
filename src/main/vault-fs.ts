@@ -117,6 +117,31 @@ function uniquePath(absolute: string): string {
   throw new Error('could not find a free filename')
 }
 
+/**
+ * Copy a file into the vault's attachments folder.
+ *
+ * Copied, not linked. A note that points at `/Users/you/Desktop/shot.png` is a
+ * note that breaks the moment the vault moves to another machine, and "your
+ * notes are a folder you can move" is the whole promise. The cost is disk
+ * space, which is the right thing to spend.
+ */
+export async function importFile(
+  source: string,
+  folder: string,
+): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+  try {
+    const root = requireVault()
+    const bare = sanitiseName(path.basename(source))
+    if (bare.length === 0) return { ok: false, error: 'That file has no usable name.' }
+    const target = uniquePath(resolveInVault(root, path.join(folder, bare)))
+    await fsp.mkdir(path.dirname(target), { recursive: true })
+    await fsp.copyFile(source, target)
+    return { ok: true, path: toRelative(root, target) }
+  } catch (err) {
+    return { ok: false, error: message(err) }
+  }
+}
+
 export async function create(
   parentRelative: string,
   name: string,

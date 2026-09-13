@@ -67,4 +67,5 @@ export const isSectionId = (value: unknown): value is SectionId =>
   typeof value === 'string' && SECTIONS.some((s) => s.id === value)
 
 /** Views that are not a section: they open inside whichever section you are in. */
-export const EXTENSION_VIEWS = ['home', 'graph', 'settings', 'profile', 'archive', 'unresolved'] as const
+/** Settings is not here: it is a dialog, not something that takes a tab. */
+export const EXTENSION_VIEWS = ['home', 'graph', 'profile', 'archive', 'unresolved'] as const

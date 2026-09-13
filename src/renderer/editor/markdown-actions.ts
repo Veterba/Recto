@@ -161,6 +161,29 @@ export const toggleItalic = (state: EditorState): TransactionSpec => toggleWrap(
 export const toggleInlineCode = (state: EditorState): TransactionSpec => toggleWrap(state, '`')
 export const toggleStrikethrough = (state: EditorState): TransactionSpec => toggleWrap(state, '~~')
 export const toggleHighlight = (state: EditorState): TransactionSpec => toggleWrap(state, '==')
+/** `$x^2$` — the syntax every markdown renderer with maths agrees on. */
+export const toggleMath = (state: EditorState): TransactionSpec => toggleWrap(state, '$')
+
+/**
+ * A display maths block, on its own lines.
+ *
+ * Separate from inline `$...$` because `$$` in the middle of a paragraph is not
+ * a block anywhere - it has to start a line, and getting that wrong produces a
+ * literal `$$` in every reader.
+ */
+export function insertMathBlock(state: EditorState): TransactionSpec {
+  const range = state.selection.main
+  const selected = state.doc.sliceString(range.from, range.to)
+  const line = state.doc.lineAt(range.from)
+  const lead = range.from === line.from ? '' : '\n'
+  const insert = `${lead}$$\n${selected}\n$$\n`
+  return {
+    changes: { from: range.from, to: range.to, insert },
+    selection: { anchor: range.from + lead.length + 3 + selected.length },
+    scrollIntoView: true,
+    userEvent: 'input.format',
+  }
+}
 
 /** `[text](url)` with the cursor left in the url, or in the text if empty. */
 export function insertLink(state: EditorState): TransactionSpec {
@@ -295,6 +318,7 @@ export type Format =
   | 'code'
   | 'strikethrough'
   | 'highlight'
+  | 'math'
   | 'bullet'
   | 'numbered'
   | 'task'
@@ -307,6 +331,7 @@ const WRAPPERS: readonly { format: Format; marker: string }[] = [
   { format: 'highlight', marker: '==' },
   { format: 'italic', marker: '*' },
   { format: 'code', marker: '`' },
+  { format: 'math', marker: '$' },
 ]
 
 export function activeFormats(state: EditorState): Set<Format> {

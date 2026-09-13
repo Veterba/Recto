@@ -1,3 +1,4 @@
+import { api } from '../api'
 import * as md from '../editor/markdown-actions'
 import { getActiveEditor } from '../views/MarkdownView'
 import type { Command, CommandRegistry } from './commands'
@@ -69,9 +70,40 @@ export function registerEditorCommands(
     editorCommand('editor:link', 'Insert link', 'Mod+K', md.insertLink),
     editorCommand('editor:wikilink', 'Insert wikilink', 'Mod+Shift+K', md.insertWikiLink),
     editorCommand('editor:code-block', 'Insert code block', 'Mod+Shift+E', md.insertCodeBlock),
+    editorCommand('editor:math', 'Inline maths', 'Mod+Shift+M', md.toggleMath),
+    editorCommand('editor:math-block', 'Maths block', 'Mod+Alt+M', md.insertMathBlock),
     editorCommand('editor:horizontal-rule', 'Insert horizontal rule', 'Mod+Shift+Minus', md.insertHorizontalRule),
     editorCommand('editor:move-line-up', 'Move line up', 'Alt+ArrowUp', (state) => md.moveLines(state, -1)),
     editorCommand('editor:move-line-down', 'Move line down', 'Alt+ArrowDown', (state) => md.moveLines(state, 1)),
+    {
+      id: 'editor:image',
+      name: 'Insert image',
+      section: 'Editor',
+      scope: 'editor',
+      hotkey: 'Mod+Shift+I',
+      isAvailable: editorHasFocus,
+      run: () => {
+        const editor = getActiveEditor()
+        if (editor === null) return
+        void api.invoke('fs:import-images').then((result) => {
+          if (!result.ok || result.paths.length === 0) return
+          // One `![](...)` per file, on its own line, because two images on one
+          // line render side by side in some readers and stacked in others.
+          const markdown = result.paths
+            .map((path) => `![${path.slice(path.lastIndexOf('/') + 1)}](${encodeURI(path)})`)
+            .join('\n')
+          editor.run((state) => {
+            const range = state.selection.main
+            return {
+              changes: { from: range.from, to: range.to, insert: markdown },
+              selection: { anchor: range.from + markdown.length },
+              scrollIntoView: true,
+              userEvent: 'input.image',
+            }
+          })
+        })
+      },
+    },
     {
       id: 'editor:toggle-live-preview',
       name: 'Toggle Live Preview (show markdown syntax)',

@@ -2,7 +2,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab, redo, undo } from
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { foldGutter, foldKeymap, indentOnInput } from '@codemirror/language'
-import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search'
+import { search, searchKeymap } from '@codemirror/search'
 import { Compartment, EditorState, type Extension, type TransactionSpec } from '@codemirror/state'
 import {
   EditorView,
@@ -12,6 +12,7 @@ import {
   keymap,
   rectangularSelection,
 } from '@codemirror/view'
+import { vim } from '@replit/codemirror-vim'
 import { activeFormats, type Format } from './markdown-actions'
 import { blockDecorations } from './blocks'
 import { markdownDecorations, setUnresolvedTargets, unresolvedField } from './decorations'
@@ -47,6 +48,8 @@ export type EditorHandle = {
   revealHeading: (heading: string) => boolean
   /** Live Preview hides markdown markers away from the cursor. */
   setLivePreview: (on: boolean) => void
+  /** Modal editing, toggled without rebuilding the editor. */
+  setVim: (on: boolean) => void
   /** Formats applying at the cursor, for the toolbar's pressed state. */
   getActiveFormats: () => ReadonlySet<Format>
   focus: () => void
@@ -68,9 +71,16 @@ export type EditorOptions = {
   getLinkCandidates?: () => readonly LinkCandidate[]
   /** Fires when the cursor moves, so the toolbar can update. */
   onSelectionChange?: () => void
+  vim?: boolean
 }
 
 const editable = new Compartment()
+/**
+ * Vim lives in a compartment so the setting can be flipped without rebuilding
+ * the editor - which would lose the cursor, the scroll position and the undo
+ * history every time someone tried it out.
+ */
+const vimMode = new Compartment()
 
 export function createEditor(parent: HTMLElement, options: EditorOptions): EditorHandle {
   /** Clicking a `[[wikilink]]` navigates; clicking elsewhere is a normal click. */
@@ -120,7 +130,12 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         dropCursor(),
         rectangularSelection(),
         highlightActiveLine(),
-        highlightSelectionMatches(),
+        // `highlightSelectionMatches()` used to be here. Selecting a word lit up
+        // every other occurrence of it - in CodeMirror's own default green,
+        // because nothing in this app styles `.cm-selectionMatch`. Two
+        // problems, and the second is the instructive one: an extension with
+        // built-in styling will happily paint a colour that exists nowhere in
+        // the palette. ⌘F highlighting is unaffected; that is `search()`.
         indentOnInput(),
         foldGutter(),
         search({ top: true }),
@@ -144,6 +159,8 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         linkClick,
         EditorView.lineWrapping,
         editable.of(EditorView.editable.of(options.readOnly !== true)),
+        // Before the default keymap, or Vim's bindings lose every collision.
+        vimMode.of(options.vim === true ? vim({ status: true }) : []),
         // App shortcuts are registered in the command registry and handled by
         // the window listener, so only editor-native bindings live here.
         keymap.of([
@@ -217,6 +234,10 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
 
     setLivePreview: (on) => {
       view.dispatch({ effects: setLivePreview.of(on) })
+    },
+
+    setVim: (on) => {
+      view.dispatch({ effects: vimMode.reconfigure(on ? vim({ status: true }) : []) })
     },
 
     focus: () => view.focus(),

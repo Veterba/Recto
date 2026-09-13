@@ -25,6 +25,8 @@ export type CommandContext = {
   toggleGraph: () => void
   openGraphFull: () => void
   openExtension: (type: string) => void
+  openSettings: () => void
+  openTemplates: () => void
   openSearch: () => void
   openSwitcher: () => void
   toggleHistory: () => void
@@ -111,6 +113,24 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       hotkey: 'Mod+Shift+Y',
       isAvailable: () => typeof workspace.activeLeaf?.state['path'] === 'string',
       run: ctx.toggleHistory,
+    }),
+    registry.register({
+      id: 'app:settings',
+      name: 'Settings',
+      section: 'Open',
+      icon: 'settings',
+      // The macOS convention. It is what people press without thinking.
+      hotkey: 'Mod+,',
+      run: ctx.openSettings,
+    }),
+    registry.register({
+      id: 'editor:template',
+      name: 'Insert template',
+      section: 'Editor',
+      icon: 'file-text',
+      hotkey: 'Mod+Shift+T',
+      isAvailable: hasActiveLeaf,
+      run: ctx.openTemplates,
     }),
     registry.register({
       id: 'graph:toggle',

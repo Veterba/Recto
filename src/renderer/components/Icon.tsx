@@ -50,6 +50,7 @@ import {
   PanelRightClose,
   Plus,
   Search,
+  Sigma,
   Settings,
   Sparkles,
   SquareKanban,
@@ -122,6 +123,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   'chevrons-down-up': ChevronsDownUp,
   crosshair: Crosshair,
   brush: Brush,
+  sigma: Sigma,
 }
 
 type Props = {
