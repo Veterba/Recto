@@ -4,6 +4,7 @@ import { api } from '../api'
 import type { VaultTree } from '../core/file-tree-ops'
 import { ContextMenu, useContextMenu, type MenuItem } from './ContextMenu'
 import { Icon } from './Icon'
+import { RenameDialog } from './RenameDialog'
 import { Tip } from './Tip'
 
 /**
@@ -351,11 +352,8 @@ export function FileTree({
                 onContextMenu={(ev) => contextMenu.open(ev, row.node)}
                 isActive={row.node.path === activePath}
                 isCursor={row.node.path === cursor}
-                isRenaming={row.node.path === renaming}
                 onActivate={() => activate(row)}
                 onStartRename={() => setRenaming(row.node.path)}
-                onCommitRename={(name) => void commitRename(row.node.path, name)}
-                onCancelRename={() => setRenaming(null)}
                 isDropTarget={dropTarget === row.node.path}
                 onDragStart={(ev) => {
                   ev.dataTransfer.setData('text/plain', row.node.path)
@@ -395,6 +393,15 @@ export function FileTree({
           onClose={contextMenu.close}
         />
       )}
+
+      {renaming !== null && (
+        <RenameDialog
+          name={renaming.slice(renaming.lastIndexOf('/') + 1)}
+          path={renaming}
+          onCommit={(name) => void commitRename(renaming, name)}
+          onCancel={() => setRenaming(null)}
+        />
+      )}
     </>
   )
 }
@@ -405,11 +412,8 @@ type RowProps = {
   onContextMenu: (ev: React.MouseEvent) => void
   isActive: boolean
   isCursor: boolean
-  isRenaming: boolean
   onActivate: () => void
   onStartRename: () => void
-  onCommitRename: (name: string) => void
-  onCancelRename: () => void
   isDropTarget: boolean
   onDelete: () => void
   onDragStart: (ev: React.DragEvent) => void
@@ -423,11 +427,8 @@ function TreeRow({
   onContextMenu,
   isActive,
   isCursor,
-  isRenaming,
   onActivate,
   onStartRename,
-  onCommitRename,
-  onCancelRename,
   isDropTarget,
   onDelete,
   onDragStart,
@@ -452,7 +453,7 @@ function TreeRow({
       role="treeitem"
       aria-expanded={isFolder ? isOpen : undefined}
       aria-selected={isActive}
-      draggable={!isRenaming}
+      draggable
       onDragStart={onDragStart}
       onDragOver={onDragOverRow}
       onDrop={onDropRow}
@@ -469,10 +470,7 @@ function TreeRow({
         <Icon name={iconFor(node)} size={14} />
       </span>
 
-      {isRenaming ? (
-        <RenameInput initial={node.name} onCommit={onCommitRename} onCancel={onCancelRename} />
-      ) : (
-        <>
+      <>
           <span className="tree__name" title={node.path}>
             {label}
           </span>
@@ -490,7 +488,6 @@ function TreeRow({
             </button>
           </Tip>
         </>
-      )}
     </div>
   )
 }
@@ -508,44 +505,4 @@ function iconFor(node: FileNode): string {
   if (/\.(png|jpe?g|gif|webp|svg|avif)$/.test(lower)) return 'image'
   if (/\.(json|ya?ml|toml|css|js|ts|tsx|py|sh)$/.test(lower)) return 'file-code'
   return 'file'
-}
-
-function RenameInput({
-  initial,
-  onCommit,
-  onCancel,
-}: {
-  initial: string
-  onCommit: (name: string) => void
-  onCancel: () => void
-}): React.ReactElement {
-  const ref = useRef<HTMLInputElement | null>(null)
-  const [value, setValue] = useState(initial)
-
-  useEffect(() => {
-    const element = ref.current
-    if (!element) return
-    element.focus()
-    // Select the stem, not the extension - renaming almost never means
-    // renaming '.md'.
-    const dot = initial.lastIndexOf('.')
-    element.setSelectionRange(0, dot > 0 ? dot : initial.length)
-  }, [initial])
-
-  return (
-    <input
-      ref={ref}
-      className="tree__rename"
-      value={value}
-      spellCheck={false}
-      onChange={(ev) => setValue(ev.target.value)}
-      onClick={(ev) => ev.stopPropagation()}
-      onBlur={() => onCommit(value)}
-      onKeyDown={(ev) => {
-        ev.stopPropagation()
-        if (ev.key === 'Enter') onCommit(value)
-        else if (ev.key === 'Escape') onCancel()
-      }}
-    />
-  )
 }

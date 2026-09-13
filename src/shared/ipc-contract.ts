@@ -89,6 +89,7 @@ export type IpcApi = {
   'index:graph': () => GraphInfo
   'index:board': (board: string) => BoardCardInfo[]
   'index:boards': () => { board: string; count: number }[]
+  'index:context': () => NoteContextInfo[]
   'links:undo-rename': (undoId: string) => { ok: boolean; restored: number; error?: string }
   'history:list': (path: string) => SnapshotInfo[]
   'history:get': (id: number) => SnapshotInfo | null
@@ -134,6 +135,9 @@ export type BoardCardInfo = {
   due: string | null
   priority: string | null
 }
+
+/** A note's own signals about where it belongs, for Tidy. */
+export type NoteContextInfo = { path: string; tags: string[]; links: string[] }
 
 /** One stored version of a note. `content` is present only for a single fetch. */
 export type SnapshotInfo = { id: number; path: string; ts: number; bytes: number; content?: string }
@@ -198,6 +202,7 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'index:graph',
   'index:board',
   'index:boards',
+  'index:context',
   'links:undo-rename',
   'history:list',
   'history:get',

@@ -930,25 +930,7 @@ body.is-resizing {
   white-space: nowrap;
 }
 
-/* Renaming happens in place, in the row, at the row's own size. The old version
-   painted an elevated white box with a hard accent ring inside a grey row,
-   which made a rename look like a modal that had lost its dialog. */
-.tree__rename {
-  all: unset;
-  /* `all: unset` resets box-sizing too, so width + padding would overflow. */
-  box-sizing: border-box;
-  flex: 1;
-  min-width: 0;
-  padding: 0 4px;
-  border-radius: 4px;
-  font: inherit;
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
-}
-.tree__rename::selection {
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
-}
+
 
 .tree__error {
   margin: 0 0 var(--size-2);
@@ -1059,25 +1041,7 @@ body.is-resizing {
   white-space: nowrap;
 }
 
-/* Renaming happens in place, in the row, at the row's own size. The old version
-   painted an elevated white box with a hard accent ring inside a grey row,
-   which made a rename look like a modal that had lost its dialog. */
-.tree__rename {
-  all: unset;
-  /* `all: unset` resets box-sizing too, so width + padding would overflow. */
-  box-sizing: border-box;
-  flex: 1;
-  min-width: 0;
-  padding: 0 4px;
-  border-radius: 4px;
-  font: inherit;
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
-}
-.tree__rename::selection {
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
-}
+
 
 .tree__error {
   margin: 0 0 var(--size-2);
@@ -3153,4 +3117,137 @@ body.is-resizing {
 .graph__btn[disabled]:hover {
   background: transparent;
   color: var(--text-muted);
+}
+
+/* ---------- dialog ---------- */
+
+/* The backdrop blurs the app behind it. That is deliberate groundwork: the
+   glass direction wants `backdrop-filter` on every floating surface, and this
+   is the first one to need it. */
+.dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: flex;
+  /* center, not the stretch default — stretch would make the dialog fill the
+     window, which is the same mistake that has caught this codebase before. */
+  align-items: center;
+  justify-content: center;
+  /* Padding rather than a fixed offset, so a short window still keeps a gutter
+     instead of clipping the dialog. */
+  padding: var(--size-6);
+  background: color-mix(in srgb, var(--bg-primary) 35%, transparent);
+  backdrop-filter: blur(7px) saturate(120%);
+  -webkit-backdrop-filter: blur(7px) saturate(120%);
+  animation: fade var(--anim-fast) var(--ease);
+}
+
+.dialog {
+  box-sizing: border-box;
+  width: min(520px, calc(100vw - 2 * var(--size-6)));
+  padding: var(--size-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  animation: dialog-in 140ms var(--ease);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+.dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-3);
+}
+
+.dialog__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.dialog__close {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.dialog__close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Which file this is about. Without it the dialog is a naked text box asking
+   you to trust that it means the thing you right-clicked. */
+.dialog__path {
+  margin: 2px 0 var(--size-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog__row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+}
+
+.dialog__input {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  padding: 9px var(--size-3);
+  border-radius: var(--radius-m);
+  background: var(--bg-secondary);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: box-shadow var(--anim-fast) var(--ease);
+}
+.dialog__input:focus {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.dialog__input::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.dialog__submit {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  padding: 9px var(--size-4);
+  border-radius: var(--radius-m);
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), opacity var(--anim-fast) var(--ease);
+}
+.dialog__submit:hover {
+  background: var(--accent-hover);
+}
+.dialog__submit[disabled] {
+  opacity: 0.4;
+  cursor: default;
 }

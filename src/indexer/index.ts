@@ -17,6 +17,7 @@ import type {
   GraphEdge,
   GraphNode,
   IndexRequest,
+  NoteContext,
   IndexResponse,
   SearchHit,
   Snapshot,
@@ -442,6 +443,42 @@ function boards(): { board: string; count: number }[] {
     .all() as { board: string; count: number }[]
 }
 
+/**
+ * Every note's tags and resolved outgoing links.
+ *
+ * Read in one pass rather than per note: Tidy reasons over the whole vault at
+ * once, and a query per note on a few thousand notes is the difference between
+ * instant and a visible pause.
+ */
+function context(): NoteContext[] {
+  const handle = requireDb()
+  const notes = handle.prepare('SELECT path FROM notes ORDER BY path').all() as { path: string }[]
+
+  const tags = handle.prepare('SELECT DISTINCT path, tag FROM tags').all() as { path: string; tag: string }[]
+  const links = handle
+    .prepare('SELECT DISTINCT source_path AS source, target_path AS target FROM links WHERE target_path IS NOT NULL')
+    .all() as { source: string; target: string }[]
+
+  const byTag = new Map<string, string[]>()
+  for (const row of tags) {
+    const list = byTag.get(row.path)
+    if (list) list.push(row.tag)
+    else byTag.set(row.path, [row.tag])
+  }
+  const byLink = new Map<string, string[]>()
+  for (const row of links) {
+    const list = byLink.get(row.source)
+    if (list) list.push(row.target)
+    else byLink.set(row.source, [row.target])
+  }
+
+  return notes.map((note) => ({
+    path: note.path,
+    tags: byTag.get(note.path) ?? [],
+    links: byLink.get(note.path) ?? [],
+  }))
+}
+
 function handle(request: IndexRequest): IndexResponse {
   switch (request.kind) {
     case 'open': {
@@ -482,6 +519,8 @@ function handle(request: IndexRequest): IndexResponse {
       return { kind: 'board-result', cards: board(request.board) }
     case 'boards':
       return { kind: 'boards-result', boards: boards() }
+    case 'context':
+      return { kind: 'context-result', notes: context() }
     case 'history':
       return { kind: 'history-result', snapshots: listSnapshots(requireDb(), request.path) }
     case 'history-get':
