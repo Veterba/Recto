@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { VIBRANCY_MATERIALS, type VibrancyMaterial } from '@shared/ipc-contract'
 
 /**
  * Appearance and shell layout, persisted to `.recto/appearance.json`.
@@ -39,6 +40,23 @@ export type Appearance = {
    * and that is the user's call, not the app's.
    */
   translucent: boolean
+  /**
+   * How much of the blurred desktop shows through, 0-100.
+   *
+   * Not a blur radius: macOS fixes that per vibrancy material and offers no way
+   * to change it. What this actually moves is the opacity of the app's own
+   * surfaces - which is the only honest thing a "blur strength" control can do
+   * here, and it is the knob that visibly matters.
+   */
+  blurStrength: number
+  /**
+   * Which macOS material does the blurring.
+   *
+   * Unlike `blurStrength` - which is really transparency - this changes the
+   * blur itself, because each material has its own radius and tint baked into
+   * AppKit. It is the only honest way to make the blur stronger or weaker.
+   */
+  vibrancy: VibrancyMaterial
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -52,6 +70,8 @@ export const DEFAULT_APPEARANCE: Appearance = {
   headingScale: 1.25,
   vimMode: false,
   translucent: true,
+  blurStrength: 80,
+  vibrancy: 'sidebar',
 }
 
 /**
@@ -67,6 +87,14 @@ const FONT_STACKS: Record<Appearance['editorFont'], string> = {
   sans: 'var(--font-ui)',
   serif: 'ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", serif',
 }
+
+/**
+ * Vibrancy is macOS-only, and without it a translucent window is just an
+ * unreadable one - the desktop would show through raw and unblurred. Checked
+ * from the user agent rather than over IPC so it is available synchronously,
+ * before the first paint.
+ */
+const SUPPORTS_VIBRANCY = /Mac OS X/.test(navigator.userAgent)
 
 export function applyAppearance(appearance: Appearance): void {
   const root = document.documentElement
@@ -84,8 +112,27 @@ export function applyAppearance(appearance: Appearance): void {
   // H4-H6 sit at or below it - which is what those levels are for.
   root.style.setProperty('--heading-scale', String(appearance.headingScale))
   // One attribute swaps every translucent token for its opaque equivalent.
-  if (appearance.translucent) root.removeAttribute('data-translucent')
-  else root.setAttribute('data-translucent', 'off')
+  if (appearance.translucent && SUPPORTS_VIBRANCY) {
+    root.removeAttribute('data-translucent')
+    // At 0 the app is opaque; at 100 it is mostly backdrop. The chrome goes
+    // further than the editor, because window furniture can afford to be
+    // ghostly and a paragraph of text cannot.
+    /**
+     * The sidebar, and only the sidebar. The editor is opaque, always - a page
+     * of prose sitting on top of the desktop is not a look worth having.
+     */
+    const t = Math.min(100, Math.max(0, appearance.blurStrength)) / 100
+    // Floors at 0.28: below that the light text has no panel to sit on, and the
+    // control is about how much backdrop shows, not whether the sidebar exists.
+    root.style.setProperty('--sidebar-alpha', (1 - t * 0.72).toFixed(3))
+    // Grain earns its keep in proportion to how much backdrop there is.
+    root.style.setProperty('--grain-opacity', (0.18 + t * 0.42).toFixed(3))
+  } else {
+    root.setAttribute('data-translucent', 'off')
+    root.style.removeProperty('--sidebar-alpha')
+    root.style.removeProperty('--grain-opacity')
+
+  }
 }
 
 function coerce(value: unknown): Appearance {
@@ -111,6 +158,13 @@ function coerce(value: unknown): Appearance {
         : DEFAULT_APPEARANCE.headingScale,
     vimMode: typeof v.vimMode === 'boolean' ? v.vimMode : DEFAULT_APPEARANCE.vimMode,
     translucent: typeof v.translucent === 'boolean' ? v.translucent : DEFAULT_APPEARANCE.translucent,
+    blurStrength:
+      typeof v.blurStrength === 'number' && Number.isFinite(v.blurStrength)
+        ? Math.min(100, Math.max(0, v.blurStrength))
+        : DEFAULT_APPEARANCE.blurStrength,
+    vibrancy: VIBRANCY_MATERIALS.includes(v.vibrancy as VibrancyMaterial)
+      ? (v.vibrancy as VibrancyMaterial)
+      : DEFAULT_APPEARANCE.vibrancy,
     editorFont:
       v.editorFont === 'mono' || v.editorFont === 'sans' || v.editorFont === 'serif'
         ? v.editorFont
@@ -133,6 +187,9 @@ export function useAppearance(): {
       if (cancelled) return
       const next = coerce(saved)
       applyAppearance(next)
+      // The material lives in the window, not the document, so it has to be
+      // pushed to main rather than written into a CSS variable.
+      void api.invoke('app:set-vibrancy', next.vibrancy)
       setAppearance(next)
       setReady(true)
     })
@@ -145,6 +202,7 @@ export function useAppearance(): {
     setAppearance((prev) => {
       const next = { ...prev, ...patch }
       applyAppearance(next)
+      if (patch.vibrancy !== undefined) void api.invoke('app:set-vibrancy', next.vibrancy)
       window.clearTimeout(saveTimer.current)
       // Dragging the sidebar fires this every frame; only the last one matters.
       saveTimer.current = window.setTimeout(() => {

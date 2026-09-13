@@ -116,7 +116,10 @@ code {
   /* Translucent, so the desktop blurs through the window furniture. The editor
      pane below paints its own denser ground: text has to stay readable over
      whatever happens to be behind the app. */
-  background: var(--chrome);
+  /* No ground here: the titlebar, sidebar and status bar each paint their
+     own, and the content area paints --surface. A ground on the shell as
+     well would sit under all of them and double the opacity. */
+  background: transparent;
 }
 
 /* Hide the first paint until appearance.json has been applied, so the app never
@@ -126,7 +129,9 @@ code {
 }
 
 .shell__titlebar {
-  height: 36px;
+  /* Arc's is a thin strip; 36px read as a band. 30 is the floor that still
+     clears the macOS traffic lights. */
+  height: 30px;
   flex: none;
   display: flex;
   align-items: center;
@@ -135,7 +140,7 @@ code {
   padding-left: 84px; /* clears the macOS traffic lights */
   padding-right: var(--size-2);
   border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: var(--chrome);
   -webkit-app-region: drag;
 }
 
@@ -163,12 +168,15 @@ code {
 }
 
 .shell__content {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
-  /* Denser than the chrome on purpose: you read here, and reading over a
-     blurred desktop is only pleasant up to a point. */
   background: var(--surface);
+  /* A card inset into the chrome, the way Arc insets its web view. The rounded
+     corners need something behind them, which is why the frosted ground moved
+     up to `.shell__main` - see there. */
+  border-radius: var(--radius-m) 0 0 var(--radius-m);
   /* Views scroll their own content. */
   overflow: hidden;
 }
@@ -259,9 +267,178 @@ code {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border-right: 1px solid var(--glass-border);
+  border-right: 1px solid var(--sidebar-line);
+  /* The one translucent surface in the app. */
+  background: var(--sidebar-bg);
+}
+
+/**
+ * Grain.
+ *
+ * A blurred backdrop on its own reads as a smeared photograph of whatever
+ * happens to be behind the window - you can still make out the shapes, and the
+ * panel looks like a window rather than a surface. A fine noise breaks up those
+ * shapes and the panel starts reading as frosted material instead. It is what
+ * Arc does, and it is the difference between "see-through" and "glass".
+ *
+ * Generated rather than shipped as an asset: one SVG turbulence tile, so there
+ * is no image file to load and nothing to go missing from a packaged build.
+ */
+.shell__main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--grain-opacity, 0.5);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
+}
+
+/* No backdrop, no reason for grain. */
+:root[data-translucent='off'] .shell__main::after {
+  display: none;
+}
+
+/**
+ * A halo in the theme's own ground colour, behind every glyph in the sidebar.
+ *
+ * A translucent panel takes the colour of whatever is behind the window, so
+ * text sized for a dark ground can end up on a bright one and disappear. The
+ * halo is `--surface-rgb`, which is near-black in the dark theme and near-white
+ * in the light one - so it darkens the backdrop behind dark-theme text and
+ * lightens it behind light-theme text, automatically, without a second set of
+ * colours to maintain. It is what macOS does for vibrant labels.
+ */
+/**
+ * The frosted chrome: sidebar, titlebar, status bar.
+ *
+ * One dark panel with light text, whatever the theme. Two things this fixes,
+ * both reported:
+ *
+ * 1. Half the sidebar used to be legible and half ghosted, because muted greys
+ *    vanish against a frosted panel while anything with its own background
+ *    stayed crisp. That combination reads as failed rendering, not hierarchy.
+ *    Nothing here is dimmer than `--sidebar-dim`, and hierarchy comes from
+ *    weight and size.
+ * 2. Theme-coloured text cannot work on a panel that takes the colour of
+ *    whatever is behind the window. Light text on a dark ground can.
+ *
+ * No sheen, no inset highlight, no per-element blur. A selected row is a flat
+ * step lighter than the panel - which is all "selected" needs to mean.
+ */
+/*
+ * The ground is painted on `.shell__main`, not on `.sidebar`.
+ *
+ * The editor is a rounded card inset into the chrome, and a rounded corner has
+ * to reveal *something*. With the ground on the sidebar the corner would have
+ * cut a notch straight through to the desktop. One ground behind both, one card
+ * on top of it - and the sidebar itself paints nothing, so nothing stacks.
+ */
+:root:not([data-translucent='off']) .shell__main,
+:root:not([data-translucent='off']) .shell__titlebar,
+:root:not([data-translucent='off']) .status {
+  background: var(--sidebar-bg);
+}
+
+:root:not([data-translucent='off']) .sidebar {
+  /* Paints nothing: `.shell__main` behind it is the ground. Two grounds would
+     compose to nearly opaque, which is the trap this whole layer keeps falling
+     into. */
   background: transparent;
 }
+
+:root:not([data-translucent='off']) .sidebar,
+:root:not([data-translucent='off']) .shell__titlebar,
+:root:not([data-translucent='off']) .status {
+  color: var(--sidebar-text);
+  border-color: var(--sidebar-line);
+  /* Just enough to seat the glyphs. A wide halo reads as blur, not contrast. */
+  text-shadow: 0 1px 2px rgb(var(--sidebar-rgb) / 0.5);
+}
+
+:root:not([data-translucent='off']) .sidebar *,
+:root:not([data-translucent='off']) .shell__titlebar *,
+:root:not([data-translucent='off']) .status * {
+  color: inherit;
+}
+
+/* The few things allowed to sit back - and they sit back by one step, not five. */
+:root:not([data-translucent='off']) .sidebar__vault-name,
+:root:not([data-translucent='off']) .sidebar .tree__icon,
+:root:not([data-translucent='off']) .sidebar .tree__chevron,
+:root:not([data-translucent='off']) .sidebar .sidebar__search-icon,
+:root:not([data-translucent='off']) .sidebar .sidebar__empty,
+:root:not([data-translucent='off']) .sidebar .board__count,
+:root:not([data-translucent='off']) .status .status__item--muted,
+:root:not([data-translucent='off']) .sidebar .segmented__tab:not(.is-active) {
+  color: var(--sidebar-dim);
+}
+:root:not([data-translucent='off']) .sidebar__search-input::placeholder {
+  color: var(--sidebar-dim);
+}
+
+/* Rows, fields and buttons: flat overlays on the panel. */
+:root:not([data-translucent='off']) .sidebar .tree__row:hover:not(.is-active),
+:root:not([data-translucent='off']) .sidebar .boards__row:hover:not(.is-active),
+:root:not([data-translucent='off']) .sidebar .tool-btn:hover,
+:root:not([data-translucent='off']) .sidebar .footer-btn:hover,
+:root:not([data-translucent='off']) .sidebar .icon-btn:hover,
+:root:not([data-translucent='off']) .shell__titlebar .titlebar-btn:hover,
+:root:not([data-translucent='off']) .status .status__btn:hover {
+  background: var(--sidebar-row);
+}
+
+:root:not([data-translucent='off']) .sidebar .tree__row.is-active,
+:root:not([data-translucent='off']) .sidebar .boards__row.is-active,
+:root:not([data-translucent='off']) .sidebar .segmented__tab.is-active {
+  background: var(--sidebar-row-active);
+  color: var(--sidebar-text);
+  box-shadow: none;
+}
+
+:root:not([data-translucent='off']) .sidebar .segmented,
+:root:not([data-translucent='off']) .sidebar .sidebar__search-input {
+  background: var(--sidebar-field);
+}
+
+/* Weight marks the open note. Pure white on a light row is how the label and
+   its icon disappeared. */
+:root:not([data-translucent='off']) .sidebar .tree__row.is-active .tree__name,
+:root:not([data-translucent='off']) .sidebar .boards__row.is-active .boards__name {
+  font-weight: 600;
+}
+
+/* Grain over every frosted surface, not just the sidebar. */
+:root:not([data-translucent='off']) .shell__titlebar,
+:root:not([data-translucent='off']) .status {
+  position: relative;
+}
+/* The grain sits behind the sidebar's contents and behind the editor card. */
+.shell__main {
+  position: relative;
+}
+.sidebar,
+.shell__content {
+  position: relative;
+  z-index: 1;
+}
+:root:not([data-translucent='off']) .shell__titlebar::after,
+:root:not([data-translucent='off']) .status::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--grain-opacity, 0.4);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
+}
+:root:not([data-translucent='off']) .shell__titlebar > *,
+:root:not([data-translucent='off']) .status > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- section tabs ---------- */
 
 .sidebar__vault {
   flex: none;
@@ -271,7 +448,6 @@ code {
   gap: var(--size-2);
   padding: var(--size-2) var(--size-2) var(--size-2) var(--size-3);
 }
-
 .sidebar__vault-name {
   font-size: 11px;
   font-weight: 700;
@@ -282,10 +458,9 @@ code {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* ---------- section tabs ---------- */
-
 .segmented {
+  position: relative;
+  z-index: 1;
   flex: none;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -330,6 +505,8 @@ code {
 /* ---------- search ---------- */
 
 .sidebar__search {
+  position: relative;
+  z-index: 1;
   flex: none;
   position: relative;
   display: flex;
@@ -367,6 +544,8 @@ code {
 }
 
 .sidebar__body {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -383,6 +562,8 @@ code {
 }
 
 .sidebar__footer {
+  position: relative;
+  z-index: 1;
   flex: none;
   display: flex;
   align-items: center;
@@ -446,7 +627,7 @@ body.is-resizing .sidebar__resize {
   align-items: flex-start;
   padding: var(--size-2) 6px;
   border-right: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: var(--chrome);
 }
 
 /* ---------- status bar ---------- */
@@ -459,7 +640,7 @@ body.is-resizing .sidebar__resize {
   gap: var(--size-2);
   padding: 0 var(--size-2) 0 var(--size-3);
   border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: var(--chrome);
   font-size: 11px;
   color: var(--text-secondary);
 }
@@ -581,7 +762,7 @@ body.is-resizing {
   align-items: stretch;
   gap: 2px;
   padding: var(--size-1) var(--size-1) 0;
-  background: var(--bg-secondary);
+  background: var(--tint);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
@@ -609,7 +790,7 @@ body.is-resizing {
   color: var(--text-secondary);
 }
 .tab.is-active {
-  background: var(--bg-primary);
+  background: var(--tint);
   color: var(--text-primary);
   /* Bridge the tab into the content area below it. Fill alone is invisible in
      light mode, where the tab and the content are both white. */
@@ -651,7 +832,7 @@ body.is-resizing {
 .tabs__content {
   flex: 1;
   min-height: 0;
-  background: var(--bg-primary);
+  background: transparent;
   /* Views scroll their own content (the editor, the tree). Letting this scroll
      too put a stray horizontal scrollbar under the editor. */
   overflow: hidden;
@@ -896,118 +1077,9 @@ body.is-resizing {
   padding-right: var(--size-2);
   border-radius: var(--radius-s);
   font-size: 13px;
-  color: var(--text-secondary);
-  cursor: default;
-  user-select: none;
-}
-.tree__row:hover {
-  background: var(--bg-hover);
-}
-.tree__row.is-cursor {
-  background: var(--bg-hover);
+  /* Primary, not secondary. A translucent panel eats contrast, and these are
+     file names - the thing the sidebar exists to show, not a caption. */
   color: var(--text-primary);
-}
-.tree__row.is-active {
-  background: var(--accent-muted);
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.tree__chevron {
-  flex: none;
-  width: 14px;
-  text-align: center;
-  font-size: 13px;
-  line-height: 1;
-  color: var(--text-muted);
-  transition: transform var(--anim-fast) var(--ease);
-}
-.tree__chevron.is-open {
-  transform: rotate(90deg);
-}
-.tree__chevron.is-hidden {
-  visibility: hidden;
-}
-
-.tree__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-
-
-.tree__error {
-  margin: 0 0 var(--size-2);
-  padding: var(--size-1) var(--size-2);
-  border-radius: var(--radius-s);
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
-  color: var(--danger);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-/* ---------- sidebar header actions ---------- */
-
-.sidebar__head {
-  justify-content: space-between;
-}
-
-.sidebar__actions {
-  display: flex;
-  gap: 2px;
-}
-
-.icon-btn {
-  all: unset;
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border-radius: 5px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
-}
-.icon-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.icon-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-/* ---------- file tree ---------- */
-
-.tree {
-  height: 100%;
-  overflow: auto;
-  outline: none;
-}
-
-/* Full-height spacer gives a real scrollbar while only the visible window is
-   in the DOM. */
-.tree__sizer {
-  position: relative;
-}
-.tree__window {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  will-change: transform;
-}
-
-.tree__row {
-  height: 24px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding-right: var(--size-2);
-  border-radius: var(--radius-s);
-  font-size: 13px;
-  color: var(--text-secondary);
   cursor: default;
   user-select: none;
 }
@@ -1211,7 +1283,7 @@ body.is-resizing {
   justify-content: space-between;
   padding: 0 4px 0 var(--size-3);
   border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: var(--chrome-strong);
   cursor: grab;
   user-select: none;
 }
@@ -1509,7 +1581,7 @@ body.is-resizing {
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: var(--tint);
 }
 .backlinks.is-collapsed {
   max-height: none;
@@ -1750,7 +1822,7 @@ body.is-resizing {
   gap: 1px;
   padding: var(--size-1) var(--size-2);
   border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: var(--tint);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -2172,7 +2244,7 @@ body.is-resizing {
 .props {
   flex: none;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: var(--tint);
 }
 
 .props__head {
@@ -2333,7 +2405,7 @@ body.is-resizing {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--bg-primary);
+  background: transparent;
 }
 
 /* The canvas is absolutely positioned inside this box on purpose. Sized in the
@@ -2377,7 +2449,7 @@ body.is-resizing {
   gap: var(--size-1);
   padding: 5px var(--size-2);
   border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: var(--tint);
 }
 
 .graph__btn {
@@ -2449,7 +2521,7 @@ body.is-resizing {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--bg-primary);
+  background: transparent;
 }
 
 .board__error {
@@ -2485,7 +2557,7 @@ body.is-resizing {
   min-height: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-m);
-  background: var(--bg-secondary);
+  background: var(--tint);
   transition: border-color var(--anim-fast) var(--ease), background var(--anim-fast) var(--ease);
 }
 .board__col.is-target {
@@ -2725,7 +2797,7 @@ body.is-resizing {
   gap: var(--size-2);
   padding: 6px var(--size-2);
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3224,6 +3296,8 @@ body.is-resizing {
 /* ---------- sidebar tools row ---------- */
 
 .sidebar__tools {
+  position: relative;
+  z-index: 1;
   flex: none;
   display: flex;
   /* center, not stretch — this row mixes a labelled button with two icon
@@ -3422,50 +3496,6 @@ body.is-resizing {
   border-radius: var(--radius-s);
   color: var(--danger);
   font-size: 11.5px;
-}
-
-/* ---------- glass ---------- */
-
-/*
- * One place that defines what "glass" means here: a translucent pane, blurred,
- * with a hairline border and a lit top edge. The sheen is what stops it reading
- * as a flat tint - a real pane catches light along its top edge, and without it
- * translucency just looks like reduced opacity.
- *
- * Applied to the things that float above the page (menus, dialogs, the graph
- * window, the palette) and to the things that are picked out from a list (a
- * selected file, an active tab, a hovered button).
- */
-.menu,
-.float,
-.dialog,
-.palette,
-.tip {
-  background: var(--chrome-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border-color: var(--glass-border);
-  box-shadow: inset 0 1px 0 var(--sheen), var(--shadow-lg);
-}
-
-/* The selected file, the active tab, the current board — the same treatment,
-   so "this is the one you are on" looks the same everywhere in the app. */
-.tree__row.is-active,
-.boards__row.is-active,
-.segmented__tab.is-active,
-.tabs__tab.is-active {
-  background: var(--glass-strong);
-  box-shadow: inset 0 1px 0 var(--sheen);
-}
-
-.tree__row:hover:not(.is-active),
-.boards__row:hover:not(.is-active),
-.footer-btn:hover,
-.tool-btn:hover,
-.icon-btn:hover,
-.graph__btn:hover,
-.menu__item:hover {
-  background: var(--glass);
 }
 
 /* ---------- motion ---------- */

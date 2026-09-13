@@ -30,9 +30,41 @@
   --radius-l: 16px;
 
   /* Motion as tokens: setting these to 0s kills all animation at once. */
-  /* Glass geometry is shared; only the colours differ per theme. */
-  --glass-blur: blur(24px) saturate(180%);
-  --glass-radius: var(--radius-m);
+  /**
+   * The window's frosted chrome: sidebar, titlebar, status bar.
+   *
+   * Always a DARK panel with light text, in both themes - which is what Arc
+   * does, and for a reason: the panel takes the colour of whatever is behind
+   * the window, and only one text colour can survive that. Dark ground plus
+   * light text works over a bright backdrop and a dark one; theme-coloured text
+   * works over neither.
+   *
+   * The alpha floors at 0.28 rather than reaching zero. Below that the panel
+   * stops being a panel and the light text has nothing to sit on - the point of
+   * the control is how much backdrop shows, not whether the sidebar exists.
+   */
+  --sidebar-rgb: 24 24 28;
+  --sidebar-alpha: 0.44;
+  --sidebar-bg: rgb(var(--sidebar-rgb) / var(--sidebar-alpha));
+
+  /* Not pure white. At 96% over a mid-grey panel the text glows rather than
+     reads, which is what made it look faded - too bright, not too dim. */
+  --sidebar-text: rgb(236 237 242 / 0.92);
+  --sidebar-dim: rgb(236 237 242 / 0.62);
+  /* Flat overlays: a selected row is a step lighter than the panel, not a
+     pane of glass sitting on it. */
+  --sidebar-row: rgb(255 255 255 / 0.08);
+  /* A step, not a spotlight. At 0.20 a selected row over a bright backdrop went
+     near-white and swallowed its own label and icon. */
+  --sidebar-row-active: rgb(255 255 255 / 0.13);
+  --sidebar-field: rgb(255 255 255 / 0.09);
+  --sidebar-line: rgb(255 255 255 / 0.12);
+
+  --chrome: var(--bg-secondary);
+  --chrome-strong: var(--bg-secondary);
+  --surface: var(--bg-primary);
+  --tint: var(--bg-secondary);
+
 
   --anim-fast: 100ms;
   --anim-base: 180ms;
@@ -81,13 +113,8 @@
      shows through; `--glass` is the lit surface used for a selected row or a
      raised button; `--sheen` is the hairline that makes glass read as a pane
      of something rather than a flat tint. */
-  --chrome: rgb(22 22 26 / 0.62);
-  --chrome-strong: rgb(22 22 26 / 0.82);
-  --surface: rgb(18 18 22 / 0.74);
-  --glass: rgb(255 255 255 / 0.08);
-  --glass-strong: rgb(255 255 255 / 0.13);
+  --chrome-rgb: 22 22 26;
   --glass-border: rgb(255 255 255 / 0.10);
-  --sheen: rgb(255 255 255 / 0.07);
 }
 
 @media (prefers-color-scheme: light) {
@@ -108,13 +135,8 @@
     --highlight-bg: rgb(255 206 61 / 0.42);
     --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
     --shadow-md: 0 6px 20px rgb(0 0 0 / 0.10);
-    --chrome: rgb(250 249 247 / 0.62);
-    --chrome-strong: rgb(250 249 247 / 0.84);
-    --surface: rgb(255 255 255 / 0.78);
-    --glass: rgb(255 255 255 / 0.55);
-    --glass-strong: rgb(255 255 255 / 0.78);
+    --chrome-rgb: 250 249 247;
     --glass-border: rgb(0 0 0 / 0.07);
-    --sheen: rgb(255 255 255 / 0.65);
   }
 }
 
@@ -135,13 +157,8 @@
   --highlight-bg: rgb(255 206 61 / 0.42);
   --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
   --shadow-md: 0 6px 20px rgb(0 0 0 / 0.10);
-  --chrome: rgb(250 249 247 / 0.62);
-  --chrome-strong: rgb(250 249 247 / 0.84);
-  --surface: rgb(255 255 255 / 0.78);
-  --glass: rgb(255 255 255 / 0.55);
-  --glass-strong: rgb(255 255 255 / 0.78);
+  --chrome-rgb: 250 249 247;
   --glass-border: rgb(0 0 0 / 0.07);
-  --sheen: rgb(255 255 255 / 0.65);
 }
 
 :root[data-theme='dark'] {
@@ -167,13 +184,8 @@
      shows through; `--glass` is the lit surface used for a selected row or a
      raised button; `--sheen` is the hairline that makes glass read as a pane
      of something rather than a flat tint. */
-  --chrome: rgb(22 22 26 / 0.62);
-  --chrome-strong: rgb(22 22 26 / 0.82);
-  --surface: rgb(18 18 22 / 0.74);
-  --glass: rgb(255 255 255 / 0.08);
-  --glass-strong: rgb(255 255 255 / 0.13);
+  --chrome-rgb: 22 22 26;
   --glass-border: rgb(255 255 255 / 0.10);
-  --sheen: rgb(255 255 255 / 0.07);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -192,6 +204,26 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+/**
+ * The canvas has to be transparent, not just `body`.
+ *
+ * This is why the vibrancy did nothing. The page's canvas background propagates
+ * from `html` first and only falls through to `body` when `html` has none - and
+ * when neither sets one, Chromium paints the `color-scheme` default, which is
+ * opaque. So `body { background: transparent }` was covered by an opaque white
+ * or near-black canvas underneath it, and no amount of translucency further up
+ * could ever show through.
+ */
+html {
+  background: transparent;
+}
+
+/* Translucency off, or a platform with no vibrancy: paint a real ground here,
+   because with a transparent canvas there would be nothing behind the app. */
+:root[data-translucent='off'] {
+  background: var(--bg-primary);
 }
 
 body {
@@ -258,14 +290,15 @@ body {
  * one rule set, rather than a second theme to keep in sync.
  */
 :root[data-translucent='off'] {
-  --chrome: var(--bg-secondary);
-  --chrome-strong: var(--bg-secondary);
-  --surface: var(--bg-primary);
-  --glass: var(--bg-hover);
-  --glass-strong: var(--bg-hover);
+  --sidebar-alpha: 1;
+  --sidebar-bg: var(--bg-secondary);
+  --sidebar-text: var(--text-primary);
+  --sidebar-dim: var(--text-secondary);
+  --sidebar-row: var(--bg-hover);
+  --sidebar-row-active: var(--accent-muted);
+  --sidebar-field: var(--bg-hover);
+  --sidebar-line: var(--border);
   --glass-border: var(--border);
-  --sheen: transparent;
-  --glass-blur: none;
 }
 
 /* Motion is a preference the OS already knows about. */

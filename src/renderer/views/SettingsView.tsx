@@ -3,6 +3,7 @@ import type { ArchiveState, IndexStats, VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { HotkeyEditor } from '../components/HotkeyEditor'
 import { Icon } from '../components/Icon'
+import { VIBRANCY_LABELS, VIBRANCY_MATERIALS } from '@shared/ipc-contract'
 import type { Appearance } from '../core/appearance'
 import { createPortal } from 'react-dom'
 
@@ -71,17 +72,64 @@ function Appearance_({ appearance, update }: Deps): React.ReactElement {
 
       <Row
         label="Translucency"
-        hint="Blur the desktop through the window, and glass on selected items. macOS only."
+        hint={
+          /Mac OS X/.test(navigator.userAgent)
+            ? 'Blur the desktop through the window.'
+            : 'macOS only — this platform has no window vibrancy.'
+        }
       >
         <button
           className={`toggle${appearance.translucent ? ' is-on' : ''}`}
           role="switch"
           aria-checked={appearance.translucent}
+          disabled={!/Mac OS X/.test(navigator.userAgent)}
           onClick={() => update({ translucent: !appearance.translucent })}
         >
           <span className="toggle__knob" />
         </button>
       </Row>
+
+      {appearance.translucent && (
+        <>
+          <Row
+            label="Sidebar transparency"
+            hint={
+              appearance.blurStrength === 0
+                ? 'Opaque — the sidebar paints its own background'
+                : appearance.blurStrength === 100
+                  ? 'Fully transparent — the sidebar is only the backdrop and your files'
+                  : `${appearance.blurStrength}% — the editor always stays opaque, so text never blends`
+            }
+          >
+            <input
+              className="slider"
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={appearance.blurStrength}
+              onChange={(event) => update({ blurStrength: Number(event.target.value) })}
+            />
+          </Row>
+
+          <Row
+            label="Blur"
+            hint="How sharp things behind the window stay. Soft keeps their shapes; strong dissolves them."
+          >
+            <div className="segmented segmented--inline">
+              {VIBRANCY_MATERIALS.map((material) => (
+                <button
+                  key={material}
+                  className={`segmented__tab${appearance.vibrancy === material ? ' is-active' : ''}`}
+                  onClick={() => update({ vibrancy: material })}
+                >
+                  <span>{VIBRANCY_LABELS[material]}</span>
+                </button>
+              ))}
+            </div>
+          </Row>
+        </>
+      )}
     </>
   )
 }
