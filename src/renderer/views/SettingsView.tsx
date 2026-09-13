@@ -3,7 +3,6 @@ import type { ArchiveState, IndexStats, VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { HotkeyEditor } from '../components/HotkeyEditor'
 import { Icon } from '../components/Icon'
-import { VIBRANCY_LABELS, VIBRANCY_MATERIALS } from '@shared/ipc-contract'
 import type { Appearance } from '../core/appearance'
 import { createPortal } from 'react-dom'
 
@@ -53,6 +52,16 @@ function Row({
   )
 }
 
+/** A named group of settings. One heading, one hairline, no accordion. */
+function Group({ title, children }: { title: string; children: React.ReactNode }): React.ReactElement {
+  return (
+    <section className="settings__group">
+      <h3 className="settings__grouphead">{title}</h3>
+      {children}
+    </section>
+  )
+}
+
 function Appearance_({ appearance, update }: Deps): React.ReactElement {
   return (
     <>
@@ -74,7 +83,7 @@ function Appearance_({ appearance, update }: Deps): React.ReactElement {
         label="Translucency"
         hint={
           /Mac OS X/.test(navigator.userAgent)
-            ? 'Blur the desktop through the window.'
+            ? 'Blur the desktop through the sidebar. How far it goes is set by the theme.'
             : 'macOS only — this platform has no window vibrancy.'
         }
       >
@@ -90,46 +99,61 @@ function Appearance_({ appearance, update }: Deps): React.ReactElement {
       </Row>
 
       {appearance.translucent && (
-        <>
-          <Row
-            label="Sidebar transparency"
-            hint={
-              appearance.blurStrength === 0
-                ? 'Opaque — the sidebar paints its own background'
-                : appearance.blurStrength === 100
-                  ? 'Fully transparent — the sidebar is only the backdrop and your files'
-                  : `${appearance.blurStrength}% — the editor always stays opaque, so text never blends`
-            }
-          >
-            <input
-              className="slider"
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={appearance.blurStrength}
-              onChange={(event) => update({ blurStrength: Number(event.target.value) })}
-            />
-          </Row>
-
-          <Row
-            label="Blur"
-            hint="How sharp things behind the window stay. Soft keeps their shapes; strong dissolves them."
-          >
-            <div className="segmented segmented--inline">
-              {VIBRANCY_MATERIALS.map((material) => (
-                <button
-                  key={material}
-                  className={`segmented__tab${appearance.vibrancy === material ? ' is-active' : ''}`}
-                  onClick={() => update({ vibrancy: material })}
-                >
-                  <span>{VIBRANCY_LABELS[material]}</span>
-                </button>
-              ))}
-            </div>
-          </Row>
-        </>
+        <p className="setting__note">
+          <Icon name="panel-left-close" size={13} />
+          How far it goes is the theme's call, not a slider: a dark panel on a light page can be
+          almost entirely backdrop and still read, a light panel on a dark one cannot. Full screen
+          switches it off while it lasts — there is no desktop behind a full-screen window, only a
+          black space.
+        </p>
       )}
+
+      <Group title="Sidebar">
+        <Row
+          label="Text size"
+          hint={`${Math.round(13 * appearance.sidebarScale)}px file names — the editor's own size is under Editor`}
+        >
+          <input
+            className="slider"
+            type="range"
+            min={0.9}
+            max={1.25}
+            step={0.05}
+            value={appearance.sidebarScale}
+            onChange={(event) => update({ sidebarScale: Number(event.target.value) })}
+          />
+        </Row>
+
+        <Row label="Bolder text" hint="A frosted panel eats stroke weight; this puts it back.">
+          <button
+            className={`toggle${appearance.sidebarBold ? ' is-on' : ''}`}
+            role="switch"
+            aria-checked={appearance.sidebarBold}
+            onClick={() => update({ sidebarBold: !appearance.sidebarBold })}
+          >
+            <span className="toggle__knob" />
+          </button>
+        </Row>
+
+        <Row
+          label="Brightness"
+          hint={
+            appearance.sidebarContrast >= 95
+              ? 'As white as it goes — over a pale backdrop this starts to glow rather than read'
+              : `${appearance.sidebarContrast}% — how white the file names are against the panel`
+          }
+        >
+          <input
+            className="slider"
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={appearance.sidebarContrast}
+            onChange={(event) => update({ sidebarContrast: Number(event.target.value) })}
+          />
+        </Row>
+      </Group>
     </>
   )
 }

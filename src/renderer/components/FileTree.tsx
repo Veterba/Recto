@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { FileNode } from '@shared/ipc-contract'
 import { api } from '../api'
+import { treeRowHeight } from '../core/appearance'
 import type { VaultTree } from '../core/file-tree-ops'
+import { ConfirmDialog } from './ConfirmDialog'
 import { ContextMenu, useContextMenu, type MenuItem } from './ContextMenu'
 import { Icon } from './Icon'
 import { RenameDialog } from './RenameDialog'
@@ -15,7 +17,6 @@ import { Tip } from './Tip'
  * position is rendered. A vault of 10k notes renders ~30 rows.
  */
 
-const ROW_HEIGHT = 24
 const OVERSCAN = 8
 const INDENT = 13
 
@@ -54,6 +55,10 @@ export function FileTree({
   onCreateIn,
   vaultPath,
 }: Props): React.ReactElement {
+  // Read every render rather than fixed at module load: the sidebar's text
+  // size is a setting, and the virtualiser has to agree with the stylesheet
+  // about how tall a row is or it scrolls to the wrong one.
+  const ROW_HEIGHT = treeRowHeight()
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [scrollTop, setScrollTop] = useState(0)
   const [viewport, setViewport] = useState(600)
@@ -64,6 +69,8 @@ export function FileTree({
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   /** "Renamed, and N links in M notes were updated" - with an undo. */
   const [rewrite, setRewrite] = useState<{ files: number; links: number; undoId: string } | null>(null)
+  /** The node a delete is waiting on confirmation for. */
+  const [confirming, setConfirming] = useState<FileNode | null>(null)
 
   const rows = useMemo(() => flatten(tree.roots, expanded), [tree.roots, expanded])
   const contextMenu = useContextMenu<FileNode>()
@@ -129,7 +136,7 @@ export function FileTree({
           label: 'Move to archive',
           icon: 'trash',
           danger: true,
-          run: () => void remove(node.path),
+          run: () => setConfirming(node),
         },
       ]
     },
@@ -261,14 +268,14 @@ export function FileTree({
         case 'Backspace':
           if (row && (ev.metaKey || ev.ctrlKey)) {
             ev.preventDefault()
-            void remove(row.node.path)
+            setConfirming(row.node)
           }
           break
         default:
           break
       }
     },
-    [rows, cursorIndex, expanded, renaming, activate, onToggleFolder, remove],
+    [rows, cursorIndex, expanded, renaming, activate, onToggleFolder],
   )
 
   // Keep the keyboard cursor on screen.
@@ -369,7 +376,7 @@ export function FileTree({
                       : row.node.path.slice(0, Math.max(0, row.node.path.lastIndexOf('/'))),
                   )
                 }}
-                onDelete={() => void remove(row.node.path)}
+                onDelete={() => setConfirming(row.node)}
                 onDropRow={(ev) => {
                   ev.preventDefault()
                   ev.stopPropagation()
@@ -391,6 +398,32 @@ export function FileTree({
           items={menuFor(contextMenu.menu.subject)}
           at={contextMenu.menu.at}
           onClose={contextMenu.close}
+        />
+      )}
+
+      {confirming !== null && (
+        <ConfirmDialog
+          title={confirming.kind === 'folder' ? 'Delete folder' : 'Delete note'}
+          body={
+            confirming.kind === 'folder' ? (
+              <>
+                <strong>{confirming.name}</strong> and everything inside it goes to the archive.
+                Recoverable there, then it goes to the system trash.
+              </>
+            ) : (
+              <>
+                <strong>{confirming.name.replace(/\.md$/i, '')}</strong> goes to the archive.
+                Recoverable there, then it goes to the system trash.
+              </>
+            )
+          }
+          confirmLabel="Move to archive"
+          onConfirm={() => {
+            const target = confirming.path
+            setConfirming(null)
+            void remove(target)
+          }}
+          onCancel={() => setConfirming(null)}
         />
       )}
 

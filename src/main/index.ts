@@ -1,8 +1,13 @@
 import { app, BrowserWindow } from 'electron'
 import { registerIpc } from './ipc'
+import { handleVaultScheme, registerVaultScheme } from './vault-protocol'
 import { createWindow } from './window'
 
 app.setName('Recto')
+
+// Before ready, or the scheme is registered without its privileges and every
+// image load fails as an opaque cross-origin request.
+registerVaultScheme()
 
 // One instance, one vault. A second launch focuses the existing window.
 if (!app.requestSingleInstanceLock()) {
@@ -17,6 +22,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   void app.whenReady().then(() => {
+    handleVaultScheme()
     registerIpc()
     createWindow()
 

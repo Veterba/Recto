@@ -33,24 +33,58 @@
   /**
    * The window's frosted chrome: sidebar, titlebar, status bar.
    *
-   * Always a DARK panel with light text, in both themes - which is what Arc
-   * does, and for a reason: the panel takes the colour of whatever is behind
-   * the window, and only one text colour can survive that. Dark ground plus
-   * light text works over a bright backdrop and a dark one; theme-coloured text
-   * works over neither.
+   * A dark panel with light text in the dark theme, a light panel with dark
+   * text in the light one - and the panel's brightness is mostly not ours at
+   * all. It is AppKit's: the vibrancy material has a light and a dark variant,
+   * and which one is drawn follows the WINDOW's appearance, set from the app's
+   * theme in `appearance.ts`. Measured over the same desktop, the same sidebar
+   * reads 103 with the window dark and 164 with it light.
    *
-   * The alpha floors at 0.28 rather than reaching zero. Below that the panel
-   * stops being a panel and the light text has nothing to sit on - the point of
-   * the control is how much backdrop shows, not whether the sidebar exists.
+   * That is why "light text in both themes, because the panel takes the colour
+   * of whatever is behind it" - which is what this comment used to say - was
+   * wrong. It is only true of a panel whose material never changes appearance,
+   * and ours was only stuck that way because nothing was setting it.
+   *
+   * So the tint here is a thin veil ON the material rather than the material
+   * itself: 18% in the light theme, where AppKit's frost does the work, and
+   * 60% in the dark one, where the panel also has to sit above the editor's
+   * ground so the chrome frames it.
+   *
+   * The alpha never reaches zero. Below the floor the panel stops being a panel
+   * and the light text has nothing to sit on - the point of the control is how
+   * much backdrop shows, not whether the sidebar exists.
+   *
+   * Neutral greys, not blue-grey ones: every tinted surface in the app used to
+   * pull very slightly violet, which reads as a colour cast rather than as a
+   * dark theme.
    */
-  --sidebar-rgb: 24 24 28;
-  --sidebar-alpha: 0.44;
+  --sidebar-rgb: 252 252 253;
+  /* How far the transparency slider is allowed to take the panel. The dark
+     theme fades less: a dark panel over a dark desktop runs out of contrast
+     long before a dark panel over a bright one does. */
+  --sidebar-fade: 0.82;
+  /* How far along that fade the theme actually sits. Both halves live in the
+     stylesheet, per theme, because "how transparent can this panel be before it
+     stops reading" is not a matter of taste - it depends on whether the panel
+     is dark-on-light or light-on-dark. */
+  --sidebar-t: 1;
+  --sidebar-alpha: calc(1 - var(--sidebar-t) * var(--sidebar-fade));
+  /* Grain earns its keep in proportion to how much backdrop there is. */
+  --grain-opacity: 0.3;
   --sidebar-bg: rgb(var(--sidebar-rgb) / var(--sidebar-alpha));
 
-  /* Not pure white. At 96% over a mid-grey panel the text glows rather than
-     reads, which is what made it look faded - too bright, not too dim. */
-  --sidebar-text: rgb(236 237 242 / 0.92);
-  --sidebar-dim: rgb(236 237 242 / 0.62);
+  /* One ink, two strengths, both driven from settings. Not pure white: at 100%
+     over a mid-grey panel the text glows rather than reads, which is what made
+     it look faded - too bright, not too dim. */
+  --sidebar-ink: 24 24 27;
+  --sidebar-ink-alpha: 0.94;
+  --sidebar-dim-alpha: 0.68;
+  --sidebar-text: rgb(var(--sidebar-ink) / var(--sidebar-ink-alpha));
+  --sidebar-dim: rgb(var(--sidebar-ink) / var(--sidebar-dim-alpha));
+  /* Size and weight of the sidebar's own text, from settings. */
+  --sidebar-scale: 1.05;
+  --sidebar-weight: 540;
+  --tree-row-h: 25px;
   /* Flat overlays: a selected row is a step lighter than the panel, not a
      pane of glass sitting on it. */
   --sidebar-row: rgb(255 255 255 / 0.08);
@@ -92,20 +126,20 @@
 
 :root {
   color-scheme: dark;
-  --bg-primary: #16161a;
-  --bg-secondary: #1c1c21;
-  --bg-elevated: #24242b;
-  --bg-hover: #2c2c34;
-  --border: #2e2e37;
-  --border-strong: #3d3d48;
-  --text-primary: #e9e9ee;
-  --text-secondary: #a6a6b2;
-  --text-muted: #6f6f7d;
-  --danger: #f4736b;
+  --bg-primary: #171717;
+  --bg-secondary: #1e1e1e;
+  --bg-elevated: #262626;
+  --bg-hover: #2f2f2f;
+  --border: #303030;
+  --border-strong: #434343;
+  --text-primary: #ededed;
+  --text-secondary: #a9a9a9;
+  --text-muted: #737373;
+  --danger: #f0736b;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.45);
   /* Code panels read darker than the page, the way an editor does. Highlight
      is a yellow that survives both themes without being a marker pen. */
-  --code-bg: #101015;
+  --code-bg: #101010;
   --highlight-bg: rgb(255 214 102 / 0.26);
   --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.35);
   --shadow-md: 0 8px 28px rgb(0 0 0 / 0.42);
@@ -113,7 +147,7 @@
      shows through; `--glass` is the lit surface used for a selected row or a
      raised button; `--sheen` is the hairline that makes glass read as a pane
      of something rather than a flat tint. */
-  --chrome-rgb: 22 22 26;
+  --chrome-rgb: 22 22 22;
   --glass-border: rgb(255 255 255 / 0.10);
 }
 
@@ -131,7 +165,7 @@
     --text-muted: #85847c;
     --danger: #c2352b;
     --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
-  --code-bg: #f4f2ee;
+  --code-bg: #f3f3f1;
     --highlight-bg: rgb(255 206 61 / 0.42);
     --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
     --shadow-md: 0 6px 20px rgb(0 0 0 / 0.10);
@@ -153,7 +187,7 @@
   --text-muted: #85847c;
   --danger: #c2352b;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
-  --code-bg: #f4f2ee;
+  --code-bg: #f3f3f1;
   --highlight-bg: rgb(255 206 61 / 0.42);
   --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
   --shadow-md: 0 6px 20px rgb(0 0 0 / 0.10);
@@ -163,20 +197,20 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg-primary: #16161a;
-  --bg-secondary: #1c1c21;
-  --bg-elevated: #24242b;
-  --bg-hover: #2c2c34;
-  --border: #2e2e37;
-  --border-strong: #3d3d48;
-  --text-primary: #e9e9ee;
-  --text-secondary: #a6a6b2;
-  --text-muted: #6f6f7d;
-  --danger: #f4736b;
+  --bg-primary: #171717;
+  --bg-secondary: #1e1e1e;
+  --bg-elevated: #262626;
+  --bg-hover: #2f2f2f;
+  --border: #303030;
+  --border-strong: #434343;
+  --text-primary: #ededed;
+  --text-secondary: #a9a9a9;
+  --text-muted: #737373;
+  --danger: #f0736b;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.45);
   /* Code panels read darker than the page, the way an editor does. Highlight
      is a yellow that survives both themes without being a marker pen. */
-  --code-bg: #101015;
+  --code-bg: #101010;
   --highlight-bg: rgb(255 214 102 / 0.26);
   --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.35);
   --shadow-md: 0 8px 28px rgb(0 0 0 / 0.42);
@@ -184,8 +218,58 @@
      shows through; `--glass` is the lit surface used for a selected row or a
      raised button; `--sheen` is the hairline that makes glass read as a pane
      of something rather than a flat tint. */
-  --chrome-rgb: 22 22 26;
+  --chrome-rgb: 22 22 22;
   --glass-border: rgb(255 255 255 / 0.10);
+}
+
+/*
+ * The frosted chrome, in the dark theme.
+ *
+ * Light theme puts a dark panel next to a white page, which is the Arc look and
+ * works without any further thought. The dark theme cannot copy it: a dark
+ * panel beside a dark editor is one unbroken dark shape, which is what "dark
+ * theme sidebar looks very bad" was. So the panel goes LIGHTER than the editor
+ * and frames it, and it fades less far, because a dark panel over a dark
+ * desktop runs out of contrast long before a dark one over a bright desktop.
+ */
+:root[data-theme='dark'],
+:root:not([data-theme='light']) {
+  --sidebar-rgb: 46 46 46;
+  --sidebar-fade: 0.5;
+  --sidebar-t: 0.8;
+  --grain-opacity: 0.52;
+  --sidebar-ink: 244 244 245;
+  --sidebar-row: rgb(255 255 255 / 0.07);
+  --sidebar-row-active: rgb(255 255 255 / 0.12);
+  --sidebar-field: rgb(255 255 255 / 0.07);
+  --sidebar-line: rgb(255 255 255 / 0.10);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --sidebar-rgb: 252 252 253;
+    --sidebar-fade: 0.82;
+    --sidebar-t: 1;
+    /* Grain over a light frost reads as dirt, not as material. */
+    --grain-opacity: 0.3;
+    --sidebar-ink: 24 24 27;
+    --sidebar-row: rgb(0 0 0 / 0.06);
+    --sidebar-row-active: rgb(0 0 0 / 0.10);
+    --sidebar-field: rgb(0 0 0 / 0.06);
+    --sidebar-line: rgb(0 0 0 / 0.10);
+  }
+}
+
+:root[data-theme='light'] {
+  --sidebar-rgb: 252 252 253;
+  --sidebar-fade: 0.82;
+  --sidebar-t: 1;
+  --grain-opacity: 0.3;
+  --sidebar-ink: 24 24 27;
+  --sidebar-row: rgb(0 0 0 / 0.06);
+  --sidebar-row-active: rgb(0 0 0 / 0.10);
+  --sidebar-field: rgb(0 0 0 / 0.06);
+  --sidebar-line: rgb(0 0 0 / 0.10);
 }
 
 @media (prefers-reduced-motion: reduce) {
