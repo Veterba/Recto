@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, shell } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { IpcApi, RenameOutcome } from '../shared/ipc-contract'
 import * as archive from './archive'
 import { openIndexForVault, send, stopIndexer } from './index-client'
@@ -6,6 +6,9 @@ import { readState, writeState } from './state'
 import * as vaultFs from './vault-fs'
 import { closeVault, openVault, pickVault, startupState } from './vault'
 import { markSelfWrite, startWatching, stopWatching } from './watcher'
+
+/** Where images land. A folder in the vault, so the vault stays portable. */
+const ATTACHMENTS = 'attachments'
 
 /** Typed handler registration - the channel name and its signature stay in sync. */
 function handle<C extends keyof IpcApi>(
@@ -97,6 +100,18 @@ export function registerIpc(): void {
     const moved = await apply()
     if (!moved.ok) return moved
 
+    /**
+     * Move the note's version history with it, before the watcher notices.
+     *
+     * The watcher reports the rename as unlink(old) + add(new), and the unlink
+     * deletes the old path's snapshots. That event is at least a batching
+     * interval away (chokidar settles for 120ms, the queue flushes after 60),
+     * while this send happens in the same tick as the rename returning - so it
+     * wins by a wide margin rather than by luck. If it ever lost, the cost is
+     * losing history for a renamed note, not losing the note.
+     */
+    void send({ kind: 'note-renamed', from, to: moved.path }, 15_000).catch(() => undefined)
+
     const rewrite = await vaultFs.rewriteLinksTo(sources, from, moved.path)
     let undoId: string | undefined
     if (rewrite.changed.length > 0) {
@@ -168,6 +183,22 @@ export function registerIpc(): void {
   handle('archive:purge', (id) => archive.purge(id))
   handle('archive:set-retention', (days) => archive.setRetention(days))
   handle('fs:reveal', (p) => vaultFs.reveal(p))
+  handle('fs:import-images', async () => {
+    const picked = await dialog.showOpenDialog({
+      title: 'Add images',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'heic'] }],
+    })
+    if (picked.canceled) return { ok: true as const, paths: [] }
+
+    const paths: string[] = []
+    for (const source of picked.filePaths) {
+      const copied = await vaultFs.importFile(source, ATTACHMENTS)
+      if (!copied.ok) return copied
+      paths.push(copied.path)
+    }
+    return { ok: true as const, paths }
+  })
 
   handle('index:search', async (query, limit) => {
     const response = await send({ kind: 'search', query, ...(limit === undefined ? {} : { limit }) }, 15_000)

@@ -38,6 +38,7 @@ const ITEMS: readonly Item[] = [
   { kind: 'button', commandId: 'editor:strikethrough', label: 'Strikethrough', icon: 'strikethrough', format: 'strikethrough' },
   { kind: 'button', commandId: 'editor:highlight', label: 'Highlight', icon: 'highlighter', format: 'highlight' },
   { kind: 'button', commandId: 'editor:inline-code', label: 'Inline code', icon: 'code', format: 'code' },
+  { kind: 'button', commandId: 'editor:math', label: 'Maths', hint: 'Wraps in $ … $', icon: 'sigma', format: 'math' },
   { kind: 'sep' },
   { kind: 'button', commandId: 'editor:link', label: 'Link', icon: 'link' },
   // Named for what it does, not for its syntax: "Wikilink" meant nothing to
@@ -56,6 +57,7 @@ const ITEMS: readonly Item[] = [
   { kind: 'button', commandId: 'editor:quote', label: 'Quote', icon: 'quote', format: 'quote' },
   { kind: 'sep' },
   { kind: 'button', commandId: 'editor:code-block', label: 'Code block', icon: 'square-code' },
+  { kind: 'button', commandId: 'editor:image', label: 'Insert image', hint: 'Copies the file into the vault', icon: 'image' },
   { kind: 'button', commandId: 'editor:horizontal-rule', label: 'Divider', icon: 'minus' },
 ]
 

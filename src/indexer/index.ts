@@ -146,6 +146,23 @@ function removeNote(relative: string): void {
   // Child tables cascade from notes; FTS is a virtual table and does not.
   handle.prepare('DELETE FROM notes WHERE path = ?').run(relative)
   handle.prepare('DELETE FROM notes_fts WHERE path = ?').run(relative)
+  // Nor do snapshots, which have no foreign key because they outlive an edit
+  // on purpose. They must not outlive the NOTE: history kept for a deleted
+  // path resurfaces the moment something is created with the same name, and a
+  // new note showing a stranger's version history is alarming.
+  handle.prepare('DELETE FROM snapshots WHERE path = ?').run(relative)
+}
+
+/**
+ * Carry a note's history across a rename.
+ *
+ * Main sends this BEFORE it touches the disk. The watcher then reports an
+ * unlink of the old path and an add of the new one, in whatever order it likes
+ * - and by then the snapshots have already moved, so the unlink finds nothing
+ * to delete. Doing it afterwards would be a race with `removeNote`.
+ */
+function renameNote(from: string, to: string): void {
+  requireDb().prepare('UPDATE snapshots SET path = ? WHERE path = ?').run(to, from)
 }
 
 /**
@@ -521,6 +538,9 @@ function handle(request: IndexRequest): IndexResponse {
       return { kind: 'boards-result', boards: boards() }
     case 'context':
       return { kind: 'context-result', notes: context() }
+    case 'note-renamed':
+      renameNote(request.from, request.to)
+      return { kind: 'note-changed-done' }
     case 'history':
       return { kind: 'history-result', snapshots: listSnapshots(requireDb(), request.path) }
     case 'history-get':

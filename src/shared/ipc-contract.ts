@@ -79,6 +79,8 @@ export type IpcApi = {
   'fs:trash': (path: string) => { ok: boolean; error?: string }
   'fs:move': (path: string, newParent: string) => RenameOutcome | { ok: false; error: string }
   'fs:reveal': (path: string) => { ok: boolean }
+  /** Pick image files and copy them into the vault. Empty when cancelled. */
+  'fs:import-images': () => { ok: true; paths: string[] } | { ok: false; error: string }
   'index:search': (query: string, limit?: number) => SearchResult[]
   'index:backlinks': (path: string) => BacklinkResult[]
   'index:stats': () => IndexStats
@@ -192,6 +194,7 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'fs:trash',
   'fs:move',
   'fs:reveal',
+  'fs:import-images',
   'index:search',
   'index:backlinks',
   'index:stats',

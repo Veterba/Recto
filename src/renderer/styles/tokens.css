@@ -30,10 +30,16 @@
   --radius-l: 16px;
 
   /* Motion as tokens: setting these to 0s kills all animation at once. */
+  /* Glass geometry is shared; only the colours differ per theme. */
+  --glass-blur: blur(24px) saturate(180%);
+  --glass-radius: var(--radius-m);
+
   --anim-fast: 100ms;
   --anim-base: 180ms;
   --anim-slow: 320ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* A touch of overshoot, for things that appear rather than merely change. */
+  --ease-pop: cubic-bezier(0.16, 1.1, 0.3, 1);
 }
 
 /*
@@ -71,6 +77,17 @@
   --highlight-bg: rgb(255 214 102 / 0.26);
   --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.35);
   --shadow-md: 0 8px 28px rgb(0 0 0 / 0.42);
+  /* Translucent surfaces. `--chrome` is the window furniture that the desktop
+     shows through; `--glass` is the lit surface used for a selected row or a
+     raised button; `--sheen` is the hairline that makes glass read as a pane
+     of something rather than a flat tint. */
+  --chrome: rgb(22 22 26 / 0.62);
+  --chrome-strong: rgb(22 22 26 / 0.82);
+  --surface: rgb(18 18 22 / 0.74);
+  --glass: rgb(255 255 255 / 0.08);
+  --glass-strong: rgb(255 255 255 / 0.13);
+  --glass-border: rgb(255 255 255 / 0.10);
+  --sheen: rgb(255 255 255 / 0.07);
 }
 
 @media (prefers-color-scheme: light) {
@@ -87,10 +104,17 @@
     --text-muted: #85847c;
     --danger: #c2352b;
     --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
-    --code-bg: #f4f2ee;
+  --code-bg: #f4f2ee;
     --highlight-bg: rgb(255 206 61 / 0.42);
     --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
     --shadow-md: 0 6px 20px rgb(0 0 0 / 0.10);
+    --chrome: rgb(250 249 247 / 0.62);
+    --chrome-strong: rgb(250 249 247 / 0.84);
+    --surface: rgb(255 255 255 / 0.78);
+    --glass: rgb(255 255 255 / 0.55);
+    --glass-strong: rgb(255 255 255 / 0.78);
+    --glass-border: rgb(0 0 0 / 0.07);
+    --sheen: rgb(255 255 255 / 0.65);
   }
 }
 
@@ -111,6 +135,13 @@
   --highlight-bg: rgb(255 206 61 / 0.42);
   --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
   --shadow-md: 0 6px 20px rgb(0 0 0 / 0.10);
+  --chrome: rgb(250 249 247 / 0.62);
+  --chrome-strong: rgb(250 249 247 / 0.84);
+  --surface: rgb(255 255 255 / 0.78);
+  --glass: rgb(255 255 255 / 0.55);
+  --glass-strong: rgb(255 255 255 / 0.78);
+  --glass-border: rgb(0 0 0 / 0.07);
+  --sheen: rgb(255 255 255 / 0.65);
 }
 
 :root[data-theme='dark'] {
@@ -132,6 +163,17 @@
   --highlight-bg: rgb(255 214 102 / 0.26);
   --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.35);
   --shadow-md: 0 8px 28px rgb(0 0 0 / 0.42);
+  /* Translucent surfaces. `--chrome` is the window furniture that the desktop
+     shows through; `--glass` is the lit surface used for a selected row or a
+     raised button; `--sheen` is the hairline that makes glass read as a pane
+     of something rather than a flat tint. */
+  --chrome: rgb(22 22 26 / 0.62);
+  --chrome-strong: rgb(22 22 26 / 0.82);
+  --surface: rgb(18 18 22 / 0.74);
+  --glass: rgb(255 255 255 / 0.08);
+  --glass-strong: rgb(255 255 255 / 0.13);
+  --glass-border: rgb(255 255 255 / 0.10);
+  --sheen: rgb(255 255 255 / 0.07);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -158,7 +200,10 @@ body {
   font-size: 14px;
   line-height: 1.5;
   color: var(--text-primary);
-  background: var(--bg-primary);
+  /* Transparent so the window's vibrancy shows through. Every surface that
+     needs a ground paints its own; `--surface` and `--chrome` are translucent,
+     and become opaque when translucency is switched off. */
+  background: transparent;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -201,4 +246,40 @@ body {
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+
+/**
+ * Translucency off.
+ *
+ * Vibrancy is divisive and genuinely hurts on a busy desktop or a low-contrast
+ * display, so it is a switch rather than a decree. Turning it off replaces
+ * every translucent token with its opaque equivalent and disables the blur -
+ * one rule set, rather than a second theme to keep in sync.
+ */
+:root[data-translucent='off'] {
+  --chrome: var(--bg-secondary);
+  --chrome-strong: var(--bg-secondary);
+  --surface: var(--bg-primary);
+  --glass: var(--bg-hover);
+  --glass-strong: var(--bg-hover);
+  --glass-border: var(--border);
+  --sheen: transparent;
+  --glass-blur: none;
+}
+
+/* Motion is a preference the OS already knows about. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --anim-fast: 0ms;
+    --anim-base: 0ms;
+    --anim-slow: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
 }

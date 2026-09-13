@@ -4,12 +4,12 @@ import { api } from '../api'
 import { HotkeyEditor } from '../components/HotkeyEditor'
 import { Icon } from '../components/Icon'
 import type { Appearance } from '../core/appearance'
-import { registerView } from '../core/view-registry'
+import { createPortal } from 'react-dom'
 
 /**
  * Settings.
  *
- * A registered view like everything else, so it opens in a tab or a split and
+ * A dialog, not a view: it opens over whatever you were doing and
  * takes part in the workspace rather than being a modal that blocks the app.
  *
  * Every control writes through the same state the rest of the app reads, so
@@ -24,9 +24,6 @@ const TABS: readonly { id: Tab; label: string }[] = [
   { id: 'shortcuts', label: 'Shortcuts' },
   { id: 'vault', label: 'Vault' },
 ]
-
-/** Hues spaced around the wheel; accent saturation and lightness stay fixed. */
-const HUES = [258, 222, 190, 160, 130, 45, 25, 350, 320, 288]
 
 type Deps = {
   appearance: Appearance
@@ -72,18 +69,18 @@ function Appearance_({ appearance, update }: Deps): React.ReactElement {
         </div>
       </Row>
 
-      <Row label="Accent" hint="One hue drives every accent in the app.">
-        <div className="hues">
-          {HUES.map((hue) => (
-            <button
-              key={hue}
-              className={`hue${appearance.accentHue === hue ? ' is-active' : ''}`}
-              style={{ background: `hsl(${hue} 88% 68%)` }}
-              aria-label={`Hue ${hue}`}
-              onClick={() => update({ accentHue: hue })}
-            />
-          ))}
-        </div>
+      <Row
+        label="Translucency"
+        hint="Blur the desktop through the window, and glass on selected items. macOS only."
+      >
+        <button
+          className={`toggle${appearance.translucent ? ' is-on' : ''}`}
+          role="switch"
+          aria-checked={appearance.translucent}
+          onClick={() => update({ translucent: !appearance.translucent })}
+        >
+          <span className="toggle__knob" />
+        </button>
       </Row>
     </>
   )
@@ -115,6 +112,51 @@ function EditorSettings({ appearance, update }: Deps): React.ReactElement {
             </button>
           ))}
         </div>
+      </Row>
+
+      <Row
+        label="Heading font"
+        hint="Match uses the body font. A serif over a sans reads well."
+      >
+        <div className="segmented segmented--inline">
+          {(['match', 'mono', 'sans', 'serif'] as const).map((font) => (
+            <button
+              key={font}
+              className={`segmented__tab${appearance.headingFont === font ? ' is-active' : ''}`}
+              onClick={() => update({ headingFont: font })}
+            >
+              <span>{font}</span>
+            </button>
+          ))}
+        </div>
+      </Row>
+
+      <Row
+        label="Heading size"
+        hint={`${appearance.headingScale.toFixed(2)}× per level — H1 is ${Math.round(
+          appearance.fontSize * appearance.headingScale ** 3,
+        )}px against ${appearance.fontSize}px body`}
+      >
+        <input
+          className="slider"
+          type="range"
+          min={1}
+          max={1.6}
+          step={0.05}
+          value={appearance.headingScale}
+          onChange={(event) => update({ headingScale: Number(event.target.value) })}
+        />
+      </Row>
+
+      <Row label="Vim mode" hint="Modal editing. Esc for normal mode, :w saves.">
+        <button
+          className={`toggle${appearance.vimMode ? ' is-on' : ''}`}
+          role="switch"
+          aria-checked={appearance.vimMode}
+          onClick={() => update({ vimMode: !appearance.vimMode })}
+        >
+          <span className="toggle__knob" />
+        </button>
       </Row>
 
       <Row label="Font size" hint={`${appearance.fontSize}px`}>
@@ -234,11 +276,43 @@ function Settings(deps: Deps): React.ReactElement {
   )
 }
 
-export function registerSettingsView(getDeps: () => Deps): () => void {
-  return registerView({
-    type: 'settings',
-    title: 'Settings',
-    icon: 'settings',
-    render: () => <Settings {...getDeps()} />,
-  })
+/**
+ * Settings, as a dialog.
+ *
+ * It used to open as a tab, which meant settings took a workspace slot, sat in
+ * `workspace.json`, and could be left open in a split beside a note. Nothing
+ * about changing a font size wants to persist across restarts or share the
+ * screen - it is a thing you open, change, and close. `⌘,` like every other
+ * Mac app.
+ */
+export function SettingsDialog({ onClose, ...deps }: Deps & { onClose: () => void }): React.ReactElement {
+  return createPortal(
+    <div
+      className="dialog__backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div
+        className="dialog dialog--settings"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        onKeyDown={(event) => {
+          event.stopPropagation()
+          if (event.key === 'Escape') onClose()
+        }}
+      >
+        <header className="dialog__head">
+          <h2 className="dialog__title">Settings</h2>
+          <button className="dialog__close" onClick={onClose} aria-label="Close settings">
+            <Icon name="x" size={16} />
+          </button>
+        </header>
+        <Settings {...deps} />
+      </div>
+    </div>,
+    document.body,
+  )
 }

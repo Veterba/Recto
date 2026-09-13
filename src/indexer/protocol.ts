@@ -64,6 +64,7 @@ export type IndexRequest =
   | { kind: 'board'; board: string }
   | { kind: 'boards' }
   | { kind: 'context' }
+  | { kind: 'note-renamed'; from: string; to: string }
   | { kind: 'history'; path: string }
   | { kind: 'history-get'; id: number }
   | { kind: 'history-prune' }

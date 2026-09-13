@@ -1,5 +1,6 @@
 import { syntaxTree } from '@codemirror/language'
 import { Compartment, RangeSetBuilder, StateEffect, StateField, type Extension } from '@codemirror/state'
+import { vaultFileUrl } from '../core/vault-url'
 import {
   Decoration,
   EditorView,
@@ -109,6 +110,47 @@ class RuleWidget extends WidgetType {
   }
 }
 
+/** An image embed. Rendered as the picture, not as its markdown. */
+class ImageWidget extends WidgetType {
+  constructor(
+    private readonly src: string,
+    private readonly alt: string,
+  ) {
+    super()
+  }
+
+  override eq(other: ImageWidget): boolean {
+    return other.src === this.src && other.alt === this.alt
+  }
+
+  override toDOM(): HTMLElement {
+    const wrap = document.createElement('span')
+    wrap.className = 'cm-image'
+    const url = vaultFileUrl(this.src)
+    if (url === '') {
+      wrap.textContent = this.alt
+      return wrap
+    }
+    const img = document.createElement('img')
+    img.src = url
+    img.alt = this.alt
+    img.loading = 'lazy'
+    // A missing file must say so rather than leaving a broken-image glyph with
+    // no clue which path failed.
+    img.addEventListener('error', () => {
+      wrap.classList.add('is-missing')
+      wrap.textContent = `Image not found: ${this.src}`
+    })
+    wrap.appendChild(img)
+    return wrap
+  }
+
+  override ignoreEvent(): boolean {
+    return false
+  }
+}
+
+const IMAGE = /!\[([^\]]*)\]\(([^)\s]+)\)/g
 const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
 const HIGHLIGHT = /==([^=\n]+)==/g
 const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
@@ -306,6 +348,17 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
       // `==highlight==` is not in the markdown grammar, so the markers have to
       // be hidden here by hand. The highlight itself is painted in blocks.ts,
       // which runs in Source mode too.
+      // Images before wikilinks: `![alt](x)` contains no [[ ]], but matching
+      // it first keeps the overlap rule from dropping it.
+      for (const match of line.text.matchAll(IMAGE)) {
+        const start = line.from + (match.index ?? 0)
+        ranges.push({
+          from: start,
+          to: start + match[0].length,
+          deco: Decoration.replace({ widget: new ImageWidget(match[2] ?? '', match[1] ?? '') }),
+        })
+      }
+
       for (const match of line.text.matchAll(HIGHLIGHT)) {
         const start = line.from + (match.index ?? 0)
         const end = start + match[0].length
@@ -330,9 +383,18 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
     }
   }
 
-  // The builder demands sorted, non-overlapping ranges. Overlaps are real here:
-  // a wikilink inside a heading produces both a HeaderMark and a link range.
-  ranges.sort((a, b) => a.from - b.from || a.to - b.to)
+  /**
+   * Sorted, non-overlapping - and at the same start position, the LONGER range
+   * wins.
+   *
+   * These are replacements, so the outermost one is the one that means
+   * something. An image is the case that exposed it: the grammar contributes a
+   * `LinkMark` covering the `![` at offset 0, and with shortest-first that
+   * two-character marker was added before the widget covering the whole
+   * `![alt](src)` - which was then dropped as overlapping, so images silently
+   * never rendered.
+   */
+  ranges.sort((a, b) => a.from - b.from || b.to - a.to)
   const builder = new RangeSetBuilder<Decoration>()
   let lastTo = -1
   for (const range of ranges) {

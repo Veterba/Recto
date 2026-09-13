@@ -1,6 +1,6 @@
 .boot {
   height: 100%;
-  background: var(--bg-primary);
+  background: var(--surface);
 }
 
 /* ---------- buttons ---------- */
@@ -113,7 +113,10 @@ code {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg-secondary);
+  /* Translucent, so the desktop blurs through the window furniture. The editor
+     pane below paints its own denser ground: text has to stay readable over
+     whatever happens to be behind the app. */
+  background: var(--chrome);
 }
 
 /* Hide the first paint until appearance.json has been applied, so the app never
@@ -163,7 +166,9 @@ code {
   flex: 1;
   min-width: 0;
   display: flex;
-  background: var(--bg-primary);
+  /* Denser than the chrome on purpose: you read here, and reading over a
+     blurred desktop is only pleasant up to a point. */
+  background: var(--surface);
   /* Views scroll their own content. */
   overflow: hidden;
 }
@@ -254,8 +259,8 @@ code {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border-right: 1px solid var(--border);
-  background: var(--bg-secondary);
+  border-right: 1px solid var(--glass-border);
+  background: transparent;
 }
 
 .sidebar__vault {
@@ -2020,27 +2025,6 @@ body.is-resizing {
   font-size: 12px;
 }
 
-.hues {
-  display: flex;
-  gap: 6px;
-}
-
-.hue {
-  all: unset;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  cursor: pointer;
-  box-shadow: 0 0 0 1px var(--border) inset;
-  transition: transform var(--anim-fast) var(--ease), box-shadow var(--anim-fast) var(--ease);
-}
-.hue:hover {
-  transform: scale(1.12);
-}
-.hue.is-active {
-  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent);
-}
-
 .toggle {
   all: unset;
   width: 38px;
@@ -3398,4 +3382,149 @@ body.is-resizing {
 }
 .tidy__toggle:hover {
   color: var(--text-primary);
+}
+
+/* Settings is wider and taller than a prompt: it holds four tabs of content,
+   and scrolling a settings panel in a 520px box is miserable. */
+.dialog--settings {
+  width: min(760px, calc(100vw - 2 * var(--size-6)));
+  max-height: min(80vh, 720px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-bottom: var(--size-2);
+}
+.dialog--settings .settings {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- images in notes ---------- */
+
+.cm-image {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+.cm-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+}
+.cm-image.is-missing {
+  padding: 3px 8px;
+  border: 1px dashed var(--danger);
+  border-radius: var(--radius-s);
+  color: var(--danger);
+  font-size: 11.5px;
+}
+
+/* ---------- glass ---------- */
+
+/*
+ * One place that defines what "glass" means here: a translucent pane, blurred,
+ * with a hairline border and a lit top edge. The sheen is what stops it reading
+ * as a flat tint - a real pane catches light along its top edge, and without it
+ * translucency just looks like reduced opacity.
+ *
+ * Applied to the things that float above the page (menus, dialogs, the graph
+ * window, the palette) and to the things that are picked out from a list (a
+ * selected file, an active tab, a hovered button).
+ */
+.menu,
+.float,
+.dialog,
+.palette,
+.tip {
+  background: var(--chrome-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--sheen), var(--shadow-lg);
+}
+
+/* The selected file, the active tab, the current board — the same treatment,
+   so "this is the one you are on" looks the same everywhere in the app. */
+.tree__row.is-active,
+.boards__row.is-active,
+.segmented__tab.is-active,
+.tabs__tab.is-active {
+  background: var(--glass-strong);
+  box-shadow: inset 0 1px 0 var(--sheen);
+}
+
+.tree__row:hover:not(.is-active),
+.boards__row:hover:not(.is-active),
+.footer-btn:hover,
+.tool-btn:hover,
+.icon-btn:hover,
+.graph__btn:hover,
+.menu__item:hover {
+  background: var(--glass);
+}
+
+/* ---------- motion ---------- */
+
+/*
+ * Movement is either meaningful or it is decoration. These are the meaningful
+ * ones: something arriving, something being picked, something being dragged.
+ * Everything is a token, so `prefers-reduced-motion` turns the lot off at once.
+ */
+.tree__row,
+.boards__row,
+.board__card,
+.tab,
+.segmented__tab,
+.footer-btn,
+.tool-btn,
+.icon-btn,
+.graph__btn,
+.menu__item,
+.formatbar__btn {
+  transition:
+    background var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease),
+    box-shadow var(--anim-fast) var(--ease),
+    transform var(--anim-fast) var(--ease);
+}
+
+/* A card lifts while you hold it, so the board reads as physical for the one
+   gesture where that helps: knowing which card you have. */
+.board__card:active {
+  transform: scale(0.995);
+}
+.board__card.is-dragging {
+  transform: rotate(-0.6deg) scale(1.02);
+  box-shadow: var(--shadow-md);
+  opacity: 0.85;
+}
+
+.cm-task-checkbox {
+  transition: transform var(--anim-fast) var(--ease-pop);
+}
+.cm-task-checkbox:active {
+  transform: scale(0.86);
+}
+
+/* Panels and pickers arrive rather than appear. */
+.palette,
+.float {
+  animation: rise var(--anim-base) var(--ease-pop);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+/* The active-tab underline slides between tabs instead of blinking. */
+.settings__tab {
+  transition: color var(--anim-fast) var(--ease), border-color var(--anim-base) var(--ease);
 }

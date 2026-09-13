@@ -36,6 +36,7 @@ function MarkdownEditor({
   onOpenPath,
   getLinkCandidates,
   livePreview,
+  vim,
 }: {
   path: string
   /** A `#heading` from the link that opened this note, to scroll to. */
@@ -44,6 +45,7 @@ function MarkdownEditor({
   onOpenPath: (p: string, h?: string | null) => void
   getLinkCandidates: () => readonly LinkCandidate[]
   livePreview: boolean
+  vim: boolean
 }): React.ReactElement {
   const [initial, setInitial] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -145,6 +147,10 @@ function MarkdownEditor({
     handle.current?.setLivePreview(livePreview)
   }, [livePreview])
 
+  useEffect(() => {
+    handle.current?.setVim(vim)
+  }, [vim])
+
   // An external edit reloads the buffer; our own save comes back through the
   // watcher too, so compare against what we last wrote before replacing it.
   useEffect(
@@ -219,6 +225,7 @@ function MarkdownEditor({
           handle.current = editor
           activeHandle = editor
           editor.setLivePreview(livePreview)
+          editor.setVim(vim)
           setActive(editor.getActiveFormats())
           refreshUnresolved(initial)
           // A link with a #heading opened this note; land on that heading.
@@ -235,6 +242,7 @@ export function registerMarkdownView(
   onOpenPath: (path: string, heading?: string | null) => void,
   getLinkCandidates: () => readonly LinkCandidate[],
   getLivePreview: () => boolean,
+  getVim: () => boolean,
 ): () => void {
   return registerView({
     type: 'markdown',
@@ -247,6 +255,7 @@ export function registerMarkdownView(
     render: ({ state }) => {
       const path = (state as State).path
       const livePreview = getLivePreview()
+      const vim = getVim()
       const rawHeading = (state as State).heading
       const heading = typeof rawHeading === 'string' && rawHeading !== '' ? rawHeading : null
       if (typeof path !== 'string' || path === '') {
@@ -267,6 +276,7 @@ export function registerMarkdownView(
           onOpenPath={onOpenPath}
           getLinkCandidates={getLinkCandidates}
           livePreview={livePreview}
+          vim={vim}
         />
       )
     },

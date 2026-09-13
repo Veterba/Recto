@@ -12,9 +12,12 @@ import type { LinkCandidate } from '../editor/link-complete'
 import { SearchPanel } from '../components/SearchPanel'
 import { Sidebar, SidebarStub } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
+import { TemplatePicker } from '../components/TemplatePicker'
 import { TidyDialog } from '../components/TidyDialog'
 import { Tip } from '../components/Tip'
 import { planTidy, type TidyPlan } from '../core/tidy'
+import { fillTemplate, templateBody, TEMPLATE_FOLDER } from '../core/templates'
+import { getActiveEditor } from './MarkdownView'
 import { WorkspaceView } from '../components/WorkspaceView'
 import { useAppearance, type Theme } from '../core/appearance'
 import { commands } from '../core/commands'
@@ -24,6 +27,7 @@ import { formatChord } from '../core/hotkeys'
 import { registerEditorCommands } from '../core/editor-commands'
 import { registerAppCommands } from '../core/register-commands'
 import { getSection, type SectionId } from '../core/sections'
+import { setVaultPath } from '../core/vault-url'
 import { useVault } from '../core/vault-store'
 import { useWorkspace } from '../core/use-workspace'
 import { getView } from '../core/view-registry'
@@ -35,7 +39,7 @@ import { registerGraphView } from '../graph/GraphView'
 import { setActiveNote, noteIndexChanged } from '../core/note-bus'
 import { registerArchiveView } from './ArchiveView'
 import { registerMarkdownView } from './MarkdownView'
-import { registerSettingsView } from './SettingsView'
+import { SettingsDialog } from './SettingsView'
 import { registerStubViews } from './stubs'
 import { registerUnresolvedView } from './UnresolvedView'
 
@@ -69,6 +73,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [switcherOpen, setSwitcherOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
 
@@ -83,6 +89,9 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   // Published rather than passed down: the graph is a floating window, not a
   // child of the tab that knows which note is open.
   useEffect(() => setActiveNote(activePath), [activePath])
+
+  // Image widgets resolve `attachments/x.png` against this.
+  useEffect(() => setVaultPath(vault.path), [vault.path])
 
   /** Which board the Tasks workspace is showing, from its own active leaf. */
   const activeBoard = useMemo(() => {
@@ -118,15 +127,17 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   /**
    * The Data tree, without the folder the board writes cards into.
    *
-   * Cards are real notes and have to live somewhere, but that somewhere is an
-   * implementation detail of Tasks - a folder of them sitting in your file list
-   * is clutter you did not create. They are still indexed, still in the graph,
-   * still findable by ⌘O and full-text search, and still openable from the
-   * board; only this one list hides them.
+   * Cards and templates are real notes and have to live somewhere, but that
+   * somewhere is an implementation detail of the features that own them - a
+   * folder of them sitting in your file list is clutter you did not create.
+   * They stay indexed, in the graph, findable by ⌘O and full-text search, and
+   * openable from the board or the template picker; only this one list hides
+   * them.
    */
   const visibleTree = useMemo(() => {
+    const hidden = new Set<string>([CARD_FOLDER, TEMPLATE_FOLDER])
     const withoutCards = {
-      roots: tree.roots.filter((node) => !(node.kind === 'folder' && node.path === CARD_FOLDER)),
+      roots: tree.roots.filter((node) => !(node.kind === 'folder' && hidden.has(node.path))),
       byPath: tree.byPath,
     }
     if (query.trim() === '') return withoutCards
@@ -136,6 +147,56 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
   /** Every folder in the vault, for expand-all. */
   const allFolders = useMemo(() => allFolderPaths(tree.roots), [tree.roots])
+
+  /** Every note path, flattened once for Tidy and the template picker. */
+  const allNotes = useMemo(() => {
+    const out: string[] = []
+    const walk = (nodes: readonly FileNode[]): void => {
+      for (const node of nodes) {
+        if (node.kind === 'folder') walk(node.children ?? [])
+        else if (node.name.toLowerCase().endsWith('.md')) out.push(node.path)
+      }
+    }
+    walk(tree.roots)
+    return out
+  }, [tree.roots])
+
+  /**
+   * Insert a template at the cursor.
+   *
+   * Its own frontmatter is dropped first: a template is a note, so it may have
+   * picked some up, and a second `---` block halfway down a file is a rule and
+   * a pile of stray text rather than metadata.
+   */
+  const insertTemplate = useCallback(
+    async (templatePath: string) => {
+      setTemplatesOpen(false)
+      const editor = getActiveEditor()
+      const target = activePath
+      if (editor === null || target === null) return
+
+      const read = await api.invoke('fs:read', templatePath)
+      if (!read.ok) return
+
+      const name = target.slice(target.lastIndexOf('/') + 1).replace(/\.md$/i, '')
+      const text = fillTemplate(templateBody(read.content), {
+        title: name,
+        path: target,
+        now: new Date(),
+      })
+
+      editor.run((state) => {
+        const range = state.selection.main
+        return {
+          changes: { from: range.from, to: range.to, insert: text },
+          selection: { anchor: range.from + text.length },
+          scrollIntoView: true,
+          userEvent: 'input.template',
+        }
+      })
+    },
+    [activePath],
+  )
 
   // --- tidy ---------------------------------------------------------------
   const [tidy, setTidy] = useState<TidyPlan | null>(null)
@@ -148,26 +209,17 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
    */
   const openTidy = useCallback(async () => {
     const context = await api.invoke('index:context')
-    const notes: string[] = []
-    const walk = (nodes: readonly FileNode[]): void => {
-      for (const node of nodes) {
-        if (node.kind === 'folder') walk(node.children ?? [])
-        else if (node.name.toLowerCase().endsWith('.md')) notes.push(node.path)
-      }
-    }
-    walk(tree.roots)
-
     setTidy(
       planTidy({
-        notes,
+        notes: allNotes,
         folders: allFolders,
         context: new Map(context.map((entry) => [entry.path, { tags: entry.tags, links: entry.links }])),
-        // The board owns this folder; a stray note landing in it would appear
-        // on a kanban nobody put it on.
-        reserved: [CARD_FOLDER],
+        // The board owns one of these and templates are not notes you file;
+        // a stray note landing in either would turn up where nobody put it.
+        reserved: [CARD_FOLDER, TEMPLATE_FOLDER],
       }),
     )
-  }, [tree.roots, allFolders])
+  }, [allNotes, allFolders])
 
   const runTidy = useCallback(async () => {
     if (tidy === null) return
@@ -219,13 +271,11 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       (p, heading) => openFileRef.current(p, heading ?? null),
       () => linkCandidatesRef.current,
       () => livePreviewRef.current,
+      () => vimRef.current,
     )
     registerUnresolvedView((p) => openFileRef.current(p))
     registerGraphView((p) => openFileRef.current(p))
     registerBoardView((p) => openBoardCardRef.current(p))
-    // Read lazily: settings renders from the live appearance state, so there is
-    // no copy to keep in sync and no "apply" step.
-    registerSettingsView(() => settingsDepsRef.current)
   }
 
   const openFile = useCallback(
@@ -273,6 +323,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
    */
   const livePreviewRef = useRef(appearance.livePreview)
   livePreviewRef.current = appearance.livePreview
+  const vimRef = useRef(appearance.vimMode)
+  vimRef.current = appearance.vimMode
 
   const settingsDepsRef = useRef({
     appearance,
@@ -370,6 +422,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     const offApp = registerAppCommands(commands, {
       workspace: active,
       openPalette,
+      openSettings: () => setSettingsOpen(true),
+      openTemplates: () => setTemplatesOpen(true),
       closeVault: onCloseVault,
       toggleSidebar,
       newNote: () => void createIn('file'),
@@ -473,7 +527,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
             onCollapseAll={activeSection === 'data' ? () => setExpanded(new Set()) : undefined}
             onTidy={activeSection === 'data' ? () => void openTidy() : undefined}
             onOpenArchive={() => openExtension('archive')}
-            onOpenSettings={() => openExtension('settings')}
+            onOpenSettings={() => setSettingsOpen(true)}
             onCollapse={toggleSidebar}
           >
             {activeSection === 'data' ? (
@@ -552,6 +606,14 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
         onToggleGraph={() => setGraphWindow({ open: !graphWindow.open })}
         onOpenPalette={openPalette}
       />
+      {templatesOpen && (
+        <TemplatePicker
+          notes={allNotes}
+          onPick={(path) => void insertTemplate(path)}
+          onClose={() => setTemplatesOpen(false)}
+        />
+      )}
+      {settingsOpen && <SettingsDialog {...settingsDepsRef.current} onClose={() => setSettingsOpen(false)} />}
       {tidy !== null && (
         <TidyDialog
           plan={tidy}

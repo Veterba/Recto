@@ -90,11 +90,40 @@ export const editorTheme = (): Extension =>
 export const markdownHighlighting = (): Extension =>
   syntaxHighlighting(
     HighlightStyle.define([
-      { tag: tags.heading1, fontSize: '1.7em', fontWeight: '650', lineHeight: '1.3' },
-      { tag: tags.heading2, fontSize: '1.4em', fontWeight: '650', lineHeight: '1.35' },
-      { tag: tags.heading3, fontSize: '1.2em', fontWeight: '600' },
-      { tag: tags.heading4, fontSize: '1.08em', fontWeight: '600' },
-      { tag: [tags.heading5, tags.heading6], fontWeight: '600' },
+      // Every level is a power of one ratio, so a single setting makes the
+      // document's structure louder or quieter without six values drifting
+      // apart. `--heading-scale` is set from appearance.
+      {
+        tag: tags.heading1,
+        fontSize: 'calc(pow(var(--heading-scale, 1.25), 3) * 1em)',
+        fontWeight: '650',
+        lineHeight: '1.3',
+        fontFamily: 'var(--font-heading, inherit)',
+      },
+      {
+        tag: tags.heading2,
+        fontSize: 'calc(pow(var(--heading-scale, 1.25), 2) * 1em)',
+        fontWeight: '650',
+        lineHeight: '1.35',
+        fontFamily: 'var(--font-heading, inherit)',
+      },
+      {
+        tag: tags.heading3,
+        fontSize: 'calc(var(--heading-scale, 1.25) * 1em)',
+        fontWeight: '600',
+        fontFamily: 'var(--font-heading, inherit)',
+      },
+      {
+        tag: tags.heading4,
+        fontSize: 'calc(1em + (var(--heading-scale, 1.25) - 1) * 0.35em)',
+        fontWeight: '600',
+        fontFamily: 'var(--font-heading, inherit)',
+      },
+      {
+        tag: [tags.heading5, tags.heading6],
+        fontWeight: '600',
+        fontFamily: 'var(--font-heading, inherit)',
+      },
       { tag: tags.strong, fontWeight: '700', color: 'var(--text-primary)' },
       { tag: tags.emphasis, fontStyle: 'italic' },
       { tag: tags.strikethrough, textDecoration: 'line-through', color: 'var(--text-muted)' },

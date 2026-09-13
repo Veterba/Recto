@@ -19,7 +19,22 @@ export function createWindow(): BrowserWindow {
     minHeight: 480,
     show: false,
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#16161a',
+    /**
+     * Vibrancy: the desktop behind the window is blurred through it.
+     *
+     * `under-window` blurs everything behind the whole window rather than
+     * tinting a region, which is the effect asked for. It only works if the
+     * window itself paints nothing opaque - hence the fully transparent
+     * background here, and translucent surface tokens in the renderer. If the
+     * user turns translucency off, the renderer paints opaque backgrounds over
+     * the top and the vibrancy is simply never seen.
+     *
+     * macOS only. On Windows and Linux these are ignored and the opaque
+     * backgrounds are all there is, which is the correct fallback.
+     */
+    vibrancy: 'under-window',
+    visualEffectState: 'active',
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(dirname, '../preload/index.mjs'),
       contextIsolation: true,
