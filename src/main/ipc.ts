@@ -208,6 +208,10 @@ export function registerIpc(): void {
     const response = await send({ kind: 'boards' }, 30_000)
     return response.kind === 'boards-result' ? response.boards : []
   })
+  handle('index:context', async () => {
+    const response = await send({ kind: 'context' }, 30_000)
+    return response.kind === 'context-result' ? response.notes : []
+  })
   handle('index:reindex', async () => {
     await send({ kind: 'reindex', force: true })
     return { ok: true }

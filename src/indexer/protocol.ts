@@ -43,6 +43,9 @@ export type BoardCard = {
   priority: string | null
 }
 
+/** What Tidy reasons over: a note's own signals about where it belongs. */
+export type NoteContext = { path: string; tags: string[]; links: string[] }
+
 export type NoteChange = { type: 'upserted' | 'removed'; path: string }
 
 /** One stored version of a note. `content` is omitted when listing. */
@@ -60,6 +63,7 @@ export type IndexRequest =
   | { kind: 'graph' }
   | { kind: 'board'; board: string }
   | { kind: 'boards' }
+  | { kind: 'context' }
   | { kind: 'history'; path: string }
   | { kind: 'history-get'; id: number }
   | { kind: 'history-prune' }
@@ -78,6 +82,7 @@ export type IndexResponse =
   | { kind: 'graph-result'; graph: GraphData }
   | { kind: 'board-result'; cards: BoardCard[] }
   | { kind: 'boards-result'; boards: { board: string; count: number }[] }
+  | { kind: 'context-result'; notes: NoteContext[] }
   | { kind: 'history-result'; snapshots: Snapshot[] }
   | { kind: 'history-get-result'; snapshot: Snapshot | null }
   | { kind: 'history-prune-result'; removed: number }

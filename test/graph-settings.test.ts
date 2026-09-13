@@ -20,8 +20,21 @@ describe('graph settings', () => {
   })
 
   it('reads a file it wrote itself', () => {
-    const saved = { tunables: { ...DEFAULT_TUNABLES, repelStrength: 400 }, showLabels: false, showOrphans: false }
+    const saved = {
+      tunables: { ...DEFAULT_TUNABLES, repelStrength: 400 },
+      showLabels: false,
+      showOrphans: false,
+      showTasks: true,
+    }
     expect(parseSettings(saved)).toEqual(saved)
+  })
+
+  it('hides task cards unless the file says otherwise', () => {
+    // They live in a folder the Data tree hides, and a note visible in one list
+    // and not the other reads as a ghost the app failed to forget.
+    expect(parseSettings({}).showTasks).toBe(false)
+    expect(parseSettings({ showTasks: true }).showTasks).toBe(true)
+    expect(parseSettings({ showTasks: 'yes' }).showTasks).toBe(false)
   })
 
   it('keeps the defaults for fields the file omits', () => {
@@ -58,7 +71,7 @@ describe('graph settings', () => {
 
   it('ignores unknown keys instead of carrying them into state', () => {
     const parsed = parseSettings({ showLabels: true, mysteryField: { deep: true } })
-    expect(Object.keys(parsed).sort()).toEqual(['showLabels', 'showOrphans', 'tunables'])
+    expect(Object.keys(parsed).sort()).toEqual(['showLabels', 'showOrphans', 'showTasks', 'tunables'])
   })
 
   it('does not mutate the shared defaults', () => {

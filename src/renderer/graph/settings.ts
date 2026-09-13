@@ -18,12 +18,20 @@ export type GraphSettings = {
   tunables: Tunables
   showLabels: boolean
   showOrphans: boolean
+  /**
+   * Task cards are notes, so the graph would show them - but the Data tree
+   * hides the folder they live in, and a note you can see in one place and not
+   * the other reads as a ghost. Off by default, with a switch, so the graph
+   * agrees with the file list AND nothing is hidden from you by force.
+   */
+  showTasks: boolean
 }
 
 export const DEFAULT_SETTINGS: GraphSettings = {
   tunables: DEFAULT_TUNABLES,
   showLabels: true,
   showOrphans: true,
+  showTasks: false,
 }
 
 /** Sane outer edges for each force, matching the slider ranges in the UI. */
@@ -57,5 +65,6 @@ export function parseSettings(raw: unknown): GraphSettings {
     tunables,
     showLabels: typeof record['showLabels'] === 'boolean' ? record['showLabels'] : true,
     showOrphans: typeof record['showOrphans'] === 'boolean' ? record['showOrphans'] : true,
+    showTasks: typeof record['showTasks'] === 'boolean' ? record['showTasks'] : false,
   }
 }
