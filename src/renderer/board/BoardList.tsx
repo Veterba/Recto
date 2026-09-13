@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { ContextMenu, useContextMenu, type MenuItem } from '../components/ContextMenu'
 import { Icon } from '../components/Icon'
+import { Tip } from '../components/Tip'
 import { fuzzyMatch } from '../core/fuzzy'
 import { columnId, DEFAULT_BOARDS, type Board } from './boards'
 import { updateBoards, useBoards } from './use-boards'
@@ -22,6 +24,24 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
   const file = useBoards()
   const [adding, setAdding] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
+  const contextMenu = useContextMenu<Board>()
+
+  const menuFor = (board: Board): MenuItem[] => [
+    { kind: 'heading', label: 'This board' },
+    { kind: 'item', label: 'Open', icon: 'square-kanban', run: () => onOpen(board.id) },
+    { kind: 'item', label: 'Rename', icon: 'pencil', run: () => setRenaming(board.id) },
+    { kind: 'separator' },
+    {
+      kind: 'item',
+      label: 'Remove board',
+      icon: 'trash',
+      danger: true,
+      // Not destructive to anything but the definition, and the menu should
+      // say so rather than leave it to be discovered.
+      disabled: file.boards.length <= 1,
+      run: () => remove(board.id),
+    },
+  ]
 
   const add = (name: string): void => {
     const trimmed = name.trim()
@@ -55,7 +75,11 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
   return (
     <div className="boards">
       {shown.map((board) => (
-        <div className={`boards__row${board.id === activeBoard ? ' is-active' : ''}`} key={board.id}>
+        <div
+          className={`boards__row${board.id === activeBoard ? ' is-active' : ''}`}
+          key={board.id}
+          onContextMenu={(event) => contextMenu.open(event, board)}
+        >
           {renaming === board.id ? (
             <input
               className="boards__rename"
@@ -87,14 +111,15 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
                 {board.name}
               </button>
               {file.boards.length > 1 && (
-                <button
-                  className="boards__remove"
-                  aria-label={`Remove ${board.name}`}
-                  title="Remove this board — the cards stay as notes"
-                  onClick={() => remove(board.id)}
-                >
-                  <Icon name="x" size={12} />
-                </button>
+                <Tip label="Remove this board" hint="The cards stay as notes">
+                  <button
+                    className="boards__remove"
+                    aria-label={`Remove ${board.name}`}
+                    onClick={() => remove(board.id)}
+                  >
+                    <Icon name="x" size={12} />
+                  </button>
+                </Tip>
               )}
             </>
           )}
@@ -119,6 +144,14 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
           <Icon name="plus" size={13} />
           New board
         </button>
+      )}
+
+      {contextMenu.menu !== null && (
+        <ContextMenu
+          items={menuFor(contextMenu.menu.subject)}
+          at={contextMenu.menu.at}
+          onClose={contextMenu.close}
+        />
       )}
     </div>
   )

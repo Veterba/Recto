@@ -4,6 +4,7 @@ import { commands } from '../core/commands'
 import { chordFromEvent, formatChord, normalizeChord } from '../core/hotkeys'
 import { fuzzyFilter, type MatchRange } from '../core/fuzzy'
 import { Highlight } from './CommandPalette'
+import { Tip } from './Tip'
 
 /**
  * Rebind any command.
@@ -153,9 +154,10 @@ export function HotkeyEditor(): React.ReactElement {
               </button>
 
               {row.overridden ? (
+                <Tip label="Back to the default">
                 <button
                   className="hotkeys__clear"
-                  title="Back to the default"
+                  aria-label="Back to the default"
                   onClick={() => {
                     const next = { ...overrides }
                     delete next[row.id]
@@ -164,14 +166,17 @@ export function HotkeyEditor(): React.ReactElement {
                 >
                   ↺
                 </button>
+                </Tip>
               ) : (
-                <button
-                  className="hotkeys__clear"
-                  title="Unbind"
-                  onClick={() => commit({ ...overrides, [row.id]: null })}
-                >
-                  ×
-                </button>
+                <Tip label="Unbind this shortcut">
+                  <button
+                    className="hotkeys__clear"
+                    aria-label="Unbind"
+                    onClick={() => commit({ ...overrides, [row.id]: null })}
+                  >
+                    ×
+                  </button>
+                </Tip>
               )}
             </li>
           )

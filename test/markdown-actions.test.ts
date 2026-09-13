@@ -174,9 +174,11 @@ describe('insertions', () => {
     expect(plain(s, md.insertCodeBlock(s))).toBe('```\nconst x = 1\n```\n')
   })
 
-  it('adds a rule on its own line', () => {
+  it('adds a rule on its own line, with the blank the syntax requires', () => {
+    // This test used to assert 'text\n---\n', which is a setext H2, not a rule.
+    // It was encoding the bug, not catching it.
     const s = make('text|')
-    expect(plain(s, md.insertHorizontalRule(s))).toBe('text\n---\n')
+    expect(plain(s, md.insertHorizontalRule(s))).toBe('text\n\n---\n')
   })
 })
 
@@ -259,5 +261,75 @@ describe('active formats at the cursor', () => {
     expect(md.activeFormats(state).has('bold')).toBe(true)
     const next = state.update(md.toggleBold(state)).state
     expect(md.activeFormats(next).has('bold')).toBe(false)
+  })
+})
+
+describe('horizontal rule', () => {
+  it('leaves a blank line above, so the paragraph does not become a heading', () => {
+    // `---` directly under text is a setext H2 in CommonMark. Writing it with
+    // no gap is why the divider button appeared to do nothing.
+    const s = make('some text|')
+    expect(plain(s, md.insertHorizontalRule(s))).toBe('some text\n\n---\n')
+  })
+
+  it('does not add a gap when the cursor is already on a blank line', () => {
+    const s = make('text\n|')
+    expect(plain(s, md.insertHorizontalRule(s))).toBe('text\n\n---\n')
+  })
+
+  it('separates the rule from the text that follows it', () => {
+    const s = make('above|\nbelow')
+    expect(plain(s, md.insertHorizontalRule(s))).toBe('above\n\n---\n\nbelow')
+  })
+})
+
+describe('alignment', () => {
+  it('wraps the block in the one thing every markdown reader understands', () => {
+    const s = make('hel|lo')
+    expect(plain(s, md.setAlignment(s, 'center'))).toBe('<div align="center">\nhello\n</div>')
+  })
+
+  it('wraps the whole paragraph, not just the cursor line', () => {
+    const s = make('one\ntw|o\nthree')
+    expect(plain(s, md.setAlignment(s, 'right'))).toBe('<div align="right">\none\ntwo\nthree\n</div>')
+  })
+
+  it('stops at a blank line rather than swallowing the next paragraph', () => {
+    const s = make('one|\n\ntwo')
+    expect(plain(s, md.setAlignment(s, 'center'))).toBe('<div align="center">\none\n</div>\n\ntwo')
+  })
+
+  it('retargets an existing wrapper instead of nesting a second one', () => {
+    const s = make('<div align="center">\nhel|lo\n</div>')
+    expect(plain(s, md.setAlignment(s, 'right'))).toBe('<div align="right">\nhello\n</div>')
+  })
+
+  it('unwraps when you choose left, because left is what unwrapped already is', () => {
+    const s = make('<div align="center">\nhel|lo\n</div>')
+    expect(plain(s, md.setAlignment(s, 'left'))).toBe('hello')
+  })
+
+  it('unwraps when you press the same button again', () => {
+    const s = make('<div align="center">\nhel|lo\n</div>')
+    expect(plain(s, md.setAlignment(s, 'center'))).toBe('hello')
+  })
+
+  it('writes nothing at all for left on an unwrapped block', () => {
+    // Otherwise every paragraph you centred and then undid leaves a div behind.
+    const s = make('hel|lo')
+    expect(md.setAlignment(s, 'left')).toBe(null)
+  })
+
+  it('reports the alignment at the cursor, for the toolbar', () => {
+    expect(md.alignmentAt(make('<div align="justify">\nhel|lo\n</div>'))).toBe('justify')
+    expect(md.alignmentAt(make('hel|lo'))).toBe(null)
+  })
+
+  it('does not claim an alignment when only the opening tag is there', () => {
+    expect(md.alignmentAt(make('<div align="center">\nhel|lo'))).toBe(null)
+  })
+
+  it('lights the matching toolbar button', () => {
+    expect([...md.activeFormats(make('<div align="center">\nhel|lo\n</div>'))]).toContain('align-center')
   })
 })

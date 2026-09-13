@@ -1,5 +1,6 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab, redo, undo } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { languages } from '@codemirror/language-data'
 import { foldGutter, foldKeymap, indentOnInput } from '@codemirror/language'
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search'
 import { Compartment, EditorState, type Extension, type TransactionSpec } from '@codemirror/state'
@@ -12,6 +13,7 @@ import {
   rectangularSelection,
 } from '@codemirror/view'
 import { activeFormats, type Format } from './markdown-actions'
+import { blockDecorations } from './blocks'
 import { markdownDecorations, setUnresolvedTargets, unresolvedField } from './decorations'
 import { livePreview, livePreviewCompartment, setLivePreview } from './live-preview'
 import { linkCompletion, type LinkCandidate } from './link-complete'
@@ -126,9 +128,13 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         EditorState.allowMultipleSelections.of(true),
         // Markdown with GFM-ish extensions; the grammar is CM's own, so
         // highlighting stays incremental as you type.
-        markdown({ base: markdownLanguage, codeLanguages: [], addKeymap: true }),
+        // `languages` lazy-loads a grammar the first time a fence names it, so
+        // a vault with no code costs nothing and ```python highlights properly.
+        // This is what `codeLanguages: []` was a placeholder for.
+        markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true }),
         markdownHighlighting(),
         markdownDecorations(),
+        blockDecorations(),
         // Live Preview sits in a compartment so the mode can be switched at
         // runtime without rebuilding the editor and losing undo history.
         livePreviewCompartment.of(

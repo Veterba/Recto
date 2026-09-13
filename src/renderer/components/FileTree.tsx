@@ -2,7 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { FileNode } from '@shared/ipc-contract'
 import { api } from '../api'
 import type { VaultTree } from '../core/file-tree-ops'
+import { ContextMenu, useContextMenu, type MenuItem } from './ContextMenu'
 import { Icon } from './Icon'
+import { Tip } from './Tip'
 
 /**
  * The file explorer.
@@ -35,6 +37,10 @@ type Props = {
   onToggleFolder: (path: string) => void
   onOpenFile: (path: string) => void
   onChanged: () => void
+  /** Create inside a specific folder, from the context menu. */
+  onCreateIn: (parent: string, kind: 'file' | 'folder') => void
+  /** Absolute vault path, for "copy full path". */
+  vaultPath: string
 }
 
 export function FileTree({
@@ -44,6 +50,8 @@ export function FileTree({
   onToggleFolder,
   onOpenFile,
   onChanged,
+  onCreateIn,
+  vaultPath,
 }: Props): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [scrollTop, setScrollTop] = useState(0)
@@ -57,6 +65,75 @@ export function FileTree({
   const [rewrite, setRewrite] = useState<{ files: number; links: number; undoId: string } | null>(null)
 
   const rows = useMemo(() => flatten(tree.roots, expanded), [tree.roots, expanded])
+  const contextMenu = useContextMenu<FileNode>()
+
+  const copy = useCallback((text: string) => {
+    void navigator.clipboard.writeText(text).catch(() => {
+      // Clipboard permission can be refused; a failed copy is not worth a
+      // dialog, and the path is visible on the row anyway.
+    })
+  }, [])
+
+  /**
+   * The right-click menu for one node.
+   *
+   * Only actions that actually work appear here. A menu is a promise about
+   * what the app can do, and an entry that opens nothing is worse than no
+   * entry at all.
+   */
+  const menuFor = useCallback(
+    (node: FileNode): MenuItem[] => {
+      const isFolder = node.kind === 'folder'
+      const parent = isFolder ? node.path : node.path.slice(0, Math.max(0, node.path.lastIndexOf('/')))
+      const full = vaultPath === '' ? node.path : `${vaultPath}/${node.path}`
+
+      return [
+        { kind: 'heading', label: isFolder ? 'Inside this folder' : 'Alongside this note' },
+        {
+          kind: 'item',
+          label: 'New note',
+          icon: 'file-plus',
+          run: () => onCreateIn(parent, 'file'),
+        },
+        {
+          kind: 'item',
+          label: 'New folder',
+          icon: 'folder-plus',
+          run: () => onCreateIn(parent, 'folder'),
+        },
+        { kind: 'separator' },
+        { kind: 'heading', label: isFolder ? 'This folder' : 'This note' },
+        { kind: 'item', label: 'Rename', icon: 'pencil', shortcut: 'F2', run: () => setRenaming(node.path) },
+        {
+          kind: 'item',
+          label: 'Copy relative path',
+          icon: 'copy',
+          run: () => copy(node.path),
+        },
+        {
+          kind: 'item',
+          label: 'Copy full path',
+          icon: 'clipboard-copy',
+          run: () => copy(full),
+        },
+        {
+          kind: 'item',
+          label: 'Reveal in Finder',
+          icon: 'external-link',
+          run: () => void api.invoke('fs:reveal', node.path),
+        },
+        { kind: 'separator' },
+        {
+          kind: 'item',
+          label: 'Move to archive',
+          icon: 'trash',
+          danger: true,
+          run: () => void remove(node.path),
+        },
+      ]
+    },
+    [vaultPath, onCreateIn, copy],
+  )
 
   useLayoutEffect(() => {
     const element = scrollRef.current
@@ -271,6 +348,7 @@ export function FileTree({
                 key={row.node.path}
                 row={row}
                 isOpen={expanded.has(row.node.path)}
+                onContextMenu={(ev) => contextMenu.open(ev, row.node)}
                 isActive={row.node.path === activePath}
                 isCursor={row.node.path === cursor}
                 isRenaming={row.node.path === renaming}
@@ -309,6 +387,14 @@ export function FileTree({
           </div>
         </div>
       </div>
+
+      {contextMenu.menu !== null && (
+        <ContextMenu
+          items={menuFor(contextMenu.menu.subject)}
+          at={contextMenu.menu.at}
+          onClose={contextMenu.close}
+        />
+      )}
     </>
   )
 }
@@ -316,6 +402,7 @@ export function FileTree({
 type RowProps = {
   row: Row
   isOpen: boolean
+  onContextMenu: (ev: React.MouseEvent) => void
   isActive: boolean
   isCursor: boolean
   isRenaming: boolean
@@ -333,6 +420,7 @@ type RowProps = {
 function TreeRow({
   row,
   isOpen,
+  onContextMenu,
   isActive,
   isCursor,
   isRenaming,
@@ -370,33 +458,56 @@ function TreeRow({
       onDrop={onDropRow}
       onClick={onActivate}
       onDoubleClick={onStartRename}
-      title={node.path}
+      onContextMenu={onContextMenu}
     >
       <span className={`tree__chevron${isFolder ? '' : ' is-hidden'}${isOpen ? ' is-open' : ''}`}>
         {isFolder ? '›' : ''}
+      </span>
+      {/* An icon per kind, so a folder and a note are distinguishable without
+          reading the chevron - which is invisible on a file. */}
+      <span className="tree__icon">
+        <Icon name={iconFor(node)} size={14} />
       </span>
 
       {isRenaming ? (
         <RenameInput initial={node.name} onCommit={onCommitRename} onCancel={onCancelRename} />
       ) : (
         <>
-          <span className="tree__name">{label}</span>
-          <button
-            className="tree__delete"
-            aria-label={`Delete ${node.name}`}
-            title="Move to archive"
-            onMouseDown={(ev) => ev.stopPropagation()}
-            onClick={(ev) => {
-              ev.stopPropagation()
-              onDelete()
-            }}
-          >
-            <Icon name="x" size={13} />
-          </button>
+          <span className="tree__name" title={node.path}>
+            {label}
+          </span>
+          <Tip label="Move to archive" hint="Recoverable for 10 days">
+            <button
+              className="tree__delete"
+              aria-label={`Delete ${node.name}`}
+              onMouseDown={(ev) => ev.stopPropagation()}
+              onClick={(ev) => {
+                ev.stopPropagation()
+                onDelete()
+              }}
+            >
+              <Icon name="x" size={13} />
+            </button>
+          </Tip>
         </>
       )}
     </div>
   )
+}
+
+/**
+ * The icon for a node.
+ *
+ * Attachments get their own so an image does not read as a note - the tree is
+ * the one place you see both kinds side by side.
+ */
+function iconFor(node: FileNode): string {
+  if (node.kind === 'folder') return 'folder'
+  const lower = node.name.toLowerCase()
+  if (lower.endsWith('.md')) return 'file-text'
+  if (/\.(png|jpe?g|gif|webp|svg|avif)$/.test(lower)) return 'image'
+  if (/\.(json|ya?ml|toml|css|js|ts|tsx|py|sh)$/.test(lower)) return 'file-code'
+  return 'file'
 }
 
 function RenameInput({
