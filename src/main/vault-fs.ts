@@ -142,6 +142,31 @@ export async function importFile(
   }
 }
 
+/**
+ * Write bytes into the vault, under a name we choose.
+ *
+ * The counterpart to `importFile` for content that has no path on disk - a
+ * dragged image, a pasted screenshot. Same folder, same uniquing, same
+ * containment; only the source differs.
+ */
+export async function importData(
+  name: string,
+  data: Uint8Array,
+  folder: string,
+): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+  try {
+    const root = requireVault()
+    const bare = sanitiseName(name)
+    if (bare.length === 0) return { ok: false, error: 'That file has no usable name.' }
+    const target = uniquePath(resolveInVault(root, path.join(folder, bare)))
+    await fsp.mkdir(path.dirname(target), { recursive: true })
+    await fsp.writeFile(target, data)
+    return { ok: true, path: toRelative(root, target) }
+  } catch (err) {
+    return { ok: false, error: message(err) }
+  }
+}
+
 export async function create(
   parentRelative: string,
   name: string,

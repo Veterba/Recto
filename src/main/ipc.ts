@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import type { IpcApi, RenameOutcome } from '../shared/ipc-contract'
 import * as archive from './archive'
 import { openIndexForVault, send, stopIndexer } from './index-client'
@@ -188,6 +188,12 @@ export function registerIpc(): void {
     win.setVibrancy(material)
     return { ok: true }
   })
+  handle('app:set-theme-source', (source) => {
+    // Drives the NSVisualEffectView variant behind the whole window, so the
+    // app's theme and the blur's own appearance cannot disagree.
+    nativeTheme.themeSource = source
+    return { ok: true }
+  })
   handle('fs:reveal', (p) => vaultFs.reveal(p))
   handle('fs:import-images', async () => {
     const picked = await dialog.showOpenDialog({
@@ -205,6 +211,15 @@ export function registerIpc(): void {
     }
     return { ok: true as const, paths }
   })
+
+  handle('fs:import-data', async (name, data) => {
+    // The renderer sends a Uint8Array; structured clone can hand it over as a
+    // plain object shape depending on the bridge, so normalise before writing.
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(Object.values(data as object) as number[])
+    return vaultFs.importData(name, bytes, ATTACHMENTS)
+  })
+
+  handle('app:is-fullscreen', () => BrowserWindow.getAllWindows()[0]?.isFullScreen() ?? false)
 
   handle('index:search', async (query, limit) => {
     const response = await send({ kind: 'search', query, ...(limit === undefined ? {} : { limit }) }, 15_000)

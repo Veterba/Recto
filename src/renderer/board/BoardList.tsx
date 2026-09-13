@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ContextMenu, useContextMenu, type MenuItem } from '../components/ContextMenu'
 import { Icon } from '../components/Icon'
 import { Tip } from '../components/Tip'
@@ -24,6 +25,8 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
   const file = useBoards()
   const [adding, setAdding] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
+  /** The board a removal is waiting on confirmation for. */
+  const [confirming, setConfirming] = useState<Board | null>(null)
   const contextMenu = useContextMenu<Board>()
 
   const menuFor = (board: Board): MenuItem[] => [
@@ -39,7 +42,7 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
       // Not destructive to anything but the definition, and the menu should
       // say so rather than leave it to be discovered.
       disabled: file.boards.length <= 1,
-      run: () => remove(board.id),
+      run: () => setConfirming(board),
     },
   ]
 
@@ -115,7 +118,7 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
                   <button
                     className="boards__remove"
                     aria-label={`Remove ${board.name}`}
-                    onClick={() => remove(board.id)}
+                    onClick={() => setConfirming(board)}
                   >
                     <Icon name="x" size={12} />
                   </button>
@@ -144,6 +147,25 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
           <Icon name="plus" size={13} />
           New board
         </button>
+      )}
+
+      {confirming !== null && (
+        <ConfirmDialog
+          title="Remove board"
+          body={
+            <>
+              <strong>{confirming.name}</strong> disappears from this list. Its cards are notes and
+              stay exactly where they are — recreating a board with the same name brings them back.
+            </>
+          }
+          confirmLabel="Remove board"
+          onConfirm={() => {
+            const id = confirming.id
+            setConfirming(null)
+            remove(id)
+          }}
+          onCancel={() => setConfirming(null)}
+        />
       )}
 
       {contextMenu.menu !== null && (

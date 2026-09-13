@@ -3,13 +3,13 @@
  *
  * The renderer runs from the app bundle, so `attachments/shot.png` means
  * nothing to it - the path has to be resolved against the vault's absolute
- * location, which only the shell knows. Kept as a module-level value rather
- * than threaded through the editor, because CodeMirror widgets are constructed
- * far from any React context.
+ * location, which only the shell knows.
  *
- * The alternative was a custom protocol handler in main. That is the better
- * answer the moment images need to work in a packaged, sandboxed build, and
- * this is deliberately the one place that would have to change.
+ * It resolves to `recto-file://vault/...`, not `file://`. A `file://` URL is
+ * refused outright from the dev server's `http://localhost` origin and treated
+ * as a cross-directory read from a packaged build's own `file://` origin, which
+ * is why images rendered as a broken glyph everywhere. The custom scheme is
+ * handled in main, where every path goes through the vault containment check.
  */
 
 let root = ''
@@ -18,7 +18,10 @@ export function setVaultPath(path: string): void {
   root = path
 }
 
-/** A `file://` URL for a path inside the vault, or '' if we have no vault. */
+/** True once a vault is open; before that there is nothing to resolve against. */
+export const hasVault = (): boolean => root !== ''
+
+/** A loadable URL for a path inside the vault, or '' if we have no vault. */
 export function vaultFileUrl(relative: string): string {
   if (root === '') return ''
   const decoded = (() => {
@@ -29,9 +32,10 @@ export function vaultFileUrl(relative: string): string {
       return relative
     }
   })()
-  // Absolute paths and real URLs are left alone: a note may legitimately point
-  // at something outside the vault.
-  if (/^[a-z]+:\/\//i.test(decoded) || decoded.startsWith('/')) return decoded
-  const joined = `${root}/${decoded}`.replace(/\/+/g, '/')
-  return `file://${joined.split('/').map(encodeURIComponent).join('/')}`
+  // Real URLs are left alone: a note may legitimately point at something on the
+  // web, and an absolute local path is not ours to serve.
+  if (/^[a-z]+:\/\//i.test(decoded)) return decoded
+  if (decoded.startsWith('/')) return `file://${decoded}`
+  const clean = decoded.replace(/^\.\//, '').replace(/\/+/g, '/')
+  return `recto-file://vault/${clean.split('/').map(encodeURIComponent).join('/')}`
 }

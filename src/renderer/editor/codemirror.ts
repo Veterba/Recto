@@ -15,6 +15,7 @@ import {
 import { vim } from '@replit/codemirror-vim'
 import { activeFormats, type Format } from './markdown-actions'
 import { blockDecorations } from './blocks'
+import { imageDrop } from './images'
 import { markdownDecorations, setUnresolvedTargets, unresolvedField } from './decorations'
 import { livePreview, livePreviewCompartment, setLivePreview } from './live-preview'
 import { linkCompletion, type LinkCandidate } from './link-complete'
@@ -156,6 +157,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
           livePreview((v) => v.state.field(unresolvedField, false) ?? new Set<string>()),
         ),
         editorTheme(),
+        imageDrop(),
         linkClick,
         EditorView.lineWrapping,
         editable.of(EditorView.editable.of(options.readOnly !== true)),

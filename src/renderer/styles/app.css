@@ -352,8 +352,28 @@ code {
 :root:not([data-translucent='off']) .status {
   color: var(--sidebar-text);
   border-color: var(--sidebar-line);
-  /* Just enough to seat the glyphs. A wide halo reads as blur, not contrast. */
-  text-shadow: 0 1px 2px rgb(var(--sidebar-rgb) / 0.5);
+}
+
+/**
+ * The frosted palette, as tokens, scoped to the panel.
+ *
+ * Every component in the sidebar already reads `--bg-hover`, `--text-muted`,
+ * `--accent-muted` and friends. Overriding those tokens here means each one
+ * gets the frosted equivalent automatically, instead of each needing its own
+ * `:root:not([data-translucent]) .sidebar .thing` override - which is how a
+ * hovered "New board" ended up painting an opaque near-white `--bg-hover`
+ * rectangle onto the glass, and a selected folder painted the same one
+ * full-width. Two reported bugs, one missing line.
+ */
+:root:not([data-translucent='off']) .sidebar {
+  --text-primary: var(--sidebar-text);
+  --text-secondary: var(--sidebar-dim);
+  --text-muted: var(--sidebar-dim);
+  --bg-hover: var(--sidebar-row);
+  --bg-elevated: rgb(var(--sidebar-rgb) / 0.92);
+  --border: var(--sidebar-line);
+  --border-strong: var(--sidebar-line);
+  --accent-muted: var(--sidebar-row-active);
 }
 
 :root:not([data-translucent='off']) .sidebar *,
@@ -388,8 +408,6 @@ code {
   background: var(--sidebar-row);
 }
 
-:root:not([data-translucent='off']) .sidebar .tree__row.is-active,
-:root:not([data-translucent='off']) .sidebar .boards__row.is-active,
 :root:not([data-translucent='off']) .sidebar .segmented__tab.is-active {
   background: var(--sidebar-row-active);
   color: var(--sidebar-text);
@@ -401,12 +419,6 @@ code {
   background: var(--sidebar-field);
 }
 
-/* Weight marks the open note. Pure white on a light row is how the label and
-   its icon disappeared. */
-:root:not([data-translucent='off']) .sidebar .tree__row.is-active .tree__name,
-:root:not([data-translucent='off']) .sidebar .boards__row.is-active .boards__name {
-  font-weight: 600;
-}
 
 /* Grain over every frosted surface, not just the sidebar. */
 :root:not([data-translucent='off']) .shell__titlebar,
@@ -528,7 +540,7 @@ code {
   width: 100%;
   padding: 6px var(--size-2) 6px 28px;
   border-radius: var(--radius-s);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--sidebar-scale));
   color: var(--text-primary);
   background: var(--bg-hover);
   transition: box-shadow var(--anim-fast) var(--ease);
@@ -1070,13 +1082,25 @@ body.is-resizing {
 }
 
 .tree__row {
-  height: 24px;
+  /* Height comes from the same number the virtualiser uses; they cannot be
+     allowed to disagree or the tree scrolls to the wrong row.
+
+     The gap between rows is a transparent border rather than a margin, for
+     that same reason: with `box-sizing: border-box` the row still occupies
+     exactly one row height, so the pitch the virtualiser assumes is untouched.
+     A margin would also have collapsed between neighbours and quietly shortened
+     it by a pixel. */
+  height: var(--tree-row-h);
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+  background-clip: padding-box;
   display: flex;
   align-items: center;
   gap: 2px;
   padding-right: var(--size-2);
   border-radius: var(--radius-s);
-  font-size: 13px;
+  font-size: calc(13px * var(--sidebar-scale));
+  font-weight: var(--sidebar-weight);
   /* Primary, not secondary. A translucent panel eats contrast, and these are
      file names - the thing the sidebar exists to show, not a caption. */
   color: var(--text-primary);
@@ -1086,14 +1110,34 @@ body.is-resizing {
 .tree__row:hover {
   background: var(--bg-hover);
 }
-.tree__row.is-cursor {
+/*
+ * The keyboard cursor, and ONLY while the tree has the keyboard.
+ *
+ * It is a different thing from the open note: the cursor is where the arrow
+ * keys are, the active row is what you are reading. They are usually the same
+ * row and occasionally not - click a folder open after opening a note and they
+ * separate. Painting both the whole time meant a folder sat lit while you were
+ * typing in a note, with nothing to say why. Now the cursor shows up when the
+ * tree is actually where your keys go, and disappears the moment focus leaves.
+ */
+.tree:focus-within .tree__row.is-cursor {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-.tree__row.is-active {
+/*
+ * The open note, task or board.
+ *
+ * A tint, and weight on the label. No accent bar and no accent-coloured text:
+ * both were tried and both were noise - one violet stripe down a list of files
+ * reads as an alert, not as "you are here".
+ */
+.tree__row.is-active,
+.boards__row.is-active {
   background: var(--accent-muted);
-  color: var(--accent);
-  font-weight: 500;
+}
+.tree__row.is-active .tree__name,
+.boards__row.is-active .boards__name {
+  font-weight: 650;
 }
 
 .tree__chevron {
@@ -2082,6 +2126,23 @@ body.is-resizing {
   margin-right: 4px;
 }
 
+/* A named group inside a settings tab. The heading earns its keep once a tab
+   holds two unrelated things - window translucency and sidebar legibility are
+   both "appearance" and neither explains the other. */
+.settings__group {
+  display: contents;
+}
+.settings__grouphead {
+  margin: var(--size-4) 0 0;
+  padding-top: var(--size-3);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 /* An inline variant of the sidebar's segmented control. */
 .segmented--inline {
   grid-template-columns: none;
@@ -2775,12 +2836,6 @@ body.is-resizing {
 .boards__row:hover {
   background: var(--bg-hover);
 }
-.boards__row.is-active {
-  background: var(--accent-muted);
-}
-.boards__row.is-active .boards__name {
-  color: var(--accent);
-}
 
 .boards__name,
 .boards__add,
@@ -2796,7 +2851,8 @@ body.is-resizing {
   align-items: center;
   gap: var(--size-2);
   padding: 6px var(--size-2);
-  font-size: 13px;
+  font-size: calc(13px * var(--sidebar-scale));
+  font-weight: var(--sidebar-weight);
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2956,6 +3012,18 @@ body.is-resizing {
   background: var(--border-strong);
 }
 
+
+/* The `-` of a bullet list, drawn as one.
+
+   A step darker and a size up from the surrounding text: at the body size in
+   the muted grey it read as a speck of dust rather than as a list marker. The
+   line-height stays at 1 so a larger glyph cannot stretch the line box - the
+   editor's own line height is well above 1.3em, so nothing moves. */
+.cm-bullet {
+  color: var(--text-secondary);
+  font-size: 1.3em;
+  line-height: 1;
+}
 
 /* ---------- tooltips ---------- */
 
@@ -3126,7 +3194,8 @@ body.is-resizing {
   height: 28px;
   padding: 0 var(--size-2);
   border-radius: var(--radius-s);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--sidebar-scale));
+  font-weight: var(--sidebar-weight);
   color: var(--text-secondary);
   white-space: nowrap;
   cursor: pointer;
@@ -3288,6 +3357,16 @@ body.is-resizing {
 .dialog__submit:hover {
   background: var(--accent-hover);
 }
+.dialog__submit--danger {
+  background: var(--danger);
+  color: #fff;
+}
+.dialog__submit--danger:hover {
+  /* Darker, not lighter: a destructive button that brightens on hover reads as
+     an invitation. */
+  filter: brightness(0.92);
+}
+
 .dialog__submit[disabled] {
   opacity: 0.4;
   cursor: default;
@@ -3308,7 +3387,13 @@ body.is-resizing {
 }
 
 .sidebar__tools-gap {
+  /* A rule, not empty air. The row holds two unrelated things - what the tree
+     is showing on the left, what to do to it on the right - and a plain gap
+     left them reading as one ragged group. */
   flex: 1;
+  height: 1px;
+  margin: 0 var(--size-2);
+  background: var(--border);
 }
 
 .tool-btn {
@@ -3323,7 +3408,7 @@ body.is-resizing {
   padding: 0 6px;
   border-radius: var(--radius-s);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--sidebar-scale));
   cursor: pointer;
   transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
 }

@@ -32,29 +32,23 @@ export type StateFeature = string
 /**
  * How sharp the backdrop stays, sharpest first.
  *
- * Soft blurs least, so shapes behind the window survive; strong blurs most, so
- * they dissolve. That is what a blur control is for - it is not a tint, and it
- * is not an opacity.
- *
- * AppKit exposes no blur radius, so these are three materials **measured** for
- * how much detail survives behind them. Edge energy in the sidebar region, with
- * the sidebar's own tint at 6% so the material is the only variable:
+ * `fullscreen-ui` blurs least, so shapes behind the window survive; `window`
+ * blurs most, so they dissolve. AppKit exposes no blur radius, so these are
+ * three materials **measured** for how much detail survives behind them. Edge
+ * energy in the sidebar region, with the sidebar's own tint at 6% so the
+ * material is the only variable:
  *
  *   fullscreen-ui  2.29   sidebar  1.72   window  1.27
  *
- * I had this order inverted from reasoning about the names - `window` sounds
- * like a light material and is in fact the most obscuring of the three.
+ * `window` sounds like a light material and is in fact the most obscuring of
+ * the three, which is the whole reason these were measured rather than guessed.
+ *
+ * Not a setting any more: the app picks one per theme. The list stays because
+ * the IPC channel has to validate what it is handed.
  */
 export const VIBRANCY_MATERIALS = ['fullscreen-ui', 'sidebar', 'window'] as const
 
 export type VibrancyMaterial = (typeof VIBRANCY_MATERIALS)[number]
-
-/** What the settings UI calls each one. */
-export const VIBRANCY_LABELS: Record<VibrancyMaterial, string> = {
-  'fullscreen-ui': 'soft',
-  sidebar: 'medium',
-  window: 'strong',
-}
 
 /** A node in the vault tree. Paths are vault-relative, POSIX-separated. */
 export type FileNode = {
@@ -78,18 +72,29 @@ export type VaultChange =
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
 export type IpcEvents = {
   'vault:changed': (changes: VaultChange[]) => void
+  /** The window entered or left macOS full screen. */
+  'app:fullscreen': (on: boolean) => void
 }
 
 export type IpcEventChannel = keyof IpcEvents
 
-export const IPC_EVENT_CHANNELS: readonly IpcEventChannel[] = ['vault:changed'] as const
+export const IPC_EVENT_CHANNELS: readonly IpcEventChannel[] = ['vault:changed', 'app:fullscreen'] as const
 
 /** Invoke channels: renderer -> main, request/response. */
 export type IpcApi = {
   'app:startup-state': () => StartupState
   'app:platform': () => { platform: NodeJS.Platform; version: string }
-  /** macOS vibrancy material. The only real control over the blur itself. */
-  'app:set-vibrancy': (material: VibrancyMaterial) => { ok: boolean }
+  /** macOS vibrancy material; null takes the blur off the window entirely. */
+  'app:set-vibrancy': (material: VibrancyMaterial | null) => { ok: boolean }
+  /**
+   * The window's macOS appearance, which decides which VARIANT of the vibrancy
+   * material AppKit draws - the light frost or the dark one. Without this the
+   * app's own light theme could be wearing dark-mode vibrancy, which is a dark
+   * sidebar no tint can lighten.
+   */
+  'app:set-theme-source': (source: 'system' | 'light' | 'dark') => { ok: boolean }
+  /** Asked once at boot; after that `app:fullscreen` pushes the changes. */
+  'app:is-fullscreen': () => boolean
   'vault:pick': () => OpenVaultResult
   'vault:open': (path: string) => OpenVaultResult
   'vault:close': () => StartupState
@@ -110,6 +115,17 @@ export type IpcApi = {
   'fs:reveal': (path: string) => { ok: boolean }
   /** Pick image files and copy them into the vault. Empty when cancelled. */
   'fs:import-images': () => { ok: true; paths: string[] } | { ok: false; error: string }
+  /**
+   * Write dropped or pasted bytes into the vault's attachments folder.
+   *
+   * Bytes rather than a source path on purpose: a drag from Finder, a drag out
+   * of a browser and a pasted screenshot all arrive in the renderer as a `File`
+   * with no path at all, and `webUtils.getPathForFile` only covers the first.
+   */
+  'fs:import-data': (
+    name: string,
+    data: Uint8Array,
+  ) => { ok: true; path: string } | { ok: false; error: string }
   'index:search': (query: string, limit?: number) => SearchResult[]
   'index:backlinks': (path: string) => BacklinkResult[]
   'index:stats': () => IndexStats
@@ -210,6 +226,8 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'app:startup-state',
   'app:platform',
   'app:set-vibrancy',
+  'app:set-theme-source',
+  'app:is-fullscreen',
   'vault:pick',
   'vault:open',
   'vault:close',
@@ -225,6 +243,7 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'fs:move',
   'fs:reveal',
   'fs:import-images',
+  'fs:import-data',
   'index:search',
   'index:backlinks',
   'index:stats',

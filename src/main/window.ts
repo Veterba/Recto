@@ -59,6 +59,21 @@ export function createWindow(): BrowserWindow {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url)
   })
 
+  /**
+   * Full screen turns the translucency off.
+   *
+   * In full screen there is no desktop behind the window to blur - the backdrop
+   * is whatever macOS puts behind a full-screen space, which is black. A
+   * "translucent" sidebar there is just a darker sidebar with less contrast, so
+   * the renderer switches to the opaque palette while it lasts.
+   */
+  const pushFullScreen = (): void => {
+    if (win.isDestroyed()) return
+    win.webContents.send('app:fullscreen', win.isFullScreen())
+  }
+  win.on('enter-full-screen', pushFullScreen)
+  win.on('leave-full-screen', pushFullScreen)
+
   win.once('ready-to-show', () => win.show())
 
   void win.loadURL(appEntry())

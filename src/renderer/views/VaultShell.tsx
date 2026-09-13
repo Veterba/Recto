@@ -462,6 +462,27 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     openExtension,
   ])
 
+  /**
+   * A file dropped anywhere but the editor is dropped nowhere.
+   *
+   * Chromium's default for a file drop is to navigate to it, which in a
+   * single-page app means the window replaces itself with the image you were
+   * trying to file. The editor's own handler takes the drops that matter; this
+   * swallows the misses.
+   */
+  useEffect(() => {
+    const swallow = (ev: DragEvent): void => {
+      if (ev.dataTransfer?.types.includes('Files') !== true) return
+      ev.preventDefault()
+    }
+    window.addEventListener('dragover', swallow)
+    window.addEventListener('drop', swallow)
+    return () => {
+      window.removeEventListener('dragover', swallow)
+      window.removeEventListener('drop', swallow)
+    }
+  }, [])
+
   useEffect(() => {
     void api.invoke('state:read', 'hotkeys').then((saved) => {
       if (saved !== null && typeof saved === 'object') {

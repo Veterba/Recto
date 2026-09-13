@@ -96,6 +96,27 @@ class LinkLabel extends WidgetType {
   }
 }
 
+/**
+ * The `•` a bullet list is asking for.
+ *
+ * `-` is what the file says and what every other markdown tool expects, so the
+ * document keeps it; a dash just reads as a stray hyphen down the left margin
+ * rather than as a list. A widget, not a CSS `::marker`, because CodeMirror's
+ * lines are not list elements and never will be.
+ */
+class BulletWidget extends WidgetType {
+  override eq(): boolean {
+    return true
+  }
+
+  override toDOM(): HTMLElement {
+    const dot = document.createElement('span')
+    dot.className = 'cm-bullet'
+    dot.textContent = '•'
+    return dot
+  }
+}
+
 /** A drawn horizontal rule, in place of the `---` that produces it. */
 class RuleWidget extends WidgetType {
   override eq(): boolean {
@@ -149,6 +170,8 @@ class ImageWidget extends WidgetType {
     return false
   }
 }
+
+const bullet = Decoration.replace({ widget: new BulletWidget() })
 
 const IMAGE = /!\[([^\]]*)\]\(([^)\s]+)\)/g
 const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
@@ -305,6 +328,14 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
       from,
       to,
       enter: (node) => {
+        if (node.name === 'ListMark') {
+          if (active.has(view.state.doc.lineAt(node.from).number)) return
+          // Only unordered lists. `1.` is content - renumbering it as a dot
+          // would lose the one thing an ordered list is for.
+          if (!/^[-*+]$/.test(view.state.doc.sliceString(node.from, node.to))) return
+          ranges.push({ from: node.from, to: node.to, deco: bullet })
+          return
+        }
         if (!MARKERS.has(node.name)) return
         if (active.has(view.state.doc.lineAt(node.from).number)) return
         if (node.to <= node.from) return
