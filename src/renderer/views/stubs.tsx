@@ -23,12 +23,6 @@ const STUBS: Stub[] = [
     blurb: 'Stat tiles over the append-only events table: notes created, tasks done, streaks, time in app.',
   },
   {
-    type: 'chat',
-    title: 'AI',
-    milestone: 'milestone 4',
-    blurb: 'Claude, streaming over IPC from the main process. Conversations saved as markdown in the vault.',
-  },
-  {
     type: 'profile',
     title: 'Profile',
     milestone: 'milestone 7',

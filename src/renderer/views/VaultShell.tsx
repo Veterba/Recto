@@ -29,6 +29,9 @@ import { setVaultPath } from '../core/vault-url'
 import { useVault } from '../core/vault-store'
 import { useWorkspace } from '../core/use-workspace'
 import { getView } from '../core/view-registry'
+import { ChatList } from '../ai/ChatList'
+import { CHAT_FOLDER, chatFileName, serialiseConversation } from '../ai/conversation'
+import { registerChatView } from '../ai/ChatView'
 import { BoardList } from '../board/BoardList'
 import { registerBoardView } from '../board/BoardView'
 import { CARD_FOLDER, createCard } from '../board/create-card'
@@ -91,12 +94,38 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   // Image widgets resolve `attachments/x.png` against this.
   useEffect(() => setVaultPath(vault.path), [vault.path])
 
+  /** Which conversation the AI workspace is showing. */
+  const activeChat = useMemo(() => {
+    const leaf = sections?.ai.activeLeaf
+    const path = leaf?.type === 'chat' ? leaf.state['path'] : undefined
+    return typeof path === 'string' ? path : null
+  }, [sections, revision])
+
   /** Which board the Tasks workspace is showing, from its own active leaf. */
   const activeBoard = useMemo(() => {
     const leaf = sections?.tasks.activeLeaf
     const id = leaf?.type === 'board' ? leaf.state['board'] : undefined
     return typeof id === 'string' ? id : null
   }, [sections, revision])
+
+  /**
+   * An empty AI workspace opens the most recent conversation.
+   *
+   * Same reasoning as Tasks below: arriving at a blank pane and having to work
+   * out that the thing you want is in the sidebar is a worse first second than
+   * landing in the conversation you had last.
+   */
+  useEffect(() => {
+    if (activeSection !== 'ai') return
+    const ai = sections?.ai
+    if (ai === undefined || ai.activeLeaf !== null) return
+    const folder = tree.roots.find((node) => node.kind === 'folder' && node.path === CHAT_FOLDER)
+    const newest = (folder?.children ?? [])
+      .filter((node) => node.kind === 'file' && node.name.toLowerCase().endsWith('.md'))
+      .map((node) => node.path)
+      .sort((a, b) => b.localeCompare(a))[0]
+    if (newest !== undefined) ai.openView('chat', { path: newest })
+  }, [activeSection, sections, revision, tree.roots])
 
   /**
    * An empty Tasks workspace opens its first board.
@@ -111,6 +140,33 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     const first = boards.boards[0]
     if (first !== undefined) tasks.openView('board', { board: first.id })
   }, [activeSection, sections, revision, boards])
+
+  const openChat = useCallback(
+    (path: string) => {
+      setActiveSection('ai')
+      sections?.ai.openView('chat', { path })
+    },
+    [sections, setActiveSection],
+  )
+
+  /**
+   * A new conversation is a new note, created up front rather than on the first
+   * message. It costs one empty file and buys the invariant the whole feature
+   * rests on: the thing on screen always has somewhere on disk to be.
+   */
+  const newChat = useCallback(async () => {
+    const created = await api.invoke('fs:create', CHAT_FOLDER, chatFileName(new Date()), 'file')
+    if (!created.ok) return
+    await api.invoke(
+      'fs:write',
+      created.path,
+      // No `created:` field: the filename IS the timestamp, and two records of
+      // the same fact drift.
+      serialiseConversation({ title: 'New chat', model: appearanceRef.current.aiModel, messages: [] }),
+    )
+    await refresh()
+    openChat(created.path)
+  }, [refresh, openChat])
 
   const openBoard = useCallback(
     (id: string) => {
@@ -133,7 +189,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
    * them.
    */
   const visibleTree = useMemo(() => {
-    const hidden = new Set<string>([CARD_FOLDER, TEMPLATE_FOLDER])
+    const hidden = new Set<string>([CARD_FOLDER, TEMPLATE_FOLDER, CHAT_FOLDER])
     const withoutCards = {
       roots: tree.roots.filter((node) => !(node.kind === 'folder' && hidden.has(node.path))),
       byPath: tree.byPath,
@@ -214,7 +270,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
         context: new Map(context.map((entry) => [entry.path, { tags: entry.tags, links: entry.links }])),
         // The board owns one of these and templates are not notes you file;
         // a stray note landing in either would turn up where nobody put it.
-        reserved: [CARD_FOLDER, TEMPLATE_FOLDER],
+        reserved: [CARD_FOLDER, TEMPLATE_FOLDER, CHAT_FOLDER],
       }),
     )
   }, [allNotes, allFolders])
@@ -274,6 +330,10 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     registerUnresolvedView((p) => openFileRef.current(p))
     registerGraphView((p) => openFileRef.current(p))
     registerBoardView((p) => openBoardCardRef.current(p))
+    registerChatView(
+      () => appearanceRef.current.aiModel,
+      (aiModel) => updateRef.current({ aiModel }),
+    )
   }
 
   const openFile = useCallback(
@@ -319,6 +379,13 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
    * Read lazily by the markdown view, so the mode is current without the view
    * being re-registered every time it changes.
    */
+  // Read lazily by the chat view, which is registered once but must always see
+  // the current model and be able to change it.
+  const appearanceRef = useRef(appearance)
+  appearanceRef.current = appearance
+  const updateRef = useRef(update)
+  updateRef.current = update
+
   const livePreviewRef = useRef(appearance.livePreview)
   livePreviewRef.current = appearance.livePreview
   const vimRef = useRef(appearance.vimMode)
@@ -381,6 +448,10 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       void createIn('file')
       return
     }
+    if (activeSection === 'ai') {
+      void newChat()
+      return
+    }
     if (activeSection === 'tasks') {
       // It used to open another copy of the board, which is not what a button
       // labelled "Task" promises. Now it makes a card on the board you are
@@ -394,7 +465,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       return
     }
     active?.openView(section.viewType, { draft: Date.now() }, { reuse: false })
-  }, [activeSection, createIn, active, section.viewType, boards, activeBoard, openBoardCard])
+  }, [activeSection, createIn, active, section.viewType, boards, activeBoard, openBoardCard, newChat])
 
   const openExtension = useCallback(
     (type: string) => {
@@ -546,9 +617,13 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} />
             ) : (
-              <p className="sidebar__empty">
-                Your conversations. Each one is a markdown file in the vault.
-              </p>
+              <ChatList
+                tree={tree.roots}
+                activePath={activeChat}
+                query={query}
+                onOpen={openChat}
+                onChanged={() => void refresh()}
+              />
             )}
           </Sidebar>
         ) : (

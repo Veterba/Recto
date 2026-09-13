@@ -3643,3 +3643,266 @@ body.is-resizing {
 .settings__tab {
   transition: color var(--anim-fast) var(--ease), border-color var(--anim-base) var(--ease);
 }
+
+/* ---------- chat ---------- */
+
+/*
+ * One column, a composer welded to the bottom, and no bubbles.
+ *
+ * Bubbles are for a conversation between two people who are equally likely to
+ * say something short. This is a question and a document-length answer, so the
+ * answer gets the full column and the turns are separated by a role label and
+ * space rather than by shape. Same reason the prose column is capped: an answer
+ * running the full width of a 1400px window is unreadable, and the fix is the
+ * one every reading surface uses.
+ */
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-primary);
+}
+
+.chat__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat__thread {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--size-8) var(--size-6) var(--size-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-6);
+}
+
+.chat__turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+}
+
+.chat__role {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* The question is set apart by a rule rather than a box: it is the shorter of
+   the two and a box around it reads as an interruption in the transcript. */
+.chat__turn--user .chat__body {
+  padding-left: var(--size-3);
+  border-left: 2px solid var(--border-strong);
+}
+
+.chat__body {
+  min-width: 0;
+}
+
+.chat__para {
+  margin: 0 0 var(--size-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+.chat__para:last-child {
+  margin-bottom: 0;
+}
+
+.chat__code {
+  margin: 0 0 var(--size-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--code-bg);
+  overflow: hidden;
+}
+.chat__codehead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px var(--size-2) 4px var(--size-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.chat__lang {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.chat__copy {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: var(--radius-s);
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.chat__copy:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.chat__copy.is-done {
+  color: var(--accent);
+}
+.chat__code pre {
+  margin: 0;
+  padding: var(--size-3);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* Three dots, because a spinner says "working" and this says "writing". */
+.chat__thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.chat__thinking i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: chat-dot 1.2s var(--ease) infinite;
+}
+.chat__thinking i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.chat__thinking i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes chat-dot {
+  0%, 60%, 100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+.chat__error {
+  margin: 0;
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.chat__welcome {
+  padding: var(--size-8) 0;
+  color: var(--text-secondary);
+}
+.chat__welcome h2 {
+  margin: 0 0 var(--size-2);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.chat__welcome p {
+  margin: 0;
+  max-width: 56ch;
+  line-height: 1.65;
+  font-size: 13.5px;
+}
+
+/* The composer is a card, not a bar: it sits in the column with the thread it
+   belongs to rather than spanning a window that is mostly empty either side. */
+.chat__composer {
+  flex: none;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--size-2) var(--size-6) var(--size-4);
+}
+.chat__input {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  padding: var(--size-3) var(--size-3) var(--size-2);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-m) var(--radius-m) 0 0;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-y: auto;
+  resize: none;
+}
+.chat__input:focus {
+  border-color: var(--border-strong);
+}
+.chat__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-1) var(--size-2) var(--size-1) var(--size-3);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-m) var(--radius-m);
+  background: var(--bg-elevated);
+}
+.chat__model {
+  all: unset;
+  padding: 3px 6px;
+  border-radius: var(--radius-s);
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.chat__model:hover {
+  background: var(--bg-hover);
+}
+.chat__hint {
+  flex: 1;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat__send {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), opacity var(--anim-fast) var(--ease);
+}
+.chat__send[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+.chat__send:hover:not([disabled]) {
+  background: var(--accent-hover);
+}
+.chat__send--stop {
+  background: var(--text-secondary);
+}
+
+/* A failed test reads as a failure rather than as more prose. */
+.setting__note--bad {
+  color: var(--danger);
+}

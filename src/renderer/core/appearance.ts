@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
-import { type VibrancyMaterial } from '@shared/ipc-contract'
+import { isAiModel, type AiModelId, type VibrancyMaterial } from '@shared/ipc-contract'
 
 /**
  * Appearance and shell layout, persisted to `.recto/appearance.json`.
@@ -45,6 +45,14 @@ export type Appearance = {
   /** How white the sidebar's text is, 0-100. */
   sidebarContrast: number
   /**
+   * Which model new messages go to.
+   *
+   * Here rather than per conversation because it is a preference, not a
+   * property of a chat - though a conversation records the model it was last
+   * answered by, so reopening an old one picks its model back up.
+   */
+  aiModel: AiModelId
+  /**
    * macOS vibrancy: the desktop, blurred, through the sidebar.
    *
    * One switch and nothing else. It used to carry a transparency slider and a
@@ -71,6 +79,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   sidebarScale: 1.05,
   sidebarBold: true,
   sidebarContrast: 70,
+  aiModel: 'claude-sonnet-5',
   translucent: true,
 }
 
@@ -251,6 +260,7 @@ function coerce(value: unknown): Appearance {
       typeof v.sidebarContrast === 'number' && Number.isFinite(v.sidebarContrast)
         ? Math.min(100, Math.max(0, v.sidebarContrast))
         : DEFAULT_APPEARANCE.sidebarContrast,
+    aiModel: isAiModel(v.aiModel) ? v.aiModel : DEFAULT_APPEARANCE.aiModel,
     translucent: typeof v.translucent === 'boolean' ? v.translucent : DEFAULT_APPEARANCE.translucent,
     editorFont:
       v.editorFont === 'mono' || v.editorFont === 'sans' || v.editorFont === 'serif'

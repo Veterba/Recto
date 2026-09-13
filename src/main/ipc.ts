@@ -1,10 +1,12 @@
 import { BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import type { IpcApi, RenameOutcome } from '../shared/ipc-contract'
+import * as ai from './ai'
 import * as archive from './archive'
 import { openIndexForVault, send, stopIndexer } from './index-client'
 import { readState, writeState } from './state'
 import * as vaultFs from './vault-fs'
 import { closeVault, openVault, pickVault, startupState } from './vault'
+import { clearKey, keyStatus, writeKey } from './secrets'
 import { markSelfWrite, startWatching, stopWatching } from './watcher'
 
 /** Where images land. A folder in the vault, so the vault stays portable. */
@@ -220,6 +222,22 @@ export function registerIpc(): void {
   })
 
   handle('app:is-fullscreen', () => BrowserWindow.getAllWindows()[0]?.isFullScreen() ?? false)
+
+  handle('ai:key-status', () => keyStatus())
+  handle('ai:set-key', (key) => {
+    const result = writeKey(key)
+    // The client caches the key it was built with, so a new key needs a new one.
+    if (result.ok) ai.resetProvider()
+    return result
+  })
+  handle('ai:clear-key', () => {
+    clearKey()
+    ai.resetProvider()
+    return { ok: true }
+  })
+  handle('ai:test', (model) => ai.test(model))
+  handle('ai:send', (request) => ai.startStream(request))
+  handle('ai:cancel', (id) => ai.cancel(id))
 
   handle('index:search', async (query, limit) => {
     const response = await send({ kind: 'search', query, ...(limit === undefined ? {} : { limit }) }, 15_000)
