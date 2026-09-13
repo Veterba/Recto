@@ -1,7 +1,7 @@
 import { DEFAULT_TUNABLES, type Tunables } from './protocol'
 
 /**
- * What the graph remembers between launches, in `.obsidian-like/graph.json`.
+ * What the graph remembers between launches, in `.recto/graph.json`.
  *
  * Force tunables are a matter of taste at a given vault size, so having to
  * re-dial them on every launch would make them decorative.

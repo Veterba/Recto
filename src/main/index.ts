@@ -2,7 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { registerIpc } from './ipc'
 import { createWindow } from './window'
 
-app.setName('Obsidian-like')
+app.setName('Recto')
 
 // One instance, one vault. A second launch focuses the existing window.
 if (!app.requestSingleInstanceLock()) {

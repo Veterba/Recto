@@ -140,7 +140,6 @@ const livePreviewEnabled = StateField.define<boolean>({
  */
 const RULE_LINE = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/
 const FENCE = /^\s*(`{3,}|~{3,})/
-const ALIGN_TAG = /^\s*(<div align="(?:left|center|right|justify)">|<\/div>)\s*$/
 
 const hiddenBlock = Decoration.replace({ block: true })
 const ruleBlock = Decoration.replace({ block: true, widget: new RuleWidget() })
@@ -183,7 +182,7 @@ const blockHiding = StateField.define<DecorationSet>({
       }
     }
 
-    // --- rules, alignment tags and code fences ---------------------------
+    // --- rules and code fences -------------------------------------------
     //
     // The fence lines go too, not just their backticks. Hiding only the ``` of
     // "```python" leaves the word "python" sitting inside the block, and the
@@ -215,9 +214,6 @@ const blockHiding = StateField.define<DecorationSet>({
           ranges.push({ from: line.from, to: line.to, deco: ruleBlock })
         }
         continue
-      }
-      if (ALIGN_TAG.test(line.text)) {
-        ranges.push({ from: line.from, to: line.to, deco: hiddenBlock })
       }
     }
 

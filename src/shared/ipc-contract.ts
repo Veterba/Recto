@@ -3,7 +3,7 @@
  * Every channel the renderer can reach is listed here and nowhere else.
  */
 
-export const VAULT_STATE_DIR = '.obsidian-like'
+export const VAULT_STATE_DIR = '.recto'
 
 export type VaultInfo = {
   /** Absolute path. Main-process side only ever; renderer treats it as opaque. */
@@ -23,7 +23,7 @@ export type OpenVaultResult =
   | { ok: false; cancelled: true }
 
 /**
- * One JSON file per feature inside `.obsidian-like/`, named by feature id.
+ * One JSON file per feature inside `.recto/`, named by feature id.
  * Human-editable, individually deletable, diffable in git - Obsidian's pattern.
  * The id is a bare name: no slashes, no dots, no traversal.
  */
@@ -128,6 +128,7 @@ export type GraphInfo = { nodes: GraphNodeInfo[]; edges: GraphEdgeInfo[] }
 export type BoardCardInfo = {
   path: string
   title: string
+  preview: string
   status: string | null
   order: number | null
   due: string | null

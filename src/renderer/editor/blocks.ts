@@ -11,7 +11,7 @@ import {
 } from '@codemirror/view'
 
 /**
- * Block-level looks: fenced code, blockquotes and aligned paragraphs.
+ * Block-level looks: fenced code and blockquotes.
  *
  * These apply in BOTH modes. Live Preview hides the *markers* (the backticks,
  * the `>`, the `<div>` tags); this module gives the blocks themselves a shape,
@@ -79,36 +79,8 @@ const codeOnly = Decoration.line({ class: 'cm-codeblock cm-codeblock-first cm-co
 const quoteLine = Decoration.line({ class: 'cm-quoteblock' })
 const highlightMark = Decoration.mark({ class: 'cm-highlight' })
 
-const ALIGN_OPEN = /^\s*<div align="(left|center|right|justify)">\s*$/
-const ALIGN_CLOSE = /^\s*<\/div>\s*$/
 const HIGHLIGHT = /==([^=\n]+)==/g
 const QUOTE = /^\s*>\s?/
-
-/**
- * Which lines sit inside an alignment wrapper, and with what alignment.
- *
- * Scanned over the whole document rather than the viewport: the opening `<div>`
- * can easily be above the visible range, and guessing from the visible lines
- * alone would align half a paragraph.
- */
-function alignedLines(state: EditorState): Map<number, string> {
-  const out = new Map<number, string>()
-  let current: string | null = null
-  for (let n = 1; n <= state.doc.lines; n++) {
-    const text = state.doc.line(n).text
-    const open = ALIGN_OPEN.exec(text)
-    if (open?.[1] !== undefined) {
-      current = open[1]
-      continue
-    }
-    if (ALIGN_CLOSE.test(text)) {
-      current = null
-      continue
-    }
-    if (current !== null) out.set(n, current)
-  }
-  return out
-}
 
 /** The language written after the opening fence, if any. */
 function fenceLanguage(text: string): string {
@@ -117,7 +89,6 @@ function fenceLanguage(text: string): string {
 
 function build(view: EditorView): DecorationSet {
   const state = view.state
-  const aligned = alignedLines(state)
 
   /**
    * `sort` is NOT the decoration's own side - it mirrors it.
@@ -184,7 +155,7 @@ function build(view: EditorView): DecorationSet {
       },
     })
 
-    // --- line-level: quotes, alignment, and inline highlight --------------
+    // --- line-level: quotes and inline highlight ---------------------------
     const startLine = state.doc.lineAt(from).number
     const endLine = state.doc.lineAt(to).number
 
@@ -193,16 +164,6 @@ function build(view: EditorView): DecorationSet {
 
       if (QUOTE.test(line.text)) {
         entries.push({ from: line.from, to: line.from, deco: quoteLine, sort: SORT.line })
-      }
-
-      const alignment = aligned.get(n)
-      if (alignment !== undefined) {
-        entries.push({
-          from: line.from,
-          to: line.from,
-          deco: Decoration.line({ class: `cm-align cm-align-${alignment}` }),
-          sort: SORT.line,
-        })
       }
 
       for (const match of line.text.matchAll(HIGHLIGHT)) {

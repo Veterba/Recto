@@ -55,11 +55,6 @@ const ITEMS: readonly Item[] = [
   { kind: 'button', commandId: 'editor:checklist', label: 'Checklist', icon: 'list-checks', format: 'task' },
   { kind: 'button', commandId: 'editor:quote', label: 'Quote', icon: 'quote', format: 'quote' },
   { kind: 'sep' },
-  { kind: 'button', commandId: 'editor:align-left', label: 'Align left', icon: 'align-left', format: 'align-left' },
-  { kind: 'button', commandId: 'editor:align-center', label: 'Align centre', icon: 'align-center', format: 'align-center' },
-  { kind: 'button', commandId: 'editor:align-right', label: 'Align right', icon: 'align-right', format: 'align-right' },
-  { kind: 'button', commandId: 'editor:align-justify', label: 'Justify', icon: 'align-justify', format: 'align-justify' },
-  { kind: 'sep' },
   { kind: 'button', commandId: 'editor:code-block', label: 'Code block', icon: 'square-code' },
   { kind: 'button', commandId: 'editor:horizontal-rule', label: 'Divider', icon: 'minus' },
 ]

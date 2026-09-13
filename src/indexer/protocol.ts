@@ -34,6 +34,8 @@ export type Backlink = {
 export type BoardCard = {
   path: string
   title: string
+  /** First line of the note's body, for the card. Empty when there is none. */
+  preview: string
   status: string | null
   /** Fractional index within its column; null for a card never dragged. */
   order: number | null
