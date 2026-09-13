@@ -205,12 +205,125 @@ export function insertCodeBlock(state: EditorState): TransactionSpec {
   }
 }
 
+/**
+ * A horizontal rule.
+ *
+ * The blank line before it is not cosmetic. `---` directly under a line of text
+ * is a *setext heading* in CommonMark - it turns the paragraph above into an
+ * H2 instead of drawing a rule. That is why the old version appeared to "just
+ * write ---" and do nothing: it wrote a heading marker.
+ *
+ * `***` would dodge the ambiguity, but `---` is what every other editor writes
+ * and what the user will see elsewhere, so the fix is the blank line.
+ */
 export function insertHorizontalRule(state: EditorState): TransactionSpec {
   const line = state.doc.lineAt(state.selection.main.head)
-  const insert = line.text.trim() === '' ? '---\n' : '\n---\n'
+  const emptyHere = line.text.trim() === ''
+  const previousBlank = line.number === 1 || state.doc.line(line.number - 1).text.trim() === ''
+  const next = line.number < state.doc.lines ? state.doc.line(line.number + 1) : null
+
+  // Exactly one blank line above the rule. Sitting on a blank line is not
+  // enough on its own: `text` / `` / `---` is fine, but `text` / `---` is a
+  // setext heading, and the cursor's own blank line is where the rule goes.
+  const before = emptyHere ? (previousBlank ? '' : '\n') : '\n\n'
+  // The insert lands at the END of the current line, so the document's own
+  // newline already follows it - adding another would leave a stray blank.
+  const after = next !== null && next.text.trim() === '' ? '' : '\n'
+  const insert = `${before}---${after}`
+
   return {
     changes: { from: line.to, insert },
     selection: { anchor: line.to + insert.length },
+    scrollIntoView: true,
+    userEvent: 'input.format',
+  }
+}
+
+/**
+ * Paragraph alignment.
+ *
+ * Markdown has no alignment syntax, so this writes the one thing every reader
+ * understands: a `<div align="...">` wrapper. It renders correctly in Obsidian,
+ * on GitHub, and anywhere else the file is opened - which a bespoke marker
+ * would not. The cost is visible HTML in the source, and that is the honest
+ * trade rather than a syntax only this app can read.
+ *
+ * Left is the default, so choosing it removes the wrapper instead of writing
+ * `align="left"` - otherwise every paragraph you ever centred and then undid
+ * would leave a div behind.
+ */
+export type Alignment = 'left' | 'center' | 'right' | 'justify'
+
+const ALIGN_OPEN = /^\s*<div align="(left|center|right|justify)">\s*$/
+const ALIGN_CLOSE = /^\s*<\/div>\s*$/
+
+/** The run of non-blank lines the selection sits in. */
+function blockAround(state: EditorState): { first: number; last: number } {
+  const lines = selectedLines(state)
+  let first = lines[0]?.number ?? state.doc.lineAt(state.selection.main.head).number
+  let last = lines[lines.length - 1]?.number ?? first
+
+  while (first > 1 && state.doc.line(first - 1).text.trim() !== '') {
+    if (ALIGN_OPEN.test(state.doc.line(first - 1).text)) break
+    first--
+  }
+  while (last < state.doc.lines && state.doc.line(last + 1).text.trim() !== '') {
+    if (ALIGN_CLOSE.test(state.doc.line(last + 1).text)) break
+    last++
+  }
+  return { first, last }
+}
+
+/** The alignment wrapping the cursor's block, if any. */
+export function alignmentAt(state: EditorState): Alignment | null {
+  const { first, last } = blockAround(state)
+  if (first < 2 || last >= state.doc.lines) return null
+  const open = ALIGN_OPEN.exec(state.doc.line(first - 1).text)
+  if (open?.[1] === undefined) return null
+  if (!ALIGN_CLOSE.test(state.doc.line(last + 1).text)) return null
+  return open[1] as Alignment
+}
+
+export function setAlignment(state: EditorState, alignment: Alignment): TransactionSpec | null {
+  const { first, last } = blockAround(state)
+  const current = alignmentAt(state)
+
+  // Already wrapped: retarget the open tag, or unwrap when the choice is the
+  // default or a second press of the same button.
+  if (current !== null) {
+    const openLine = state.doc.line(first - 1)
+    const closeLine = state.doc.line(last + 1)
+    if (alignment === 'left' || alignment === current) {
+      return {
+        changes: [
+          // Each tag takes its own line separator with it, or unwrapping leaves
+          // a blank line behind. The opening tag takes the newline AFTER it;
+          // the closing tag takes the one BEFORE it, which is the newline that
+          // ends the last line of content.
+          { from: openLine.from, to: Math.min(openLine.to + 1, state.doc.length) },
+          { from: Math.max(0, closeLine.from - 1), to: closeLine.to },
+        ],
+        scrollIntoView: true,
+        userEvent: 'input.format',
+      }
+    }
+    return {
+      changes: { from: openLine.from, to: openLine.to, insert: `<div align="${alignment}">` },
+      scrollIntoView: true,
+      userEvent: 'input.format',
+    }
+  }
+
+  // Nothing to do: left is what an unwrapped block already is.
+  if (alignment === 'left') return null
+
+  const firstLine = state.doc.line(first)
+  const lastLine = state.doc.line(last)
+  return {
+    changes: [
+      { from: firstLine.from, insert: `<div align="${alignment}">\n` },
+      { from: lastLine.to, insert: `\n</div>` },
+    ],
     scrollIntoView: true,
     userEvent: 'input.format',
   }
@@ -266,6 +379,10 @@ export type Format =
   | 'numbered'
   | 'task'
   | 'quote'
+  | 'align-left'
+  | 'align-center'
+  | 'align-right'
+  | 'align-justify'
 
 const WRAPPERS: readonly { format: Format; marker: string }[] = [
   // Longest first: '**' must be tested before '*', or bold always reads as italic.
@@ -288,6 +405,10 @@ export function activeFormats(state: EditorState): Set<Format> {
   else if (/^\s*[-*+]\s/.test(line.text)) active.add('bullet')
   if (/^\s*\d+\.\s/.test(line.text)) active.add('numbered')
   if (/^\s*>\s/.test(line.text)) active.add('quote')
+
+  // Alignment is a wrapper around the block, not a prefix on the line.
+  const alignment = alignmentAt(state)
+  if (alignment !== null) active.add(`align-${alignment}` as Format)
 
   // --- inline formats, by looking outward from the cursor ---
   const text = line.text

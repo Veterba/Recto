@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Icon } from './Icon'
+import { Tip } from './Tip'
 import {
   parseFrontmatter,
   removeField,
@@ -133,8 +134,12 @@ export function Properties({ text, onChange }: Props): React.ReactElement {
         <div className="props__body">
           {parsed.fields.map((field) => (
             <div className="prop" key={field.key}>
-              <span className="prop__key" title={field.type}>
-                <Icon name={TYPE_ICON[field.type]} size={13} />
+              <span className="prop__key">
+                <Tip label={`${field.type} property`} placement="right">
+                  <span className="prop__type">
+                    <Icon name={TYPE_ICON[field.type]} size={13} />
+                  </span>
+                </Tip>
                 {renaming === field.key ? (
                   <input
                     className="prop__rename"
@@ -151,21 +156,25 @@ export function Properties({ text, onChange }: Props): React.ReactElement {
                     }}
                   />
                 ) : (
-                  <button className="prop__keyname" onDoubleClick={() => setRenaming(field.key)}>
-                    {field.key}
-                  </button>
+                  <Tip label={field.key} hint="Double-click to rename" placement="right">
+                    <button className="prop__keyname" onDoubleClick={() => setRenaming(field.key)}>
+                      {field.key}
+                    </button>
+                  </Tip>
                 )}
               </span>
 
               <ValueEditor field={field} onChange={(value) => onChange(setField(text, field.key, value))} />
 
-              <button
-                className="prop__remove"
-                aria-label={`Remove ${field.key}`}
-                onClick={() => onChange(removeField(text, field.key))}
-              >
-                <Icon name="x" size={12} />
-              </button>
+              <Tip label={`Remove “${field.key}”`}>
+                <button
+                  className="prop__remove"
+                  aria-label={`Remove ${field.key}`}
+                  onClick={() => onChange(removeField(text, field.key))}
+                >
+                  <Icon name="x" size={12} />
+                </button>
+              </Tip>
             </div>
           ))}
 

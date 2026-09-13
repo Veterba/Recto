@@ -95,7 +95,22 @@ class LinkLabel extends WidgetType {
   }
 }
 
+/** A drawn horizontal rule, in place of the `---` that produces it. */
+class RuleWidget extends WidgetType {
+  override eq(): boolean {
+    // Every rule is identical, so CodeMirror can reuse the DOM freely.
+    return true
+  }
+
+  override toDOM(): HTMLElement {
+    const hr = document.createElement('div')
+    hr.className = 'cm-rule'
+    return hr
+  }
+}
+
 const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
+const HIGHLIGHT = /==([^=\n]+)==/g
 const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
 const FENCE_LINE = /^---\s*$/
 
@@ -110,15 +125,27 @@ const livePreviewEnabled = StateField.define<boolean>({
 })
 
 /**
- * Hiding the frontmatter block needs a *block* decoration, because it replaces
- * whole lines rather than a range inside one.
+ * Block-level hiding: the frontmatter block, `---` rules, and the `<div align>`
+ * tags that carry paragraph alignment.
  *
  * CodeMirror refuses block decorations from a ViewPlugin ("Block decorations
  * may not be specified via plugins") - they have to come from a StateField, so
- * that the editor can account for their height before it renders. Hence a
- * second, tiny decoration source alongside the main plugin.
+ * the editor can account for their height before it renders. Hence this second,
+ * small decoration source alongside the main plugin.
+ *
+ * And a block range must span whole lines, ending at a line END. Ending at the
+ * next line's `from` includes the newline, is not a line end, and CodeMirror
+ * silently ignores the whole decoration - which looks exactly like a condition
+ * that never matched.
  */
-const frontmatterHiding = StateField.define<DecorationSet>({
+const RULE_LINE = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/
+const FENCE = /^\s*(`{3,}|~{3,})/
+const ALIGN_TAG = /^\s*(<div align="(?:left|center|right|justify)">|<\/div>)\s*$/
+
+const hiddenBlock = Decoration.replace({ block: true })
+const ruleBlock = Decoration.replace({ block: true, widget: new RuleWidget() })
+
+const blockHiding = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update: (value, transaction) => {
     if (!transaction.docChanged && transaction.selection === undefined && value !== Decoration.none) {
@@ -129,28 +156,72 @@ const frontmatterHiding = StateField.define<DecorationSet>({
     if (!(state.field(livePreviewEnabled, false) ?? false)) return Decoration.none
 
     const doc = state.doc
-    if (doc.lines < 2 || !FENCE_LINE.test(doc.line(1).text)) return Decoration.none
-
-    let close = -1
-    for (let n = 2; n <= doc.lines; n++) {
-      if (FENCE_LINE.test(doc.line(n).text)) {
-        close = n
-        break
-      }
-    }
-    if (close === -1) return Decoration.none
-
-    // The cursor anywhere in the block brings the raw YAML back.
+    /** Line numbers the selection touches; those stay raw. */
+    const touched = new Set<number>()
     for (const range of state.selection.ranges) {
       const from = doc.lineAt(range.from).number
       const to = doc.lineAt(range.to).number
-      if (from <= close && to >= 1) return Decoration.none
+      for (let n = from; n <= to; n++) touched.add(n)
     }
 
-    // A block decoration must span whole lines: `from` at a line start and
-    // `to` at a line END. Using the next line's start instead includes the
-    // newline, which is not a line end, and CodeMirror silently ignores it.
-    return Decoration.set([Decoration.replace({ block: true }).range(0, doc.line(close).to)])
+    const ranges: { from: number; to: number; deco: Decoration }[] = []
+
+    // --- frontmatter ------------------------------------------------------
+    let frontmatterEnd = 0
+    if (doc.lines >= 2 && FENCE_LINE.test(doc.line(1).text)) {
+      for (let n = 2; n <= doc.lines; n++) {
+        if (!FENCE_LINE.test(doc.line(n).text)) continue
+        frontmatterEnd = n
+        break
+      }
+      if (frontmatterEnd > 0) {
+        let cursorInside = false
+        for (let n = 1; n <= frontmatterEnd; n++) if (touched.has(n)) cursorInside = true
+        if (!cursorInside) {
+          ranges.push({ from: 0, to: doc.line(frontmatterEnd).to, deco: hiddenBlock })
+        }
+      }
+    }
+
+    // --- rules, alignment tags and code fences ---------------------------
+    //
+    // The fence lines go too, not just their backticks. Hiding only the ``` of
+    // "```python" leaves the word "python" sitting inside the block, and the
+    // closing fence leaves an empty row at the bottom - which is exactly what
+    // a rendered code block should not have. The language is shown as a chip
+    // instead, from blocks.ts.
+    let inFence = false
+    for (let n = frontmatterEnd + 1; n <= doc.lines; n++) {
+      const line = doc.line(n)
+      const isFence = FENCE.test(line.text)
+
+      if (isFence) {
+        const wasIn = inFence
+        inFence = !inFence
+        if (!touched.has(n)) ranges.push({ from: line.from, to: line.to, deco: hiddenBlock })
+        // A closing fence ends the block; nothing else on this line matters.
+        if (wasIn) continue
+        continue
+      }
+      // Inside a fence, `---` is code and `<div>` is code. Never touch them.
+      if (inFence) continue
+      if (touched.has(n)) continue
+
+      if (RULE_LINE.test(line.text)) {
+        // `---` directly under a line of text is a setext H2, not a rule.
+        // Drawing a line there would hide a heading.
+        const previous = n > 1 ? doc.line(n - 1).text.trim() : ''
+        if (previous === '' || !line.text.trim().startsWith('-')) {
+          ranges.push({ from: line.from, to: line.to, deco: ruleBlock })
+        }
+        continue
+      }
+      if (ALIGN_TAG.test(line.text)) {
+        ranges.push({ from: line.from, to: line.to, deco: hiddenBlock })
+      }
+    }
+
+    return Decoration.set(ranges.map((range) => range.deco.range(range.from, range.to)), true)
   },
   provide: (field) => EditorView.decorations.from(field),
 })
@@ -219,6 +290,16 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
         })
       }
 
+      // `==highlight==` is not in the markdown grammar, so the markers have to
+      // be hidden here by hand. The highlight itself is painted in blocks.ts,
+      // which runs in Source mode too.
+      for (const match of line.text.matchAll(HIGHLIGHT)) {
+        const start = line.from + (match.index ?? 0)
+        const end = start + match[0].length
+        ranges.push({ from: start, to: start + 2, deco: hidden })
+        ranges.push({ from: end - 2, to: end, deco: hidden })
+      }
+
       for (const match of line.text.matchAll(WIKILINK)) {
         const start = line.from + (match.index ?? 0)
         const end = start + match[0].length
@@ -256,7 +337,7 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
 export function livePreview(getUnresolved: (view: EditorView) => ReadonlySet<string>): Extension {
   return [
     livePreviewEnabled,
-    frontmatterHiding,
+    blockHiding,
     ViewPlugin.fromClass(
       class {
         decorations: DecorationSet

@@ -930,6 +930,9 @@ body.is-resizing {
   white-space: nowrap;
 }
 
+/* Renaming happens in place, in the row, at the row's own size. The old version
+   painted an elevated white box with a hard accent ring inside a grey row,
+   which made a rename look like a modal that had lost its dialog. */
 .tree__rename {
   all: unset;
   /* `all: unset` resets box-sizing too, so width + padding would overflow. */
@@ -940,8 +943,11 @@ body.is-resizing {
   border-radius: 4px;
   font: inherit;
   color: var(--text-primary);
-  background: var(--bg-elevated);
-  box-shadow: 0 0 0 1px var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.tree__rename::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .tree__error {
@@ -1053,6 +1059,9 @@ body.is-resizing {
   white-space: nowrap;
 }
 
+/* Renaming happens in place, in the row, at the row's own size. The old version
+   painted an elevated white box with a hard accent ring inside a grey row,
+   which made a rename look like a modal that had lost its dialog. */
 .tree__rename {
   all: unset;
   /* `all: unset` resets box-sizing too, so width + padding would overflow. */
@@ -1063,8 +1072,11 @@ body.is-resizing {
   border-radius: 4px;
   font: inherit;
   color: var(--text-primary);
-  background: var(--bg-elevated);
-  box-shadow: 0 0 0 1px var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.tree__rename::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .tree__error {
@@ -2810,4 +2822,336 @@ body.is-resizing {
 .boards__add:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+/* ---------- editor blocks ---------- */
+
+/* A fenced code block reads as one panel, not as three grey lines. The rounded
+   corners come from the first/last line, so it works at any length without a
+   wrapper element - which a line decoration cannot produce. */
+.cm-codeblock {
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding-left: var(--size-3) !important;
+  padding-right: var(--size-3) !important;
+}
+.cm-codeblock-first {
+  position: relative;
+  padding-top: 4px !important;
+  border-top-left-radius: var(--radius-s);
+  border-top-right-radius: var(--radius-s);
+}
+.cm-codeblock-last {
+  position: relative;
+  padding-bottom: 4px !important;
+  border-bottom-left-radius: var(--radius-s);
+  border-bottom-right-radius: var(--radius-s);
+}
+
+/* Both chips are absolutely positioned inside the first line of the block.
+   In flow they would sit before the code and push the first line right. */
+.cm-code-lang {
+  position: absolute;
+  top: 3px;
+  right: 58px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  vertical-align: middle;
+}
+
+.cm-code-copy {
+  all: unset;
+  box-sizing: border-box;
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.cm-codeblock-first:hover .cm-code-copy,
+.cm-code-copy:focus-visible {
+  opacity: 1;
+}
+.cm-code-copy:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.cm-code-copy.is-done {
+  opacity: 1;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* A quote gets a bar and a colour, so it cannot be mistaken for a code block —
+   which was the actual complaint: the two looked identical. */
+.cm-quoteblock {
+  position: relative;
+  padding-left: var(--size-4) !important;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.cm-quoteblock::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+
+.cm-highlight {
+  background: var(--highlight-bg);
+  border-radius: 3px;
+  padding: 1px 2px;
+  /* Negative margin so a highlight does not widen the line it sits on. */
+  margin: 0 -1px;
+  box-decoration-break: clone;
+}
+
+/* The drawn `---`. A real element rather than a border on the line, so it
+   centres in the line box at any font size. */
+.cm-rule {
+  height: 1px;
+  margin: 0.65em 0;
+  background: var(--border-strong);
+}
+
+.cm-align-left { text-align: left; }
+.cm-align-center { text-align: center; }
+.cm-align-right { text-align: right; }
+.cm-align-justify { text-align: justify; }
+
+/* ---------- tooltips ---------- */
+
+/* The browser's `title` waits about a second, cannot be styled, and renders in
+   a system font belonging to no app. For a toolbar of unlabelled icons that
+   delay is the whole difference between usable and guesswork. */
+.tip__anchor {
+  display: contents;
+}
+
+.tip {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 260px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  line-height: 1.35;
+  pointer-events: none;
+  animation: tip-in 90ms var(--ease);
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+.tip__label {
+  white-space: nowrap;
+}
+.tip__hint {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+/* ---------- context menu ---------- */
+
+.menu {
+  position: fixed;
+  z-index: 210;
+  min-width: 210px;
+  padding: var(--size-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  animation: menu-in 110ms var(--ease);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+.menu__heading {
+  margin: 0;
+  padding: 5px var(--size-2) 3px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.menu__sep {
+  height: 1px;
+  margin: var(--size-1) 0;
+  border: 0;
+  background: var(--border);
+}
+
+.menu__item {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  width: 100%;
+  padding: 6px var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.menu__item:hover,
+.menu__item:focus-visible {
+  background: var(--bg-hover);
+}
+.menu__item[disabled] {
+  color: var(--text-muted);
+  cursor: default;
+}
+.menu__item[disabled]:hover {
+  background: transparent;
+}
+.menu__item.is-danger {
+  color: var(--danger);
+}
+.menu__item.is-danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.menu__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--text-muted);
+}
+.menu__item.is-danger .menu__icon {
+  color: var(--danger);
+}
+
+.menu__label {
+  flex: 1;
+  min-width: 0;
+}
+
+.menu__shortcut {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- tree icons ---------- */
+
+.tree__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  margin-right: 5px;
+  color: var(--text-muted);
+}
+.tree__row.is-active .tree__icon {
+  color: var(--accent);
+}
+
+/* ---------- sidebar search row + footer ---------- */
+
+.sidebar__searchrow {
+  flex: none;
+  display: flex;
+  /* center, not stretch: a 30px input next to a 24px button is what stretch
+     produces, and it has bitten this codebase twice already. */
+  align-items: center;
+  gap: 2px;
+  margin: 0 var(--size-2) var(--size-2);
+}
+.sidebar__searchrow .sidebar__search {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.icon-btn--sm {
+  width: 26px;
+  height: 26px;
+}
+
+/* One button shape for the whole footer. It used to mix labelled buttons with
+   bare icons at two sizes, which read as several bars crammed together. */
+.footer-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+}
+.footer-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.footer-btn--icon {
+  width: 28px;
+  padding: 0;
+}
+
+.sidebar__footer-gap {
+  flex: 1;
+}
+
+.graph__slider-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.graph__btn[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+.graph__btn[disabled]:hover {
+  background: transparent;
+  color: var(--text-muted);
 }

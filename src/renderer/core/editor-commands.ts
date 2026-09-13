@@ -70,6 +70,21 @@ export function registerEditorCommands(
     editorCommand('editor:wikilink', 'Insert wikilink', 'Mod+Shift+K', md.insertWikiLink),
     editorCommand('editor:code-block', 'Insert code block', 'Mod+Shift+E', md.insertCodeBlock),
     editorCommand('editor:horizontal-rule', 'Insert horizontal rule', 'Mod+Shift+Minus', md.insertHorizontalRule),
+    // Alignment writes an HTML wrapper, which markdown has no syntax for.
+    // Mod+Shift+L/E/R/J would collide with the theme cycle and inline code, so
+    // these go on Mod+Alt, which is otherwise free.
+    editorCommand('editor:align-left', 'Align left', 'Mod+Alt+ArrowLeft', (state) =>
+      md.setAlignment(state, 'left'),
+    ),
+    editorCommand('editor:align-center', 'Align centre', 'Mod+Alt+ArrowUp', (state) =>
+      md.setAlignment(state, 'center'),
+    ),
+    editorCommand('editor:align-right', 'Align right', 'Mod+Alt+ArrowRight', (state) =>
+      md.setAlignment(state, 'right'),
+    ),
+    editorCommand('editor:align-justify', 'Justify', 'Mod+Alt+ArrowDown', (state) =>
+      md.setAlignment(state, 'justify'),
+    ),
     editorCommand('editor:move-line-up', 'Move line up', 'Alt+ArrowUp', (state) => md.moveLines(state, -1)),
     editorCommand('editor:move-line-down', 'Move line down', 'Alt+ArrowDown', (state) => md.moveLines(state, 1)),
     {

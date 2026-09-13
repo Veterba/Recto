@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BoardCardInfo } from '@shared/ipc-contract'
 import { api } from '../api'
+import { ContextMenu, useContextMenu, type MenuItem } from '../components/ContextMenu'
 import { Icon } from '../components/Icon'
+import { Tip } from '../components/Tip'
 import { setField } from '../core/frontmatter'
 import { noteIndexChanged, useNoteBus } from '../core/note-bus'
 import { registerView } from '../core/view-registry'
@@ -45,6 +47,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
   const [renaming, setRenaming] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const { revision } = useNoteBus()
+  const contextMenu = useContextMenu<Card>()
 
   /**
    * Cards we have written but the index has not caught up with yet.
@@ -196,6 +199,47 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
     setColumns(board.columns.filter((column) => column.id !== id))
   }
 
+  /** Right-click on a card. A card is a note, so the note actions apply. */
+  const menuFor = (card: Card): MenuItem[] => [
+    { kind: 'heading', label: 'This card' },
+    { kind: 'item', label: 'Open', icon: 'file-text', run: () => onOpenNote(card.path) },
+    {
+      kind: 'item',
+      label: 'Copy relative path',
+      icon: 'copy',
+      run: () => void navigator.clipboard.writeText(card.path).catch(() => undefined),
+    },
+    {
+      kind: 'item',
+      label: 'Reveal in Finder',
+      icon: 'external-link',
+      run: () => void api.invoke('fs:reveal', card.path),
+    },
+    { kind: 'separator' },
+    { kind: 'heading', label: 'Move to' },
+    ...board.columns
+      .filter((column) => column.id !== card.column)
+      .map<MenuItem>((column) => ({
+        kind: 'item',
+        label: column.name,
+        icon: 'arrow-right',
+        run: () => void move(card.path, { column: column.id, index: Number.MAX_SAFE_INTEGER }),
+      })),
+    { kind: 'separator' },
+    {
+      kind: 'item',
+      label: 'Move to archive',
+      icon: 'trash',
+      danger: true,
+      run: () => {
+        void api.invoke('archive:add', card.path).then(() => {
+          noteIndexChanged()
+          load()
+        })
+      },
+    },
+  ]
+
   // --- rendering ----------------------------------------------------------
 
   const onDropInto = (column: string, index: number) => (event: React.DragEvent) => {
@@ -261,14 +305,15 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
                 )}
                 <span className="board__count">{list.length}</span>
                 {board.columns.length > 1 && (
-                  <button
-                    className="board__colremove"
-                    aria-label={`Remove ${column.name}`}
-                    title="Remove column — the cards move to the first column"
-                    onClick={() => removeColumn(column.id)}
-                  >
-                    <Icon name="x" size={12} />
-                  </button>
+                  <Tip label="Remove column" hint="Its cards move to the first column">
+                    <button
+                      className="board__colremove"
+                      aria-label={`Remove ${column.name}`}
+                      onClick={() => removeColumn(column.id)}
+                    >
+                      <Icon name="x" size={12} />
+                    </button>
+                  </Tip>
                 )}
               </header>
 
@@ -292,6 +337,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
                     onDragOver={allowDrop(column.id, index)}
                     onDrop={onDropInto(column.id, index)}
                     onClick={() => onOpenNote(card.path)}
+                    onContextMenu={(event) => contextMenu.open(event, card)}
                   >
                     <h3 className="board__title">{card.title}</h3>
                     {(card.due !== null || card.priority !== null) && (
@@ -347,6 +393,14 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
           />
         </section>
       </div>
+
+      {contextMenu.menu !== null && (
+        <ContextMenu
+          items={menuFor(contextMenu.menu.subject)}
+          at={contextMenu.menu.at}
+          onClose={contextMenu.close}
+        />
+      )}
 
       {cards !== null && cards.length === 0 && (
         <p className="board__empty">

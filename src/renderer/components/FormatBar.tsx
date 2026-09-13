@@ -1,4 +1,5 @@
 import { Icon } from './Icon'
+import { Tip } from './Tip'
 import type { Format } from '../editor/markdown-actions'
 
 /**
@@ -18,6 +19,8 @@ type Item =
       kind: 'button'
       commandId: string
       label: string
+      /** Second line in the tooltip, for anything the label cannot carry. */
+      hint?: string
       /** Text glyph for the headings, where an icon reads worse than "H1". */
       text?: string
       icon?: string
@@ -37,12 +40,25 @@ const ITEMS: readonly Item[] = [
   { kind: 'button', commandId: 'editor:inline-code', label: 'Inline code', icon: 'code', format: 'code' },
   { kind: 'sep' },
   { kind: 'button', commandId: 'editor:link', label: 'Link', icon: 'link' },
-  { kind: 'button', commandId: 'editor:wikilink', label: 'Wikilink', icon: 'brackets' },
+  // Named for what it does, not for its syntax: "Wikilink" meant nothing to
+  // anyone who had not already read about wikilinks.
+  {
+    kind: 'button',
+    commandId: 'editor:wikilink',
+    label: 'Link to a note',
+    hint: 'Inserts [[ ]] and offers your notes',
+    icon: 'brackets',
+  },
   { kind: 'sep' },
   { kind: 'button', commandId: 'editor:bullet-list', label: 'Bullet list', icon: 'list', format: 'bullet' },
   { kind: 'button', commandId: 'editor:numbered-list', label: 'Numbered list', icon: 'list-ordered', format: 'numbered' },
   { kind: 'button', commandId: 'editor:checklist', label: 'Checklist', icon: 'list-checks', format: 'task' },
   { kind: 'button', commandId: 'editor:quote', label: 'Quote', icon: 'quote', format: 'quote' },
+  { kind: 'sep' },
+  { kind: 'button', commandId: 'editor:align-left', label: 'Align left', icon: 'align-left', format: 'align-left' },
+  { kind: 'button', commandId: 'editor:align-center', label: 'Align centre', icon: 'align-center', format: 'align-center' },
+  { kind: 'button', commandId: 'editor:align-right', label: 'Align right', icon: 'align-right', format: 'align-right' },
+  { kind: 'button', commandId: 'editor:align-justify', label: 'Justify', icon: 'align-justify', format: 'align-justify' },
   { kind: 'sep' },
   { kind: 'button', commandId: 'editor:code-block', label: 'Code block', icon: 'square-code' },
   { kind: 'button', commandId: 'editor:horizontal-rule', label: 'Divider', icon: 'minus' },
@@ -65,22 +81,26 @@ export function FormatBar({ active, onRun, shortcutFor }: Props): React.ReactEle
         const isActive = item.format !== undefined && active.has(item.format)
         const shortcut = shortcutFor(item.commandId)
 
+        // The hint carries the shortcut, or an explanation when the label
+        // cannot say enough on its own.
+        const hint = [item.hint, shortcut].filter(Boolean).join(' · ')
+
         return (
-          <button
-            key={item.commandId}
-            className={`formatbar__btn${isActive ? ' is-active' : ''}${item.text === undefined ? '' : ' formatbar__btn--text'}`}
-            title={shortcut === null ? item.label : `${item.label} (${shortcut})`}
-            aria-label={item.label}
-            aria-pressed={item.format === undefined ? undefined : isActive}
-            // mousedown, not click: the editor must not lose its selection
-            // before the command reads it.
-            onMouseDown={(ev) => {
-              ev.preventDefault()
-              onRun(item.commandId)
-            }}
-          >
-            {item.text !== undefined ? item.text : <Icon name={item.icon ?? ''} size={15} />}
-          </button>
+          <Tip key={item.commandId} label={item.label} hint={hint} placement="bottom">
+            <button
+              className={`formatbar__btn${isActive ? ' is-active' : ''}${item.text === undefined ? '' : ' formatbar__btn--text'}`}
+              aria-label={item.label}
+              aria-pressed={item.format === undefined ? undefined : isActive}
+              // mousedown, not click: the editor must not lose its selection
+              // before the command reads it.
+              onMouseDown={(ev) => {
+                ev.preventDefault()
+                onRun(item.commandId)
+              }}
+            >
+              {item.text !== undefined ? item.text : <Icon name={item.icon ?? ''} size={15} />}
+            </button>
+          </Tip>
         )
       })}
     </div>

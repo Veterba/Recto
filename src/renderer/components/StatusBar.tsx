@@ -2,6 +2,7 @@ import { formatChord } from '../core/hotkeys'
 import { viewTitle } from '../core/view-registry'
 import type { Workspace } from '../core/workspace'
 import { Icon } from './Icon'
+import { Tip } from './Tip'
 
 /**
  * Bottom strip. Deliberately sparse: it shows what is open and offers the
@@ -35,16 +36,21 @@ export function StatusBar({
       <span className="status__item status__item--muted">
         {openCount} {openCount === 1 ? 'tab' : 'tabs'}
       </span>
-      <button
-        className={`status__btn${graphOpen ? ' is-on' : ''}`}
-        onClick={onToggleGraph}
-        title={`Graph (${formatChord('Mod+G')})`}
-      >
-        <Icon name="git-fork" size={13} />
-      </button>
-      <button className="status__btn" onClick={onOpenPalette} title="Command palette">
-        <kbd>⌘P</kbd>
-      </button>
+      <Tip label={graphOpen ? 'Hide graph' : 'Show graph'} hint={formatChord('Mod+G')} placement="top">
+        <button
+          className={`status__btn${graphOpen ? ' is-on' : ''}`}
+          onClick={onToggleGraph}
+          aria-label="Toggle graph"
+          aria-pressed={graphOpen}
+        >
+          <Icon name="git-fork" size={13} />
+        </button>
+      </Tip>
+      <Tip label="Command palette" hint="Every command in the app" placement="top">
+        <button className="status__btn" onClick={onOpenPalette} aria-label="Command palette">
+          <kbd>⌘P</kbd>
+        </button>
+      </Tip>
     </footer>
   )
 }

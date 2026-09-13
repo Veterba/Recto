@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { Icon } from './Icon'
+import { Tip } from './Tip'
 
 /**
  * A floating panel over the workspace: draggable by its header, resizable from
@@ -172,16 +173,20 @@ export function FloatingWindow({
       <header className="float__head" onPointerDown={startDrag} onDoubleClick={() => onChange({ ...geometry, maximized: !geometry.maximized })}>
         <h2 className="float__title">{title}</h2>
         <div className="float__actions">
-          <button
-            className="icon-btn"
-            onClick={() => onChange({ ...geometry, maximized: !geometry.maximized })}
-            title={geometry.maximized ? 'Restore' : 'Expand to full size'}
-          >
-            <Icon name={geometry.maximized ? 'minimize' : 'maximize'} size={14} />
-          </button>
-          <button className="icon-btn" onClick={onClose} title={closeHint ?? 'Close'}>
-            <Icon name="x" size={15} />
-          </button>
+          <Tip label={geometry.maximized ? 'Restore' : 'Expand to full size'} hint="Or double-click the title">
+            <button
+              className="icon-btn"
+              onClick={() => onChange({ ...geometry, maximized: !geometry.maximized })}
+              aria-label={geometry.maximized ? 'Restore' : 'Expand to full size'}
+            >
+              <Icon name={geometry.maximized ? 'minimize' : 'maximize'} size={14} />
+            </button>
+          </Tip>
+          <Tip label={closeHint ?? 'Close'}>
+            <button className="icon-btn" onClick={onClose} aria-label={closeHint ?? 'Close'}>
+              <Icon name="x" size={15} />
+            </button>
+          </Tip>
         </div>
       </header>
 

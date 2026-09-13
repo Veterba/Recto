@@ -65,6 +65,12 @@
   --text-muted: #6f6f7d;
   --danger: #f4736b;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.45);
+  /* Code panels read darker than the page, the way an editor does. Highlight
+     is a yellow that survives both themes without being a marker pen. */
+  --code-bg: #101015;
+  --highlight-bg: rgb(255 214 102 / 0.26);
+  --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 8px 28px rgb(0 0 0 / 0.42);
 }
 
 @media (prefers-color-scheme: light) {
@@ -81,6 +87,10 @@
     --text-muted: #85847c;
     --danger: #c2352b;
     --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
+    --code-bg: #f4f2ee;
+    --highlight-bg: rgb(255 206 61 / 0.42);
+    --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
+    --shadow-md: 0 6px 20px rgb(0 0 0 / 0.10);
   }
 }
 
@@ -97,6 +107,10 @@
   --text-muted: #85847c;
   --danger: #c2352b;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
+  --code-bg: #f4f2ee;
+  --highlight-bg: rgb(255 206 61 / 0.42);
+  --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
+  --shadow-md: 0 6px 20px rgb(0 0 0 / 0.10);
 }
 
 :root[data-theme='dark'] {
@@ -112,6 +126,12 @@
   --text-muted: #6f6f7d;
   --danger: #f4736b;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.45);
+  /* Code panels read darker than the page, the way an editor does. Highlight
+     is a yellow that survives both themes without being a marker pen. */
+  --code-bg: #101015;
+  --highlight-bg: rgb(255 214 102 / 0.26);
+  --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 8px 28px rgb(0 0 0 / 0.42);
 }
 
 @media (prefers-reduced-motion: reduce) {

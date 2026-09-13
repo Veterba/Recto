@@ -12,6 +12,7 @@ import type { LinkCandidate } from '../editor/link-complete'
 import { SearchPanel } from '../components/SearchPanel'
 import { Sidebar, SidebarStub } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
+import { Tip } from '../components/Tip'
 import { WorkspaceView } from '../components/WorkspaceView'
 import { useAppearance, type Theme } from '../core/appearance'
 import { commands } from '../core/commands'
@@ -117,6 +118,9 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     const roots = filterTree(tree.roots, query, (name) => fuzzyMatch(query, name) !== null)
     return { roots, byPath: tree.byPath }
   }, [tree, query])
+
+  /** Every folder in the vault, for expand-all. */
+  const allFolders = useMemo(() => allFolderPaths(tree.roots), [tree.roots])
 
   // A search result is useless collapsed, so while searching every folder is
   // open; the user's own expansion state is untouched underneath.
@@ -231,17 +235,27 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     return out
   }, [tree.roots])
 
-  const createIn = useCallback(
-    async (kind: 'file' | 'folder') => {
-      const parent = activePath === null ? '' : activePath.slice(0, Math.max(0, activePath.lastIndexOf('/')))
+  const createAt = useCallback(
+    async (parent: string, kind: 'file' | 'folder') => {
       const name = kind === 'file' ? 'Untitled.md' : 'New folder'
       const result = await api.invoke('fs:create', parent, name, kind)
       if (!result.ok) return
       await refresh()
+      // Expand the folder it went into, or the new thing is created somewhere
+      // you cannot see.
+      if (parent !== '') setExpanded((prev) => new Set(prev).add(parent))
       if (kind === 'file') openFile(result.path)
       else setExpanded((prev) => new Set(prev).add(result.path))
     },
-    [activePath, refresh, openFile],
+    [refresh, openFile],
+  )
+
+  const createIn = useCallback(
+    (kind: 'file' | 'folder') => {
+      const parent = activePath === null ? '' : activePath.slice(0, Math.max(0, activePath.lastIndexOf('/')))
+      return createAt(parent, kind)
+    },
+    [activePath, createAt],
   )
 
   /** The sidebar's bottom-left button means something different per section. */
@@ -363,15 +377,16 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
           disappears" is a fair description of that.
         */}
         <div className="shell__titlebar-actions">
-          <button
-            className={`titlebar-btn${graphWindow.open ? ' is-on' : ''}`}
-            onClick={() => setGraphWindow({ open: !graphWindow.open })}
-            title={`${graphWindow.open ? 'Hide' : 'Show'} graph (${formatChord('Mod+G')})`}
-            aria-pressed={graphWindow.open}
-          >
-            <Icon name="git-fork" size={14} />
-            <span>Graph</span>
-          </button>
+          <Tip label={`${graphWindow.open ? 'Hide' : 'Show'} the graph`} hint={formatChord('Mod+G')}>
+            <button
+              className={`titlebar-btn${graphWindow.open ? ' is-on' : ''}`}
+              onClick={() => setGraphWindow({ open: !graphWindow.open })}
+              aria-pressed={graphWindow.open}
+            >
+              <Icon name="git-fork" size={14} />
+              <span>Graph</span>
+            </button>
+          </Tip>
         </div>
       </div>
 
@@ -387,6 +402,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
             onResize={(sidebarWidth) => update({ sidebarWidth })}
             onNew={onNew}
             onNewFolder={activeSection === 'data' ? () => void createIn('folder') : undefined}
+            onExpandAll={activeSection === 'data' ? () => setExpanded(new Set(allFolders)) : undefined}
+            onCollapseAll={activeSection === 'data' ? () => setExpanded(new Set()) : undefined}
             onOpenArchive={() => openExtension('archive')}
             onOpenSettings={() => openExtension('settings')}
             onCollapse={toggleSidebar}
@@ -399,6 +416,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
                 onToggleFolder={toggleFolder}
                 onOpenFile={openFile}
                 onChanged={() => void refresh()}
+                onCreateIn={(parent, kind) => void createAt(parent, kind)}
+                vaultPath={vault.path}
               />
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} />
