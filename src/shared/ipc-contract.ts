@@ -50,6 +50,32 @@ export const VIBRANCY_MATERIALS = ['fullscreen-ui', 'sidebar', 'window'] as cons
 
 export type VibrancyMaterial = (typeof VIBRANCY_MATERIALS)[number]
 
+/**
+ * The models offered in Settings.
+ *
+ * A short list rather than whatever the API returns: the app has to be able to
+ * say what each one is *for*, and a dropdown of forty ids does not help anyone
+ * choose. Ordered most capable first.
+ */
+export const AI_MODELS = [
+  { id: 'claude-opus-5', label: 'Opus 5', blurb: 'Most capable. Slower, and costs the most.' },
+  { id: 'claude-sonnet-5', label: 'Sonnet 5', blurb: 'The balance. A good default.' },
+  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', blurb: 'Fastest and cheapest.' },
+] as const
+
+export type AiModelId = (typeof AI_MODELS)[number]['id']
+
+export const isAiModel = (value: unknown): value is AiModelId =>
+  typeof value === 'string' && AI_MODELS.some((model) => model.id === value)
+
+/** One turn. The content is plain markdown - the same text the note holds. */
+export type AiMessage = { role: 'user' | 'assistant'; content: string }
+
+/** What a running stream reports back. `id` matches the `ai:send` request. */
+export type AiDelta = { id: string; text: string }
+export type AiDone = { id: string; stopReason: string | null; inputTokens: number; outputTokens: number }
+export type AiError = { id: string; message: string }
+
 /** A node in the vault tree. Paths are vault-relative, POSIX-separated. */
 export type FileNode = {
   /** Vault-relative path, e.g. 'work/nordicsync.md'. '' is the root. */
@@ -74,11 +100,27 @@ export type IpcEvents = {
   'vault:changed': (changes: VaultChange[]) => void
   /** The window entered or left macOS full screen. */
   'app:fullscreen': (on: boolean) => void
+  /**
+   * A model's reply, token by token.
+   *
+   * Push channels rather than a promise, because the whole point is that the
+   * answer appears while it is being written. `ai:done` and `ai:error` are
+   * terminal - exactly one of them follows every accepted `ai:send`.
+   */
+  'ai:delta': (delta: AiDelta) => void
+  'ai:done': (done: AiDone) => void
+  'ai:error': (error: AiError) => void
 }
 
 export type IpcEventChannel = keyof IpcEvents
 
-export const IPC_EVENT_CHANNELS: readonly IpcEventChannel[] = ['vault:changed', 'app:fullscreen'] as const
+export const IPC_EVENT_CHANNELS: readonly IpcEventChannel[] = [
+  'vault:changed',
+  'app:fullscreen',
+  'ai:delta',
+  'ai:done',
+  'ai:error',
+] as const
 
 /** Invoke channels: renderer -> main, request/response. */
 export type IpcApi = {
@@ -146,6 +188,31 @@ export type IpcApi = {
   'archive:restore': (id: string) => { ok: true; path: string } | { ok: false; error: string }
   'archive:purge': (id: string) => { ok: boolean; error?: string }
   'archive:set-retention': (days: number) => ArchiveState
+  /**
+   * The API key. Note what is NOT here: any way to read it back.
+   *
+   * The renderer can set it, clear it, ask whether one exists and show the
+   * masked hint. Using it happens in main. A channel that returned the key
+   * would put it one `executeJavaScript` away from anything that ever runs in
+   * the window.
+   */
+  'ai:key-status': () => { present: boolean; hint: string | null; available: boolean }
+  'ai:set-key': (key: string) => { ok: boolean; error?: string }
+  'ai:clear-key': () => { ok: boolean }
+  /** One-token round trip, so "wrong key" and "no network" look different. */
+  'ai:test': (model: string) => { ok: boolean; error?: string }
+  /**
+   * Start a reply. Resolves as soon as the request is accepted; the reply
+   * itself arrives on `ai:delta` and ends with `ai:done` or `ai:error`.
+   */
+  'ai:send': (request: {
+    id: string
+    model: string
+    system: string
+    messages: AiMessage[]
+  }) => { ok: boolean; error?: string }
+  /** Stop a running stream. Unknown ids are a no-op, not an error. */
+  'ai:cancel': (id: string) => { ok: boolean }
 }
 
 /** One archived item. `originalPath` is where restore puts it back. */
@@ -264,4 +331,10 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'archive:restore',
   'archive:purge',
   'archive:set-retention',
+  'ai:key-status',
+  'ai:set-key',
+  'ai:clear-key',
+  'ai:test',
+  'ai:send',
+  'ai:cancel',
 ] as const
