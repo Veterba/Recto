@@ -4,7 +4,7 @@ import { VAULT_STATE_DIR } from '../shared/ipc-contract'
 import { currentVault } from './vault'
 
 /**
- * Per-feature JSON state inside `<vault>/.obsidian-like/`.
+ * Per-feature JSON state inside `<vault>/.recto/`.
  *
  * The feature id comes from the renderer, so it is validated as a bare name
  * rather than trusted as a path - a renderer bug must not be able to write

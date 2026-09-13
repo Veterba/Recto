@@ -27,7 +27,7 @@ import { useWorkspace } from '../core/use-workspace'
 import { getView } from '../core/view-registry'
 import { BoardList } from '../board/BoardList'
 import { registerBoardView } from '../board/BoardView'
-import { createCard } from '../board/create-card'
+import { CARD_FOLDER, createCard } from '../board/create-card'
 import { useBoards } from '../board/use-boards'
 import { registerGraphView } from '../graph/GraphView'
 import { setActiveNote, noteIndexChanged } from '../core/note-bus'
@@ -113,9 +113,22 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
   // --- sidebar list -------------------------------------------------------
 
+  /**
+   * The Data tree, without the folder the board writes cards into.
+   *
+   * Cards are real notes and have to live somewhere, but that somewhere is an
+   * implementation detail of Tasks - a folder of them sitting in your file list
+   * is clutter you did not create. They are still indexed, still in the graph,
+   * still findable by ⌘O and full-text search, and still openable from the
+   * board; only this one list hides them.
+   */
   const visibleTree = useMemo(() => {
-    if (query.trim() === '') return tree
-    const roots = filterTree(tree.roots, query, (name) => fuzzyMatch(query, name) !== null)
+    const withoutCards = {
+      roots: tree.roots.filter((node) => !(node.kind === 'folder' && node.path === CARD_FOLDER)),
+      byPath: tree.byPath,
+    }
+    if (query.trim() === '') return withoutCards
+    const roots = filterTree(withoutCards.roots, query, (name) => fuzzyMatch(query, name) !== null)
     return { roots, byPath: tree.byPath }
   }, [tree, query])
 

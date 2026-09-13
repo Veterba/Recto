@@ -34,7 +34,7 @@ import type {
  * on next launch, losing usage history and nothing else.
  */
 
-const HIDDEN = new Set(['.obsidian-like', '.git', '.DS_Store', 'node_modules', '.trash'])
+const HIDDEN = new Set(['.recto', '.git', '.DS_Store', 'node_modules', '.trash'])
 const isHidden = (name: string): boolean => HIDDEN.has(name) || name.startsWith('.')
 
 let db: Database.Database | null = null
@@ -389,7 +389,8 @@ function board(name: string): BoardCard[] {
               s.value                      AS status,
               o.num                        AS "order",
               d.value                      AS due,
-              p.value                      AS priority
+              p.value                      AS priority,
+              (SELECT body FROM notes_fts WHERE notes_fts.path = n.path) AS body
        FROM notes n
        JOIN properties b ON b.path = n.path AND b.key = 'board' AND b.value = ?
        LEFT JOIN properties s ON s.path = n.path AND s.key = 'status'
@@ -398,9 +399,36 @@ function board(name: string): BoardCard[] {
        LEFT JOIN properties p ON p.path = n.path AND p.key = 'priority'
        ORDER BY o.num IS NULL, o.num, n.name`,
     )
-    .all(name) as BoardCard[]
+    .all(name) as (BoardCard & { body: string | null })[]
 
-  return rows.map((row) => ({ ...row, title: row.title.replace(/\.md$/i, '') }))
+  return rows.map(({ body, ...row }) => ({
+    ...row,
+    title: row.title.replace(/\.md$/i, ''),
+    preview: previewOf(body, row.title),
+  }))
+}
+
+/**
+ * The first real line of a note, for the card's second line.
+ *
+ * The card used to show its file path, which is the one thing about a task
+ * nobody needs on a board. Headings are skipped because the topmost one is
+ * already the card's title, and repeating it says nothing.
+ */
+function previewOf(body: string | null, title: string): string {
+  if (body === null) return ''
+  for (const raw of body.split('\n')) {
+    const line = raw.trim()
+    if (line === '') continue
+    if (line.startsWith('#')) {
+      // Skip a heading, but only while it is still just restating the title.
+      const text = line.replace(/^#+\s*/, '')
+      if (text === title || text === '') continue
+      return text.slice(0, 160)
+    }
+    return line.replace(/^[-*+]\s+(\[[ xX]\]\s+)?/, '').slice(0, 160)
+  }
+  return ''
 }
 
 /** Board names that actually occur in the vault, with their card counts. */

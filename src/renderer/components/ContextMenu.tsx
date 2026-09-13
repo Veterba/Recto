@@ -31,6 +31,26 @@ export type MenuItem =
 
 export type MenuPosition = { x: number; y: number }
 
+/**
+ * Should this mousedown dismiss an open menu?
+ *
+ * Extracted because both answers were wrong at once, and both were invisible:
+ *
+ * - A mousedown INSIDE the menu used to dismiss it. The listener runs in the
+ *   capture phase, so it fires before the event reaches the menu and the menu's
+ *   own handler cannot stop it. The button then unmounted between mousedown and
+ *   mouseup, so no `click` was ever dispatched: the menu opened, an item
+ *   highlighted, and choosing it did nothing at all.
+ * - A RIGHT-button mousedown used to dismiss it. A right-click is not one
+ *   event - macOS and Chromium deliver mousedown/contextmenu in either order,
+ *   and a trackpad secondary tap emits the pair twice - so the menu could eat
+ *   the very gesture that opened it.
+ */
+export function shouldDismiss(button: number, insideMenu: boolean): boolean {
+  if (button === 2) return false
+  return !insideMenu
+}
+
 type Props = {
   items: readonly MenuItem[]
   at: MenuPosition
@@ -56,20 +76,48 @@ export function ContextMenu({ items, at, onClose }: Props): React.ReactElement {
   }, [at, items])
 
   useEffect(() => {
+    /**
+     * A right-button mousedown never dismisses.
+     *
+     * This is the bug that made the menu look completely broken. A right-click
+     * is not one event: depending on the input device, macOS and Chromium
+     * deliver `mousedown` then `contextmenu`, or `contextmenu` then
+     * `mousedown` - and a real trackpad secondary tap emits the pair twice.
+     * On the orderings where a mousedown arrives after the menu mounts, the
+     * menu's own dismiss listener ate the very gesture that opened it and the
+     * menu vanished within a frame. Opening a menu somewhere else still works,
+     * because that gesture fires its own `contextmenu` and simply moves it.
+     */
+    const closeOnMouse = (event: MouseEvent): void => {
+      const target = event.target
+      const inside = target instanceof Node && ref.current?.contains(target) === true
+      if (shouldDismiss(event.button, inside)) onClose()
+    }
     const close = (): void => onClose()
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose()
     }
-    // `capture` so the menu closes before whatever was clicked reacts to it.
-    window.addEventListener('mousedown', close, true)
-    window.addEventListener('resize', close)
-    window.addEventListener('blur', close)
-    window.addEventListener('keydown', onKey)
+
+    // Attached on the next macrotask, not synchronously: anything still being
+    // dispatched for the opening gesture has to finish first.
+    let dispose = (): void => undefined
+    const timer = window.setTimeout(() => {
+      // `capture` so the menu closes before whatever was clicked reacts to it.
+      window.addEventListener('mousedown', closeOnMouse, true)
+      window.addEventListener('resize', close)
+      window.addEventListener('blur', close)
+      window.addEventListener('keydown', onKey)
+      dispose = () => {
+        window.removeEventListener('mousedown', closeOnMouse, true)
+        window.removeEventListener('resize', close)
+        window.removeEventListener('blur', close)
+        window.removeEventListener('keydown', onKey)
+      }
+    }, 0)
+
     return () => {
-      window.removeEventListener('mousedown', close, true)
-      window.removeEventListener('resize', close)
-      window.removeEventListener('blur', close)
-      window.removeEventListener('keydown', onKey)
+      window.clearTimeout(timer)
+      dispose()
     }
   }, [onClose])
 

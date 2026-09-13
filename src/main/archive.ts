@@ -9,7 +9,7 @@ import { currentVault } from './vault'
 /**
  * Deleting a note archives it instead.
  *
- * Two stages, deliberately: the file moves into `.obsidian-like/archive/` and
+ * Two stages, deliberately: the file moves into `.recto/archive/` and
  * stays there for a retention window (10 days by default, configurable), then
  * goes to the OS trash. So an accidental delete is recoverable inside the app
  * for a week and a half, and still recoverable from Finder after that.

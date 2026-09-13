@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 
 /**
- * Appearance and shell layout, persisted to `.obsidian-like/appearance.json`.
+ * Appearance and shell layout, persisted to `.recto/appearance.json`.
  *
  * Kept separate from workspace.json: the layout of your tabs is a different
  * concern from what colour the app is, and one JSON file per feature means you

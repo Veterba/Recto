@@ -25,11 +25,35 @@ function check(dir: string): 'ok' | 'missing' | 'unreadable' {
   }
 }
 
+/** What the state folder was called before the app was named Recto. */
+const LEGACY_STATE_DIR = '.obsidian-like'
+
 /**
- * Create `.obsidian-like/` if absent. Returns true if we created it, so the
+ * Carry a vault's state folder across the rename.
+ *
+ * Without this, renaming the app silently abandons every vault's tabs, board
+ * definitions, graph settings and archive - the files would still be there,
+ * under a name nothing reads any more. One rename, once, and only when there
+ * is nothing already in the way.
+ */
+function migrateStateDir(dir: string): void {
+  const legacy = path.join(dir, LEGACY_STATE_DIR)
+  const current = path.join(dir, VAULT_STATE_DIR)
+  if (!fs.existsSync(legacy) || fs.existsSync(current)) return
+  try {
+    fs.renameSync(legacy, current)
+  } catch {
+    // A vault we cannot rename inside is a vault we scaffold fresh. Losing the
+    // tab layout is not worth refusing to open someone's notes.
+  }
+}
+
+/**
+ * Create `.recto/` if absent. Returns true if we created it, so the
  * first-run UI can say "new vault" rather than "opened vault".
  */
 function scaffold(dir: string): boolean {
+  migrateStateDir(dir)
   const stateDir = path.join(dir, VAULT_STATE_DIR)
   if (fs.existsSync(stateDir)) return false
   fs.mkdirSync(path.join(stateDir, '.trash'), { recursive: true })

@@ -1,5 +1,5 @@
 /**
- * Board and column definitions, from `.obsidian-like/boards.json`.
+ * Board and column definitions, from `.recto/boards.json`.
  *
  * Columns live here rather than in the notes for one reason: an empty column
  * has to be able to exist. If the set of columns were derived from the
@@ -10,7 +10,7 @@
  * index for `board: <id>`. That asymmetry is the whole design - structure is
  * app state, content is files.
  *
- * Read defensively, like every other file in `.obsidian-like/`: a person is
+ * Read defensively, like every other file in `.recto/`: a person is
  * invited to edit it, so every field may be missing or the wrong type.
  */
 

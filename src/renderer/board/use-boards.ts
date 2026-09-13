@@ -3,7 +3,7 @@ import { api } from '../api'
 import { DEFAULT_BOARDS, parseBoards, type BoardsFile } from './boards'
 
 /**
- * Board and column definitions, from `.obsidian-like/boards.json`.
+ * Board and column definitions, from `.recto/boards.json`.
  *
  * A module-level store rather than component state, because two things read it
  * - the sidebar list and the board itself - and they must not be able to

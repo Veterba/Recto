@@ -197,7 +197,7 @@ function VaultSettings({ vault, onCloseVault }: Deps): React.ReactElement {
 
       <p className="setting__note">
         <Icon name="history" size={13} />
-        The index and version history live in <code>.obsidian-like/index.db</code>. Deleting it
+        The index and version history live in <code>.recto/index.db</code>. Deleting it
         rebuilds the index from your notes — but loses version history, which cannot be rebuilt
         because it is what your files <em>used</em> to be.
       </p>

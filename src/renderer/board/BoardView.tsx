@@ -355,7 +355,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
                         )}
                       </p>
                     )}
-                    <p className="board__path">{card.path}</p>
+                    {card.preview !== '' && <p className="board__preview">{card.preview}</p>}
                   </article>
                 ))}
 
