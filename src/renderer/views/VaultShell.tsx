@@ -14,7 +14,6 @@ import { Sidebar, SidebarStub } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
 import { TemplatePicker } from '../components/TemplatePicker'
 import { TidyDialog } from '../components/TidyDialog'
-import { Tip } from '../components/Tip'
 import { planTidy, type TidyPlan } from '../core/tidy'
 import { fillTemplate, templateBody, TEMPLATE_FOLDER } from '../core/templates'
 import { getActiveEditor } from './MarkdownView'
@@ -23,7 +22,6 @@ import { useAppearance, type Theme } from '../core/appearance'
 import { commands } from '../core/commands'
 import { allFolderPaths, filterTree } from '../core/file-tree-ops'
 import { fuzzyMatch } from '../core/fuzzy'
-import { formatChord } from '../core/hotkeys'
 import { registerEditorCommands } from '../core/editor-commands'
 import { registerAppCommands } from '../core/register-commands'
 import { getSection, type SectionId } from '../core/sections'
@@ -492,23 +490,6 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     <div className={`shell${ready ? '' : ' is-booting'}`}>
       <div className="shell__titlebar">
         <Breadcrumb path={activePath} fallback={vault.name} />
-        {/*
-          A permanent, visible toggle. Closing the graph used to leave no way
-          back except a shortcut nobody had been told about - "it just
-          disappears" is a fair description of that.
-        */}
-        <div className="shell__titlebar-actions">
-          <Tip label={`${graphWindow.open ? 'Hide' : 'Show'} the graph`} hint={formatChord('Mod+G')}>
-            <button
-              className={`titlebar-btn${graphWindow.open ? ' is-on' : ''}`}
-              onClick={() => setGraphWindow({ open: !graphWindow.open })}
-              aria-pressed={graphWindow.open}
-            >
-              <Icon name="git-fork" size={14} />
-              <span>Graph</span>
-            </button>
-          </Tip>
-        </div>
       </div>
 
       <div className="shell__main">

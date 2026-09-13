@@ -29,6 +29,33 @@ export type OpenVaultResult =
  */
 export type StateFeature = string
 
+/**
+ * How sharp the backdrop stays, sharpest first.
+ *
+ * Soft blurs least, so shapes behind the window survive; strong blurs most, so
+ * they dissolve. That is what a blur control is for - it is not a tint, and it
+ * is not an opacity.
+ *
+ * AppKit exposes no blur radius, so these are three materials **measured** for
+ * how much detail survives behind them. Edge energy in the sidebar region, with
+ * the sidebar's own tint at 6% so the material is the only variable:
+ *
+ *   fullscreen-ui  2.29   sidebar  1.72   window  1.27
+ *
+ * I had this order inverted from reasoning about the names - `window` sounds
+ * like a light material and is in fact the most obscuring of the three.
+ */
+export const VIBRANCY_MATERIALS = ['fullscreen-ui', 'sidebar', 'window'] as const
+
+export type VibrancyMaterial = (typeof VIBRANCY_MATERIALS)[number]
+
+/** What the settings UI calls each one. */
+export const VIBRANCY_LABELS: Record<VibrancyMaterial, string> = {
+  'fullscreen-ui': 'soft',
+  sidebar: 'medium',
+  window: 'strong',
+}
+
 /** A node in the vault tree. Paths are vault-relative, POSIX-separated. */
 export type FileNode = {
   /** Vault-relative path, e.g. 'work/nordicsync.md'. '' is the root. */
@@ -61,6 +88,8 @@ export const IPC_EVENT_CHANNELS: readonly IpcEventChannel[] = ['vault:changed'] 
 export type IpcApi = {
   'app:startup-state': () => StartupState
   'app:platform': () => { platform: NodeJS.Platform; version: string }
+  /** macOS vibrancy material. The only real control over the blur itself. */
+  'app:set-vibrancy': (material: VibrancyMaterial) => { ok: boolean }
   'vault:pick': () => OpenVaultResult
   'vault:open': (path: string) => OpenVaultResult
   'vault:close': () => StartupState
@@ -180,6 +209,7 @@ export type ExposedApi = {
 export const IPC_CHANNELS: readonly IpcChannel[] = [
   'app:startup-state',
   'app:platform',
+  'app:set-vibrancy',
   'vault:pick',
   'vault:open',
   'vault:close',

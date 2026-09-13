@@ -40,7 +40,7 @@ export const editorTheme = (): Extension =>
       backgroundColor: 'var(--accent-muted) !important',
     },
     '&.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--accent-muted) !important' },
-    '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--bg-hover) 45%, transparent)' },
+    '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--bg-hover) 30%, transparent)' },
     '.cm-gutters': { display: 'none' },
     '.cm-foldPlaceholder': {
       backgroundColor: 'var(--bg-hover)',
@@ -58,7 +58,7 @@ export const editorTheme = (): Extension =>
       backgroundColor: 'color-mix(in srgb, var(--accent) 42%, transparent)',
     },
     '.cm-panels': {
-      backgroundColor: 'var(--bg-secondary)',
+      backgroundColor: 'var(--chrome-strong)',
       color: 'var(--text-primary)',
       borderTop: '1px solid var(--border)',
     },

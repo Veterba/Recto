@@ -34,6 +34,7 @@ export function createWindow(): BrowserWindow {
      */
     vibrancy: 'under-window',
     visualEffectState: 'active',
+    transparent: true,
     backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(dirname, '../preload/index.mjs'),

@@ -182,6 +182,12 @@ export function registerIpc(): void {
   handle('archive:restore', (id) => archive.restore(id))
   handle('archive:purge', (id) => archive.purge(id))
   handle('archive:set-retention', (days) => archive.setRetention(days))
+  handle('app:set-vibrancy', (material) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win === undefined || process.platform !== 'darwin') return { ok: false }
+    win.setVibrancy(material)
+    return { ok: true }
+  })
   handle('fs:reveal', (p) => vaultFs.reveal(p))
   handle('fs:import-images', async () => {
     const picked = await dialog.showOpenDialog({
