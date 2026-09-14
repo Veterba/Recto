@@ -16,7 +16,8 @@ import { StatusBar } from '../components/StatusBar'
 import { TemplatePicker } from '../components/TemplatePicker'
 import { TidyDialog } from '../components/TidyDialog'
 import { planTidy, type TidyPlan } from '../core/tidy'
-import { fillTemplate, templateBody, TEMPLATE_FOLDER } from '../core/templates'
+import { fillTemplate, templateBody, type TemplateSettings } from '../core/templates'
+import { dayKey, ensureDailyNote, retemplateDailyNote, useTemplateSettings } from '../core/daily-note'
 import { getActiveEditor } from './MarkdownView'
 import { WorkspaceView } from '../components/WorkspaceView'
 import { useAppearance, type Theme } from '../core/appearance'
@@ -72,6 +73,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   const { appearance, ready, update } = useAppearance()
   const boards = useBoards()
   const { tree, refresh } = useVault(true)
+  const templates = useTemplateSettings(vault.path)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -191,7 +193,10 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
    * them.
    */
   const visibleTree = useMemo(() => {
-    const hidden = new Set<string>([CARD_FOLDER, TEMPLATE_FOLDER, CHAT_FOLDER])
+    // Templates are NOT hidden: they are notes the user writes and edits, so
+    // the folder sits in the tree with its own icon. Cards and chats are the
+    // app's storage for features that have their own screens.
+    const hidden = new Set<string>([CARD_FOLDER, CHAT_FOLDER])
     const withoutCards = {
       roots: tree.roots.filter((node) => !(node.kind === 'folder' && hidden.has(node.path))),
       byPath: tree.byPath,
@@ -272,10 +277,10 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
         context: new Map(context.map((entry) => [entry.path, { tags: entry.tags, links: entry.links }])),
         // The board owns one of these and templates are not notes you file;
         // a stray note landing in either would turn up where nobody put it.
-        reserved: [CARD_FOLDER, TEMPLATE_FOLDER, CHAT_FOLDER],
+        reserved: [CARD_FOLDER, CHAT_FOLDER, templates.settings.folder, templates.settings.daily.folder],
       }),
     )
-  }, [allNotes, allFolders])
+  }, [allNotes, allFolders, templates.settings])
 
   const runTidy = useCallback(async () => {
     if (tidy === null) return
@@ -393,13 +398,73 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   const vimRef = useRef(appearance.vimMode)
   vimRef.current = appearance.vimMode
 
+  /**
+   * Save template settings, creating the templates folder if it is new.
+   *
+   * Created on save rather than on first use: the whole point of choosing a
+   * folder is to go and put templates in it, and a folder that only appears
+   * after the first template is one you cannot put the first template in.
+   * Nothing is moved from the old folder - that would be a vault-wide rename
+   * with link rewrites, which is not what "change a setting" should do.
+   */
+  const updateTemplates = useCallback(
+    async (requested: TemplateSettings) => {
+      /**
+       * Match an existing folder regardless of case.
+       *
+       * The Mac disk is case-insensitive and the tree is not: typing
+       * "Templates" beside an existing "templates" found nothing in the tree,
+       * asked main to create it, and main - seeing the name taken on disk -
+       * made "Templates 2". Adopting the folder's real spelling instead means
+       * the setting points at the folder that is actually there.
+       */
+      const existing = [...tree.byPath.values()].find(
+        (node) => node.kind === 'folder' && node.path.toLowerCase() === requested.folder.toLowerCase(),
+      )
+      const next = existing === undefined ? requested : { ...requested, folder: existing.path }
+      const previous = templates.settings
+      templates.update(next)
+
+      if (existing === undefined) {
+        const at = next.folder.lastIndexOf('/')
+        await api.invoke('fs:create', at === -1 ? '' : next.folder.slice(0, at), next.folder.slice(at + 1), 'folder')
+        await refresh()
+      }
+      if (await retemplateDailyNote(previous, next)) noteIndexChanged()
+    },
+    [templates, tree.byPath, refresh],
+  )
+
+  const openDailyNote = useCallback(async () => {
+    const result = await ensureDailyNote(templates.settings)
+    if (!result.ok) return
+    if (result.created) {
+      await refresh()
+      noteIndexChanged()
+    }
+    openFileRef.current(result.path)
+  }, [templates.settings, refresh])
+
   const settingsDepsRef = useRef({
     appearance,
     update,
     vault,
     onCloseVault,
+    templates: templates.settings,
+    updateTemplates: (_next: TemplateSettings) => {},
+    notes: [] as string[],
+    openDailyNote: () => {},
   })
-  settingsDepsRef.current = { appearance, update, vault, onCloseVault }
+  settingsDepsRef.current = {
+    appearance,
+    update,
+    vault,
+    onCloseVault,
+    templates: templates.settings,
+    updateTemplates: (next: TemplateSettings) => void updateTemplates(next),
+    notes: allNotes,
+    openDailyNote: () => void openDailyNote(),
+  }
 
   const linkCandidatesRef = useRef<LinkCandidate[]>([])
   linkCandidatesRef.current = useMemo(() => {
@@ -536,6 +601,65 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   ])
 
   /**
+   * The daily note, made automatically.
+   *
+   * Checked when the vault opens, when the setting changes, when the window
+   * comes back into focus, and once a minute - and acted on only when the
+   * calendar day has changed since the last check. So a laptop opened the next
+   * morning gets its note within a minute without anyone doing anything, and
+   * an app left running overnight rolls over at midnight.
+   *
+   * It creates the note; it does not open it. Taking over the editor on launch
+   * would be the app deciding what you do first - "Open today's note" is one
+   * command away for when you want it.
+   */
+  const refreshRef = useRef(refresh)
+  refreshRef.current = refresh
+  useEffect(() => {
+    if (!templates.loaded || !templates.settings.daily.enabled) return
+    let lastDay = ''
+    let running = false
+    const check = async (): Promise<void> => {
+      const today = dayKey()
+      if (today === lastDay || running) return
+      running = true
+      try {
+        const result = await ensureDailyNote(templates.settings)
+        if (result.ok) {
+          lastDay = today
+          if (result.created) {
+            await refreshRef.current()
+            noteIndexChanged()
+          }
+        }
+      } finally {
+        running = false
+      }
+    }
+    void check()
+    const timer = window.setInterval(() => void check(), 60_000)
+    const onFocus = (): void => void check()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [templates.loaded, templates.settings])
+
+  useEffect(
+    () =>
+      commands.register({
+        id: 'daily:open',
+        name: "Open today's daily note",
+        section: 'Open',
+        icon: 'calendar-days',
+        hotkey: 'Mod+Shift+D',
+        run: () => void openDailyNote(),
+      }),
+    [openDailyNote],
+  )
+
+  /**
    * A file dropped anywhere but the editor is dropped nowhere.
    *
    * Chromium's default for a file drop is to navigate to it, which in a
@@ -616,6 +740,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
                 onChanged={() => void refresh()}
                 onCreateIn={(parent, kind) => void createAt(parent, kind)}
                 vaultPath={vault.path}
+                templateFolder={templates.settings.folder}
               />
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} />
@@ -689,6 +814,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       {templatesOpen && (
         <TemplatePicker
           notes={allNotes}
+          folder={templates.settings.folder}
           onPick={(path) => void insertTemplate(path)}
           onClose={() => setTemplatesOpen(false)}
         />

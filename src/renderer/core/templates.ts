@@ -12,7 +12,130 @@
  * as a note any more.
  */
 
+/** Where templates live when the vault has not said otherwise. */
 export const TEMPLATE_FOLDER = 'templates'
+
+/** Where daily notes go when the vault has not said otherwise. */
+export const DAILY_FOLDER = 'Daily'
+
+/**
+ * Per-vault template settings, in `.recto/templates.json`.
+ *
+ * Per vault, not per install: a work vault and a journal vault want different
+ * templates folders and only one of them wants a daily note.
+ */
+export type TemplateSettings = {
+  /** Vault-relative folder holding the templates. */
+  folder: string
+  daily: {
+    enabled: boolean
+    /** Vault-relative folder the year folders go under. */
+    folder: string
+    /** Vault-relative path of the template to use, or null for the built-in one. */
+    template: string | null
+  }
+}
+
+export const DEFAULT_TEMPLATE_SETTINGS: TemplateSettings = {
+  folder: TEMPLATE_FOLDER,
+  daily: { enabled: false, folder: DAILY_FOLDER, template: null },
+}
+
+/**
+ * A folder path as typed, made into one the vault can use - or null.
+ *
+ * Trimmed, slashes collapsed, leading and trailing slashes dropped. Refused
+ * outright: `..` anywhere, and any segment starting with a dot, because those
+ * are the app's own state folder and the file tree hides them - a templates
+ * folder there would be a folder you set and then could never see.
+ *
+ * Main re-checks containment on every write regardless; this is so the
+ * settings field says "no" instead of silently doing something else.
+ */
+export function normaliseFolder(input: string): string | null {
+  const cleaned = input
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/\/+/g, '/')
+    .replace(/^\/+|\/+$/g, '')
+  if (cleaned === '') return null
+  const segments = cleaned.split('/')
+  if (segments.some((segment) => segment === '' || segment === '..' || segment.startsWith('.'))) return null
+  return segments.map((segment) => segment.trim()).join('/')
+}
+
+/** Read the settings file back, falling back field by field rather than wholesale. */
+export function coerceTemplateSettings(value: unknown): TemplateSettings {
+  if (typeof value !== 'object' || value === null) return DEFAULT_TEMPLATE_SETTINGS
+  const v = value as { folder?: unknown; daily?: unknown }
+  const daily = (typeof v.daily === 'object' && v.daily !== null ? v.daily : {}) as {
+    enabled?: unknown
+    folder?: unknown
+    template?: unknown
+  }
+  const folder = typeof v.folder === 'string' ? normaliseFolder(v.folder) : null
+  const dailyFolder = typeof daily.folder === 'string' ? normaliseFolder(daily.folder) : null
+  const template =
+    typeof daily.template === 'string' && normaliseFolder(daily.template) !== null && /\.md$/i.test(daily.template)
+      ? daily.template
+      : null
+  return {
+    folder: folder ?? DEFAULT_TEMPLATE_SETTINGS.folder,
+    daily: {
+      enabled: daily.enabled === true,
+      folder: dailyFolder ?? DEFAULT_TEMPLATE_SETTINGS.daily.folder,
+      template,
+    },
+  }
+}
+
+/** Is this path inside (or exactly) that folder? Segment-wise, not by prefix. */
+export function isInFolder(path: string, folder: string): boolean {
+  return path === folder || path.startsWith(`${folder}/`)
+}
+
+/**
+ * ISO 8601 week number and the year that week belongs to.
+ *
+ * Weeks start on Monday, and week 1 is the one containing the year's first
+ * Thursday. The second half matters: 29 December can be week 1 of the NEXT
+ * year, and 1 January can be week 53 of the previous one. Getting that wrong
+ * files a note under a week number that does not exist in that year.
+ */
+export function isoWeek(date: Date): { year: number; week: number } {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  // Thursday of this week decides the year.
+  const day = d.getUTCDay() === 0 ? 7 : d.getUTCDay()
+  d.setUTCDate(d.getUTCDate() + 4 - day)
+  const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1)
+  const week = Math.ceil(((d.getTime() - yearStart) / 86_400_000 + 1) / 7)
+  return { year: d.getUTCFullYear(), week }
+}
+
+/**
+ * Where today's daily note goes: `Daily/2026/09/W37/2026-09-14.md`.
+ *
+ * Year, month, week, then the note. The note's own name carries the full date
+ * rather than just `14`, because notes are linked by name - `[[14]]` would be
+ * ambiguous across every month in the vault, `[[2026-09-14]]` never is.
+ *
+ * The week folder uses the ISO week number, and sits under the CALENDAR year
+ * and month of the day itself. So 29 December 2025 lands in
+ * `2025/12/W01` - its ISO week belongs to 2026, but a person looking for a
+ * December note looks in December.
+ */
+export function dailyNotePath(date: Date, root: string): { folder: string; name: string; path: string; key: string } {
+  const year = date.getFullYear()
+  const month = pad(date.getMonth() + 1)
+  const week = `W${pad(isoWeek(date).week)}`
+  const key = isoDate(date)
+  const folder = `${root}/${year}/${month}/${week}`
+  const name = `${key}.md`
+  return { folder, name, path: `${folder}/${name}`, key }
+}
+
+/** What a daily note contains when no template has been chosen. */
+export const BUILT_IN_DAILY = '# {{date}}\n\n'
 
 export type TemplateVars = {
   /** The note being written into, without its extension. */

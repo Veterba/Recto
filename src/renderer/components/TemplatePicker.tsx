@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
 import { fuzzyFilter } from '../core/fuzzy'
-import { TEMPLATE_FOLDER, templateName } from '../core/templates'
+import { isInFolder, TEMPLATE_FOLDER, templateName } from '../core/templates'
 import { Highlight } from './CommandPalette'
 import { Icon } from './Icon'
 
@@ -17,11 +17,13 @@ import { Icon } from './Icon'
 type Props = {
   /** Every note in the vault; templates are filtered out of it here. */
   notes: readonly string[]
+  /** The vault's templates folder, from Settings → Templates. */
+  folder: string
   onPick: (path: string) => void
   onClose: () => void
 }
 
-export function TemplatePicker({ notes, onPick, onClose }: Props): React.ReactElement {
+export function TemplatePicker({ notes, folder, onPick, onClose }: Props): React.ReactElement {
   const [query, setQuery] = useState('')
   const [cursor, setCursor] = useState(0)
   const input = useRef<HTMLInputElement | null>(null)
@@ -29,8 +31,8 @@ export function TemplatePicker({ notes, onPick, onClose }: Props): React.ReactEl
   useEffect(() => input.current?.focus(), [])
 
   const templates = useMemo(
-    () => notes.filter((path) => path.startsWith(`${TEMPLATE_FOLDER}/`)),
-    [notes],
+    () => notes.filter((path) => path !== folder && isInFolder(path, folder)),
+    [notes, folder],
   )
 
   const results = useMemo(
@@ -62,7 +64,7 @@ export function TemplatePicker({ notes, onPick, onClose }: Props): React.ReactEl
         <input
           ref={input}
           className="palette__input"
-          placeholder={templates.length === 0 ? `No templates yet — add notes to ${TEMPLATE_FOLDER}/` : 'Insert template…'}
+          placeholder={templates.length === 0 ? `No templates yet — add notes to ${folder}/` : 'Insert template…'}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
@@ -83,7 +85,7 @@ export function TemplatePicker({ notes, onPick, onClose }: Props): React.ReactEl
 
         {templates.length === 0 ? (
           <p className="palette__empty">
-            A template is just a note in <code>{TEMPLATE_FOLDER}/</code>. Create one there and it
+            A template is just a note in <code>{folder}/</code>. Create one there and it
             appears here — <code>{'{{date}}'}</code>, <code>{'{{title}}'}</code> and{' '}
             <code>{'{{time}}'}</code> are filled in when you insert it.
           </p>
