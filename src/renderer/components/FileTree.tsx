@@ -43,6 +43,8 @@ type Props = {
   onCreateIn: (parent: string, kind: 'file' | 'folder') => void
   /** Absolute vault path, for "copy full path". */
   vaultPath: string
+  /** The templates folder, which gets its own icon so it cannot pass for a normal one. */
+  templateFolder: string
 }
 
 export function FileTree({
@@ -54,6 +56,7 @@ export function FileTree({
   onChanged,
   onCreateIn,
   vaultPath,
+  templateFolder,
 }: Props): React.ReactElement {
   // Read every render rather than fixed at module load: the sidebar's text
   // size is a setting, and the virtualiser has to agree with the stylesheet
@@ -358,6 +361,7 @@ export function FileTree({
                 isOpen={expanded.has(row.node.path)}
                 onContextMenu={(ev) => contextMenu.open(ev, row.node)}
                 isActive={row.node.path === activePath}
+                isTemplateFolder={row.node.kind === 'folder' && row.node.path === templateFolder}
                 isCursor={row.node.path === cursor}
                 onActivate={() => activate(row)}
                 onStartRename={() => setRenaming(row.node.path)}
@@ -441,6 +445,7 @@ export function FileTree({
 
 type RowProps = {
   row: Row
+  isTemplateFolder: boolean
   isOpen: boolean
   onContextMenu: (ev: React.MouseEvent) => void
   isActive: boolean
@@ -456,6 +461,7 @@ type RowProps = {
 
 function TreeRow({
   row,
+  isTemplateFolder,
   isOpen,
   onContextMenu,
   isActive,
@@ -500,11 +506,11 @@ function TreeRow({
       {/* An icon per kind, so a folder and a note are distinguishable without
           reading the chevron - which is invisible on a file. */}
       <span className="tree__icon">
-        <Icon name={iconFor(node)} size={14} />
+        <Icon name={isTemplateFolder ? 'layout-template' : iconFor(node)} size={14} />
       </span>
 
       <>
-          <span className="tree__name" title={node.path}>
+          <span className="tree__name" title={isTemplateFolder ? `${node.path} — your templates` : node.path}>
             {label}
           </span>
           <Tip label="Move to archive" hint="Recoverable for 10 days">
