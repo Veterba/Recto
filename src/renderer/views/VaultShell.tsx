@@ -11,6 +11,7 @@ import { QuickSwitcher } from '../components/QuickSwitcher'
 import type { LinkCandidate } from '../editor/link-complete'
 import { SearchPanel } from '../components/SearchPanel'
 import { Sidebar, SidebarStub } from '../components/Sidebar'
+import { SidebarThemePicker } from '../components/SidebarThemePicker'
 import { StatusBar } from '../components/StatusBar'
 import { TemplatePicker } from '../components/TemplatePicker'
 import { TidyDialog } from '../components/TidyDialog'
@@ -76,6 +77,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [themePicker, setThemePicker] = useState<{ x: number; y: number } | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
 
@@ -602,6 +604,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
             onOpenArchive={() => openExtension('archive')}
             onOpenSettings={() => setSettingsOpen(true)}
             onCollapse={toggleSidebar}
+            onThemePick={setThemePicker}
           >
             {activeSection === 'data' ? (
               <FileTree
@@ -688,6 +691,14 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
           notes={allNotes}
           onPick={(path) => void insertTemplate(path)}
           onClose={() => setTemplatesOpen(false)}
+        />
+      )}
+      {themePicker !== null && (
+        <SidebarThemePicker
+          at={themePicker}
+          appearance={appearance}
+          update={update}
+          onClose={() => setThemePicker(null)}
         />
       )}
       {settingsOpen && <SettingsDialog {...settingsDepsRef.current} onClose={() => setSettingsOpen(false)} />}

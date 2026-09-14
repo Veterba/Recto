@@ -33,6 +33,12 @@ type Props = {
   onOpenArchive: () => void
   onOpenSettings: () => void
   onCollapse: () => void
+  /**
+   * Right-click on the panel itself - not on a row, which has its own menu -
+   * opens the colour picker. A surface you can recolour should say so when you
+   * ask it what it can do.
+   */
+  onThemePick: (at: { x: number; y: number }) => void
   children?: React.ReactNode
 }
 
@@ -52,6 +58,7 @@ export function Sidebar({
   onOpenArchive,
   onOpenSettings,
   onCollapse,
+  onThemePick,
   children,
 }: Props): React.ReactElement {
   const searchRef = useRef<HTMLInputElement | null>(null)
@@ -80,7 +87,17 @@ export function Sidebar({
   const section = SECTIONS.find((s) => s.id === activeSection) ?? SECTIONS[0]!
 
   return (
-    <aside className="sidebar" style={{ width }} aria-label="Sidebar">
+    <aside
+      className="sidebar"
+      style={{ width }}
+      aria-label="Sidebar"
+      onContextMenu={(event) => {
+        // Rows stop propagation for their own menus, so anything arriving here
+        // is empty panel.
+        event.preventDefault()
+        onThemePick({ x: event.clientX, y: event.clientY })
+      }}
+    >
       <header className="sidebar__vault">
         <span className="sidebar__vault-name" title={vaultName}>
           {vaultName}

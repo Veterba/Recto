@@ -337,8 +337,9 @@ code {
 :root:not([data-translucent='off']) .shell__main,
 :root:not([data-translucent='off']) .shell__titlebar,
 :root:not([data-translucent='off']) .status {
-  background: var(--sidebar-bg);
+  background-color: var(--sidebar-bg);
 }
+
 
 :root:not([data-translucent='off']) .sidebar {
   /* Paints nothing: `.shell__main` behind it is the ground. Two grounds would
@@ -448,6 +449,30 @@ code {
 :root:not([data-translucent='off']) .status > * {
   position: relative;
   z-index: 1;
+}
+
+/*
+ * Heavy grain, for the top half of the grain dial.
+ *
+ * A second layer rather than a stronger first one: the theme's tile is drawn at
+ * 42% and blended as an overlay, and CSS opacity stops at 1, so that layer
+ * cannot get much louder than it already is. This tile is drawn at full
+ * strength and coarser, and fades in on `--grain-boost` - which is 0 below the
+ * middle of the dial, so nothing the theme was tuned to changes.
+ *
+ * `::before`, so it sits under the same children the `::after` layer does
+ * (sidebar and editor card are `z-index: 1` above both).
+ */
+:root:not([data-translucent='off']) .shell__main::before,
+:root:not([data-translucent='off']) .shell__titlebar::before,
+:root:not([data-translucent='off']) .status::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--grain-boost, 0);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' stitchTiles='stitch'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='1.8' intercept='-0.4'/%3E%3CfeFuncG type='linear' slope='1.8' intercept='-0.4'/%3E%3CfeFuncB type='linear' slope='1.8' intercept='-0.4'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* ---------- section tabs ---------- */
@@ -3905,4 +3930,402 @@ body.is-resizing {
 /* A failed test reads as a failure rather than as more prose. */
 .setting__note--bad {
   color: var(--danger);
+}
+
+
+/* ---------- the sidebar's colour ---------- */
+
+/*
+ * A gradient laid OVER the frosted panel, never instead of it: the blur, the
+ * backdrop and every text colour still come from the theme, so picking a colour
+ * can make the sidebar green but cannot make it unreadable.
+ *
+ * Last in the file on purpose. `background-image` is one longhand of a property
+ * whose shorthand several of these rules set earlier - `.status` and `.sidebar`
+ * both say `background:` - and a shorthand resets the longhands it does not
+ * mention. Anywhere above their own rules, this would be silently erased in
+ * exactly the places it is for.
+ *
+ * Which element carries it depends on the mode, and it must be exactly one or
+ * two tints compose into a third colour nobody chose: translucent puts the
+ * ground on `.shell__main` with the sidebar transparent above it, opaque has
+ * the sidebar painting its own.
+ */
+:root:not([data-translucent='off']) .shell__main,
+.shell__titlebar,
+.status,
+:root[data-translucent='off'] .sidebar {
+  background-image: var(--sidebar-tint);
+  /*
+   * One gradient across the whole window, not one per element.
+   *
+   * Without this each surface sizes the gradient to its OWN box, and a 160°
+   * gradient in a wide, 30px-tall status bar runs almost left-to-right while
+   * the same gradient in the tall sidebar runs top-to-bottom - so the status
+   * bar came out as a different gradient in a different direction, which is
+   * what was reported. `fixed` sizes every one of them to the viewport, so the
+   * titlebar, sidebar and status bar are three windows onto the same wash.
+   */
+  background-attachment: fixed;
+}
+
+/* ---------- the sidebar colour picker ---------- */
+
+/*
+ * A popover on the sidebar, not a row in Settings: you are colouring a surface,
+ * so the control belongs on it.
+ */
+.arcpick {
+  position: fixed;
+  z-index: 80;
+  width: 300px;
+  padding: 10px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  animation: menu-in var(--anim-fast) var(--ease-pop);
+  user-select: none;
+}
+
+/*
+ * The pad. A dot grid, wearing the tint: what you are looking at is the thing
+ * being made rather than a drawing of it. `background-image` takes the tint and
+ * the grid stacks on top through `::before`, so neither has to know about the
+ * other.
+ */
+.arcpick__pad {
+  position: relative;
+  height: 230px;
+  border-radius: 12px;
+  background-color: var(--bg-secondary);
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+}
+.arcpick__pad::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgb(0 0 0 / 0.22) 0.8px, transparent 1.2px);
+  background-size: 9px 9px;
+}
+:root[data-theme='dark'] .arcpick__pad::before {
+  background-image: radial-gradient(circle, rgb(255 255 255 / 0.18) 0.8px, transparent 1.2px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .arcpick__pad::before {
+    background-image: radial-gradient(circle, rgb(255 255 255 / 0.18) 0.8px, transparent 1.2px);
+  }
+}
+
+.arcpick__modes {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  cursor: default;
+}
+.arcpick__mode {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--ease);
+}
+.arcpick__mode:hover {
+  background: rgb(127 127 127 / 0.14);
+}
+.arcpick__mode.is-active {
+  background: rgb(127 127 127 / 0.22);
+  color: var(--text-primary);
+}
+
+.arcpick__hint {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* A colour on the pad. The selected one is the big ringed circle; the others
+   are smaller, so which one a drag will move is never a guess. */
+/* Sized against the pad, not against a finger: at 64px the selected handle
+   covered a quarter of the pad's width, so you could not see the colours you
+   were dragging it across. */
+.arcpick__handle {
+  all: unset;
+  position: absolute;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.95), 0 1px 5px rgb(0 0 0 / 0.25);
+  cursor: grab;
+  transition: width var(--anim-fast) var(--ease-pop), height var(--anim-fast) var(--ease-pop);
+}
+.arcpick__handle.is-active {
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  box-shadow: 0 0 0 3px #fff, 0 2px 10px rgb(0 0 0 / 0.28);
+}
+.arcpick__handle:active {
+  cursor: grabbing;
+}
+
+.arcpick__stepper {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  gap: 28px;
+  cursor: default;
+}
+.arcpick__stepper button {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.arcpick__stepper button:hover:not([disabled]) {
+  background: rgb(127 127 127 / 0.16);
+  color: var(--text-primary);
+}
+.arcpick__stepper button[disabled] {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.arcpick__strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+}
+.arcpick__page {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.arcpick__page:hover:not([disabled]) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.arcpick__page[disabled] {
+  opacity: 0.25;
+  cursor: default;
+}
+.arcpick__swatches {
+  flex: 1;
+  display: flex;
+  justify-content: space-around;
+}
+.arcpick__swatch {
+  all: unset;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgb(0 0 0 / 0.1);
+  cursor: pointer;
+  transition: transform var(--anim-fast) var(--ease-pop);
+}
+.arcpick__swatch:hover {
+  transform: scale(1.12);
+}
+.arcpick__swatch.is-active {
+  box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 4px var(--text-secondary);
+}
+.arcpick__swatch--none {
+  position: relative;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+.arcpick__swatch--none::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  border-top: 1.5px solid var(--text-muted);
+  transform: rotate(45deg);
+}
+
+.arcpick__knobs {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 0 2px 2px 8px;
+}
+
+/*
+ * The strength slider: a pale track, a line through it that turns into a wave as
+ * the value rises, and a tall white pill. The motion lives in StrengthSlider.tsx.
+ *
+ * Everything is inside the track box - the thumb included, with its travel
+ * inset by half its width - so nothing it does can reach outside the slider.
+ * The thumb used to be a sibling positioned against the outer box, and at 100%
+ * half of it, plus the stretch, hung out of the popover.
+ */
+.strength {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  /* Room for the worst case: the held thumb is 4px wider than the one its
+     travel is inset for, and a full stretch adds 6px - 8px each side. Measured
+     over-hang, not a guess; without it a hard pull left the slider's box. */
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  cursor: ew-resize;
+  touch-action: none;
+  outline: none;
+}
+.strength__track {
+  position: relative;
+  width: 100%;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
+  transition: height 160ms var(--ease-pop);
+}
+.strength.is-held .strength__track {
+  height: 28px;
+}
+
+/* Inset from the rounded ends so the wave does not run into the curve. */
+.strength__wave {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 0;
+  width: calc(100% - 20px);
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.strength__wave path {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.strength:hover .strength__wave path,
+.strength.is-held .strength__wave path {
+  stroke: var(--text-secondary);
+}
+
+.strength__thumb {
+  position: absolute;
+  top: 50%;
+  /* Travel from half a thumb in from the left to half a thumb in from the
+     right, so 0 and 100 both sit fully on the track. */
+  left: calc(7px + (100% - 14px) * var(--pct-n, 0));
+  width: 14px;
+  height: 36px;
+  margin-left: -7px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 3px 10px rgb(0 0 0 / 0.16);
+  transform: translate(var(--stretch), -50%);
+  transition:
+    transform 320ms var(--ease-pop),
+    width 160ms var(--ease-pop),
+    height 160ms var(--ease-pop),
+    margin 160ms var(--ease-pop);
+}
+.strength:hover .strength__thumb {
+  height: 38px;
+}
+.strength.is-held .strength__thumb {
+  width: 18px;
+  height: 32px;
+  margin-left: -9px;
+}
+.strength.is-stretched .strength__thumb {
+  transition: width 160ms var(--ease-pop), height 160ms var(--ease-pop), margin 160ms var(--ease-pop);
+}
+.strength:focus-visible .strength__thumb {
+  box-shadow: 0 0 0 3px var(--accent-muted), 0 3px 10px rgb(0 0 0 / 0.16);
+}
+
+/* Grain: a textured knob in a ring of dots. The knob wears the same noise the
+   sidebar does, so the control looks like the thing it adjusts. */
+.arcpick__dial {
+  position: relative;
+  flex: none;
+  width: 76px;
+  height: 76px;
+  cursor: grab;
+  touch-action: none;
+}
+.arcpick__dial:active {
+  cursor: grabbing;
+}
+.arcpick__dial svg {
+  position: absolute;
+  inset: 0;
+}
+.arcpick__dial circle {
+  fill: var(--border-strong);
+  transition: fill var(--anim-fast) var(--ease);
+}
+.arcpick__dial circle.is-lit {
+  fill: var(--text-secondary);
+}
+.arcpick__knob {
+  position: absolute;
+  inset: 14px;
+  border-radius: 50%;
+  background-color: #b9b9bd;
+  background-size: 40px 40px;
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.6), inset 0 -2px 3px rgb(0 0 0 / 0.18), 0 2px 5px rgb(0 0 0 / 0.25);
+}
+/* The pointer on the knob: a short white bar that rotates with the value. */
+.arcpick__tick {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.arcpick__tick::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 4px;
+  height: 11px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 2px rgb(0 0 0 / 0.3);
 }

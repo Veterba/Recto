@@ -2,6 +2,17 @@
  * The theme layer. Every colour in the app resolves through a variable here so a
  * theme is one file of overrides. Accent is stored as separate H/S/L parts, which
  * is what lets a single hue change repaint the whole app.
+ *
+ * One accent per theme, and only the three parts are overridden - `--accent`,
+ * `--accent-hover` and `--accent-muted` are written once, here, and substitute
+ * whichever h/s/l won the cascade. That is the whole reason the hue is stored
+ * split rather than as a colour.
+ *
+ * Violet in the dark theme, blue in the light one. Not a whim: the dark theme's
+ * violet is a light tint (68%) built to glow on a near-black page, and the same
+ * colour on white is a pale smudge with nothing to hold it down. The light
+ * accent has to be DARKER than its ground, not lighter, which is a different
+ * colour rather than the same one adjusted.
  */
 
 :root {
@@ -69,8 +80,14 @@
      is dark-on-light or light-on-dark. */
   --sidebar-t: 1;
   --sidebar-alpha: calc(1 - var(--sidebar-t) * var(--sidebar-fade));
-  /* Grain earns its keep in proportion to how much backdrop there is. */
-  --grain-opacity: 0.3;
+  /* Grain earns its keep in proportion to how much backdrop there is. The
+     base is the theme's own amount; the sidebar theme's grain dial scales it,
+     with 50 on the dial meaning exactly this. */
+  --grain-base: 0.3;
+  --grain-amount: 1;
+  /* The heavy second layer, 0 until the grain dial passes its middle. */
+  --grain-boost: 0;
+  --grain-opacity: calc(var(--grain-base) * var(--grain-amount));
   --sidebar-bg: rgb(var(--sidebar-rgb) / var(--sidebar-alpha));
 
   /* One ink, two strengths, both driven from settings. Not pure white: at 100%
@@ -82,6 +99,8 @@
   --sidebar-text: rgb(var(--sidebar-ink) / var(--sidebar-ink-alpha));
   --sidebar-dim: rgb(var(--sidebar-ink) / var(--sidebar-dim-alpha));
   /* Size and weight of the sidebar's own text, from settings. */
+  /* Set at runtime from the sidebar theme; `none` is a panel with no tint. */
+  --sidebar-tint: none;
   --sidebar-scale: 1.05;
   --sidebar-weight: 540;
   --tree-row-h: 25px;
@@ -154,6 +173,9 @@
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) {
     color-scheme: light;
+    --accent-h: 217;
+    --accent-s: 91%;
+    --accent-l: 46%;
     --bg-primary: #ffffff;
     --bg-secondary: #f1f0ed;
     --bg-elevated: #ffffff;
@@ -176,6 +198,9 @@
 
 :root[data-theme='light'] {
   color-scheme: light;
+  --accent-h: 217;
+  --accent-s: 91%;
+  --accent-l: 46%;
   --bg-primary: #ffffff;
   --bg-secondary: #f1f0ed;
   --bg-elevated: #ffffff;
@@ -237,7 +262,7 @@
   --sidebar-rgb: 46 46 46;
   --sidebar-fade: 0.5;
   --sidebar-t: 0.8;
-  --grain-opacity: 0.52;
+  --grain-base: 0.52;
   --sidebar-ink: 244 244 245;
   --sidebar-row: rgb(255 255 255 / 0.07);
   --sidebar-row-active: rgb(255 255 255 / 0.12);
@@ -251,7 +276,7 @@
     --sidebar-fade: 0.82;
     --sidebar-t: 1;
     /* Grain over a light frost reads as dirt, not as material. */
-    --grain-opacity: 0.3;
+    --grain-base: 0.3;
     --sidebar-ink: 24 24 27;
     --sidebar-row: rgb(0 0 0 / 0.06);
     --sidebar-row-active: rgb(0 0 0 / 0.10);
@@ -264,7 +289,7 @@
   --sidebar-rgb: 252 252 253;
   --sidebar-fade: 0.82;
   --sidebar-t: 1;
-  --grain-opacity: 0.3;
+  --grain-base: 0.3;
   --sidebar-ink: 24 24 27;
   --sidebar-row: rgb(0 0 0 / 0.06);
   --sidebar-row-active: rgb(0 0 0 / 0.10);

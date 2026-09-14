@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { isAiModel, type AiModelId, type VibrancyMaterial } from '@shared/ipc-contract'
+import { coerceSidebarTheme, grainLevels, NO_THEME, tintCss, type SidebarTheme } from './sidebar-theme'
 
 /**
  * Appearance and shell layout, persisted to `.recto/appearance.json`.
@@ -45,6 +46,15 @@ export type Appearance = {
   /** How white the sidebar's text is, 0-100. */
   sidebarContrast: number
   /**
+   * The sidebar's own colour: a gradient laid OVER the frosted panel.
+   *
+   * A tint rather than a replacement, which is what makes it safe to let anyone
+   * pick any colour - the text colours, the blur and the backdrop still come
+   * from the theme, so the worst outcome is a green sidebar rather than an
+   * unreadable one.
+   */
+  sidebarTheme: SidebarTheme
+  /**
    * Which model new messages go to.
    *
    * Here rather than per conversation because it is a preference, not a
@@ -79,6 +89,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   sidebarScale: 1.05,
   sidebarBold: true,
   sidebarContrast: 70,
+  sidebarTheme: NO_THEME,
   aiModel: 'claude-sonnet-5',
   translucent: true,
 }
@@ -193,6 +204,12 @@ export function applyAppearance(appearance: Appearance): void {
   const ink = 0.8 + (Math.min(100, Math.max(0, appearance.sidebarContrast)) / 100) * 0.2
   root.style.setProperty('--sidebar-ink-alpha', ink.toFixed(3))
   root.style.setProperty('--sidebar-dim-alpha', (ink - 0.26).toFixed(3))
+  // A `background-image` over the panel's `background-color`, so it tints the
+  // frost rather than replacing it.
+  root.style.setProperty('--sidebar-tint', tintCss(appearance.sidebarTheme))
+  const grain = grainLevels(appearance.sidebarTheme.grain)
+  root.style.setProperty('--grain-amount', grain.amount.toFixed(2))
+  root.style.setProperty('--grain-boost', grain.boost.toFixed(2))
   // One attribute swaps every translucent token for its opaque equivalent.
   /**
    * The window's own macOS appearance has to follow the app's theme.
@@ -260,6 +277,7 @@ function coerce(value: unknown): Appearance {
       typeof v.sidebarContrast === 'number' && Number.isFinite(v.sidebarContrast)
         ? Math.min(100, Math.max(0, v.sidebarContrast))
         : DEFAULT_APPEARANCE.sidebarContrast,
+    sidebarTheme: coerceSidebarTheme(v.sidebarTheme),
     aiModel: isAiModel(v.aiModel) ? v.aiModel : DEFAULT_APPEARANCE.aiModel,
     translucent: typeof v.translucent === 'boolean' ? v.translucent : DEFAULT_APPEARANCE.translucent,
     editorFont:
