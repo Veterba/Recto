@@ -7,6 +7,8 @@
  * well as the worker chunk. Same reasoning as `src/indexer/protocol.ts`.
  */
 
+import type { GraphLayout } from './layout'
+
 export type Tunables = {
   repelStrength: number
   linkDistance: number
@@ -34,14 +36,25 @@ export type WorkerRequest =
        * entire graph and the picture you had learned is gone.
        */
       seed?: Float32Array
+      layout: GraphLayout
+      /** Group per node (top-level folder), for the clusters layout. */
+      groups: number[]
+      /** Node size and growth from the look, so collisions match the drawing. */
+      sizing: Sizing
     }
   | { kind: 'tunables'; tunables: Tunables }
+  | { kind: 'layout'; layout: GraphLayout }
+  | { kind: 'sizing'; sizing: Sizing }
   | { kind: 'reheat' }
   /** A node pinned under the pointer while the user drags it. */
   | { kind: 'drag'; index: number; x: number; y: number }
   | { kind: 'release'; index: number }
   | { kind: 'stop' }
 
+export type Sizing = { size: number; growth: number }
+
 export type WorkerResponse =
   | { kind: 'positions'; positions: Float32Array; alpha: number }
   | { kind: 'settled' }
+  /** Something in the worker threw; the view logs it rather than going quiet. */
+  | { kind: 'error'; message: string }

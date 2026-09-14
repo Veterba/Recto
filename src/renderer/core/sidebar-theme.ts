@@ -126,11 +126,17 @@ export function coerceSidebarTheme(value: unknown): SidebarTheme {
 
 // --- the pad ----------------------------------------------------------------
 
-/** Lightness at the top and bottom edges of the pad. */
-const L_TOP = 0.86
-const L_BOTTOM = 0.34
-/** The one saturation every point on the pad has. */
-const SATURATION = 0.68
+/**
+ * The part of colour space a pad covers: lightness at its top and bottom
+ * edges, and the one saturation every point on it has.
+ *
+ * The sidebar's range is narrow on purpose (see above). Other surfaces can ask
+ * for a wider one - a graph wants near-white and near-black dots, which a wash
+ * over a panel never does.
+ */
+export type PadRange = { top: number; bottom: number; saturation: number }
+
+export const SIDEBAR_PAD: PadRange = { top: 0.86, bottom: 0.34, saturation: 0.68 }
 
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
   const value = Number.parseInt(hex.slice(1), 16)
@@ -160,20 +166,20 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 /** Where a colour sits on the pad, both axes 0-1. */
-export function padPosition(hex: string): { x: number; y: number } {
+export function padPosition(hex: string, range: PadRange = SIDEBAR_PAD): { x: number; y: number } {
   if (!HEX.test(hex)) return { x: 0.5, y: 0.5 }
   const { h, l } = hexToHsl(hex)
   return {
     x: h / 360,
-    y: Math.min(1, Math.max(0, (L_TOP - l) / (L_TOP - L_BOTTOM))),
+    y: Math.min(1, Math.max(0, (range.top - l) / (range.top - range.bottom))),
   }
 }
 
 /** The colour at a point on the pad. */
-export function colorAt(x: number, y: number): string {
+export function colorAt(x: number, y: number, range: PadRange = SIDEBAR_PAD): string {
   const cx = Math.min(1, Math.max(0, x))
   const cy = Math.min(1, Math.max(0, y))
-  return hslToHex(cx * 359.9, SATURATION, L_TOP - cy * (L_TOP - L_BOTTOM))
+  return hslToHex(cx * 359.9, range.saturation, range.top - cy * (range.top - range.bottom))
 }
 
 /**
@@ -182,9 +188,9 @@ export function colorAt(x: number, y: number): string {
  * Duplicating the last colour would add a stop that changes nothing, which
  * looks like the button is broken.
  */
-export function nextStop(colors: readonly string[]): string {
+export function nextStop(colors: readonly string[], range: PadRange = SIDEBAR_PAD): string {
   const last = colors[colors.length - 1]
-  if (last === undefined || !HEX.test(last)) return colorAt(0.56, 0.45)
-  const { x, y } = padPosition(last)
-  return colorAt((x + 0.28) % 1, y)
+  if (last === undefined || !HEX.test(last)) return colorAt(0.56, 0.45, range)
+  const { x, y } = padPosition(last, range)
+  return colorAt((x + 0.28) % 1, y, range)
 }

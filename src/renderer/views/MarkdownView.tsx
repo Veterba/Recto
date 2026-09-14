@@ -2,16 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { Backlinks } from '../components/Backlinks'
 import { FormatBar } from '../components/FormatBar'
+import { Icon } from '../components/Icon'
+import { Outline } from '../components/Outline'
 import { Properties } from '../components/Properties'
 import { commands } from '../core/commands'
 import { formatChord } from '../core/hotkeys'
 import { extractTargets } from '../core/link-targets'
+import { readFolds, setOutlineOpen, toggleOutline, useOutlineOpen, writeFolds } from '../core/outline'
 import { Editor } from '../editor/Editor'
 import type { EditorHandle } from '../editor/codemirror'
 import type { LinkCandidate } from '../editor/link-complete'
 import type { Format } from '../editor/markdown-actions'
 import { noteIndexChanged } from '../core/note-bus'
 import { registerView } from '../core/view-registry'
+import { vaultFileUrl } from '../core/vault-url'
 
 /**
  * One note, in CodeMirror.
@@ -226,9 +230,25 @@ function MarkdownEditor({
     [save, refreshUnresolved],
   )
 
+  /** The caret's line, for the outline's "you are here". */
+  const [cursorLine, setCursorLine] = useState(1)
+  const outlineOpen = useOutlineOpen()
+
   const syncFormats = useCallback(() => {
     setActive(handle.current?.getActiveFormats() ?? new Set())
+    setCursorLine(handle.current?.getCursorLine() ?? 1)
   }, [])
+
+  // Folds are remembered per note. Written when they change, and again on the
+  // way out: lines typed above a fold move it, and the editor's own ranges
+  // follow the text where the last saved list would not.
+  useEffect(
+    () => () => {
+      const folds = handle.current?.getFolds()
+      if (folds !== undefined) writeFolds(path, folds)
+    },
+    [path],
+  )
 
   const flush = useCallback(() => {
     window.clearTimeout(saveTimer.current)
@@ -349,6 +369,15 @@ function MarkdownEditor({
       <div className="md__bar">
         <span className="md__path">{path}</span>
         <span className="md__mode">{livePreview ? 'Live Preview' : 'Source'}</span>
+        <button
+          className={`icon-btn md__outline-btn${outlineOpen ? ' is-on' : ''}`}
+          onClick={toggleOutline}
+          aria-pressed={outlineOpen}
+          aria-label="Outline"
+          title={`Outline (${formatChord('Mod+Shift+O')})`}
+        >
+          <Icon name="list-tree" size={13} />
+        </button>
         <span className={`md__status is-${status}`}>
           {status === 'dirty' ? 'Unsaved' : status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : ''}
         </span>
@@ -363,9 +392,11 @@ function MarkdownEditor({
         onOpenLink={onOpenLink}
         getLinkCandidates={getLinkCandidates}
         onSelectionChange={syncFormats}
+        onFoldsChange={(lines) => writeFolds(path, lines)}
         onReady={(editor: EditorHandle) => {
           handle.current = editor
           activeHandle = editor
+          editor.setFolds(readFolds(path))
           editor.setLivePreview(livePreview)
           editor.setVim(vim)
           setActive(editor.getActiveFormats())
@@ -375,6 +406,57 @@ function MarkdownEditor({
         }}
       />
       <Backlinks path={path} revision={savedAt} onOpen={onOpenPath} />
+      {outlineOpen && (
+        <Outline
+          text={text}
+          cursorLine={cursorLine}
+          onReveal={(line) => handle.current?.revealLine(line)}
+          onClose={() => setOutlineOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i
+/** Files opened in the editor. Anything else is shown, not edited. */
+const TEXT_FILE = /\.(md|markdown|txt|text|mdx|canvas|json|ya?ml|csv|tsv|log|css|js|ts|tsx|jsx|py|sh|html?|xml|toml|ini)$/i
+
+/** A path with no extension counts as text: that is how plain notes are named elsewhere. */
+const isTextFile = (path: string): boolean => {
+  const name = path.slice(path.lastIndexOf('/') + 1)
+  return !name.includes('.') || TEXT_FILE.test(name)
+}
+
+/**
+ * A tab for a file that is not a note.
+ *
+ * Clicking a screenshot in the sidebar used to open its bytes in the markdown
+ * editor - unreadable at best, and one such PNG crashed the editor outright.
+ * Images are shown as images; anything else says what it is.
+ */
+function FileView({ path }: { path: string }): React.ReactElement {
+  const name = path.slice(path.lastIndexOf('/') + 1)
+  const [failed, setFailed] = useState(false)
+  if (IMAGE_FILE.test(name) && !failed) {
+    return (
+      <div className="file-view">
+        <div className="md__bar">
+          <span className="md__path">{path}</span>
+        </div>
+        <div className="file-view__stage">
+          <img src={vaultFileUrl(path)} alt={name} onError={() => setFailed(true)} />
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="pane-empty">
+      <p>
+        <code>{name}</code>
+        <br />
+        {failed ? 'This image could not be loaded.' : 'This file is not a note, so Recto does not open it as text.'}
+      </p>
     </div>
   )
 }
@@ -410,6 +492,7 @@ export function registerMarkdownView(
           </div>
         )
       }
+      if (!isTextFile(path)) return <FileView key={path} path={path} />
       return (
         <MarkdownEditor
           key={path}

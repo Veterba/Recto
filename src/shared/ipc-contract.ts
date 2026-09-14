@@ -17,6 +17,8 @@ export type StartupState =
   | { kind: 'needs-vault'; reason: 'first-run' | 'missing' | 'unreadable'; lastPath?: string }
   | { kind: 'ready'; vault: VaultInfo }
 
+export type RecentVault = { path: string; name: string; available: boolean }
+
 export type OpenVaultResult =
   | { ok: true; vault: VaultInfo; scaffolded: boolean }
   | { ok: false; error: string }
@@ -174,6 +176,15 @@ export type IpcApi = {
   'vault:pick': () => OpenVaultResult
   'vault:open': (path: string) => OpenVaultResult
   'vault:close': () => StartupState
+  /** Vaults opened before, most recent first, excluding the open one. */
+  'vault:recent': () => RecentVault[]
+  /** The folder dialog alone. Null when cancelled. */
+  'vault:choose-folder': () => string | null
+  /**
+   * Close the open vault and open another. On failure the previous vault stays
+   * open and running.
+   */
+  'vault:switch': (path: string) => OpenVaultResult
   'shell:open-external': (url: string) => { ok: boolean }
   'state:read': (feature: StateFeature) => unknown
   'state:write': (feature: StateFeature, data: unknown) => { ok: boolean; error?: string }
@@ -344,6 +355,9 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'vault:pick',
   'vault:open',
   'vault:close',
+  'vault:recent',
+  'vault:choose-folder',
+  'vault:switch',
   'shell:open-external',
   'state:read',
   'state:write',

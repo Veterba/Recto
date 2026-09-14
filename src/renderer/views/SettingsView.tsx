@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AI_MODELS, type ArchiveState, type IndexStats, type VaultInfo } from '@shared/ipc-contract'
+import { AI_MODELS, type ArchiveState, type IndexStats, type RecentVault, type VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { HotkeyEditor } from '../components/HotkeyEditor'
 import { ObsidianSync } from '../components/ObsidianSync'
@@ -35,6 +35,7 @@ type Deps = {
   update: (patch: Partial<Appearance>) => void
   vault: VaultInfo
   onCloseVault: () => void
+  onSwitchVault: (target: string | null) => Promise<string | null>
   templates: TemplateSettings
   updateTemplates: (next: TemplateSettings) => void
   /** Every note in the vault, so the tab can list what is in the templates folder. */
@@ -595,15 +596,29 @@ function AiSettings({ appearance, update }: Deps): React.ReactElement {
   )
 }
 
-function VaultSettings({ vault, onCloseVault }: Deps): React.ReactElement {
+function VaultSettings({ vault, onCloseVault, onSwitchVault }: Deps): React.ReactElement {
   const [stats, setStats] = useState<IndexStats | null>(null)
   const [archive, setArchive] = useState<ArchiveState | null>(null)
+  const [recent, setRecent] = useState<readonly RecentVault[]>([])
+  const [switchError, setSwitchError] = useState<string | null>(null)
+  const [switching, setSwitching] = useState(false)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     void api.invoke('index:stats').then(setStats)
     void api.invoke('archive:list').then(setArchive)
+    void api.invoke('vault:recent').then(setRecent)
   }, [])
+
+  const switchTo = (target: string | null): void => {
+    setSwitchError(null)
+    setSwitching(true)
+    void onSwitchVault(target).then((error) => {
+      // On success this component is already gone with the old vault's shell.
+      setSwitching(false)
+      setSwitchError(error)
+    })
+  }
 
   return (
     <>
@@ -617,6 +632,37 @@ function VaultSettings({ vault, onCloseVault }: Deps): React.ReactElement {
           </button>
         </div>
       </Row>
+
+      <Row label="Change vault" hint="Open another folder of notes. Unsaved edits are saved to this vault first.">
+        <button className="btn btn--sm" disabled={switching} onClick={() => switchTo(null)}>
+          {switching ? 'Opening…' : 'Open another folder…'}
+        </button>
+      </Row>
+      {recent.length > 0 && (
+        <div className="vault-recent" role="list" aria-label="Recent vaults">
+          {recent.map((item) => (
+            <button
+              key={item.path}
+              role="listitem"
+              className="vault-recent__item"
+              disabled={!item.available || switching}
+              onClick={() => switchTo(item.path)}
+              title={item.available ? `Switch to ${item.path}` : `${item.path} — not found`}
+            >
+              <Icon name="folder" size={15} />
+              <span className="vault-recent__name">{item.name}</span>
+              <span className="vault-recent__path">{item.available ? item.path : 'Not found'}</span>
+              <Icon name="arrow-right" size={13} className="vault-recent__go" />
+            </button>
+          ))}
+        </div>
+      )}
+      {switchError !== null && (
+        <p className="setting__note setting__note--error" role="alert">
+          <Icon name="alert-triangle" size={13} />
+          {switchError}
+        </p>
+      )}
 
       <Row
         label="Keep deleted notes for"

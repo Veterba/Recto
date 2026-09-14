@@ -74,8 +74,30 @@ export function openVault(dir: string): OpenVaultResult {
   }
   const scaffolded = scaffold(abs)
   current = { path: abs, name: path.basename(abs) }
-  writeState({ lastVaultPath: abs })
+  const recent = [abs, ...(readState().recentVaults ?? []).filter((p) => p !== abs)].slice(0, MAX_RECENT)
+  writeState({ lastVaultPath: abs, recentVaults: recent })
   return { ok: true, vault: current, scaffolded }
+}
+
+const MAX_RECENT = 8
+
+/** Vaults opened before, most recent first, not counting the open one. */
+export function recentVaults(): { path: string; name: string; available: boolean }[] {
+  return (readState().recentVaults ?? [])
+    .filter((p) => p !== current?.path)
+    .map((p) => ({ path: p, name: path.basename(p), available: check(p) === 'ok' }))
+}
+
+/** Just the folder dialog - opening is a separate step, so the caller can wind down first. */
+export async function chooseVaultFolder(): Promise<string | null> {
+  const res = await dialog.showOpenDialog({
+    title: 'Choose a vault folder',
+    message: 'Pick a folder for your notes. An existing folder of markdown works too.',
+    properties: ['openDirectory', 'createDirectory'],
+    buttonLabel: 'Open vault',
+  })
+  const dir = res.filePaths[0]
+  return res.canceled || dir === undefined ? null : dir
 }
 
 export async function pickVault(): Promise<OpenVaultResult> {

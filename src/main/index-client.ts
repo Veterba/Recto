@@ -18,7 +18,17 @@ const dirname = path.dirname(fileURLToPath(import.meta.url))
 
 let child: UtilityProcess | null = null
 let nextId = 1
-const pending = new Map<number, { resolve: (r: IndexResponse) => void; reject: (e: Error) => void }>()
+const pending = new Map<
+  number,
+  { proc: UtilityProcess; resolve: (r: IndexResponse) => void; reject: (e: Error) => void }
+>()
+
+/**
+ * The vault the index should be open on. A child that dies - or is replaced -
+ * starts knowing nothing, so a new one is told this before anything else;
+ * otherwise every later request fails with "index not open".
+ */
+let opening: Extract<IndexRequest, { kind: 'open' }> | null = null
 
 /**
  * Native-module preflight.
@@ -61,17 +71,41 @@ function spawn(): UtilityProcess {
   })
 
   proc.on('exit', (code) => {
-    child = null
+    /**
+     * Only clean up after THIS process.
+     *
+     * Switching vaults kills the old indexer and starts a new one at once, and
+     * the old one's exit arrives a moment later. This handler used to clear
+     * `child` and reject every pending request regardless - which dropped the
+     * new indexer and failed its "open" and "reindex", so the vault switched to
+     * never got indexed and its graph and search stayed empty.
+     */
+    if (child === proc) child = null
     const error = new Error(`indexer exited (code ${code})`)
-    for (const slot of pending.values()) slot.reject(error)
-    pending.clear()
+    for (const [id, slot] of pending) {
+      if (slot.proc !== proc) continue
+      pending.delete(id)
+      slot.reject(error)
+    }
   })
 
   return proc
 }
 
 export function send(request: IndexRequest, timeoutMs = 120_000): Promise<IndexResponse> {
-  if (!child) child = spawn()
+  if (!child) {
+    child = spawn()
+    // A fresh process has no index open. Messages are handled in order, so
+    // queueing the open first is enough - unless this request IS the open.
+    if (opening !== null && request.kind !== 'open') {
+      void post(child, opening, timeoutMs).catch((err: unknown) => console.error('[indexer] reopen', err))
+    }
+  }
+  if (request.kind === 'open') opening = request
+  return post(child, request, timeoutMs)
+}
+
+function post(proc: UtilityProcess, request: IndexRequest, timeoutMs: number): Promise<IndexResponse> {
   const id = nextId++
 
   return new Promise<IndexResponse>((resolve, reject) => {
@@ -81,6 +115,7 @@ export function send(request: IndexRequest, timeoutMs = 120_000): Promise<IndexR
     }, timeoutMs)
 
     pending.set(id, {
+      proc,
       resolve: (response) => {
         clearTimeout(timer)
         resolve(response)
@@ -91,7 +126,7 @@ export function send(request: IndexRequest, timeoutMs = 120_000): Promise<IndexR
       },
     })
 
-    child?.postMessage({ id, request })
+    proc.postMessage({ id, request })
   })
 }
 
@@ -120,10 +155,14 @@ export async function openIndexForVault(): Promise<void> {
 }
 
 export function stopIndexer(): void {
+  opening = null
   if (!child) return
-  void send({ kind: 'close' }, 5_000).catch(() => undefined)
-  child.kill()
+  const proc = child
   child = null
+  // Straight to this process: going through `send` after `child` is cleared
+  // would spawn a brand-new indexer just to tell it to close.
+  void post(proc, { kind: 'close' }, 5_000).catch(() => undefined)
+  proc.kill()
 }
 
 app.on('will-quit', stopIndexer)

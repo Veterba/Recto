@@ -6,7 +6,7 @@ import * as obsidianSync from './sync'
 import { openIndexForVault, send, stopIndexer } from './index-client'
 import { readState, writeState } from './state'
 import * as vaultFs from './vault-fs'
-import { closeVault, openVault, pickVault, startupState } from './vault'
+import { chooseVaultFolder, closeVault, currentVault, openVault, pickVault, recentVaults, startupState } from './vault'
 import { clearKey, keyStatus, writeKey } from './secrets'
 import { markSelfWrite, startWatching, stopWatching } from './watcher'
 
@@ -59,6 +59,21 @@ export function registerIpc(): void {
   handle('vault:open', (dir) => {
     const result = openVault(dir)
     if (result.ok) rewatch()
+    return result
+  })
+  handle('vault:recent', () => recentVaults())
+  handle('vault:choose-folder', () => chooseVaultFolder())
+  handle('vault:switch', (dir) => {
+    // Wind the open vault down first: its watcher, index and sync must not keep
+    // running against a vault that is no longer on screen.
+    const previous = currentVault()
+    stopWatching()
+    stopIndexer()
+    obsidianSync.stopAll()
+    const result = openVault(dir)
+    // Success or not, something is open now - the new vault, or the old one
+    // still - and it needs its watcher, index and sync back.
+    if (result.ok || previous !== null) rewatch()
     return result
   })
   handle('vault:close', () => {

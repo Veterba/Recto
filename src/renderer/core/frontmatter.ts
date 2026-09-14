@@ -22,6 +22,18 @@ export type Field = {
   type: FieldType
   /** Index into the frontmatter lines, for in-place replacement. */
   line: number
+  /**
+   * How many frontmatter lines the field occupies - 1 for `key: value`, more
+   * for a block list, whose `- item` lines follow the key.
+   */
+  span: number
+  /**
+   * Written as a block list (`key:` then `  - item` lines) rather than inline
+   * (`key: [a, b]`). Kept so an edit writes back the same shape: Obsidian
+   * writes block lists, and rewriting every one of them inline on the first
+   * edit would churn every synced note.
+   */
+  block?: { indent: string }
 }
 
 export type Frontmatter = {
@@ -139,30 +151,61 @@ export function parseFrontmatter(text: string): Frontmatter {
   const fields: Field[] = []
   const opaque: string[] = []
 
-  block.forEach((line, index) => {
-    if (line.trim() === '') return
-    // Indented lines and list items belong to a structure we do not model.
+  for (let index = 0; index < block.length; index++) {
+    const line = block[index]!
+    if (line.trim() === '') continue
+    // Indented lines and stray list items belong to a structure we do not model.
     if (/^\s/.test(line) || line.trimStart().startsWith('-') || line.trimStart().startsWith('#')) {
       opaque.push(line)
-      return
+      continue
     }
     const match = KEY_VALUE.exec(line)
     if (!match?.[1]) {
       opaque.push(line)
-      return
+      continue
     }
     const key = match[1].trim()
     const raw = match[2] ?? ''
-    // A key whose value is empty and whose next line is indented is a nested
-    // map or list; leave the whole thing alone.
     const next = block[index + 1]
+
     if (raw.trim() === '' && next !== undefined && /^\s+\S/.test(next)) {
+      /**
+       * A block list - `tags:` followed by `  - learning` lines.
+       *
+       * This is how Obsidian writes lists, so every synced note with tags used
+       * to show its properties as locked, "kept exactly as written" text. It is
+       * now an ordinary, editable list. Only a PURE list qualifies: an indented
+       * `key: value` underneath is a nested map, which stays untouched.
+       */
+      let end = index + 1
+      const items: string[] = []
+      while (end < block.length && /^\s+-(\s|$)/.test(block[end]!)) {
+        items.push(unquote(block[end]!.replace(/^\s+-\s?/, '')))
+        end++
+      }
+      const nestedMap = end < block.length && /^\s+\S/.test(block[end]!)
+      if (items.length > 0 && !nestedMap) {
+        const linked = items.length > 0 && items.every((item) => ONLY_LINKS.test(item))
+        fields.push({
+          key,
+          raw: '',
+          value: linked && items.length === 1 ? items[0]! : items,
+          type: linked && items.length === 1 ? 'link' : 'list',
+          line: index,
+          span: end - index,
+          block: { indent: /^\s+/.exec(block[index + 1]!)?.[0] ?? '  ' },
+        })
+        index = end - 1
+        continue
+      }
+      // A nested map, or a list mixed with one: leave the whole thing alone.
       opaque.push(line)
-      return
+      while (index + 1 < block.length && /^\s/.test(block[index + 1]!)) opaque.push(block[++index]!)
+      continue
     }
     const { value, type } = classify(raw)
-    fields.push({ key, raw: raw.trim(), value, type, line: index })
-  })
+    fields.push({ key, raw: raw.trim(), value, type, line: index, span: 1 })
+  }
 
   return { present: true, fields, opaque, bodyStart: close + 1 }
 }
@@ -191,6 +234,14 @@ export function serialize(value: Field['value']): string {
   return text
 }
 
+/** `key:` and one `- item` line per value, at the indentation the file used. */
+function renderBlockList(key: string, items: readonly string[], indent: string): string[] {
+  const kept = items.map((item) => item.trim()).filter((item) => item !== '')
+  // An emptied block list is written as a bare key, which is what Obsidian does.
+  if (kept.length === 0) return [`${key}:`]
+  return [`${key}:`, ...kept.map((item) => `${indent}- ${serialize(item)}`)]
+}
+
 /**
  * Set (or add) one key, leaving the body and every other line untouched.
  *
@@ -209,8 +260,13 @@ export function setField(text: string, key: string, value: Field['value']): stri
 
   const existing = parsed.fields.find((field) => field.key === key)
   if (existing !== undefined) {
+    // Same shape it was written in: a block list stays a block list.
+    const replacement =
+      existing.block !== undefined && (Array.isArray(value) || existing.type === 'link')
+        ? renderBlockList(key, Array.isArray(value) ? value : value === null ? [] : [String(value)], existing.block.indent)
+        : [rendered]
     // +1 because the block starts after the opening fence.
-    lines[existing.line + 1] = rendered
+    lines.splice(existing.line + 1, existing.span, ...replacement)
     return lines.join('\n')
   }
 
@@ -240,7 +296,7 @@ export function removeField(text: string, key: string): string {
     return after.join('\n')
   }
 
-  lines.splice(existing.line + 1, 1)
+  lines.splice(existing.line + 1, existing.span)
   return lines.join('\n')
 }
 
@@ -252,6 +308,7 @@ export function renameField(text: string, from: string, to: string): string {
   if (parsed.fields.some((field) => field.key === to)) return text
 
   const lines = text.split(/\r?\n/)
+  // Only the key line: a block list's items stay exactly where they are.
   lines[existing.line + 1] = `${to}: ${existing.raw}`.trimEnd()
   return lines.join('\n')
 }

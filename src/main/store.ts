@@ -8,6 +8,8 @@ import path from 'node:path'
  */
 type AppState = {
   lastVaultPath?: string
+  /** Most recent first; for switching vaults from Settings. */
+  recentVaults?: string[]
 }
 
 const file = () => path.join(app.getPath('userData'), 'app-state.json')

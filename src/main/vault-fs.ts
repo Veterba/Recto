@@ -6,6 +6,7 @@ import { VAULT_STATE_DIR, type FileNode } from '../shared/ipc-contract'
 import { rewriteWikiLinks } from './link-rewrite'
 import { resolveInVault } from './paths'
 import { currentVault } from './vault'
+import { looksBinary } from './text-file'
 
 /**
  * All vault file access. Every path arriving from the renderer goes through
@@ -80,8 +81,11 @@ export async function readFile(
   relative: string,
 ): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
   try {
-    const content = await fsp.readFile(resolveInVault(requireVault(), relative), 'utf8')
-    return { ok: true, content }
+    const data = await fsp.readFile(resolveInVault(requireVault(), relative))
+    // Never hand binary to the editor: decoding it is lossy, and whatever reads
+    // it is one save away from writing the loss back to disk.
+    if (looksBinary(data)) return { ok: false, error: 'This file is not text, so it is not opened as a note.' }
+    return { ok: true, content: data.toString('utf8') }
   } catch (err) {
     return { ok: false, error: message(err) }
   }
@@ -94,6 +98,23 @@ export async function readFile(
 export async function writeFile(relative: string, content: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const absolute = resolveInVault(requireVault(), relative)
+    // The last line of defence for the bug above: text is never written over a
+    // file that holds binary data, whatever the renderer asks for.
+    const existing = await fsp.open(absolute, 'r').then(
+      async (handle) => {
+        try {
+          const buffer = new Uint8Array(8192)
+          const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+          return buffer.subarray(0, bytesRead)
+        } finally {
+          await handle.close()
+        }
+      },
+      () => null,
+    )
+    if (existing !== null && looksBinary(existing)) {
+      return { ok: false, error: 'Refused to overwrite a file that is not text.' }
+    }
     const tmp = `${absolute}.tmp-${process.pid}`
     await fsp.mkdir(path.dirname(absolute), { recursive: true })
     await fsp.writeFile(tmp, content, 'utf8')

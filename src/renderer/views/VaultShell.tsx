@@ -49,6 +49,7 @@ import { registerUnresolvedView } from './UnresolvedView'
 type Props = {
   vault: VaultInfo
   onCloseVault: () => void
+  onSwitchVault: (target: string | null) => Promise<string | null>
 }
 
 // Views register once per module load, before any layout is restored - otherwise
@@ -58,7 +59,7 @@ registerArchiveView()
 
 const THEME_CYCLE: readonly Theme[] = ['system', 'light', 'dark']
 
-export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
+export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React.ReactElement {
   const {
     sections,
     active,
@@ -467,6 +468,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     update,
     vault,
     onCloseVault,
+    onSwitchVault,
     templates: templates.settings,
     updateTemplates: (_next: TemplateSettings) => {},
     notes: [] as string[],
@@ -477,6 +479,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
     update,
     vault,
     onCloseVault,
+    onSwitchVault,
     templates: templates.settings,
     updateTemplates: (next: TemplateSettings) => void updateTemplates(next),
     notes: allNotes,
@@ -815,7 +818,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
             closeHint="Close graph (⌘G)"
           >
             {graphView?.render({
-              state: { floating: true },
+              state: { floating: true, maximized: graphWindow.maximized },
               setState: () => {},
               leafId: 'graph-window',
             })}

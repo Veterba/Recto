@@ -515,6 +515,12 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
   let lastTo = -1
   for (const range of ranges) {
     if (range.from < lastTo) continue
+    // A replacement that crosses a line break is refused by CodeMirror when it
+    // comes from a plugin - and it throws while the editor is being built,
+    // which took the whole window down to a blank frame. The grammar can
+    // produce one: inline maths, say, runs across lines inside one paragraph.
+    // Such a range is left as source.
+    if (range.to > view.state.doc.lineAt(range.from).to) continue
     builder.add(range.from, range.to, range.deco)
     lastTo = range.to
   }
@@ -528,6 +534,11 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
 export function livePreview(getUnresolved: (view: EditorView) => ReadonlySet<string>): Extension {
   return [
     livePreviewEnabled,
+    // The mode as a class, so CSS can tell the two apart - the active-line tint
+    // belongs to Source mode only.
+    EditorView.editorAttributes.compute([livePreviewEnabled], (state) => ({
+      class: state.field(livePreviewEnabled) ? 'cm-live' : 'cm-source',
+    })),
     blockHiding,
     ViewPlugin.fromClass(
       class {

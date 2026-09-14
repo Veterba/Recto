@@ -2,6 +2,7 @@ import { api } from '../api'
 import * as md from '../editor/markdown-actions'
 import { getActiveEditor } from '../views/MarkdownView'
 import type { Command, CommandRegistry } from './commands'
+import { toggleOutline } from './outline'
 
 /**
  * The editor shortcut set, as registry entries.
@@ -111,6 +112,41 @@ export function registerEditorCommands(
       hotkey: 'Mod+Shift+P',
       isAvailable: () => getActiveEditor() !== null,
       run: () => onToggleLivePreview(),
+    },
+    {
+      id: 'editor:toggle-fold',
+      name: 'Toggle fold on current line',
+      section: 'Editor',
+      scope: 'editor',
+      hotkey: 'Mod+.',
+      isAvailable: editorHasFocus,
+      run: () => {
+        getActiveEditor()?.toggleFold()
+      },
+    },
+    {
+      id: 'editor:fold-all',
+      name: 'Fold all headings and lists',
+      section: 'Editor',
+      hotkey: 'Mod+Alt+[',
+      isAvailable: () => getActiveEditor() !== null,
+      run: () => getActiveEditor()?.foldAll(),
+    },
+    {
+      id: 'editor:unfold-all',
+      name: 'Unfold all headings and lists',
+      section: 'Editor',
+      hotkey: 'Mod+Alt+]',
+      isAvailable: () => getActiveEditor() !== null,
+      run: () => getActiveEditor()?.unfoldAll(),
+    },
+    {
+      id: 'editor:toggle-outline',
+      name: 'Toggle outline',
+      section: 'Editor',
+      hotkey: 'Mod+Shift+O',
+      isAvailable: () => getActiveEditor() !== null,
+      run: toggleOutline,
     },
     {
       id: 'editor:find',
