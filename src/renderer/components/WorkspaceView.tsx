@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { getView, viewTitle } from '../core/view-registry'
 import type { SplitNode, TabsNode, Workspace, WorkspaceNode } from '../core/workspace'
+import { ViewBoundary } from './ViewBoundary'
 
 /**
  * Renders the workspace tree. Recursive and dumb: it reads the tree and calls
@@ -151,13 +152,21 @@ function Leaf({ workspace, leafId }: { workspace: Workspace; leafId: string }): 
 
   return (
     <div className="leaf" onMouseDown={() => workspace.setActiveLeaf(leaf.id)}>
-      {def.render({
-        state: leaf.state,
-        leafId: leaf.id,
-        setState: (next) => workspace.setLeafState(leaf.id, next),
-      })}
+      <ViewBoundary label={leafLabel(leaf)} onClose={() => workspace.closeLeaf(leaf.id)}>
+        {def.render({
+          state: leaf.state,
+          leafId: leaf.id,
+          setState: (next) => workspace.setLeafState(leaf.id, next),
+        })}
+      </ViewBoundary>
     </div>
   )
+}
+
+/** What to call a tab in an error message: its file, or its view type. */
+function leafLabel(leaf: { type: string; state: unknown }): string {
+  const path = (leaf.state as { path?: unknown } | null)?.path
+  return typeof path === 'string' && path !== '' ? path : leaf.type
 }
 
 function EmptyPane(): React.ReactElement {

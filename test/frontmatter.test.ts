@@ -52,12 +52,15 @@ describe('parsing frontmatter', () => {
     expect(fm.bodyStart).toBe(0)
   })
 
-  it('keeps nested maps and list continuations as opaque, never as fields', () => {
+  // This test used to assert that `tags:` / `  - one` stays opaque - which was
+  // the bug: every note synced from Obsidian showed its tags as locked text.
+  // Nested maps stay opaque; block lists are now ordinary list fields.
+  it('keeps nested maps opaque, and reads block lists as fields', () => {
     const fm = parseFrontmatter(
       doc('---', 'title: ok', 'nested:', '  a: 1', '  b: 2', 'tags:', '  - one', '  - two', '---'),
     )
-    expect(fm.fields.map((f) => f.key)).toEqual(['title'])
-    expect(fm.opaque.length).toBeGreaterThan(0)
+    expect(fm.fields.map((f) => f.key)).toEqual(['title', 'tags'])
+    expect(fm.opaque).toEqual(['nested:', '  a: 1', '  b: 2'])
   })
 
   it('keeps comments opaque', () => {
@@ -242,5 +245,53 @@ describe('links in properties', () => {
 
   it('leaves text that merely contains a link as text', () => {
     expect(field('---\nnote: see [[a]] later\n---\n', 'note')?.type).toBe('text')
+  })
+})
+
+describe('block lists, as Obsidian writes them', () => {
+  const note = ['---', 'tags:', '  - learning', '  - maths', 'status: draft', '---', '# Body'].join('\n')
+
+  it('reads an indented list as an editable list, not locked text', () => {
+    const fm = parseFrontmatter(note)
+    expect(fm.opaque).toEqual([])
+    expect(fm.fields.find((f) => f.key === 'tags')).toMatchObject({ type: 'list', value: ['learning', 'maths'], span: 3 })
+    expect(fm.fields.find((f) => f.key === 'status')).toMatchObject({ value: 'draft', line: 3 })
+  })
+
+  /** Rewriting it inline would churn every synced note on its first edit. */
+  it('writes an edit back as a block list, at the same indentation', () => {
+    const edited = setField(note, 'tags', ['learning', 'algebra', 'maths'])
+    expect(edited).toBe(['---', 'tags:', '  - learning', '  - algebra', '  - maths', 'status: draft', '---', '# Body'].join('\n'))
+  })
+
+  it('keeps the other properties and the body untouched when the list shrinks', () => {
+    const edited = setField(note, 'tags', ['maths'])
+    expect(edited).toBe(['---', 'tags:', '  - maths', 'status: draft', '---', '# Body'].join('\n'))
+  })
+
+  it('removes the key and all its items', () => {
+    expect(removeField(note, 'tags')).toBe(['---', 'status: draft', '---', '# Body'].join('\n'))
+  })
+
+  it('renames only the key line', () => {
+    expect(renameField(note, 'tags', 'topics')).toBe(note.replace('tags:', 'topics:'))
+  })
+
+  it('reads quoted items and four-space indents', () => {
+    const fm = parseFrontmatter(['---', 'aliases:', '    - "Q4, plan"', "    - 'draft'", '---'].join('\n'))
+    expect(fm.fields[0]).toMatchObject({ value: ['Q4, plan', 'draft'] })
+    expect(setField(['---', 'aliases:', '    - x', '---'].join('\n'), 'aliases', ['x', 'y'])).toContain('    - y')
+  })
+
+  it('reads a block list of links as links', () => {
+    const fm = parseFrontmatter(['---', 'related:', '  - "[[Recto]]"', '---'].join('\n'))
+    expect(fm.fields[0]).toMatchObject({ type: 'link', value: '[[Recto]]' })
+  })
+
+  /** A nested map is not a list; editing it here would flatten it. */
+  it('still leaves a nested map alone', () => {
+    const fm = parseFrontmatter(['---', 'author:', '  name: Ada', '  born: 1815', 'status: done', '---'].join('\n'))
+    expect(fm.fields.map((f) => f.key)).toEqual(['status'])
+    expect(fm.opaque).toEqual(['author:', '  name: Ada', '  born: 1815'])
   })
 })

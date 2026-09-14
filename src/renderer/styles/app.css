@@ -2578,18 +2578,6 @@ body.is-resizing {
   background: var(--border);
 }
 
-.graph__slider {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--text-muted);
-}
-.graph__slider input[type='range'] {
-  width: 72px;
-  height: 3px;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
 
 .graph__spacer {
   flex: 1;
@@ -3250,11 +3238,6 @@ body.is-resizing {
   flex: 1;
 }
 
-.graph__slider-icon {
-  display: inline-flex;
-  align-items: center;
-  color: var(--text-muted);
-}
 
 .graph__btn[disabled] {
   opacity: 0.35;
@@ -4039,6 +4022,11 @@ body.is-resizing {
   z-index: 2;
   display: flex;
   gap: 4px;
+  padding: 2px;
+  border-radius: 10px;
+  /* Its own ground, so the icons read over whatever colour the pad is wearing. */
+  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+  backdrop-filter: blur(6px);
   cursor: default;
 }
 .arcpick__mode {
@@ -4065,8 +4053,11 @@ body.is-resizing {
   position: absolute;
   inset: 0;
   margin: 0;
+  padding: 0 28px;
   display: grid;
   place-items: center;
+  text-align: center;
+  line-height: 1.45;
   font-size: 12px;
   color: var(--text-muted);
   pointer-events: none;
@@ -5023,4 +5014,1171 @@ body.is-resizing {
 }
 .osync__actions {
   margin-top: var(--size-1);
+}
+
+/* ---------- note structure: fold arrows, indent guides, outline ---------- */
+
+/* The arrow sits in the margin, left of the heading or bullet it folds.
+   Absolutely positioned with no offsets, so it lands where the line's text
+   starts - past any indentation - and the negative margin moves it out. It
+   takes no room in the line, so a note does not reflow when it appears. */
+.cm-fold-toggle {
+  position: absolute;
+  margin-left: -22px;
+  width: 18px;
+  height: 1.75em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--anim-fast) var(--ease), color var(--anim-fast) var(--ease);
+  user-select: none;
+}
+.cm-fold-toggle > span {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--anim-fast) var(--ease);
+}
+.cm-fold-toggle.is-folded > span {
+  transform: translateX(-1px) rotate(-45deg);
+}
+/* Headings are taller than their line's base size, so the arrow is given the
+   heading's own size and line height to centre on the text. */
+.cm-fold-toggle--h1 { font-size: calc(pow(var(--heading-scale, 1.25), 3) * 1em); height: 1.3em; }
+.cm-fold-toggle--h2 { font-size: calc(pow(var(--heading-scale, 1.25), 2) * 1em); height: 1.35em; }
+.cm-fold-toggle--h3 { font-size: calc(var(--heading-scale, 1.25) * 1em); height: 1.75em; }
+.cm-fold-toggle--h1 > span,
+.cm-fold-toggle--h2 > span,
+.cm-fold-toggle--h3 > span {
+  font-size: 14px;
+}
+.cm-line:hover .cm-fold-toggle,
+.cm-fold-toggle.is-folded {
+  opacity: 1;
+}
+.cm-fold-toggle:hover {
+  color: var(--text-primary);
+}
+
+/* What stands in for a folded section. */
+.cm-fold-more {
+  display: inline-block;
+  /* A list item's hanging indent is a negative text-indent, which an
+     inline-block inherits - it pushed the ellipsis out of its own pill. */
+  text-indent: 0;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-family: var(--font-ui, system-ui);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  height: 18px;
+  vertical-align: 0.15em;
+  cursor: pointer;
+}
+.cm-fold-more:hover {
+  color: var(--text-primary);
+  background: var(--bg-active, var(--bg-hover));
+}
+
+/* One quiet line from each bullet down through its children. */
+.cm-indent-guides .cm-indent-guide {
+  background: var(--border-strong);
+  opacity: 0.7;
+}
+
+.md {
+  position: relative;
+}
+.md__outline-btn {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.md__outline-btn.is-on {
+  color: var(--accent);
+}
+
+.outline {
+  position: absolute;
+  top: 44px;
+  right: var(--size-4);
+  z-index: 5;
+  width: 220px;
+  max-height: calc(100% - 64px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-md);
+  font-size: 12.5px;
+}
+.outline__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 4px 12px;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.outline__empty {
+  margin: 0;
+  padding: 4px 12px 12px;
+  color: var(--text-muted);
+}
+.outline__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 4px 6px;
+  overflow-y: auto;
+}
+.outline__item {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.outline__item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.outline__item.is-current {
+  color: var(--accent);
+}
+.outline__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* No tinted box behind the caret's line in Live Preview. With the caret on a
+   heading - where every note opens - the tint drew a grey slab behind the
+   title and made the raw `#` look like a code block. Obsidian draws nothing
+   there; the revealed syntax already says where the caret is. Source mode
+   keeps the tint, where every line looks alike without it. */
+.cm-editor.cm-live .cm-activeLine {
+  background-color: transparent;
+}
+
+/* ---------- pill slider ---------- */
+
+.pill {
+  --pill-track: #ebebeb;
+  --pill-tick: rgb(0 0 0 / 0.16);
+  --pill-fill: #141414;
+  --pill-knob: #141414;
+  --pill-dot: #ffffff;
+  --pill-bubble: #141414;
+  --pill-bubble-text: #ffffff;
+  --knob: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  user-select: none;
+}
+:root[data-theme='dark'] .pill {
+  --pill-track: #2b2b2b;
+  --pill-tick: rgb(255 255 255 / 0.16);
+  --pill-fill: #f2f2f2;
+  --pill-knob: #f2f2f2;
+  --pill-dot: #141414;
+  --pill-bubble: #f2f2f2;
+  --pill-bubble-text: #141414;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .pill {
+    --pill-track: #2b2b2b;
+    --pill-tick: rgb(255 255 255 / 0.16);
+    --pill-fill: #f2f2f2;
+    --pill-knob: #f2f2f2;
+    --pill-dot: #141414;
+    --pill-bubble: #f2f2f2;
+    --pill-bubble-text: #141414;
+  }
+}
+.pill__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+}
+.pill__label {
+  color: var(--text-secondary);
+}
+.pill__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.pill__track {
+  position: relative;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--pill-track);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+.pill__track:focus-visible {
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08), 0 0 0 2px var(--accent);
+}
+/* Tick marks across the empty part; the fill simply covers them. */
+.pill__ticks {
+  position: absolute;
+  inset: 7px 12px;
+  background-image: repeating-linear-gradient(90deg, var(--pill-tick) 0 1px, transparent 1px 5px);
+  border-radius: 2px;
+}
+/* The knob's centre travels over (width - knob); the fill reaches its right edge. */
+.pill__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--knob) + (100% - var(--knob)) * var(--t));
+  border-radius: 999px;
+  background: var(--pill-fill);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.18);
+}
+.pill__knob {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--knob) / 2 + (100% - var(--knob)) * var(--t));
+  width: calc(var(--knob) + 4px);
+  height: calc(var(--knob) + 4px);
+  border-radius: 50%;
+  background: var(--pill-knob);
+  box-shadow: 0 0 0 2px var(--pill-track), 0 3px 10px rgb(0 0 0 / 0.28);
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  transition: transform 160ms var(--ease-pop);
+}
+.pill__knob > i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--pill-dot);
+  transition: width 160ms var(--ease-pop), height 160ms var(--ease-pop);
+}
+.pill__track:hover .pill__knob {
+  transform: translate(-50%, -50%) scale(1.08);
+}
+.pill.is-held .pill__knob {
+  transform: translate(-50%, -50%) scale(0.94);
+}
+.pill.is-held .pill__knob > i {
+  width: 5px;
+  height: 5px;
+}
+/* A click glides; a drag does not, or the knob lags behind the pointer. */
+.pill.is-gliding .pill__fill {
+  transition: width 220ms var(--ease-pop);
+}
+.pill.is-gliding .pill__knob {
+  transition: left 220ms var(--ease-pop), transform 160ms var(--ease-pop);
+}
+.pill__bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  min-width: 26px;
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: var(--pill-bubble);
+  color: var(--pill-bubble-text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 6px) scale(0.6);
+  transform-origin: 50% 100%;
+  transition: opacity 140ms var(--ease), transform 200ms var(--ease-pop);
+}
+.pill__bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--pill-bubble);
+  transform: translateX(-50%);
+}
+.pill.is-held .pill__bubble {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+.pill__marks {
+  position: relative;
+  height: 22px;
+  margin: 0 calc(var(--knob) / 2);
+}
+.pill__mark {
+  position: absolute;
+  top: 0;
+  left: calc(100% * var(--at));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color 160ms var(--ease);
+}
+.pill__mark > i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.pill__mark.is-near {
+  color: var(--text-primary);
+}
+
+/* ---------- graph settings: gear, wheel, section ---------- */
+
+.graph {
+  position: relative;
+  /* The settings wheel hangs a little past the right edge on purpose. */
+  overflow: hidden;
+}
+/* Under the canvas, not over it: grain is texture for the background, and on
+   top it speckled every dot and label too. */
+.graph__canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--graph-grain, 0);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+/* The way in: a round gear at the middle of the right edge. */
+.graph__gear {
+  all: unset;
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  z-index: 4;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  animation: gear-in 320ms var(--ease-pop) both;
+  transition: color var(--anim-fast) var(--ease), transform 260ms var(--ease-pop);
+}
+.graph__gear:hover {
+  color: var(--text-primary);
+  transform: rotate(60deg);
+}
+.graph__gear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@keyframes gear-in {
+  from {
+    opacity: 0;
+    transform: translateX(40px) rotate(-120deg);
+  }
+}
+
+/* Everything the settings put on screen, over the right side of the graph. */
+.gset {
+  position: absolute;
+  top: 0;
+  /* Pushed a little past the edge: the wheel's far curve can go off-screen,
+     and the section beside it gets the room back. */
+  right: -14px;
+  bottom: 44px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding-right: 4px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.gset > * {
+  pointer-events: auto;
+}
+
+/* --- the wheel --- */
+.gwheel {
+  position: relative;
+  flex: none;
+  width: 212px;
+  overflow: visible;
+  touch-action: none;
+  outline: none;
+  animation: wheel-in 380ms var(--ease-pop) both;
+}
+.gset.is-closing .gwheel {
+  animation: wheel-out 240ms var(--ease) both;
+}
+@keyframes wheel-in {
+  from {
+    opacity: 0;
+    transform: translateX(90px);
+  }
+}
+@keyframes wheel-out {
+  to {
+    opacity: 0;
+    transform: translateX(90px);
+  }
+}
+.gwheel__arc {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.gwheel__arc path {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.gwheel__handle {
+  all: unset;
+  position: absolute;
+  width: 30px;
+  height: 11px;
+  margin-top: -5.5px;
+  border-radius: 999px;
+  background: var(--text-primary);
+  opacity: 0.8;
+  cursor: pointer;
+  transition: opacity var(--anim-fast) var(--ease), transform 200ms var(--ease-pop);
+}
+.gwheel__handle:hover {
+  opacity: 1;
+  transform: scaleX(1.15);
+}
+.gwheel__item {
+  all: unset;
+  position: absolute;
+  top: 0;
+  margin-top: -21px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform-origin: 100% 50%;
+  cursor: pointer;
+  will-change: transform, opacity;
+}
+.gwheel__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  /* A faint ground of its own: over a tinted graph, bare muted text vanished. */
+  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+  transition: color 160ms var(--ease), background 160ms var(--ease), border-color 160ms var(--ease);
+}
+.gwheel__icon {
+  width: 52px;
+  height: 38px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--hue);
+  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+  border: 1.5px solid transparent;
+  transition: background 200ms var(--ease), border-color 200ms var(--ease), transform 220ms var(--ease-pop);
+}
+.gwheel__item:hover .gwheel__icon {
+  transform: scale(1.06);
+}
+.gwheel__item.is-centre .gwheel__label {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.gwheel__item.is-centre .gwheel__icon {
+  background: color-mix(in srgb, var(--hue) 16%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--hue) 70%, transparent);
+}
+
+/* --- the section beside it --- */
+.gset__panel {
+  width: 300px;
+  max-height: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-lg);
+  animation: section-in 300ms var(--ease-pop) both;
+  cursor: default;
+}
+.gset.is-closing .gset__panel {
+  animation: section-out 200ms var(--ease) both;
+}
+@keyframes section-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.97);
+  }
+}
+@keyframes section-out {
+  to {
+    opacity: 0;
+    transform: translateX(24px) scale(0.97);
+  }
+}
+.gset__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 10px 4px 16px;
+}
+.gset__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.gset__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hue);
+}
+.gset__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 10px 16px 18px;
+}
+/* The colour editor brings its own padding. */
+.gset__body > .arcpick__editor {
+  margin: -4px -6px 0;
+}
+.gset__below {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gset__below:empty {
+  display: none;
+}
+.gset__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.gset__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.gset__label {
+  color: var(--text-secondary);
+}
+.gset__seg {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--pill-track, var(--bg-hover));
+}
+.gset__seg > button {
+  all: unset;
+  flex: 1;
+  padding: 4px;
+  border-radius: 7px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 160ms var(--ease), color 160ms var(--ease);
+}
+.gset__seg > button:hover {
+  color: var(--text-primary);
+}
+.gset__seg > button.is-on {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+}
+.gset__seg--icons > button {
+  font-size: 14px;
+}
+.gset__seg > button:focus-visible,
+.gset__layout:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.gset__layouts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+.gset__layout {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 0 5px;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  font-size: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 160ms var(--ease), border-color 160ms var(--ease);
+}
+.gset__layout:hover {
+  background: var(--bg-hover);
+}
+.gset__layout.is-on {
+  border-color: color-mix(in srgb, var(--hue) 65%, transparent);
+  background: color-mix(in srgb, var(--hue) 12%, transparent);
+  color: var(--text-primary);
+}
+.gset__glyph {
+  width: 32px;
+  height: 30px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 0.8;
+  stroke-opacity: 0.55;
+}
+
+/* ---------- recent vaults ---------- */
+
+.vault-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -4px 0 var(--size-3);
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+.vault-recent__item {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.vault-recent__item:hover:not([disabled]) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.vault-recent__item[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.vault-recent__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.vault-recent__name {
+  font-weight: 500;
+  font-size: 13px;
+}
+.vault-recent__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.vault-recent__go {
+  opacity: 0;
+  transition: opacity var(--anim-fast) var(--ease), transform var(--anim-fast) var(--ease);
+}
+.vault-recent__item:hover:not([disabled]) .vault-recent__go {
+  opacity: 1;
+  transform: translateX(2px);
+}
+.setting__note--error {
+  color: var(--danger);
+}
+
+/* ---------- colour legend: which colour is which ---------- */
+
+/* A tag over a pad handle: Few / Mid / Most. */
+.arcpick__tag {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.62);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: tag-in 260ms var(--ease-pop) both;
+}
+.arcpick__tag.is-left {
+  left: -4px;
+  transform: none;
+  animation-name: tag-in-side;
+}
+.arcpick__tag.is-right {
+  left: auto;
+  right: -4px;
+  transform: none;
+  animation-name: tag-in-side;
+}
+@keyframes tag-in-side {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+.arcpick__tag.is-below {
+  bottom: auto;
+  top: calc(100% + 5px);
+}
+@keyframes tag-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px) scale(0.8);
+  }
+}
+
+.glegend {
+  margin: 10px 2px 0;
+}
+.glegend__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.glegend__end {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.glegend__track {
+  position: relative;
+  flex: 1;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+.glegend__ramp {
+  position: absolute;
+  left: 4px;
+  right: 8px;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 999px;
+  opacity: 0.55;
+}
+/* Each dot a note of a bigger size, in its colour; a wave runs toward the hub. */
+.glegend__dot {
+  position: relative;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--bg-elevated), 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: background 320ms var(--ease);
+  animation: legend-wave 2.2s var(--ease) infinite;
+}
+@keyframes legend-wave {
+  0%,
+  60%,
+  100% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.22);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glegend__dot {
+    animation: none;
+  }
+}
+.glegend__swap {
+  all: unset;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  cursor: pointer;
+  transition: transform 380ms var(--ease-pop), color var(--anim-fast) var(--ease);
+}
+.glegend__swap:hover {
+  color: var(--text-primary);
+}
+.glegend--single {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.glegend__swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+
+/* ---------- slider family ---------- */
+
+/* classic: no ticks at all. */
+.pill--classic .pill__ticks {
+  display: none;
+}
+/* inset: the ticks ride inside the fill, light on dark. */
+.pill--inset .pill__ticks {
+  display: none;
+}
+.pill--inset .pill__fill {
+  background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--pill-dot) 45%, transparent) 0 1px, transparent 1px 5px);
+  background-color: var(--pill-fill);
+  background-size: auto 8px;
+  background-position: 12px center;
+  background-repeat: repeat-x;
+}
+
+.steps,
+.range,
+.hist {
+  --pill-track: #ebebeb;
+  --pill-tick: rgb(0 0 0 / 0.16);
+  --pill-fill: #141414;
+  --pill-knob: #141414;
+  --pill-dot: #ffffff;
+  --pill-bubble: #141414;
+  --pill-bubble-text: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  user-select: none;
+}
+:root[data-theme='dark'] :is(.steps, .range, .hist) {
+  --pill-track: #2b2b2b;
+  --pill-tick: rgb(255 255 255 / 0.16);
+  --pill-fill: #f2f2f2;
+  --pill-knob: #f2f2f2;
+  --pill-dot: #141414;
+  --pill-bubble: #f2f2f2;
+  --pill-bubble-text: #141414;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) :is(.steps, .range, .hist) {
+    --pill-track: #2b2b2b;
+    --pill-tick: rgb(255 255 255 / 0.16);
+    --pill-fill: #f2f2f2;
+    --pill-knob: #f2f2f2;
+    --pill-dot: #141414;
+    --pill-bubble: #f2f2f2;
+    --pill-bubble-text: #141414;
+  }
+}
+
+/* --- stepped dots --- */
+.steps__current {
+  font-size: 11px;
+  color: var(--text-primary);
+  font-weight: 500;
+  animation: step-label 240ms var(--ease-pop) both;
+}
+@keyframes step-label {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.steps__track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--pill-track);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
+  outline: none;
+}
+.steps__track:focus-visible {
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08), 0 0 0 2px var(--accent);
+}
+.steps__arrow {
+  all: unset;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.steps__arrow:hover:not([disabled]) {
+  color: var(--text-primary);
+}
+.steps__arrow[disabled] {
+  opacity: 0.3;
+  cursor: default;
+}
+.steps__rule {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  background: var(--pill-tick);
+}
+.steps__dots {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--n), 1fr);
+  align-items: center;
+  height: 100%;
+}
+.steps__dot {
+  all: unset;
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.steps__dot > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pill-tick);
+  background: color-mix(in srgb, var(--pill-fill) 35%, transparent);
+  transition: transform 180ms var(--ease-pop);
+}
+.steps__dot:hover > i {
+  transform: scale(1.35);
+}
+.steps__dot.is-on > i {
+  opacity: 0;
+}
+/* The selected dot is one glider that travels between positions. */
+.steps__glider {
+  position: absolute;
+  top: 50%;
+  left: calc((var(--i) + 0.5) / var(--n) * 100%);
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--pill-fill);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.3);
+  transition: left 300ms var(--ease-pop);
+}
+
+/* --- range --- */
+.range__track,
+.hist__track {
+  position: relative;
+  height: 22px;
+  margin: 0 10px;
+  cursor: pointer;
+  touch-action: none;
+}
+.range__track::before,
+.hist__track::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  top: 50%;
+  height: 22px;
+  margin-top: -11px;
+  border-radius: 999px;
+  background: var(--pill-track);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.range__bar {
+  position: absolute;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 999px;
+  background: var(--pill-fill);
+  transition: left 120ms var(--ease), right 120ms var(--ease);
+}
+.range__knob {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: var(--pill-dot);
+  box-shadow: 0 0 0 3px var(--pill-fill), 0 2px 6px rgb(0 0 0 / 0.3);
+  transition: transform 160ms var(--ease-pop);
+  outline: none;
+}
+.range__knob:focus-visible {
+  box-shadow: 0 0 0 3px var(--pill-fill), 0 0 0 5px var(--accent);
+}
+.range__knob.is-held,
+.range__knob:hover {
+  transform: scale(1.12);
+}
+.range__knob--small {
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+}
+.range__badge {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--pill-bubble);
+  color: var(--pill-bubble-text);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: transform 200ms var(--ease-pop);
+}
+.range__badge::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--pill-bubble);
+  transform: translateX(-50%);
+}
+.range__knob.is-held .range__badge {
+  transform: translateX(-50%) translateY(-2px) scale(1.08);
+}
+.range {
+  padding-top: 18px;
+}
+.range > .pill__head {
+  margin-top: -18px;
+  margin-bottom: 18px;
+}
+.range__ruler {
+  position: relative;
+  height: 22px;
+  margin: 0 10px;
+}
+.range__ruler > span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 9.5px;
+  color: var(--text-muted);
+}
+.range__ruler i {
+  width: 1px;
+  height: 5px;
+  background: var(--text-muted);
+}
+
+/* --- histogram --- */
+.hist__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 46px;
+  margin: 0 4px -8px;
+}
+.hist__bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.hist__bar > i {
+  width: 100%;
+  border-radius: 3px 3px 1px 1px;
+  background: color-mix(in srgb, var(--pill-fill) 22%, transparent);
+  transition: background 200ms var(--ease), height 300ms var(--ease-pop);
+}
+.hist__bar.is-in > i {
+  background: var(--pill-fill);
+}
+.hist__labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
 }

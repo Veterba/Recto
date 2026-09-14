@@ -1,4 +1,7 @@
 import { DEFAULT_TUNABLES, type Tunables } from './protocol'
+import { coerceLook, DEFAULT_LOOK, type GraphLook } from './look'
+import { coerceLayout, DEFAULT_LAYOUT, type GraphLayout } from './layout'
+import { ALL_LINKS, coerceLinkRange, type LinkRange } from './degree-bins'
 
 /**
  * What the graph remembers between launches, in `.recto/graph.json`.
@@ -32,6 +35,12 @@ export type GraphSettings = {
    * hiding them without asking is how things go missing.
    */
   showChats: boolean
+  /** Colours, node and link styling, labels, backdrop. */
+  look: GraphLook
+  /** The shape the graph grows into. */
+  layout: GraphLayout
+  /** Only notes with this many links are shown. */
+  linkRange: LinkRange
 }
 
 export const DEFAULT_SETTINGS: GraphSettings = {
@@ -40,6 +49,9 @@ export const DEFAULT_SETTINGS: GraphSettings = {
   showOrphans: true,
   showTasks: false,
   showChats: true,
+  look: DEFAULT_LOOK,
+  layout: DEFAULT_LAYOUT,
+  linkRange: ALL_LINKS,
 }
 
 /** Sane outer edges for each force, matching the slider ranges in the UI. */
@@ -75,5 +87,8 @@ export function parseSettings(raw: unknown): GraphSettings {
     showOrphans: typeof record['showOrphans'] === 'boolean' ? record['showOrphans'] : true,
     showTasks: typeof record['showTasks'] === 'boolean' ? record['showTasks'] : false,
     showChats: typeof record['showChats'] === 'boolean' ? record['showChats'] : true,
+    look: coerceLook(record['look']),
+    layout: coerceLayout(record['layout']),
+    linkRange: coerceLinkRange(record['linkRange']),
   }
 }

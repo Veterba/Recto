@@ -1,7 +1,7 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab, redo, undo } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
-import { foldGutter, foldKeymap, indentOnInput } from '@codemirror/language'
+import { foldedRanges, indentOnInput } from '@codemirror/language'
 import { search, searchKeymap } from '@codemirror/search'
 import { Compartment, EditorState, type Extension, type TransactionSpec } from '@codemirror/state'
 import {
@@ -17,6 +17,7 @@ import { activeFormats, type Format } from './markdown-actions'
 import { blockDecorations } from './blocks'
 import { imageDrop } from './images'
 import { obsidianSyntax } from './obsidian-syntax'
+import { foldAll, foldedLines, noteStructure, restoreFolds, toggleFoldAt, unfoldAll } from './structure'
 import { markdownDecorations, setUnresolvedTargets, unresolvedField } from './decorations'
 import { livePreview, livePreviewCompartment, setLivePreview } from './live-preview'
 import { linkCompletion, type LinkCandidate } from './link-complete'
@@ -52,6 +53,17 @@ export type EditorHandle = {
   setLivePreview: (on: boolean) => void
   /** Modal editing, toggled without rebuilding the editor. */
   setVim: (on: boolean) => void
+  /** Put the caret at the start of a line and centre it, opening any fold over it. */
+  revealLine: (line: number) => void
+  /** The caret's line, 1-based. */
+  getCursorLine: () => number
+  /** Fold or unfold the heading or list item under the caret. */
+  toggleFold: () => boolean
+  foldAll: () => void
+  unfoldAll: () => void
+  /** Folded lines by number, to remember a note's folds between visits. */
+  getFolds: () => number[]
+  setFolds: (lines: readonly number[]) => void
   /** Formats applying at the cursor, for the toolbar's pressed state. */
   getActiveFormats: () => ReadonlySet<Format>
   focus: () => void
@@ -74,6 +86,8 @@ export type EditorOptions = {
   /** Fires when the cursor moves, so the toolbar can update. */
   onSelectionChange?: () => void
   vim?: boolean
+  /** Fires when a section or list item is folded or unfolded. */
+  onFoldsChange?: (lines: number[]) => void
 }
 
 const editable = new Compartment()
@@ -139,7 +153,8 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         // built-in styling will happily paint a colour that exists nowhere in
         // the palette. ⌘F highlighting is unaffected; that is `search()`.
         indentOnInput(),
-        foldGutter(),
+        // Fold arrows beside headings and list items, and indentation guides.
+        noteStructure(),
         search({ top: true }),
         ...(options.getLinkCandidates === undefined ? [] : [linkCompletion(options.getLinkCandidates)]),
         EditorState.allowMultipleSelections.of(true),
@@ -171,7 +186,10 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         keymap.of([
           ...searchKeymap,
           ...historyKeymap,
-          ...foldKeymap,
+          // No `foldKeymap`: folding is app commands now (⌘. and ⌘⌥[ / ⌘⌥]),
+          // and CodeMirror's own ⌘⌥[ folded by different rules - it would have
+          // claimed the chord first and folded a section with its trailing
+          // blank lines.
           indentWithTab,
           ...defaultKeymap,
         ]),
@@ -180,6 +198,9 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
           // The toolbar needs to know on both, because typing can enter or
           // leave a format without the cursor being moved by hand.
           if (update.docChanged || update.selectionSet) options.onSelectionChange?.()
+          if (foldedRanges(update.startState) !== foldedRanges(update.state)) {
+            options.onFoldsChange?.(foldedLines(update.state))
+          }
         }),
       ],
     }),
@@ -257,6 +278,21 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       }
       return false
     },
+
+    revealLine: (n) => {
+      const line = view.state.doc.line(Math.min(Math.max(1, n), view.state.doc.lines))
+      // At the END of the line: a caret at the start of a heading shows its raw
+      // `#` in Live Preview, and the end is where you would carry on writing.
+      // Landing there also opens a fold that was hiding the line.
+      view.dispatch({ selection: { anchor: line.to }, effects: EditorView.scrollIntoView(line.from, { y: 'start', yMargin: 48 }) })
+      view.focus()
+    },
+    getCursorLine: () => view.state.doc.lineAt(view.state.selection.main.head).number,
+    toggleFold: () => toggleFoldAt(view, view.state.doc.lineAt(view.state.selection.main.head).number),
+    foldAll: () => foldAll(view),
+    unfoldAll: () => unfoldAll(view),
+    getFolds: () => foldedLines(view.state),
+    setFolds: (lines) => restoreFolds(view, lines),
 
     getActiveFormats: () => activeFormats(view.state),
 
