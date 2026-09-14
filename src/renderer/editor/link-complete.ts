@@ -31,6 +31,11 @@ export function linkCompletion(getCandidates: () => readonly LinkCandidate[]): E
 
         const from = context.pos - typed.length
         const candidates = getCandidates()
+        // Brackets that are already closed after the cursor - `[[|]]`, the shape
+        // you get from typing both pairs first - must not be closed again. That
+        // is how `[[Recto]]]]` got into a real vault.
+        const after = context.state.doc.sliceString(context.pos, context.pos + 2)
+        const close = after === ']]' ? '' : ']]'
 
         return {
           from,
@@ -39,8 +44,9 @@ export function linkCompletion(getCandidates: () => readonly LinkCandidate[]): E
             ...(candidate.folder === '' ? {} : { detail: candidate.folder }),
             type: 'text',
             // Close the brackets on accept, so the link is complete rather
-            // than leaving the user to type ']]' themselves.
-            apply: `${candidate.name}]]`,
+            // than leaving the user to type ']]' themselves - unless they
+            // already did.
+            apply: `${candidate.name}${close}`,
           })),
           // CodeMirror filters and ranks the list; re-filtering here would mean
           // two competing notions of "best match".

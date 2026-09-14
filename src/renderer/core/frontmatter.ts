@@ -12,7 +12,7 @@
  * refuses to touch it.
  */
 
-export type FieldType = 'text' | 'number' | 'boolean' | 'list' | 'date' | 'empty'
+export type FieldType = 'text' | 'number' | 'boolean' | 'list' | 'date' | 'link' | 'empty'
 
 export type Field = {
   key: string
@@ -46,6 +46,8 @@ const FENCE = /^---\s*$/
  */
 const KEY_VALUE = /^([\p{L}\p{N}_][\p{L}\p{N}_ .-]*):(.*)$/u
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?/
+/** A value that is nothing but one or more `[[wikilinks]]`, space or comma separated. */
+const ONLY_LINKS = /^\[\[[^\[\]]+\]\](?:\s*,?\s*\[\[[^\[\]]+\]\])*$/
 
 function unquote(raw: string): string {
   const value = raw.trim()
@@ -54,15 +56,49 @@ function unquote(raw: string): string {
   return value
 }
 
+/**
+ * Split a flow list on commas that are not inside quotes or brackets.
+ *
+ * A plain `split(',')` cut `"[[Plan, v2]]"` - a link to a note with a comma in
+ * its name - into two broken halves.
+ */
+export function splitItems(inner: string): string[] {
+  const items: string[] = []
+  let current = ''
+  let quote: string | null = null
+  let depth = 0
+  for (const char of inner) {
+    if (quote !== null) {
+      if (char === quote) quote = null
+    } else if (char === '"' || char === "'") quote = char
+    else if (char === '[') depth++
+    else if (char === ']') depth--
+    else if (char === ',' && depth === 0) {
+      items.push(current)
+      current = ''
+      continue
+    }
+    current += char
+  }
+  if (current.trim() !== '') items.push(current)
+  return items.map((item) => item.trim())
+}
+
 /** Classify a scalar. Order matters: a date is text-shaped, so test it first. */
 function classify(raw: string): { value: Field['value']; type: FieldType } {
   const trimmed = raw.trim()
   if (trimmed === '') return { value: null, type: 'empty' }
 
+  // A wikilink, quoted or not. Checked before the list rule, because an
+  // unquoted `[[Note]]` also starts with `[` and ends with `]` - it used to be
+  // read as a one-item list containing the text `[Note]`, mangling the link.
+  const bare = unquote(trimmed)
+  if (ONLY_LINKS.test(bare)) return { value: bare, type: 'link' }
+
   // `[a, b]` or a bare comma list.
   if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
     const inner = trimmed.slice(1, -1).trim()
-    const items = inner === '' ? [] : inner.split(',').map((part) => unquote(part))
+    const items = inner === '' ? [] : splitItems(inner).map((part) => unquote(part))
     return { value: items, type: 'list' }
   }
 
@@ -136,7 +172,13 @@ export function serialize(value: Field['value']): string {
   if (value === null) return ''
   if (typeof value === 'boolean') return value ? 'true' : 'false'
   if (typeof value === 'number') return String(value)
-  if (Array.isArray(value)) return `[${value.map((item) => item.trim()).filter((i) => i !== '').join(', ')}]`
+  if (Array.isArray(value)) {
+    // Each item quoted when it has to be. An unquoted `[[a]]` inside a flow
+    // list is a nested list to every YAML reader, including the one in
+    // Obsidian - so a list of links must come out as `["[[a]]", "[[b]]"]`.
+    const items = value.map((item) => item.trim()).filter((item) => item !== '')
+    return `[${items.map((item) => (/^[[{>|*&!%@`"']/.test(item) || item.includes(',') ? `"${item.replace(/"/g, '\\"')}"` : item)).join(', ')}]`
+  }
 
   const text = value.trim()
   // Quote anything that would otherwise change type on the way back in.

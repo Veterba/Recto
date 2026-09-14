@@ -108,3 +108,26 @@ describe('resolving wikilinks', () => {
     expect(normalizeName('ЗАМЕТКА')).toBe('заметка')
   })
 })
+
+describe('links in frontmatter', () => {
+  it('counts a link in a property, on its own line number', () => {
+    const parsed = parseNote('---\nrelated: "[[Q4 plan]]"\nstatus: draft\n---\nBody with [[Other]].')
+    expect(parsed.links.map((l) => [l.target, l.line])).toEqual([
+      ['Q4 plan', 1],
+      ['Other', 4],
+    ])
+  })
+
+  it('reads links from a list property, with headings and aliases', () => {
+    const parsed = parseNote('---\nrefs: ["[[a#Intro|first]]", "[[b]]"]\n---\n')
+    expect(parsed.links).toEqual([
+      { target: 'a', heading: 'Intro', alias: 'first', line: 1 },
+      { target: 'b', heading: null, alias: null, line: 1 },
+    ])
+  })
+
+  it('does not treat an unterminated block as frontmatter links twice', () => {
+    const parsed = parseNote('---\nrelated: [[x]]\nno closing fence')
+    expect(parsed.links.map((l) => l.target)).toEqual(['x'])
+  })
+})

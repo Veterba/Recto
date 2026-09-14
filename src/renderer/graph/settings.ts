@@ -25,6 +25,13 @@ export type GraphSettings = {
    * agrees with the file list AND nothing is hidden from you by force.
    */
   showTasks: boolean
+  /**
+   * Conversations with Claude are notes too, and each one links to whatever it
+   * quoted - so a vault with a lot of chatting grows a cluster of them that is
+   * not really part of your notes. On by default, because they ARE notes and
+   * hiding them without asking is how things go missing.
+   */
+  showChats: boolean
 }
 
 export const DEFAULT_SETTINGS: GraphSettings = {
@@ -32,6 +39,7 @@ export const DEFAULT_SETTINGS: GraphSettings = {
   showLabels: true,
   showOrphans: true,
   showTasks: false,
+  showChats: true,
 }
 
 /** Sane outer edges for each force, matching the slider ranges in the UI. */
@@ -66,5 +74,6 @@ export function parseSettings(raw: unknown): GraphSettings {
     showLabels: typeof record['showLabels'] === 'boolean' ? record['showLabels'] : true,
     showOrphans: typeof record['showOrphans'] === 'boolean' ? record['showOrphans'] : true,
     showTasks: typeof record['showTasks'] === 'boolean' ? record['showTasks'] : false,
+    showChats: typeof record['showChats'] === 'boolean' ? record['showChats'] : true,
   }
 }

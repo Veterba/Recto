@@ -158,7 +158,15 @@ export function draw(
 ): number {
   const started = performance.now()
   const { camera, positions, nodes, edges, active, neighbours, hovered } = state
-  const dimming = active >= 0
+  /**
+   * Whether a note is open - which ADDS emphasis, and no longer takes any away.
+   *
+   * It used to fade every other note to a quarter and every other edge to a
+   * sixth, which made the open note stand out by making the rest of the vault
+   * hard to see. The graph is for seeing the vault; the open note is found by
+   * its colour, size, ring and accented links, all of which stay.
+   */
+  const highlighting = active >= 0
 
   context.clearRect(0, 0, width, height)
 
@@ -170,7 +178,7 @@ export function draw(
   const lit: number[] = []
 
   for (const [a, b] of edges) {
-    const isLit = dimming && (a === active || b === active)
+    const isLit = highlighting && (a === active || b === active)
     const target = isLit ? lit : plain
     const [x1, y1] = worldToScreen(camera, positions[a * 2] ?? 0, positions[a * 2 + 1] ?? 0, width, height)
     const [x2, y2] = worldToScreen(camera, positions[b * 2] ?? 0, positions[b * 2 + 1] ?? 0, width, height)
@@ -194,7 +202,7 @@ export function draw(
     context.stroke()
   }
 
-  strokeBatch(plain, palette.edge, dimming ? 0.18 : 0.55, 1)
+  strokeBatch(plain, palette.edge, 0.55, 1)
   strokeBatch(lit, palette.edgeActive, 0.9, 1.5)
 
   // --- nodes --------------------------------------------------------------
@@ -207,7 +215,7 @@ export function draw(
     const isNeighbour = neighbours.has(i)
     const isHovered = i === hovered
 
-    context.globalAlpha = dimming && !isActive && !isNeighbour && !isHovered ? 0.25 : 1
+    context.globalAlpha = 1
     context.fillStyle = isActive
       ? palette.nodeActive
       : (nodes[i]?.degree ?? 0) === 0
@@ -259,7 +267,7 @@ export function draw(
       if (sx < 0 || sy < 0 || sx > width || sy > height) continue
 
       const r = radiusOf(node.degree) * Math.max(0.6, Math.min(1.6, camera.zoom))
-      context.globalAlpha = isActive || isHovered ? 1 : dimming && !isNeighbour ? 0.3 : 0.8
+      context.globalAlpha = isActive || isHovered ? 1 : 0.8
       context.fillStyle = isActive ? palette.labelActive : palette.label
       context.fillText(node.label, sx, sy + (isActive ? r * 1.6 : r) + 4, 160)
     }
