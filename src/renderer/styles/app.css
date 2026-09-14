@@ -826,17 +826,30 @@ body.is-resizing {
   background: var(--bg-hover);
   color: var(--text-secondary);
 }
+/*
+ * The tab you are in: outlined in the accent, left, right and top.
+ *
+ * Same fill as every other tab - the bar's own grey - so nothing jumps out as
+ * a white block; the accent outline alone says which one it is. The outline is
+ * inset box-shadow rather than a border, so the tab does not change size when
+ * it becomes active and the row never shifts.
+ */
 .tab.is-active {
   background: var(--tint);
   color: var(--text-primary);
-  /* Bridge the tab into the content area below it. Fill alone is invisible in
-     light mode, where the tab and the content are both white. */
   box-shadow:
     inset 1px 0 0 var(--border),
     inset -1px 0 0 var(--border),
     inset 0 1px 0 var(--border);
 }
-
+/* The accent goes on ONE tab in the window: the note you are actually in.
+   With the editor split, the other pane's active tab keeps the plain outline. */
+.tabs.is-focused .tab.is-active {
+  box-shadow:
+    inset 1px 0 0 var(--accent),
+    inset -1px 0 0 var(--accent),
+    inset 0 1px 0 var(--accent);
+}
 .tab__title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -875,10 +888,8 @@ body.is-resizing {
   overflow: hidden;
 }
 
-/* The focused group gets a hairline accent, so splits are never ambiguous. */
-.split .tabs.is-focused > .tabs__bar {
-  box-shadow: inset 0 2px 0 -1px var(--accent);
-}
+/* Which split is focused is shown by its active tab's accent line (above);
+   a second accent along the whole bar said the same thing twice. */
 
 .leaf {
   height: 100%;
@@ -4760,4 +4771,256 @@ body.is-resizing {
   margin-left: auto;
   font-size: 11.5px;
   color: var(--text-muted);
+}
+
+/* ---------- Obsidian syntax: maths, tables, callouts, embeds ---------- */
+
+/* Inline maths sits on the text baseline; KaTeX's own CSS handles the rest. */
+.cm-math {
+  padding: 0 1px;
+}
+.cm-math .katex {
+  font-size: 1.08em;
+}
+/* `$$…$$` inside a line: display style, but it must not break the line open. */
+.cm-math-display .katex-display {
+  display: inline-block;
+  margin: 0.2em 0.4em;
+}
+
+/* A `$$` block on its own lines: centred, with room to breathe, and scrolls
+   sideways rather than overflowing the column when a formula is long. */
+.cm-math-block {
+  padding: var(--size-2) 0;
+  overflow-x: auto;
+  cursor: text;
+}
+.cm-math-block .katex-display {
+  margin: 0;
+}
+.katex-error {
+  color: var(--danger) !important;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* Tables, drawn like a document table rather than a spreadsheet. */
+.cm-table-wrap {
+  margin: var(--size-2) 0;
+  overflow-x: auto;
+  cursor: text;
+}
+.cm-table {
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 0.92em;
+  line-height: 1.5;
+}
+.cm-table th,
+.cm-table td {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.cm-table th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+}
+.cm-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--bg-secondary) 45%, transparent);
+}
+.cm-table code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* Footnote markers: small, raised, in the accent. */
+.cm-footnote-ref {
+  padding: 0 1px;
+  font-size: 0.72em;
+  color: var(--accent);
+}
+
+/* A note embed: a link card, since transcluding the note is its own feature. */
+.cm-embed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+}
+.cm-embed__label {
+  color: var(--text-muted);
+}
+
+/*
+ * Callouts: `> [!type] Title`. One tint per colour group, a left bar in the
+ * same colour, the header line bold - Obsidian's shape, in this app's palette.
+ */
+.cm-callout {
+  --callout: 90 110 140;
+  background: rgb(var(--callout) / 0.08);
+  border-left: 3px solid rgb(var(--callout) / 0.85);
+  padding-left: var(--size-3) !important;
+}
+.cm-callout-head {
+  padding-top: 6px !important;
+  font-weight: 600;
+  color: rgb(var(--callout));
+}
+.cm-callout-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.cm-callout-icon {
+  font-weight: 700;
+}
+.cm-callout-note { --callout: 68 138 255; }
+.cm-callout-abstract { --callout: 0 176 194; }
+.cm-callout-info { --callout: 68 138 255; }
+.cm-callout-tip { --callout: 0 191 165; }
+.cm-callout-success { --callout: 34 170 90; }
+.cm-callout-question { --callout: 236 150 0; }
+.cm-callout-warning { --callout: 236 117 0; }
+.cm-callout-failure { --callout: 233 49 71; }
+.cm-callout-danger { --callout: 233 49 71; }
+.cm-callout-example { --callout: 120 82 238; }
+.cm-callout-quote { --callout: 140 140 140; }
+
+/* ---------- Obsidian sync (settings) ---------- */
+
+.osync {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+}
+.osync__label {
+  margin: var(--size-2) 0 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.osync__vaults {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-2);
+}
+.osync__vault {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--size-3);
+  padding: var(--size-2) var(--size-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  cursor: pointer;
+}
+.osync__vault:hover {
+  background: var(--bg-hover);
+}
+.osync__vault.is-chosen {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.osync__vault-name {
+  font-weight: 600;
+}
+.osync__vault-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.osync__vault-path,
+.osync__path {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.osync__counts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.osync__counts li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.osync__counts li.is-zero {
+  color: var(--text-muted);
+}
+.osync__pair {
+  display: flex;
+  gap: var(--size-3);
+  align-items: flex-start;
+  padding: var(--size-3);
+  border-radius: var(--radius-m);
+  background: var(--bg-secondary);
+}
+.osync__pair > div {
+  /* Without this a long vault path forces the whole settings pane to scroll
+     sideways instead of truncating. */
+  flex: 1;
+  min-width: 0;
+}
+.osync__title {
+  margin: 0;
+  font-weight: 600;
+}
+.osync__path {
+  margin: 2px 0 0;
+}
+.osync__state {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.osync__problem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-size: 12.5px;
+}
+.osync__problem p {
+  flex: 1;
+  margin: 0;
+}
+.osync__problem svg {
+  flex: none;
+  margin-top: 2px;
+}
+.osync__conflicts ul {
+  margin: 4px 0 0;
+  padding-left: var(--size-4);
+  font-size: 12px;
+}
+.osync__preview {
+  padding: var(--size-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+.osync__actions {
+  margin-top: var(--size-1);
 }

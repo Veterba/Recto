@@ -16,6 +16,7 @@ import { vim } from '@replit/codemirror-vim'
 import { activeFormats, type Format } from './markdown-actions'
 import { blockDecorations } from './blocks'
 import { imageDrop } from './images'
+import { obsidianSyntax } from './obsidian-syntax'
 import { markdownDecorations, setUnresolvedTargets, unresolvedField } from './decorations'
 import { livePreview, livePreviewCompartment, setLivePreview } from './live-preview'
 import { linkCompletion, type LinkCandidate } from './link-complete'
@@ -147,7 +148,9 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         // `languages` lazy-loads a grammar the first time a fence names it, so
         // a vault with no code costs nothing and ```python highlights properly.
         // This is what `codeLanguages: []` was a placeholder for.
-        markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true }),
+        // Plus Obsidian's own syntax - maths, comments, footnotes - in the
+        // grammar, so a note copied out of Obsidian parses the same here.
+        markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true, extensions: [obsidianSyntax] }),
         markdownHighlighting(),
         markdownDecorations(),
         blockDecorations(),

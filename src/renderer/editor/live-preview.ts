@@ -2,6 +2,15 @@ import { syntaxTree } from '@codemirror/language'
 import { Compartment, RangeSetBuilder, StateEffect, StateField, type Extension } from '@codemirror/state'
 import { vaultFileUrl } from '../core/vault-url'
 import {
+  CalloutHeader,
+  EmbedWidget,
+  FootnoteWidget,
+  MathWidget,
+  mathSource,
+  stripContainers,
+  TableWidget,
+} from './rich-widgets'
+import {
   Decoration,
   EditorView,
   ViewPlugin,
@@ -32,6 +41,9 @@ const MARKERS = new Set([
   'QuoteMark',
   'LinkMark',
   'URL',
+  // `%%` around a comment: the comment itself stays, dimmed, the way Obsidian's
+  // Live Preview shows it.
+  'CommentMark',
 ])
 
 const hidden = Decoration.replace({})
@@ -175,6 +187,9 @@ const bullet = Decoration.replace({ widget: new BulletWidget() })
 
 const IMAGE = /!\[([^\]]*)\]\(([^)\s]+)\)/g
 const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
+const EMBED = /!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g
+/** `> [!type]` with an optional fold sign and title. */
+export const CALLOUT_HEAD = /^(\s*>\s*)\[!([\w-]+)\]([+-]?)(.*)$/
 const HIGHLIGHT = /==([^=\n]+)==/g
 const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
 const FENCE_LINE = /^---\s*$/
@@ -203,7 +218,6 @@ const livePreviewEnabled = StateField.define<boolean>({
  * silently ignores the whole decoration - which looks exactly like a condition
  * that never matched.
  */
-const RULE_LINE = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/
 const FENCE = /^\s*(`{3,}|~{3,})/
 
 const hiddenBlock = Decoration.replace({ block: true })
@@ -212,7 +226,12 @@ const ruleBlock = Decoration.replace({ block: true, widget: new RuleWidget() })
 const blockHiding = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update: (value, transaction) => {
-    if (!transaction.docChanged && transaction.selection === undefined && value !== Decoration.none) {
+    // The syntax tree finishes parsing a long note in the background, after the
+    // transaction that opened it; a table or formula further down only appears
+    // in the tree later. Recompute when the tree changes too, or those stay raw
+    // until something else happens to move the caret.
+    const treeChanged = syntaxTree(transaction.startState) !== syntaxTree(transaction.state)
+    if (!transaction.docChanged && transaction.selection === undefined && !treeChanged && value !== Decoration.none) {
       return value.map(transaction.changes)
     }
 
@@ -267,20 +286,46 @@ const blockHiding = StateField.define<DecorationSet>({
         if (wasIn) continue
         continue
       }
-      // Inside a fence, `---` is code and `<div>` is code. Never touch them.
-      if (inFence) continue
-      if (touched.has(n)) continue
-
-      if (RULE_LINE.test(line.text)) {
-        // `---` directly under a line of text is a setext H2, not a rule.
-        // Drawing a line there would hide a heading.
-        const previous = n > 1 ? doc.line(n - 1).text.trim() : ''
-        if (previous === '' || !line.text.trim().startsWith('-')) {
-          ranges.push({ from: line.from, to: line.to, deco: ruleBlock })
-        }
-        continue
-      }
     }
+
+    // --- rules, maths blocks and tables, from the grammar -----------------
+    //
+    // Rules used to be guessed from the text: a `---` line counted unless the
+    // line above had text, to avoid eating a setext heading. That guessed wrong
+    // both ways - a `---` right after a list item stayed raw, and a `---` under
+    // a `$$` block the grammar did not understand became a heading. The parser
+    // knows which one it is, so it decides.
+    syntaxTree(state).iterate({
+      enter: (node) => {
+        const name = node.name
+        if (name !== 'HorizontalRule' && name !== 'MathBlock' && name !== 'Table') return undefined
+        const first = doc.lineAt(node.from)
+        const last = doc.lineAt(node.to)
+        if (first.number <= frontmatterEnd) return false
+        for (let n = first.number; n <= last.number; n++) if (touched.has(n)) return false
+
+        if (name === 'HorizontalRule') {
+          ranges.push({ from: first.from, to: last.to, deco: ruleBlock })
+        } else if (name === 'MathBlock') {
+          const tex = mathSource(doc.sliceString(node.from, node.to))
+          ranges.push({
+            from: first.from,
+            to: last.to,
+            deco: Decoration.replace({ block: true, widget: new MathWidget(tex, true, true) }),
+          })
+        } else {
+          ranges.push({
+            from: first.from,
+            to: last.to,
+            deco: Decoration.replace({
+              block: true,
+              widget: new TableWidget(stripContainers(doc.sliceString(first.from, last.to))),
+            }),
+          })
+        }
+        return false
+      },
+    })
 
     return Decoration.set(ranges.map((range) => range.deco.range(range.from, range.to)), true)
   },
@@ -328,6 +373,23 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
       from,
       to,
       enter: (node) => {
+        // Blocks the block field renders whole: nothing inside them should be
+        // decorated separately.
+        if (node.name === 'MathBlock' || node.name === 'Table' || node.name === 'FencedCode') return false
+
+        if (node.name === 'InlineMath' || node.name === 'FootnoteRef') {
+          if (active.has(view.state.doc.lineAt(node.from).number)) return false
+          const text = view.state.doc.sliceString(node.from, node.to)
+          if (node.name === 'InlineMath') {
+            const display = text.startsWith('$$')
+            const tex = text.slice(display ? 2 : 1, text.length - (display ? 2 : 1))
+            ranges.push({ from: node.from, to: node.to, deco: Decoration.replace({ widget: new MathWidget(tex, display, false) }) })
+          } else {
+            ranges.push({ from: node.from, to: node.to, deco: Decoration.replace({ widget: new FootnoteWidget(text.slice(2, -1)) }) })
+          }
+          return false
+        }
+
         if (node.name === 'ListMark') {
           if (active.has(view.state.doc.lineAt(node.from).number)) return
           // Only unordered lists. `1.` is content - renumbering it as a dot
@@ -387,6 +449,29 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
           from: start,
           to: start + match[0].length,
           deco: Decoration.replace({ widget: new ImageWidget(match[2] ?? '', match[1] ?? '') }),
+        })
+      }
+
+      // Obsidian's embed, `![[file]]` or `![[file|300]]`. Before the wikilink
+      // pass: it contains a wikilink, and the longer range has to win.
+      for (const match of line.text.matchAll(EMBED)) {
+        const start = line.from + (match.index ?? 0)
+        ranges.push({
+          from: start,
+          to: start + match[0].length,
+          deco: Decoration.replace({ widget: new EmbedWidget(match[1]?.trim() ?? '', match[2]?.trim() ?? null) }),
+        })
+      }
+
+      // A callout's first line: `> [!note] Title` becomes an icon and a title.
+      // The colour for the whole callout comes from blocks.ts, in both modes.
+      const callout = CALLOUT_HEAD.exec(line.text)
+      if (callout !== null) {
+        const start = line.from + (callout[1]?.length ?? 0)
+        ranges.push({
+          from: start,
+          to: line.to,
+          deco: Decoration.replace({ widget: new CalloutHeader(callout[2] ?? 'note', (callout[4] ?? '').trim()) }),
         })
       }
 

@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import type { IpcApi, RenameOutcome } from '../shared/ipc-contract'
 import * as ai from './ai'
 import * as archive from './archive'
+import * as obsidianSync from './sync'
 import { openIndexForVault, send, stopIndexer } from './index-client'
 import { readState, writeState } from './state'
 import * as vaultFs from './vault-fs'
@@ -39,6 +40,8 @@ function rewatch(): void {
   // Old snapshots go on vault open, for the same reason archive retention does:
   // the app may not be running on the day something expires.
   void send({ kind: 'history-prune' }, 30_000).catch(() => undefined)
+  // Sync follows the open vault: each vault has its own pairing, or none.
+  obsidianSync.startForCurrentVault()
 }
 
 export function registerIpc(): void {
@@ -61,6 +64,8 @@ export function registerIpc(): void {
   handle('vault:close', () => {
     stopWatching()
     stopIndexer()
+    // A closed vault must not keep syncing in the background.
+    obsidianSync.stopAll()
     return closeVault()
   })
 
@@ -222,6 +227,14 @@ export function registerIpc(): void {
   })
 
   handle('app:is-fullscreen', () => BrowserWindow.getAllWindows()[0]?.isFullScreen() ?? false)
+
+  handle('obsidian:vaults', () => obsidianSync.detectVaults())
+  handle('obsidian:pick', () => obsidianSync.pickFolder())
+  handle('obsidian:status', () => obsidianSync.status())
+  handle('obsidian:preview', (p) => obsidianSync.preview(p))
+  handle('obsidian:enable', (p) => obsidianSync.enable(p))
+  handle('obsidian:disable', () => obsidianSync.disable())
+  handle('obsidian:sync-now', (force) => obsidianSync.syncNow(force === true))
 
   handle('ai:key-status', () => keyStatus())
   handle('ai:set-key', (key) => {

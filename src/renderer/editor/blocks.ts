@@ -1,5 +1,6 @@
 import { syntaxTree } from '@codemirror/language'
-import { isLivePreviewOn } from './live-preview'
+import { CALLOUT_HEAD, isLivePreviewOn } from './live-preview'
+import { calloutGroup } from './rich-widgets'
 import { RangeSetBuilder, type EditorState, type Extension } from '@codemirror/state'
 import {
   Decoration,
@@ -81,6 +82,45 @@ const highlightMark = Decoration.mark({ class: 'cm-highlight' })
 
 const HIGHLIGHT = /==([^=\n]+)==/g
 const QUOTE = /^\s*>\s?/
+const LIST_ITEM = /^(\s*)([-*+]|\d+[.)])(\s+)(\[[ xX]\]\s+)?/
+
+/** Callout lines, cached by group, since a note may have many. */
+const calloutLines = new Map<string, { body: Decoration; head: Decoration }>()
+function calloutDecos(group: string): { body: Decoration; head: Decoration } {
+  let decos = calloutLines.get(group)
+  if (decos === undefined) {
+    decos = {
+      body: Decoration.line({ class: `cm-callout cm-callout-${group}` }),
+      head: Decoration.line({ class: `cm-callout cm-callout-${group} cm-callout-head` }),
+    }
+    calloutLines.set(group, decos)
+  }
+  return decos
+}
+
+/** Width in columns of leading whitespace, tabs counted as four. */
+const columns = (whitespace: string): number => [...whitespace].reduce((n, c) => n + (c === '\t' ? 4 : 1), 0)
+
+/**
+ * Hanging indent for a wrapped list item or an indented continuation line.
+ *
+ * Without it a long list item wraps back to the left margin, under its own
+ * bullet, and a nested list turns into a ragged wall of text - which is what a
+ * note copied from Obsidian looked like. The wrapped part now lines up with
+ * the text after the marker, the way Obsidian and every word processor do it.
+ *
+ * Measured in `ch`, from the source: exact in the monospace editor font, a
+ * close approximation in the proportional ones.
+ */
+const hangCache = new Map<number, Decoration>()
+function hang(width: number): Decoration {
+  let deco = hangCache.get(width)
+  if (deco === undefined) {
+    deco = Decoration.line({ attributes: { style: `padding-left: calc(6px + ${width}ch); text-indent: -${width}ch` } })
+    hangCache.set(width, deco)
+  }
+  return deco
+}
 
 /** The language written after the opening fence, if any. */
 function fenceLanguage(text: string): string {
@@ -155,15 +195,61 @@ function build(view: EditorView): DecorationSet {
       },
     })
 
-    // --- line-level: quotes and inline highlight ---------------------------
+    // --- callouts: a blockquote whose first line is `> [!type]` -----------
+    //
+    // From the tree, so the whole quote gets the callout's colour even when its
+    // first line is above the viewport.
+    const calloutByLine = new Map<number, Decoration>()
+    const skipHang = new Set<number>()
+    syntaxTree(state).iterate({
+      from,
+      to,
+      enter: (node) => {
+        if (node.name === 'FencedCode' || node.name === 'MathBlock' || node.name === 'Table') {
+          const a = state.doc.lineAt(node.from).number
+          const b = state.doc.lineAt(node.to).number
+          for (let n = a; n <= b; n++) skipHang.add(n)
+          return false
+        }
+        if (node.name !== 'Blockquote') return undefined
+        const first = state.doc.lineAt(node.from)
+        const head = CALLOUT_HEAD.exec(first.text)
+        if (head === null) return undefined
+        const decos = calloutDecos(calloutGroup(head[2] ?? 'note'))
+        const last = state.doc.lineAt(node.to).number
+        for (let n = first.number; n <= last; n++) calloutByLine.set(n, n === first.number ? decos.head : decos.body)
+        return false
+      },
+    })
+
+    // --- line-level: quotes, callouts, hanging indents and highlight -------
     const startLine = state.doc.lineAt(from).number
     const endLine = state.doc.lineAt(to).number
+    const livePreview = isLivePreviewOn(view)
 
     for (let n = startLine; n <= endLine; n++) {
       const line = state.doc.line(n)
 
-      if (QUOTE.test(line.text)) {
+      const callout = calloutByLine.get(n)
+      if (callout !== undefined) {
+        entries.push({ from: line.from, to: line.from, deco: callout, sort: SORT.line })
+      } else if (QUOTE.test(line.text)) {
         entries.push({ from: line.from, to: line.from, deco: quoteLine, sort: SORT.line })
+      }
+
+      if (!skipHang.has(n) && !QUOTE.test(line.text)) {
+        const item = LIST_ITEM.exec(line.text)
+        let width = 0
+        if (item !== null) {
+          const lead = columns(item[1] ?? '')
+          // In Live Preview a task's `- [ ] ` is drawn as one checkbox, about
+          // three columns wide rather than six.
+          width = item[4] !== undefined && livePreview ? lead + 3 : lead + (item[2]?.length ?? 1) + (item[3]?.length ?? 1) + (item[4]?.length ?? 0)
+        } else {
+          const lead = /^[ \t]+/.exec(line.text)?.[0]
+          if (lead !== undefined && line.text.trim() !== '') width = columns(lead)
+        }
+        if (width > 0) entries.push({ from: line.from, to: line.from, deco: hang(width), sort: SORT.line })
       }
 
       for (const match of line.text.matchAll(HIGHLIGHT)) {
