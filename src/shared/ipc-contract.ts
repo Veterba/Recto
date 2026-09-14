@@ -76,6 +76,37 @@ export type AiDelta = { id: string; text: string }
 export type AiDone = { id: string; stopReason: string | null; inputTokens: number; outputTokens: number }
 export type AiError = { id: string; message: string }
 
+/** An Obsidian vault found on this machine, from Obsidian's own vault list. */
+export type ObsidianVaultInfo = { path: string; name: string; notes: number; open: boolean }
+
+export type SyncCounts = {
+  toRecto: number
+  toObsidian: number
+  deleteInRecto: number
+  deleteInObsidian: number
+  conflicts: number
+}
+
+/**
+ * Why a sync is not running, in terms the settings screen can explain.
+ * `guard` is the one that needs a person: a pass would delete a lot at once.
+ */
+export type SyncProblem =
+  | { reason: 'missing'; side: 'recto' | 'obsidian' }
+  | { reason: 'nested' }
+  | { reason: 'guard'; side: 'recto' | 'obsidian'; count: number }
+  | { reason: 'error'; message: string }
+
+export type ObsidianSyncStatus = {
+  /** The Obsidian folder this vault syncs with, or null if it syncs with none. */
+  obsidianPath: string | null
+  enabled: boolean
+  running: boolean
+  lastSyncAt: number | null
+  last: { counts: SyncCounts; conflicts: string[]; errors: string[] } | null
+  problem: SyncProblem | null
+}
+
 /** A node in the vault tree. Paths are vault-relative, POSIX-separated. */
 export type FileNode = {
   /** Vault-relative path, e.g. 'work/nordicsync.md'. '' is the root. */
@@ -107,6 +138,8 @@ export type IpcEvents = {
    * answer appears while it is being written. `ai:done` and `ai:error` are
    * terminal - exactly one of them follows every accepted `ai:send`.
    */
+  /** Sync state changed: a pass started, finished, or stopped for a reason. */
+  'obsidian:status': (status: ObsidianSyncStatus) => void
   'ai:delta': (delta: AiDelta) => void
   'ai:done': (done: AiDone) => void
   'ai:error': (error: AiError) => void
@@ -117,6 +150,7 @@ export type IpcEventChannel = keyof IpcEvents
 export const IPC_EVENT_CHANNELS: readonly IpcEventChannel[] = [
   'vault:changed',
   'app:fullscreen',
+  'obsidian:status',
   'ai:delta',
   'ai:done',
   'ai:error',
@@ -213,6 +247,18 @@ export type IpcApi = {
   }) => { ok: boolean; error?: string }
   /** Stop a running stream. Unknown ids are a no-op, not an error. */
   'ai:cancel': (id: string) => { ok: boolean }
+  /** Obsidian vaults registered on this machine. */
+  'obsidian:vaults': () => ObsidianVaultInfo[]
+  /** Pick an Obsidian vault folder by hand. Null when cancelled. */
+  'obsidian:pick': () => string | null
+  'obsidian:status': () => ObsidianSyncStatus
+  /** What the first pass with this folder would do - nothing is written. */
+  'obsidian:preview': (obsidianPath: string) => { ok: true; counts: SyncCounts } | { ok: false; problem: SyncProblem }
+  /** Start syncing the open vault with this Obsidian folder. */
+  'obsidian:enable': (obsidianPath: string) => ObsidianSyncStatus
+  'obsidian:disable': () => ObsidianSyncStatus
+  /** Run a pass now. `force` runs one the deletion guard stopped. */
+  'obsidian:sync-now': (force?: boolean) => ObsidianSyncStatus
 }
 
 /** One archived item. `originalPath` is where restore puts it back. */
@@ -337,4 +383,11 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'ai:test',
   'ai:send',
   'ai:cancel',
+  'obsidian:vaults',
+  'obsidian:pick',
+  'obsidian:status',
+  'obsidian:preview',
+  'obsidian:enable',
+  'obsidian:disable',
+  'obsidian:sync-now',
 ] as const

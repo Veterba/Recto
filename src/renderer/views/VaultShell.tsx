@@ -27,7 +27,7 @@ import { fuzzyMatch } from '../core/fuzzy'
 import { registerEditorCommands } from '../core/editor-commands'
 import { registerAppCommands } from '../core/register-commands'
 import { getSection, type SectionId } from '../core/sections'
-import { setVaultPath } from '../core/vault-url'
+import { setVaultFiles, setVaultPath } from '../core/vault-url'
 import { useVault } from '../core/vault-store'
 import { useWorkspace } from '../core/use-workspace'
 import { getView } from '../core/view-registry'
@@ -97,6 +97,20 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
 
   // Image widgets resolve `attachments/x.png` against this.
   useEffect(() => setVaultPath(vault.path), [vault.path])
+
+  // `![[image.png]]` embeds find a file by name anywhere in the vault, the way
+  // Obsidian does, so the editor needs every file's path - not just notes.
+  useEffect(() => {
+    const paths: string[] = []
+    const walk = (nodes: readonly FileNode[]): void => {
+      for (const node of nodes) {
+        if (node.kind === 'folder') walk(node.children ?? [])
+        else paths.push(node.path)
+      }
+    }
+    walk(tree.roots)
+    setVaultFiles(paths)
+  }, [tree.roots])
 
   /** Which conversation the AI workspace is showing. */
   const activeChat = useMemo(() => {

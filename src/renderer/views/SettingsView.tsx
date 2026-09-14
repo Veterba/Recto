@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AI_MODELS, type ArchiveState, type IndexStats, type VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { HotkeyEditor } from '../components/HotkeyEditor'
+import { ObsidianSync } from '../components/ObsidianSync'
 import { Icon } from '../components/Icon'
 import { PREVIEW_DELAY_MAX, PREVIEW_DELAY_MIN, type Appearance } from '../core/appearance'
 import { dailyNotePath, isInFolder, normaliseFolder, templateName, type TemplateSettings } from '../core/templates'
@@ -17,12 +18,13 @@ import { createPortal } from 'react-dom'
  * there is no "apply" button and nothing to get out of sync.
  */
 
-type Tab = 'appearance' | 'editor' | 'templates' | 'ai' | 'shortcuts' | 'vault'
+type Tab = 'appearance' | 'editor' | 'templates' | 'obsidian' | 'ai' | 'shortcuts' | 'vault'
 
 const TABS: readonly { id: Tab; label: string }[] = [
   { id: 'appearance', label: 'Appearance' },
   { id: 'editor', label: 'Editor' },
   { id: 'templates', label: 'Templates' },
+  { id: 'obsidian', label: 'Obsidian' },
   { id: 'ai', label: 'AI' },
   { id: 'shortcuts', label: 'Shortcuts' },
   { id: 'vault', label: 'Vault' },
@@ -689,6 +691,7 @@ function Settings(deps: Deps): React.ReactElement {
         {tab === 'appearance' && <Appearance_ {...deps} />}
         {tab === 'editor' && <EditorSettings {...deps} />}
         {tab === 'templates' && <TemplateSettingsTab {...deps} />}
+        {tab === 'obsidian' && <ObsidianSync />}
         {tab === 'ai' && <AiSettings {...deps} />}
         {tab === 'shortcuts' && <HotkeyEditor />}
         {tab === 'vault' && <VaultSettings {...deps} />}

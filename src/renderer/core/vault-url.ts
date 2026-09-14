@@ -39,3 +39,30 @@ export function vaultFileUrl(relative: string): string {
   const clean = decoded.replace(/^\.\//, '').replace(/\/+/g, '/')
   return `recto-file://vault/${clean.split('/').map(encodeURIComponent).join('/')}`
 }
+
+/**
+ * Every file in the vault by lower-cased name, for resolving `![[name]]`.
+ *
+ * Obsidian embeds find a file by its NAME, anywhere in the vault, not by path -
+ * so a note copied out of Obsidian says `![[diagram.png]]` and expects that to
+ * work wherever the image lives. Set from the file tree whenever it changes.
+ */
+let byName = new Map<string, string>()
+
+export function setVaultFiles(paths: readonly string[]): void {
+  const next = new Map<string, string>()
+  for (const path of paths) {
+    const name = path.slice(path.lastIndexOf('/') + 1).toLowerCase()
+    // Shortest path wins on a clash, the way Obsidian prefers the nearer file.
+    const existing = next.get(name)
+    if (existing === undefined || path.length < existing.length) next.set(name, path)
+  }
+  byName = next
+}
+
+/** A vault-relative path for `![[name]]`, or null. A path-like name is taken as written. */
+export function resolveVaultFile(name: string): string | null {
+  const clean = name.trim()
+  if (clean.includes('/')) return clean
+  return byName.get(clean.toLowerCase()) ?? null
+}
