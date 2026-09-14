@@ -207,3 +207,40 @@ describe('unicode keys', () => {
     expect(parseFrontmatter(removeField(text, 'дата')).fields.map((f) => f.key)).toEqual(['тема'])
   })
 })
+
+describe('links in properties', () => {
+  const field = (text: string, key: string) => parseFrontmatter(text).fields.find((f) => f.key === key)
+
+  it('reads an unquoted wikilink as a link, not as a mangled list', () => {
+    expect(field('---\nrelated: [[Q4 plan]]\n---\n', 'related')).toMatchObject({ type: 'link', value: '[[Q4 plan]]' })
+  })
+
+  it('reads a quoted wikilink as a link', () => {
+    expect(field('---\nrelated: "[[Q4 plan]]"\n---\n', 'related')).toMatchObject({ type: 'link', value: '[[Q4 plan]]' })
+  })
+
+  it('reads several links in one value as a link', () => {
+    expect(field('---\nsee: [[a]], [[b]]\n---\n', 'see')?.type).toBe('link')
+  })
+
+  it('writes a link back quoted, so other YAML readers see a string', () => {
+    const text = setField('---\n---\n', 'related', '[[Q4 plan]]')
+    expect(text).toContain('related: "[[Q4 plan]]"')
+    expect(field(text, 'related')).toMatchObject({ type: 'link', value: '[[Q4 plan]]' })
+  })
+
+  /** Unquoted, `[[[a]], [[b]]]` is a list of lists to every YAML parser. */
+  it('quotes links inside a list', () => {
+    const text = setField('---\n---\n', 'refs', ['[[a]]', '[[b]]', 'plain'])
+    expect(text).toContain('refs: ["[[a]]", "[[b]]", plain]')
+    expect(field(text, 'refs')?.value).toEqual(['[[a]]', '[[b]]', 'plain'])
+  })
+
+  it('does not split a quoted item on its own comma', () => {
+    expect(field('---\nrefs: ["[[Plan, v2]]", other]\n---\n', 'refs')?.value).toEqual(['[[Plan, v2]]', 'other'])
+  })
+
+  it('leaves text that merely contains a link as text', () => {
+    expect(field('---\nnote: see [[a]] later\n---\n', 'note')?.type).toBe('text')
+  })
+})

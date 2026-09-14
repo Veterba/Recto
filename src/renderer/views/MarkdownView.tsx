@@ -25,9 +25,101 @@ const SAVE_DEBOUNCE_MS = 500
 
 type State = { path?: unknown; heading?: unknown }
 
+/**
+ * "Updated N links" after a rename, waiting for the renamed note to mount.
+ *
+ * A rename changes the tab's path, and the editor is keyed on its path, so the
+ * component that did the rename is gone a frame later - and its state with it.
+ * The notice is handed across the remount by path instead.
+ */
+const pendingRenameNotice = new Map<string, string>()
+
 /** The live editor handle, so app commands can reach the focused editor. */
 let activeHandle: EditorHandle | null = null
 export const getActiveEditor = (): EditorHandle | null => activeHandle
+
+/**
+ * The note's name, as an editable heading above the text.
+ *
+ * It IS the file name - not the first `# heading`, and not a `title:`
+ * property. The file name is what the sidebar shows, what the graph labels,
+ * and what every `[[link]]` points at; a second, separate "title" would be a
+ * third name for the same note that could disagree with the other two.
+ *
+ * So editing it renames the file, through the same path as renaming in the
+ * sidebar, which rewrites every link pointing at it. Committed on Enter or
+ * when focus leaves - never per keystroke, since each commit is a rename and
+ * a vault-wide link rewrite.
+ */
+function NoteTitle({
+  path,
+  onRename,
+}: {
+  path: string
+  onRename: (name: string) => Promise<string | null>
+}): React.ReactElement {
+  const file = path.slice(path.lastIndexOf('/') + 1)
+  const dot = file.toLowerCase().endsWith('.md') ? file.length - 3 : file.length
+  const current = file.slice(0, dot)
+  const [draft, setDraft] = useState(current)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => setDraft(current), [current])
+
+  const commit = async (): Promise<void> => {
+    const name = draft.trim()
+    if (name === '' || name === current) {
+      setDraft(current)
+      setError(null)
+      return
+    }
+    // Slashes would make a rename a move into another folder. That is what
+    // dragging in the sidebar is for; here it is refused out loud.
+    if (/[/\\:]/.test(name)) {
+      setError('A name cannot contain / \\ or :')
+      return
+    }
+    setBusy(true)
+    const failure = await onRename(name)
+    setBusy(false)
+    if (failure !== null) {
+      setError(failure)
+      setDraft(current)
+    } else setError(null)
+  }
+
+  return (
+    <div className="note-title">
+      <input
+        className={`note-title__input${error !== null ? ' is-invalid' : ''}`}
+        value={draft}
+        disabled={busy}
+        spellCheck={false}
+        aria-label="Note name"
+        placeholder="Untitled"
+        onChange={(event) => {
+          setDraft(event.target.value)
+          if (error !== null) setError(null)
+        }}
+        onBlur={() => void commit()}
+        onKeyDown={(event) => {
+          event.stopPropagation()
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            event.currentTarget.blur()
+          }
+          if (event.key === 'Escape') {
+            setDraft(current)
+            setError(null)
+            event.currentTarget.blur()
+          }
+        }}
+      />
+      {error !== null && <p className="note-title__error">{error}</p>}
+    </div>
+  )
+}
 
 function MarkdownEditor({
   path,
@@ -37,8 +129,14 @@ function MarkdownEditor({
   getLinkCandidates,
   livePreview,
   vim,
+  showTitle,
+  onRenamed,
 }: {
   path: string
+  /** Show the editable note name above the text. */
+  showTitle: boolean
+  /** The note now lives at a new path; the tab follows it. */
+  onRenamed: (path: string) => void
   /** A `#heading` from the link that opened this note, to scroll to. */
   heading: string | null
   onOpenLink: (t: string, h: string | null) => void
@@ -141,6 +239,44 @@ function MarkdownEditor({
   // Flush on unmount so closing a tab never drops the last keystrokes.
   useEffect(() => () => flush(), [flush])
 
+  const [renameNotice, setRenameNotice] = useState<string | null>(() => {
+    const waiting = pendingRenameNotice.get(path) ?? null
+    pendingRenameNotice.delete(path)
+    return waiting
+  })
+  useEffect(() => {
+    if (renameNotice === null) return
+    const timer = window.setTimeout(() => setRenameNotice(null), 5000)
+    return () => window.clearTimeout(timer)
+  }, [renameNotice])
+
+  /** Rename from the title. Returns an error sentence, or null on success. */
+  const renameTo = useCallback(
+    async (name: string): Promise<string | null> => {
+      // Save first, to the path the text belongs to. Renaming with an unsaved
+      // buffer would move the old file and then write the new text to a path
+      // that no longer exists.
+      window.clearTimeout(saveTimer.current)
+      const value = handle.current?.getValue()
+      if (value !== undefined && value !== lastWritten.current) await save(value)
+
+      const extension = path.toLowerCase().endsWith('.md') ? '.md' : ''
+      const result = await api.invoke('fs:rename', path, `${name}${extension}`)
+      if (!result.ok) return result.error
+      noteIndexChanged()
+      if (result.rewrittenLinks > 0) {
+        pendingRenameNotice.set(result.path, 
+          `Updated ${result.rewrittenLinks} ${result.rewrittenLinks === 1 ? 'link' : 'links'} in ${result.rewrittenFiles} ${
+            result.rewrittenFiles === 1 ? 'note' : 'notes'
+          }`,
+        )
+      }
+      onRenamed(result.path)
+      return null
+    },
+    [path, save, onRenamed],
+  )
+
   // Mode changes are pushed into the live editor rather than remounting it, so
   // toggling Live Preview keeps your cursor, scroll and undo history.
   useEffect(() => {
@@ -198,6 +334,8 @@ function MarkdownEditor({
       />
       <Properties
         text={text}
+        onOpenLink={onOpenLink}
+        getLinkCandidates={getLinkCandidates}
         onChange={(next) => {
           // Written through the editor, not straight to disk: that way the
           // change is one undoable edit and the cursor is preserved.
@@ -206,6 +344,8 @@ function MarkdownEditor({
           onChange(next)
         }}
       />
+      {/* The path bar stays where it always was, top left, whether the name is
+          shown or not - the name goes under it, not the other way round. */}
       <div className="md__bar">
         <span className="md__path">{path}</span>
         <span className="md__mode">{livePreview ? 'Live Preview' : 'Source'}</span>
@@ -213,6 +353,8 @@ function MarkdownEditor({
           {status === 'dirty' ? 'Unsaved' : status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : ''}
         </span>
       </div>
+      {showTitle && <NoteTitle path={path} onRename={renameTo} />}
+      {renameNotice !== null && <p className="note-title__notice">{renameNotice}</p>}
       <Editor
         docKey={path}
         initialValue={initial}
@@ -243,6 +385,7 @@ export function registerMarkdownView(
   getLinkCandidates: () => readonly LinkCandidate[],
   getLivePreview: () => boolean,
   getVim: () => boolean,
+  getShowTitle: () => boolean,
 ): () => void {
   return registerView({
     type: 'markdown',
@@ -252,7 +395,7 @@ export function registerMarkdownView(
       if (typeof path !== 'string' || path === '') return 'Editor'
       return path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, '')
     },
-    render: ({ state }) => {
+    render: ({ state, setState }) => {
       const path = (state as State).path
       const livePreview = getLivePreview()
       const vim = getVim()
@@ -277,6 +420,11 @@ export function registerMarkdownView(
           getLinkCandidates={getLinkCandidates}
           livePreview={livePreview}
           vim={vim}
+          showTitle={getShowTitle()}
+          // The tab follows the file. The heading is dropped: it was where a
+          // link landed when the note opened, and it is not worth re-scrolling
+          // to after a rename.
+          onRenamed={(next) => setState({ path: next })}
         />
       )
     },

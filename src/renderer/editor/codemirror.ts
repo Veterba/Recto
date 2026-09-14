@@ -186,15 +186,38 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
     getValue: () => view.state.doc.toString(),
 
     setValue: (next) => {
-      if (next === view.state.doc.toString()) return
-      const selection = view.state.selection.main
-      const length = next.length
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: next },
-        // Keep the caret where it was, clamped to the new length. Losing the
-        // cursor on every external change makes co-editing unusable.
-        selection: { anchor: Math.min(selection.anchor, length), head: Math.min(selection.head, length) },
+      const current = view.state.doc.toString()
+      if (next === current) return
+      /**
+       * Replace only what differs, and carry the caret THROUGH the change.
+       *
+       * This used to swap the whole document and put the caret back at the
+       * same numeric offset. Positions do not survive edits that way: adding
+       * the first property to a note inserts a `---` block at offset 0, the
+       * caret stayed at 0 - now inside the frontmatter - and Live Preview,
+       * which shows raw syntax on the caret's line, put the YAML on screen.
+       *
+       * A minimal change (common prefix and suffix left alone) lets CodeMirror
+       * map the selection itself, with text inserted at the caret landing
+       * BEFORE it. It also keeps decorations and scroll steady, and makes the
+       * edit one small undo step rather than a whole-document replacement.
+       */
+      let start = 0
+      const limit = Math.min(current.length, next.length)
+      while (start < limit && current.charCodeAt(start) === next.charCodeAt(start)) start++
+      let end = 0
+      while (
+        end < limit - start &&
+        current.charCodeAt(current.length - 1 - end) === next.charCodeAt(next.length - 1 - end)
+      ) {
+        end++
+      }
+      const changes = view.state.changes({
+        from: start,
+        to: current.length - end,
+        insert: next.slice(start, next.length - end),
       })
+      view.dispatch({ changes, selection: view.state.selection.map(changes, 1) })
     },
 
     run: (action) => {

@@ -333,6 +333,7 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
       () => linkCandidatesRef.current,
       () => livePreviewRef.current,
       () => vimRef.current,
+      () => showTitleRef.current,
     )
     registerUnresolvedView((p) => openFileRef.current(p))
     registerGraphView((p) => openFileRef.current(p))
@@ -397,6 +398,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
   livePreviewRef.current = appearance.livePreview
   const vimRef = useRef(appearance.vimMode)
   vimRef.current = appearance.vimMode
+  const showTitleRef = useRef(appearance.showNoteTitle)
+  showTitleRef.current = appearance.showNoteTitle
 
   /**
    * Save template settings, creating the templates folder if it is new.
@@ -741,6 +744,8 @@ export function VaultShell({ vault, onCloseVault }: Props): React.ReactElement {
                 onCreateIn={(parent, kind) => void createAt(parent, kind)}
                 vaultPath={vault.path}
                 templateFolder={templates.settings.folder}
+                aiModel={appearance.aiModel}
+                previewDelayMs={appearance.previewDelay * 1000}
               />
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} />

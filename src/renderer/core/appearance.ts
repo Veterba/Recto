@@ -33,6 +33,8 @@ export type Appearance = {
   headingScale: number
   /** Modal editing, for people who type that way. */
   vimMode: boolean
+  /** The note's name, editable, centred above its text. */
+  showNoteTitle: boolean
   /**
    * How big the sidebar's own text and rows are, as a multiplier.
    *
@@ -45,6 +47,8 @@ export type Appearance = {
   sidebarBold: boolean
   /** How white the sidebar's text is, 0-100. */
   sidebarContrast: number
+  /** Seconds the pointer rests on a note before its preview card opens. */
+  previewDelay: number
   /**
    * The sidebar's own colour: a gradient laid OVER the frosted panel.
    *
@@ -76,6 +80,15 @@ export type Appearance = {
   translucent: boolean
 }
 
+/**
+ * Bounds for the hover-preview delay, in seconds.
+ *
+ * The floor is not zero: under half a second, every trip of the pointer across
+ * the sidebar opens a card, which is the flicker the delay exists to prevent.
+ */
+export const PREVIEW_DELAY_MIN = 0.5
+export const PREVIEW_DELAY_MAX = 5
+
 export const DEFAULT_APPEARANCE: Appearance = {
   theme: 'system',
   sidebarWidth: 260,
@@ -86,9 +99,11 @@ export const DEFAULT_APPEARANCE: Appearance = {
   headingFont: 'match',
   headingScale: 1.25,
   vimMode: false,
+  showNoteTitle: true,
   sidebarScale: 1.05,
   sidebarBold: true,
   sidebarContrast: 70,
+  previewDelay: 2,
   sidebarTheme: NO_THEME,
   aiModel: 'claude-sonnet-5',
   translucent: true,
@@ -268,6 +283,7 @@ function coerce(value: unknown): Appearance {
         ? Math.min(1.6, Math.max(1, v.headingScale))
         : DEFAULT_APPEARANCE.headingScale,
     vimMode: typeof v.vimMode === 'boolean' ? v.vimMode : DEFAULT_APPEARANCE.vimMode,
+    showNoteTitle: typeof v.showNoteTitle === 'boolean' ? v.showNoteTitle : DEFAULT_APPEARANCE.showNoteTitle,
     sidebarScale:
       typeof v.sidebarScale === 'number' && Number.isFinite(v.sidebarScale)
         ? Math.min(1.25, Math.max(0.9, v.sidebarScale))
@@ -278,6 +294,10 @@ function coerce(value: unknown): Appearance {
         ? Math.min(100, Math.max(0, v.sidebarContrast))
         : DEFAULT_APPEARANCE.sidebarContrast,
     sidebarTheme: coerceSidebarTheme(v.sidebarTheme),
+    previewDelay:
+      typeof v.previewDelay === 'number' && Number.isFinite(v.previewDelay)
+        ? Math.min(PREVIEW_DELAY_MAX, Math.max(PREVIEW_DELAY_MIN, v.previewDelay))
+        : DEFAULT_APPEARANCE.previewDelay,
     aiModel: isAiModel(v.aiModel) ? v.aiModel : DEFAULT_APPEARANCE.aiModel,
     translucent: typeof v.translucent === 'boolean' ? v.translucent : DEFAULT_APPEARANCE.translucent,
     editorFont:

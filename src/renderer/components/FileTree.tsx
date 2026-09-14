@@ -4,6 +4,7 @@ import { api } from '../api'
 import { treeRowHeight } from '../core/appearance'
 import type { VaultTree } from '../core/file-tree-ops'
 import { ConfirmDialog } from './ConfirmDialog'
+import { NotePreviewCard } from './NotePreviewCard'
 import { ContextMenu, useContextMenu, type MenuItem } from './ContextMenu'
 import { Icon } from './Icon'
 import { RenameDialog } from './RenameDialog'
@@ -45,7 +46,27 @@ type Props = {
   vaultPath: string
   /** The templates folder, which gets its own icon so it cannot pass for a normal one. */
   templateFolder: string
+  /** Which model the preview's "Summarize" button asks. */
+  aiModel: string
+  /** Milliseconds the pointer rests on a note before its preview opens. */
+  previewDelayMs: number
 }
+
+/*
+ * How long the pointer must rest on a note before its preview opens is a
+ * setting (Settings → Appearance → Sidebar), because the right wait depends on
+ * how you use the sidebar. It defaults to two seconds: the sidebar is somewhere
+ * the pointer passes through on its way to something else, and a short delay
+ * turns every trip across it into a flicker of cards nobody asked for.
+ */
+/**
+ * Once one preview is open, the next row's opens quickly - you are browsing
+ * previews now, and waiting two seconds per row would make that unbearable.
+ * The same rule macOS uses for tooltips.
+ */
+const PREVIEW_WARM_MS = 250
+/** Grace for the trip from the row to the card, so crossing the gap does not close it. */
+const PREVIEW_CLOSE_MS = 180
 
 export function FileTree({
   tree,
@@ -57,6 +78,8 @@ export function FileTree({
   onCreateIn,
   vaultPath,
   templateFolder,
+  aiModel,
+  previewDelayMs,
 }: Props): React.ReactElement {
   // Read every render rather than fixed at module load: the sidebar's text
   // size is a setting, and the virtualiser has to agree with the stylesheet
@@ -74,6 +97,54 @@ export function FileTree({
   const [rewrite, setRewrite] = useState<{ files: number; links: number; undoId: string } | null>(null)
   /** The node a delete is waiting on confirmation for. */
   const [confirming, setConfirming] = useState<FileNode | null>(null)
+  /** The open preview card, and the row it is anchored to. */
+  const [peek, setPeek] = useState<{ node: FileNode; anchor: { top: number; right: number; bottom: number } } | null>(
+    null,
+  )
+  const peekTimer = useRef<number | undefined>(undefined)
+  const peekOpen = useRef(false)
+  peekOpen.current = peek !== null
+
+  const cancelPeek = useCallback(() => {
+    window.clearTimeout(peekTimer.current)
+    setPeek(null)
+  }, [])
+
+  const delayRef = useRef(previewDelayMs)
+  delayRef.current = previewDelayMs
+  const hoverRow = useCallback((node: FileNode, element: HTMLElement) => {
+    window.clearTimeout(peekTimer.current)
+    // Notes only: a folder has no gist, and an image previews itself.
+    if (node.kind !== 'file' || !node.name.toLowerCase().endsWith('.md')) {
+      if (peekOpen.current) peekTimer.current = window.setTimeout(() => setPeek(null), PREVIEW_CLOSE_MS)
+      return
+    }
+    const box = element.getBoundingClientRect()
+    peekTimer.current = window.setTimeout(
+      () => setPeek({ node, anchor: { top: box.top, right: box.right, bottom: box.bottom } }),
+      peekOpen.current ? PREVIEW_WARM_MS : delayRef.current,
+    )
+  }, [])
+
+  const leaveRow = useCallback(() => {
+    window.clearTimeout(peekTimer.current)
+    if (peekOpen.current) peekTimer.current = window.setTimeout(() => setPeek(null), PREVIEW_CLOSE_MS)
+  }, [])
+
+  // Anything that means "I am doing something now" puts the preview away:
+  // a click, a key, the window losing focus. Scroll is handled on the tree.
+  useEffect(() => {
+    if (peek === null) return
+    const close = (): void => cancelPeek()
+    window.addEventListener('keydown', close)
+    window.addEventListener('blur', close)
+    return () => {
+      window.removeEventListener('keydown', close)
+      window.removeEventListener('blur', close)
+    }
+  }, [peek, cancelPeek])
+
+  useEffect(() => () => window.clearTimeout(peekTimer.current), [])
 
   const rows = useMemo(() => flatten(tree.roots, expanded), [tree.roots, expanded])
   const contextMenu = useContextMenu<FileNode>()
@@ -336,7 +407,12 @@ export function FileTree({
         ref={scrollRef}
         tabIndex={0}
         role="tree"
-        onScroll={(ev) => setScrollTop(ev.currentTarget.scrollTop)}
+        onScroll={(ev) => {
+          setScrollTop(ev.currentTarget.scrollTop)
+          // The card is anchored to a row that just moved.
+          cancelPeek()
+        }}
+        onPointerDown={cancelPeek}
         onKeyDown={onKeyDown}
         onDragOver={(ev) => {
           ev.preventDefault()
@@ -359,7 +435,12 @@ export function FileTree({
                 key={row.node.path}
                 row={row}
                 isOpen={expanded.has(row.node.path)}
-                onContextMenu={(ev) => contextMenu.open(ev, row.node)}
+                onContextMenu={(ev) => {
+                  cancelPeek()
+                  contextMenu.open(ev, row.node)
+                }}
+                onHover={(element) => hoverRow(row.node, element)}
+                onLeave={leaveRow}
                 isActive={row.node.path === activePath}
                 isTemplateFolder={row.node.kind === 'folder' && row.node.path === templateFolder}
                 isCursor={row.node.path === cursor}
@@ -367,6 +448,7 @@ export function FileTree({
                 onStartRename={() => setRenaming(row.node.path)}
                 isDropTarget={dropTarget === row.node.path}
                 onDragStart={(ev) => {
+                  cancelPeek()
                   ev.dataTransfer.setData('text/plain', row.node.path)
                   ev.dataTransfer.effectAllowed = 'move'
                 }}
@@ -396,6 +478,23 @@ export function FileTree({
           </div>
         </div>
       </div>
+
+      {peek !== null && renaming === null && contextMenu.menu === null && (
+        <NotePreviewCard
+          path={peek.node.path}
+          anchor={peek.anchor}
+          mtime={peek.node.mtime}
+          model={aiModel}
+          onOpen={(path) => {
+            cancelPeek()
+            onOpenFile(path)
+          }}
+          // Resting on the card keeps it; leaving it starts the same short
+          // grace a row does, so card and row behave as one target.
+          onPointerEnter={() => window.clearTimeout(peekTimer.current)}
+          onPointerLeave={leaveRow}
+        />
+      )}
 
       {contextMenu.menu !== null && (
         <ContextMenu
@@ -446,6 +545,8 @@ export function FileTree({
 type RowProps = {
   row: Row
   isTemplateFolder: boolean
+  onHover: (element: HTMLElement) => void
+  onLeave: () => void
   isOpen: boolean
   onContextMenu: (ev: React.MouseEvent) => void
   isActive: boolean
@@ -462,6 +563,8 @@ type RowProps = {
 function TreeRow({
   row,
   isTemplateFolder,
+  onHover,
+  onLeave,
   isOpen,
   onContextMenu,
   isActive,
@@ -499,6 +602,8 @@ function TreeRow({
       onClick={onActivate}
       onDoubleClick={onStartRename}
       onContextMenu={onContextMenu}
+      onPointerEnter={(ev) => onHover(ev.currentTarget)}
+      onPointerLeave={onLeave}
     >
       <span className={`tree__chevron${isFolder ? '' : ' is-hidden'}${isOpen ? ' is-open' : ''}`}>
         {isFolder ? '›' : ''}
@@ -510,7 +615,11 @@ function TreeRow({
       </span>
 
       <>
-          <span className="tree__name" title={isTemplateFolder ? `${node.path} — your templates` : node.path}>
+          {/* No `title` here. The browser's own tooltip showed the path after a
+              second and sat on top of the preview card - two things answering
+              one hover. The preview carries the folder; long names are
+              truncated with an ellipsis, and the full name is in the card. */}
+          <span className="tree__name">
             {label}
           </span>
           <Tip label="Move to archive" hint="Recoverable for 10 days">

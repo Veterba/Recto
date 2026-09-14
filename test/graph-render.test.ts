@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   anyVisible,
+  draw,
   fit,
   pick,
   radiusOf,
   screenToWorld,
   worldToScreen,
   type Camera,
+  type Palette,
   type RenderState,
 } from '../src/renderer/graph/renderer'
 
@@ -147,5 +149,61 @@ describe('node radius', () => {
     expect(radiusOf(0)).toBeLessThan(radiusOf(4))
     expect(radiusOf(4)).toBeLessThan(radiusOf(50))
     expect(radiusOf(10_000)).toBeLessThanOrEqual(10)
+  })
+})
+
+describe('the open note does not hide the rest', () => {
+  /** A context that records the opacity of every fill and stroke. */
+  function recordingContext(): { context: CanvasRenderingContext2D; fills: number[]; strokes: number[] } {
+    const fills: number[] = []
+    const strokes: number[] = []
+    const fake = {
+      globalAlpha: 1,
+      clearRect: (): void => {},
+      beginPath: (): void => {},
+      moveTo: (): void => {},
+      lineTo: (): void => {},
+      arc: (): void => {},
+      fillText: (): void => {},
+      fill: (): void => {
+        fills.push(fake.globalAlpha)
+      },
+      stroke: (): void => {
+        strokes.push(fake.globalAlpha)
+      },
+    }
+    const context = fake as unknown as CanvasRenderingContext2D
+    return { context, fills, strokes }
+  }
+
+  const palette: Palette = {
+    edge: '#999',
+    edgeActive: '#00f',
+    node: '#999',
+    nodeActive: '#00f',
+    nodeOrphan: '#ccc',
+    label: '#333',
+    labelActive: '#000',
+  }
+
+  /**
+   * Opening a note used to fade every other note to 25% and every other link
+   * to 18%. The graph is for seeing the vault; the open note is found by its
+   * own colour, size and ring, so nothing else needs to be dimmed to find it.
+   */
+  it('draws every note at full opacity when one is open', () => {
+    const state = {
+      ...stateWith([0, 0, 40, 0, 80, 0, 120, 0], { x: 60, y: 0, zoom: 1 }, [1, 2, 1, 0]),
+      edges: [[0, 1], [1, 2]] as [number, number][],
+      active: 0,
+      neighbours: new Set([1]),
+      showLabels: false,
+    }
+    const { context, fills, strokes } = recordingContext()
+    draw(context, state, palette, WIDTH, HEIGHT)
+    expect(fills).toHaveLength(4)
+    expect(fills.every((alpha) => alpha === 1)).toBe(true)
+    // Edges not touching the open note keep the same weight as with none open.
+    expect(strokes[0]).toBe(0.55)
   })
 })

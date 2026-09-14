@@ -93,7 +93,12 @@ async function generatedText(settings: TemplateSettings, now: Date): Promise<str
   let body = BUILT_IN_DAILY
   if (settings.daily.template !== null) {
     const template = await api.invoke('fs:read', settings.daily.template)
-    if (template.ok) body = templateBody(template.content)
+    // An EMPTY template counts as no template. That is not hypothetical: a
+    // template file created and never written in produced a blank, 0-byte
+    // daily note with nothing to say why - which looks exactly like the
+    // feature being broken. The built-in heading at least says what day it is;
+    // Settings flags the empty template so it gets filled in.
+    if (template.ok && templateBody(template.content).trim() !== '') body = templateBody(template.content)
   }
   return fillTemplate(body, { title: target.key, path: target.path, now })
 }

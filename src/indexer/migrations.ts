@@ -137,6 +137,18 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX idx_snapshots_path_ts ON snapshots(path, ts DESC);
     `,
   },
+  {
+    version: 5,
+    name: 'frontmatter-links',
+    sql: `
+      -- The parser now reads [[links]] in frontmatter. Notes already indexed
+      -- would keep their old link rows until they happened to change, because
+      -- staleness is judged by (mtime, size) - so every note is marked stale
+      -- once, and the next reconcile re-parses them all. Nothing is lost: the
+      -- index is a cache, and this is it being rebuilt.
+      UPDATE notes SET mtime = -1;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

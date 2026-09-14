@@ -3,7 +3,7 @@ import { AI_MODELS, type ArchiveState, type IndexStats, type VaultInfo } from '@
 import { api } from '../api'
 import { HotkeyEditor } from '../components/HotkeyEditor'
 import { Icon } from '../components/Icon'
-import type { Appearance } from '../core/appearance'
+import { PREVIEW_DELAY_MAX, PREVIEW_DELAY_MIN, type Appearance } from '../core/appearance'
 import { dailyNotePath, isInFolder, normaliseFolder, templateName, type TemplateSettings } from '../core/templates'
 import { createPortal } from 'react-dom'
 
@@ -132,6 +132,22 @@ function Appearance_({ appearance, update }: Deps): React.ReactElement {
           />
         </Row>
 
+        <Row
+          label="Note preview delay"
+          hint={`${appearance.previewDelay.toFixed(1)} s resting on a note before its preview opens`}
+        >
+          <input
+            className="slider"
+            type="range"
+            min={PREVIEW_DELAY_MIN}
+            max={PREVIEW_DELAY_MAX}
+            step={0.5}
+            value={appearance.previewDelay}
+            aria-label="Note preview delay"
+            onChange={(event) => update({ previewDelay: Number(event.target.value) })}
+          />
+        </Row>
+
         <Row label="Bolder text" hint="A frosted panel eats stroke weight; this puts it back.">
           <button
             className={`toggle${appearance.sidebarBold ? ' is-on' : ''}`}
@@ -228,6 +244,18 @@ function EditorSettings({ appearance, update }: Deps): React.ReactElement {
         />
       </Row>
 
+      <Row label="Note name" hint="The note's name, centred above its text. Edit it there to rename the note.">
+        <button
+          className={`toggle${appearance.showNoteTitle ? ' is-on' : ''}`}
+          role="switch"
+          aria-checked={appearance.showNoteTitle}
+          aria-label="Show note name"
+          onClick={() => update({ showNoteTitle: !appearance.showNoteTitle })}
+        >
+          <span className="toggle__knob" />
+        </button>
+      </Row>
+
       <Row label="Vim mode" hint="Modal editing. Esc for normal mode, :w saves.">
         <button
           className={`toggle${appearance.vimMode ? ' is-on' : ''}`}
@@ -317,6 +345,22 @@ function FolderField({
  */
 function TemplateSettingsTab({ templates, updateTemplates, notes, openDailyNote }: Deps): React.ReactElement {
   const inFolder = notes.filter((path) => isInFolder(path, templates.folder))
+  /** Whether the chosen daily template has anything in it. */
+  const [chosenEmpty, setChosenEmpty] = useState(false)
+  useEffect(() => {
+    const chosen = templates.daily.template
+    if (chosen === null) {
+      setChosenEmpty(false)
+      return
+    }
+    let cancelled = false
+    void api.invoke('fs:read', chosen).then((result) => {
+      if (!cancelled) setChosenEmpty(result.ok && result.content.trim() === '')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [templates.daily.template])
   const today = dailyNotePath(new Date(), templates.daily.folder)
   const setDaily = (patch: Partial<TemplateSettings['daily']>): void =>
     updateTemplates({ ...templates, daily: { ...templates.daily, ...patch } })
@@ -363,7 +407,14 @@ function TemplateSettingsTab({ templates, updateTemplates, notes, openDailyNote 
 
         {templates.daily.enabled && (
           <>
-            <Row label="Template" hint="Which template today's note starts from.">
+            <Row
+              label="Template"
+              hint={
+                chosenEmpty
+                  ? `${templateName(templates.daily.template ?? '')} is empty — daily notes use the built-in heading until you write something in it.`
+                  : "Which template today's note starts from."
+              }
+            >
               <select
                 className="setting__select"
                 value={templates.daily.template ?? ''}

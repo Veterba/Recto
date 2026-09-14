@@ -93,6 +93,24 @@ export function parseNote(content: string): ParsedNote {
   const tags: Tag[] = []
   const bodyLines: string[] = []
 
+  /**
+   * Links in frontmatter count too.
+   *
+   * `related: "[[Q4 plan]]"` is a link the user wrote on purpose - arguably
+   * the most deliberate kind, since it names the relationship. Skipping the
+   * frontmatter meant such a link drew no edge in the graph and gave the target
+   * no backlink, while a rename still rewrote it: the app half-believed in it.
+   * Line numbers are the file's own (frontmatter starts after the opening
+   * fence on line 0), so backlink context points at the right line.
+   */
+  yaml.forEach((line, index) => {
+    for (const match of line.matchAll(WIKILINK)) {
+      const target = match[1]?.trim()
+      if (target === undefined || target === '') continue
+      links.push({ target, heading: match[2]?.trim() ?? null, alias: match[3]?.trim() ?? null, line: index + 1 })
+    }
+  })
+
   let inCode = false
 
   for (let i = bodyStart; i < lines.length; i++) {

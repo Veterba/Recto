@@ -1,11 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { api } from '../api'
+import type { LinkCandidate } from '../editor/link-complete'
 import { Icon } from './Icon'
+import { LinkInput } from './LinkInput'
 import { Tip } from './Tip'
 import {
   parseFrontmatter,
   removeField,
   renameField,
   setField,
+  splitItems,
   type Field,
   type FieldType,
 } from '../core/frontmatter'
@@ -28,17 +32,159 @@ const TYPE_ICON: Record<FieldType, string> = {
   boolean: 'toggle-left',
   list: 'tags',
   date: 'calendar',
+  link: 'link',
   empty: 'minus',
+}
+
+type Part =
+  | { kind: 'text'; text: string }
+  | { kind: 'link'; target: string; heading: string | null; label: string }
+
+const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
+const HAS_LINK = /\[\[[^\]]+\]\]/
+
+/**
+ * A property value that holds links, shown as links.
+ *
+ * Read mode renders each `[[target]]` as a button that opens the note - the
+ * reason to put a link in a property at all - with any plain list items beside
+ * them as text. Clicking the empty part of the row switches to the raw text for
+ * editing, because a link you can only click and never change is a link you
+ * delete and retype.
+ *
+ * A link to nothing is drawn dashed, the same as in the editor, so a property
+ * pointing at a renamed or deleted note is visible without opening anything.
+ */
+function LinkValue({
+  field,
+  onChange,
+  onOpenLink,
+  getCandidates,
+}: {
+  field: Field
+  onChange: (value: Field['value']) => void
+  onOpenLink: (target: string, heading: string | null) => void
+  getCandidates: () => readonly LinkCandidate[]
+}): React.ReactElement {
+  const isList = Array.isArray(field.value)
+  const raw = isList ? (field.value as string[]).join(', ') : typeof field.value === 'string' ? field.value : ''
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(raw)
+  const [unresolved, setUnresolved] = useState<ReadonlySet<string>>(new Set())
+
+  const parts = useMemo((): Part[] => {
+    const items = isList ? (field.value as string[]) : [raw]
+    return items.flatMap((item): Part[] => {
+      const links = [...item.matchAll(WIKILINK)]
+      if (links.length === 0) return item.trim() === '' ? [] : [{ kind: 'text', text: item.trim() }]
+      return links.map((match): Part => ({
+        kind: 'link',
+        target: (match[1] ?? '').trim(),
+        heading: match[2]?.slice(1).trim() ?? null,
+        label: (match[3]?.slice(1) ?? match[1] ?? '').trim(),
+      }))
+    })
+  }, [field.value, isList, raw])
+
+  const targets = parts.flatMap((part): string[] => (part.kind === 'link' ? [part.target] : []))
+  const targetKey = targets.join('\n')
+  useEffect(() => {
+    if (targets.length === 0) return
+    let cancelled = false
+    void api.invoke('index:resolve-links', targets).then((resolved) => {
+      if (!cancelled) setUnresolved(new Set(targets.filter((target) => resolved[target] == null)))
+    })
+    return () => {
+      cancelled = true
+    }
+    // Keyed on the joined targets, not the array identity, which is new every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetKey])
+
+  const commit = (): void => {
+    setEditing(false)
+    if (draft === raw) return
+    onChange(isList ? splitItems(draft) : draft)
+  }
+
+  if (editing) {
+    return (
+      <LinkInput
+        className="prop__input"
+        value={draft}
+        autoFocus
+        getCandidates={getCandidates}
+        placeholder="[[Note name]]"
+        onChange={setDraft}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur()
+          if (event.key === 'Escape') {
+            setDraft(raw)
+            setEditing(false)
+          }
+        }}
+      />
+    )
+  }
+
+  return (
+    <div
+      className="prop__links"
+      role="button"
+      tabIndex={0}
+      aria-label="Edit value"
+      onClick={() => {
+        setDraft(raw)
+        setEditing(true)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          setDraft(raw)
+          setEditing(true)
+        }
+      }}
+    >
+      {parts.map((part, index) =>
+        part.kind === 'link' ? (
+          <button
+            key={index}
+            className={`prop__link${unresolved.has(part.target) ? ' is-unresolved' : ''}`}
+            title={unresolved.has(part.target) ? `No note called “${part.target}” yet` : `Open ${part.target}`}
+            onClick={(event) => {
+              // The row's own click means "edit"; the link's means "go".
+              event.stopPropagation()
+              onOpenLink(part.target, part.heading)
+            }}
+          >
+            {part.label}
+          </button>
+        ) : (
+          <span key={index} className="prop__plain">
+            {part.text}
+          </span>
+        ),
+      )}
+    </div>
+  )
 }
 
 /** Editing widget per type; text is the fallback for anything else. */
 function ValueEditor({
   field,
   onChange,
+  onOpenLink,
+  getCandidates,
 }: {
   field: Field
   onChange: (value: Field['value']) => void
+  onOpenLink: (target: string, heading: string | null) => void
+  getCandidates: () => readonly LinkCandidate[]
 }): React.ReactElement {
+  const linked =
+    field.type === 'link' || (field.type === 'list' && Array.isArray(field.value) && field.value.some((item) => HAS_LINK.test(item)))
+  if (linked) return <LinkValue field={field} onChange={onChange} onOpenLink={onOpenLink} getCandidates={getCandidates} />
+
   if (field.type === 'boolean') {
     return (
       <button
@@ -78,21 +224,23 @@ function ValueEditor({
   if (field.type === 'list') {
     const items = Array.isArray(field.value) ? field.value : []
     return (
-      <input
+      <LinkInput
         className="prop__input"
         value={items.join(', ')}
         placeholder="comma, separated"
-        onChange={(event) => onChange(event.target.value.split(',').map((part) => part.trim()))}
+        getCandidates={getCandidates}
+        onChange={(next) => onChange(splitItems(next))}
       />
     )
   }
 
   return (
-    <input
+    <LinkInput
       className="prop__input"
       value={typeof field.value === 'string' ? field.value : ''}
-      placeholder="empty"
-      onChange={(event) => onChange(event.target.value)}
+      placeholder="empty — type [[ to link a note"
+      getCandidates={getCandidates}
+      onChange={(next) => onChange(next)}
     />
   )
 }
@@ -101,9 +249,13 @@ type Props = {
   /** The whole note text - frontmatter is part of the document. */
   text: string
   onChange: (next: string) => void
+  /** Follow a `[[link]]` held in a property value. */
+  onOpenLink: (target: string, heading: string | null) => void
+  /** Note names offered after `[[` in a value. */
+  getLinkCandidates: () => readonly LinkCandidate[]
 }
 
-export function Properties({ text, onChange }: Props): React.ReactElement {
+export function Properties({ text, onChange, onOpenLink, getLinkCandidates }: Props): React.ReactElement {
   const [collapsed, setCollapsed] = useState(false)
   const [adding, setAdding] = useState(false)
   const [newKey, setNewKey] = useState('')
@@ -164,7 +316,12 @@ export function Properties({ text, onChange }: Props): React.ReactElement {
                 )}
               </span>
 
-              <ValueEditor field={field} onChange={(value) => onChange(setField(text, field.key, value))} />
+              <ValueEditor
+                field={field}
+                onChange={(value) => onChange(setField(text, field.key, value))}
+                onOpenLink={onOpenLink}
+                getCandidates={getLinkCandidates}
+              />
 
               <Tip label={`Remove “${field.key}”`}>
                 <button

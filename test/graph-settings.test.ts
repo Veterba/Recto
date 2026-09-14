@@ -25,6 +25,7 @@ describe('graph settings', () => {
       showLabels: false,
       showOrphans: false,
       showTasks: true,
+      showChats: true,
     }
     expect(parseSettings(saved)).toEqual(saved)
   })
@@ -71,11 +72,19 @@ describe('graph settings', () => {
 
   it('ignores unknown keys instead of carrying them into state', () => {
     const parsed = parseSettings({ showLabels: true, mysteryField: { deep: true } })
-    expect(Object.keys(parsed).sort()).toEqual(['showLabels', 'showOrphans', 'showTasks', 'tunables'])
+    expect(Object.keys(parsed).sort()).toEqual(['showChats', 'showLabels', 'showOrphans', 'showTasks', 'tunables'])
   })
 
   it('does not mutate the shared defaults', () => {
     parseSettings({ tunables: { repelStrength: 77 } })
     expect(DEFAULT_TUNABLES.repelStrength).toBe(220)
+  })
+})
+
+describe('showChats', () => {
+  it('shows chats unless told otherwise', () => {
+    expect(parseSettings({}).showChats).toBe(true)
+    expect(parseSettings({ showChats: false }).showChats).toBe(false)
+    expect(parseSettings({ showChats: 'no' }).showChats).toBe(true)
   })
 })
