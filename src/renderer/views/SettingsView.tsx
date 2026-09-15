@@ -7,6 +7,7 @@ import { Icon } from '../components/Icon'
 import { PREVIEW_DELAY_MAX, PREVIEW_DELAY_MIN, type Appearance } from '../core/appearance'
 import { dailyNotePath, isInFolder, normaliseFolder, templateName, type TemplateSettings } from '../core/templates'
 import { createPortal } from 'react-dom'
+import { WritingSettingsTab } from './WritingSettings'
 
 /**
  * Settings.
@@ -18,11 +19,12 @@ import { createPortal } from 'react-dom'
  * there is no "apply" button and nothing to get out of sync.
  */
 
-type Tab = 'appearance' | 'editor' | 'templates' | 'obsidian' | 'ai' | 'shortcuts' | 'vault'
+type Tab = 'appearance' | 'editor' | 'writing' | 'templates' | 'obsidian' | 'ai' | 'shortcuts' | 'vault'
 
 const TABS: readonly { id: Tab; label: string }[] = [
   { id: 'appearance', label: 'Appearance' },
   { id: 'editor', label: 'Editor' },
+  { id: 'writing', label: 'Writing' },
   { id: 'templates', label: 'Templates' },
   { id: 'obsidian', label: 'Obsidian' },
   { id: 'ai', label: 'AI' },
@@ -755,6 +757,7 @@ function Settings(deps: Deps): React.ReactElement {
       <div className="settings__body">
         {tab === 'appearance' && <Appearance_ {...deps} />}
         {tab === 'editor' && <EditorSettings {...deps} />}
+        {tab === 'writing' && <WritingSettingsTab />}
         {tab === 'templates' && <TemplateSettingsTab {...deps} />}
         {tab === 'obsidian' && <ObsidianSync />}
         {tab === 'ai' && <AiSettings {...deps} />}

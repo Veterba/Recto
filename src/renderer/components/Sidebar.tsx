@@ -89,7 +89,7 @@ export function Sidebar({
   return (
     <aside
       className="sidebar"
-      style={{ width }}
+      style={{ width, ['--sidebar-w' as string]: `${width}px` }}
       aria-label="Sidebar"
       onContextMenu={(event) => {
         // Rows stop propagation for their own menus, so anything arriving here

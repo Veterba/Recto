@@ -4,6 +4,10 @@ import { Backlinks } from '../components/Backlinks'
 import { FormatBar } from '../components/FormatBar'
 import { Icon } from '../components/Icon'
 import { Outline } from '../components/Outline'
+import { FocusBar } from '../components/FocusBar'
+import { WritingButtons } from '../components/WritingButtons'
+import { useWriting } from '../core/writing'
+import { flushAuthors, loadAuthors, saveAuthors } from '../core/authors-store'
 import { Properties } from '../components/Properties'
 import { commands } from '../core/commands'
 import { formatChord } from '../core/hotkeys'
@@ -233,6 +237,16 @@ function MarkdownEditor({
   /** The caret's line, for the outline's "you are here". */
   const [cursorLine, setCursorLine] = useState(1)
   const outlineOpen = useOutlineOpen()
+  const writing = useWriting()
+
+  // Writing tools are pushed into the live editor, like Live Preview and Vim.
+  useEffect(() => {
+    handle.current?.setWriting(writing)
+  }, [writing])
+
+  // Authorship is saved on the way out too, so closing a tab right after
+  // marking a passage does not lose the mark.
+  useEffect(() => () => flushAuthors(path), [path])
 
   const syncFormats = useCallback(() => {
     setActive(handle.current?.getActiveFormats() ?? new Set())
@@ -341,6 +355,7 @@ function MarkdownEditor({
 
   return (
     <div className="md">
+      {writing.focus && <FocusBar active={active} text={text} onAfter={() => handle.current?.focus()} />}
       <FormatBar
         active={active}
         onRun={(id) => {
@@ -351,6 +366,7 @@ function MarkdownEditor({
           const binding = commands.bindingFor(id)
           return binding === null ? null : formatChord(binding)
         }}
+        trailing={<WritingButtons onAfter={() => handle.current?.focus()} />}
       />
       <Properties
         text={text}
@@ -393,9 +409,17 @@ function MarkdownEditor({
         getLinkCandidates={getLinkCandidates}
         onSelectionChange={syncFormats}
         onFoldsChange={(lines) => writeFolds(path, lines)}
+        onAuthorsChange={() => {
+          const ranges = handle.current?.getAuthors()
+          if (ranges !== undefined) saveAuthors(path, ranges)
+        }}
         onReady={(editor: EditorHandle) => {
           handle.current = editor
           activeHandle = editor
+          editor.setWriting(writing)
+          void loadAuthors(path).then((stored) => {
+            if (stored.length > 0 && handle.current === editor) editor.setAuthors(stored)
+          })
           editor.setFolds(readFolds(path))
           editor.setLivePreview(livePreview)
           editor.setVim(vim)

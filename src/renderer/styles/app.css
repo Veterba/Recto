@@ -6182,3 +6182,427 @@ body.is-resizing {
   font-size: 10px;
   color: var(--text-muted);
 }
+
+/* ==========================================================================
+   Writing tools, after iA Writer: focus mode, syntax, style check, authors
+   ========================================================================== */
+
+:root {
+  --pos-adjective: #a0671d;
+  --pos-noun: #c24a2a;
+  --pos-adverb: #a24aaf;
+  --pos-verb: #3a6fc2;
+  --pos-conjunction: #4a8a2a;
+  --author-ai: #6c7894;
+  --author-ai-ground: rgb(108 120 148 / 0.09);
+  --author-reference: #6f8455;
+}
+:root[data-theme='dark'] {
+  --pos-adjective: #d7a15a;
+  --pos-noun: #ee7d5c;
+  --pos-adverb: #d387de;
+  --pos-verb: #79a6ec;
+  --pos-conjunction: #8fc46d;
+  --author-ai: #9aa6c2;
+  --author-ai-ground: rgb(154 166 194 / 0.1);
+  --author-reference: #a9bd8b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --pos-adjective: #d7a15a;
+    --pos-noun: #ee7d5c;
+    --pos-adverb: #d387de;
+    --pos-verb: #79a6ec;
+    --pos-conjunction: #8fc46d;
+    --author-ai: #9aa6c2;
+    --author-ai-ground: rgb(154 166 194 / 0.1);
+    --author-reference: #a9bd8b;
+  }
+}
+
+/* --- syntax highlight --- */
+.cm-pos-adjective { color: var(--pos-adjective); }
+.cm-pos-noun { color: var(--pos-noun); }
+.cm-pos-adverb { color: var(--pos-adverb); }
+.cm-pos-verb { color: var(--pos-verb); }
+.cm-pos-conjunction { color: var(--pos-conjunction); }
+
+/* --- style check: struck through, never deleted --- */
+.cm-style {
+  text-decoration-line: line-through;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: color-mix(in srgb, currentColor 70%, transparent);
+  color: var(--text-muted);
+}
+.cm-style-custom {
+  text-decoration-style: solid;
+  text-decoration-color: var(--accent);
+}
+
+/* --- authors --- */
+.cm-author-ai {
+  color: var(--author-ai);
+  background: var(--author-ai-ground);
+  border-radius: 2px;
+}
+.cm-author-reference {
+  color: var(--author-reference);
+  text-decoration: underline dotted color-mix(in srgb, var(--author-reference) 70%, transparent);
+  text-underline-offset: 3px;
+}
+
+/* --- focus: everything outside the line, sentence or paragraph fades --- */
+.cm-writing-focus .cm-line {
+  transition: color 200ms var(--ease);
+}
+.cm-writing-focus .cm-focus-dim,
+.cm-writing-focus .cm-focus-dim * {
+  color: color-mix(in srgb, var(--text-primary) calc(var(--focus-dim) * 100%), transparent) !important;
+  text-decoration-color: color-mix(in srgb, var(--text-primary) calc(var(--focus-dim) * 70%), transparent) !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+/* Pictures, maths, checkboxes and other widgets have no text colour to fade. */
+.cm-writing-focus .cm-focus-dim [contenteditable='false'] {
+  opacity: calc(var(--focus-dim) + 0.1);
+}
+.cm-writing-focus .cm-activeLine {
+  background: transparent;
+}
+
+/* --- typewriter: the first line and the last can both reach the middle --- */
+.cm-typewriter .cm-content {
+  padding-top: 44vh !important;
+}
+.cm-typewriter .cm-scroller {
+  padding-bottom: 52vh !important;
+  scrollbar-width: none;
+}
+.cm-typewriter .cm-scroller::-webkit-scrollbar {
+  width: 0;
+}
+
+/* --- focus mode: the window empties out around the text ---------------------
+   Every piece keeps a transition at all times, so leaving focus mode animates
+   back as smoothly as entering it. Heights collapse through max-height, which
+   is the only way to animate to and from content-sized elements. */
+.shell__titlebar,
+.status,
+.sidebar,
+.sidebar-stub,
+.tabs__bar,
+.md > .formatbar,
+.md > .md__bar,
+.md > .note-title,
+.md > .note-title__notice,
+.md > .props,
+.md > .backlinks,
+.split__pane,
+.split__divider,
+.outline {
+  transition:
+    opacity 260ms var(--ease),
+    margin 420ms var(--ease),
+    max-height 420ms var(--ease),
+    padding 420ms var(--ease),
+    border-width 420ms var(--ease),
+    flex-basis 420ms var(--ease),
+    transform 420ms var(--ease);
+}
+.tabs__bar,
+.md > .formatbar {
+  max-height: 64px;
+}
+.md > .md__bar {
+  max-height: 48px;
+}
+.md > .note-title {
+  max-height: 240px;
+}
+.md > .props,
+.md > .backlinks {
+  max-height: 100vh;
+}
+
+:root[data-focus='on'] :is(
+    .shell__titlebar,
+    .status,
+    .sidebar,
+    .sidebar-stub,
+    .tabs__bar,
+    .md > .formatbar,
+    .md > .md__bar,
+    .md > .note-title,
+    .md > .note-title__notice,
+    .md > .props,
+    .md > .backlinks,
+    .outline
+  ) {
+  opacity: 0;
+  pointer-events: none;
+}
+:root[data-focus='on'] .shell__titlebar > * {
+  visibility: hidden;
+}
+:root[data-focus='on'] .status {
+  margin-bottom: -26px;
+}
+:root[data-focus='on'] .sidebar {
+  margin-left: calc(-1 * var(--sidebar-w, 260px));
+}
+:root[data-focus='on'] .sidebar-stub {
+  margin-left: -42px;
+}
+:root[data-focus='on'] :is(.tabs__bar, .md > .formatbar, .md > .md__bar, .md > .note-title, .md > .note-title__notice, .md > .props, .md > .backlinks) {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  border-width: 0;
+  overflow: hidden;
+}
+/* Only the pane being written in stays; other splits fold away. */
+:root[data-focus='on'] .split__pane:not(:has(.tabs.is-focused)) {
+  flex-basis: 0% !important;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+:root[data-focus='on'] .split__divider {
+  opacity: 0;
+  pointer-events: none;
+}
+:root[data-focus='on'] .split .tabs {
+  border-color: transparent;
+}
+:root[data-focus='on'] .float {
+  opacity: 0;
+  transform: translateY(8px) scale(0.97);
+  pointer-events: none;
+  transition: opacity 260ms var(--ease), transform 360ms var(--ease);
+}
+
+/* --- the focus bar, called up by moving to the top of the window --- */
+.focusbar {
+  position: fixed;
+  /* Below the 30px title bar, never on it: the title bar drags the window, and
+     buttons under a drag area do not receive clicks. */
+  top: 40px;
+  left: 50%;
+  z-index: 70;
+  width: min(1040px, calc(100vw - 170px));
+  transform: translate(-50%, -14px) scale(0.98);
+  opacity: 0;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+  transition: transform 320ms var(--ease-pop), opacity 200ms var(--ease);
+}
+.focusbar.is-shown {
+  transform: translate(-50%, 0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.focusbar > .formatbar {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-md);
+  padding: 4px 6px;
+}
+.focusbar__count {
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.focusbar__exit {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.focusbar__exit:hover {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.formatbar__spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
+/* --- the writing tools menu --- */
+.wmenu {
+  position: fixed;
+  z-index: 90;
+  width: 290px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-elevated) 96%, transparent);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+  animation: menu-in var(--anim-fast) var(--ease-pop);
+  user-select: none;
+}
+.wmenu__master,
+.wmenu__item {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.wmenu__master {
+  font-weight: 600;
+  padding: 7px 8px;
+}
+.wmenu__master.is-on {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.wmenu__item:hover,
+.wmenu__master:not(.is-on):hover {
+  background: var(--bg-hover);
+}
+.wmenu__master:focus-visible,
+.wmenu__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.wmenu__label {
+  flex: 1;
+}
+.wmenu__state {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.wmenu__master.is-on .wmenu__state {
+  color: inherit;
+}
+.wmenu__key {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  min-width: 34px;
+  text-align: right;
+}
+.wmenu__tick {
+  width: 16px;
+  display: grid;
+  place-items: center;
+  margin-left: 14px;
+  color: var(--text-secondary);
+}
+.wmenu__sep {
+  display: block;
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--border);
+}
+.wmenu__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 38px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.wmenu__actions > span {
+  flex: 1;
+}
+.wmenu__actions button {
+  all: unset;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.wmenu__actions button:hover {
+  color: var(--text-primary);
+}
+.wmenu__more {
+  all: unset;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.wmenu__more:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* --- Settings → Writing --- */
+.chip__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: 0;
+}
+.setting--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--size-2);
+}
+.writing-words {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: 12.5px/1.5 var(--font-mono);
+}
+.writing-words:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.focusbar__sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--border);
+}
+
+/* In focus mode the menu slides in from the right edge, clear of the text. */
+.wmenu--edge {
+  animation: wmenu-edge-in 260ms var(--ease-pop) both;
+}
+@keyframes wmenu-edge-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
