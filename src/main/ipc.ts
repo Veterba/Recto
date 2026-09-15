@@ -1,5 +1,5 @@
 import { BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
-import type { IpcApi, RenameOutcome } from '../shared/ipc-contract'
+import { ATTACHMENTS_FOLDER as ATTACHMENTS, type IpcApi, type RenameOutcome } from '../shared/ipc-contract'
 import * as ai from './ai'
 import * as archive from './archive'
 import * as obsidianSync from './sync'
@@ -11,7 +11,6 @@ import { clearKey, keyStatus, writeKey } from './secrets'
 import { markSelfWrite, startWatching, stopWatching } from './watcher'
 
 /** Where images land. A folder in the vault, so the vault stays portable. */
-const ATTACHMENTS = 'attachments'
 
 /** Typed handler registration - the channel name and its signature stay in sync. */
 function handle<C extends keyof IpcApi>(

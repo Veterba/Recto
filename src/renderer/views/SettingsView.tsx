@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AI_MODELS, type ArchiveState, type IndexStats, type RecentVault, type VaultInfo } from '@shared/ipc-contract'
+import { AI_MODELS, ATTACHMENTS_FOLDER, type ArchiveState, type IndexStats, type RecentVault, type VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { HotkeyEditor } from '../components/HotkeyEditor'
 import { ObsidianSync } from '../components/ObsidianSync'
@@ -40,6 +40,8 @@ type Deps = {
   updateTemplates: (next: TemplateSettings) => void
   /** Every note in the vault, so the tab can list what is in the templates folder. */
   notes: readonly string[]
+  /** Files in the attachments folder, which the Data tree does not show. */
+  attachments: readonly string[]
   openDailyNote: () => void
 }
 
@@ -596,7 +598,7 @@ function AiSettings({ appearance, update }: Deps): React.ReactElement {
   )
 }
 
-function VaultSettings({ vault, onCloseVault, onSwitchVault }: Deps): React.ReactElement {
+function VaultSettings({ vault, onCloseVault, onSwitchVault, attachments }: Deps): React.ReactElement {
   const [stats, setStats] = useState<IndexStats | null>(null)
   const [archive, setArchive] = useState<ArchiveState | null>(null)
   const [recent, setRecent] = useState<readonly RecentVault[]>([])
@@ -663,6 +665,23 @@ function VaultSettings({ vault, onCloseVault, onSwitchVault }: Deps): React.Reac
           {switchError}
         </p>
       )}
+
+      <Row
+        label="Attachments"
+        hint={
+          attachments.length === 0
+            ? `Images you paste or drop into notes are kept in ${ATTACHMENTS_FOLDER}/. Nothing there yet.`
+            : `${attachments.length} ${attachments.length === 1 ? 'file' : 'files'} in ${ATTACHMENTS_FOLDER}/ — images you pasted or dropped into notes. Kept out of the sidebar.`
+        }
+      >
+        <button
+          className="btn btn--ghost btn--sm"
+          disabled={attachments.length === 0}
+          onClick={() => void api.invoke('fs:reveal', ATTACHMENTS_FOLDER)}
+        >
+          Show in Finder
+        </button>
+      </Row>
 
       <Row
         label="Keep deleted notes for"
