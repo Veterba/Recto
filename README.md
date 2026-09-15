@@ -7,15 +7,14 @@ choose — readable by anything, yours to move, back up, or delete.
 no analytics or phone-home of any kind.
 
 ## Status
+Currently the app is in beta-version.
 
-Early. Milestone 1 (vault + editor + file tree) is in progress.
-
-Done: the Electron skeleton — `contextIsolation: true`, `nodeIntegration: false`,
-a preload that exposes one allowlisted `invoke` and nothing else, vault picking
-and scaffolding, and the first-run screen.
-
-Next: the workspace tree, the command/hotkey registry, the file explorer, the
-SQLite indexer, and the CodeMirror 6 editor.
+### Features:
+- Focus and Styling text modes inspired by IA Writer
+- Sidebar transparency/blur styling (Secondary click on sidebar)
+- Graph (actually in demo now)
+- Tasks section
+- Obsidiant vault sync
 
 ## Running from source
 
