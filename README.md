@@ -7,7 +7,7 @@ choose — readable by anything, yours to move, back up, or delete.
 no analytics or phone-home of any kind.
 
 ## Status
-Currently the app is in beta-version.
+The app is currently in beta-version.
 
 ### Features:
 - Focus and Styling text modes inspired by IA Writer
