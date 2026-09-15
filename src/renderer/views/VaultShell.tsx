@@ -28,6 +28,7 @@ import { registerEditorCommands } from '../core/editor-commands'
 import { registerAppCommands } from '../core/register-commands'
 import { getSection, type SectionId } from '../core/sections'
 import { setVaultFiles, setVaultPath } from '../core/vault-url'
+import { getWriting, loadWriting, toggleFocus, useWriting } from '../core/writing'
 import { useVault } from '../core/vault-store'
 import { useWorkspace } from '../core/use-workspace'
 import { getView } from '../core/view-registry'
@@ -98,6 +99,37 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
 
   // Image widgets resolve `attachments/x.png` against this.
   useEffect(() => setVaultPath(vault.path), [vault.path])
+
+  // Writing tools (focus, syntax, style, authors) belong to the vault, like appearance.
+  useEffect(() => {
+    let cancelled = false
+    let timer: number | undefined
+    void api.invoke('state:read', 'writing').then((raw) => {
+      if (cancelled) return
+      loadWriting(raw, (next) => {
+        window.clearTimeout(timer)
+        timer = window.setTimeout(() => void api.invoke('state:write', 'writing', next), 300)
+      })
+    })
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [vault.path])
+
+  /**
+   * Focus mode hides everything but the text: sidebar, tabs, title and status
+   * bars, floating windows, the note's own toolbars. One attribute on the root,
+   * and the stylesheet animates each piece away - React keeps them mounted, so
+   * leaving focus mode brings back the same scroll positions and open folders.
+   */
+  const focusMode = useWriting().focus
+  useEffect(() => {
+    const root = document.documentElement
+    if (focusMode) root.setAttribute('data-focus', 'on')
+    else root.removeAttribute('data-focus')
+    return () => root.removeAttribute('data-focus')
+  }, [focusMode])
 
   // `![[image.png]]` embeds find a file by name anywhere in the vault, the way
   // Obsidian does, so the editor needs every file's path - not just notes.
@@ -735,7 +767,15 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         setSwitcherOpen(false)
         return
       }
-      if (commands.handleKeyEvent(ev)) ev.preventDefault()
+      if (commands.handleKeyEvent(ev)) {
+        ev.preventDefault()
+        return
+      }
+      // Esc leaves focus mode - unless something else already used it: closing
+      // an autocomplete, the search panel or a menu comes first.
+      if (ev.key === 'Escape' && !ev.defaultPrevented && getWriting().focus && document.querySelector('.wmenu, .cm-panels, .cm-tooltip-autocomplete') === null) {
+        toggleFocus()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)

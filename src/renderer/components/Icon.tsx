@@ -16,7 +16,13 @@ import {
   Calendar,
   CalendarDays,
   Check,
+  Bot,
   CircleDashed,
+  Focus,
+  LogOut,
+  PenLine,
+  SpellCheck,
+  UserRound,
   CircleDot,
   Magnet,
   Network,
@@ -164,6 +170,12 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   magnet: Magnet,
   network: Network,
   spline: Spline,
+  bot: Bot,
+  focus: Focus,
+  'log-out': LogOut,
+  'pen-line': PenLine,
+  'spell-check': SpellCheck,
+  'user-round': UserRound,
 }
 
 type Props = {

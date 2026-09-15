@@ -62,6 +62,8 @@ const ITEMS: readonly Item[] = [
 ]
 
 type Props = {
+  /** Controls after the formatting buttons, pushed to the right end. */
+  trailing?: React.ReactNode
   active: ReadonlySet<Format>
   /** Runs a registry command by id and returns focus to the editor. */
   onRun: (commandId: string) => void
@@ -69,7 +71,7 @@ type Props = {
   shortcutFor: (commandId: string) => string | null
 }
 
-export function FormatBar({ active, onRun, shortcutFor }: Props): React.ReactElement {
+export function FormatBar({ active, onRun, shortcutFor, trailing }: Props): React.ReactElement {
   return (
     <div className="formatbar" role="toolbar" aria-label="Formatting">
       {ITEMS.map((item, i) => {
@@ -100,6 +102,12 @@ export function FormatBar({ active, onRun, shortcutFor }: Props): React.ReactEle
           </Tip>
         )
       })}
+      {trailing !== undefined && (
+        <>
+          <span className="formatbar__spacer" />
+          {trailing}
+        </>
+      )}
     </div>
   )
 }

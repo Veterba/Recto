@@ -18,6 +18,9 @@ import { blockDecorations } from './blocks'
 import { imageDrop } from './images'
 import { obsidianSyntax } from './obsidian-syntax'
 import { foldAll, foldedLines, noteStructure, restoreFolds, toggleFoldAt, unfoldAll } from './structure'
+import { authorAnnotation, authorField, fromStored, setAuthorRanges, toStored, type Author, type StoredRange } from './authorship'
+import { setWritingConfig, writingTools } from './writing'
+import type { WritingSettings } from '../core/writing'
 import { markdownDecorations, setUnresolvedTargets, unresolvedField } from './decorations'
 import { livePreview, livePreviewCompartment, setLivePreview } from './live-preview'
 import { linkCompletion, type LinkCandidate } from './link-complete'
@@ -53,6 +56,15 @@ export type EditorHandle = {
   setLivePreview: (on: boolean) => void
   /** Modal editing, toggled without rebuilding the editor. */
   setVim: (on: boolean) => void
+  /** Focus mode, syntax, style and authorship settings, pushed live. */
+  setWriting: (settings: WritingSettings) => void
+  /** Load a note's saved authorship. */
+  setAuthors: (stored: readonly StoredRange[]) => void
+  getAuthors: () => StoredRange[]
+  /** Insert text at the selection, marked as written by this author. */
+  insertAs: (author: Author | 'human', text: string) => void
+  /** Re-mark the selected text as this author's. */
+  markSelection: (author: Author | 'human') => boolean
   /** Put the caret at the start of a line and centre it, opening any fold over it. */
   revealLine: (line: number) => void
   /** The caret's line, 1-based. */
@@ -88,6 +100,8 @@ export type EditorOptions = {
   vim?: boolean
   /** Fires when a section or list item is folded or unfolded. */
   onFoldsChange?: (lines: number[]) => void
+  /** Fires when authorship changes - text marked, or a marked passage edited. */
+  onAuthorsChange?: () => void
 }
 
 const editable = new Compartment()
@@ -155,6 +169,8 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         indentOnInput(),
         // Fold arrows beside headings and list items, and indentation guides.
         noteStructure(),
+        // iA Writer's tools: focus, typewriter, syntax, style, authors.
+        writingTools(),
         search({ top: true }),
         ...(options.getLinkCandidates === undefined ? [] : [linkCompletion(options.getLinkCandidates)]),
         EditorState.allowMultipleSelections.of(true),
@@ -198,6 +214,9 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
           // The toolbar needs to know on both, because typing can enter or
           // leave a format without the cursor being moved by hand.
           if (update.docChanged || update.selectionSet) options.onSelectionChange?.()
+          if (update.startState.field(authorField, false) !== update.state.field(authorField, false)) {
+            options.onAuthorsChange?.()
+          }
           if (foldedRanges(update.startState) !== foldedRanges(update.state)) {
             options.onFoldsChange?.(foldedLines(update.state))
           }
@@ -288,6 +307,29 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       view.focus()
     },
     getCursorLine: () => view.state.doc.lineAt(view.state.selection.main.head).number,
+    setWriting: (settings) => {
+      view.dispatch({ effects: setWritingConfig.of(settings) })
+    },
+    setAuthors: (stored) => {
+      view.dispatch({ effects: setAuthorRanges.of(fromStored(view.state.doc, stored)) })
+    },
+    getAuthors: () => toStored(view.state.doc, view.state.field(authorField)),
+    insertAs: (author, text) => {
+      const range = view.state.selection.main
+      view.dispatch({
+        changes: { from: range.from, to: range.to, insert: text },
+        selection: { anchor: range.from + text.length },
+        annotations: authorAnnotation.of(author),
+        scrollIntoView: true,
+        userEvent: 'input.paste',
+      })
+      view.focus()
+    },
+    markSelection: (author) => {
+      if (view.state.selection.ranges.every((range) => range.empty)) return false
+      view.dispatch({ annotations: authorAnnotation.of(author) })
+      return true
+    },
     toggleFold: () => toggleFoldAt(view, view.state.doc.lineAt(view.state.selection.main.head).number),
     foldAll: () => foldAll(view),
     unfoldAll: () => unfoldAll(view),

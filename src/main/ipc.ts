@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
+import { BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import { ATTACHMENTS_FOLDER as ATTACHMENTS, type IpcApi, type RenameOutcome } from '../shared/ipc-contract'
 import * as ai from './ai'
 import * as archive from './archive'
@@ -43,6 +43,29 @@ function rewatch(): void {
   obsidianSync.startForCurrentVault()
 }
 
+/**
+ * Authorship is kept by path in `.recto/authors.json`; a renamed note or folder
+ * takes its entries with it, or its AI passages would silently turn human.
+ */
+function moveAuthorship(from: string, to: string): void {
+  try {
+    const raw = readState('authors') as { notes?: Record<string, unknown> } | null
+    const notes = raw?.notes
+    if (notes === undefined || notes === null || typeof notes !== 'object') return
+    let changed = false
+    for (const key of Object.keys(notes)) {
+      const next = key === from ? to : key.startsWith(`${from}/`) ? `${to}${key.slice(from.length)}` : null
+      if (next === null) continue
+      notes[next] = notes[key]
+      delete notes[key]
+      changed = true
+    }
+    if (changed) writeState('authors', { ...raw, notes })
+  } catch (err) {
+    console.error('[authors]', err)
+  }
+}
+
 export function registerIpc(): void {
   handle('app:startup-state', () => {
     const state = startupState()
@@ -61,6 +84,7 @@ export function registerIpc(): void {
     return result
   })
   handle('vault:recent', () => recentVaults())
+  handle('app:clipboard-text', () => clipboard.readText())
   handle('vault:choose-folder', () => chooseVaultFolder())
   handle('vault:switch', (dir) => {
     // Wind the open vault down first: its watcher, index and sync must not keep
@@ -132,6 +156,7 @@ export function registerIpc(): void {
      * losing history for a renamed note, not losing the note.
      */
     void send({ kind: 'note-renamed', from, to: moved.path }, 15_000).catch(() => undefined)
+    moveAuthorship(from, moved.path)
 
     const rewrite = await vaultFs.rewriteLinksTo(sources, from, moved.path)
     let undoId: string | undefined

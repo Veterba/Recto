@@ -1,4 +1,4 @@
-import { BrowserWindow, shell } from 'electron'
+import { BrowserWindow, Menu, shell } from 'electron'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isAppUrl } from './navigation'
@@ -43,6 +43,30 @@ export function createWindow(): BrowserWindow {
       sandbox: false,
       webSecurity: true,
     },
+  })
+
+  /**
+   * Spelling suggestions on right-click.
+   *
+   * Chromium underlines misspelt words once the editor turns spellcheck on,
+   * but offers nothing to fix them with unless the app builds the menu. Only
+   * for a misspelt word: every other right-click keeps the app's own menus.
+   */
+  win.webContents.on('context-menu', (_event, params) => {
+    if (params.misspelledWord === '') return
+    const items: Electron.MenuItemConstructorOptions[] = params.dictionarySuggestions.slice(0, 6).map((word) => ({
+      label: word,
+      click: () => win.webContents.replaceMisspelling(word),
+    }))
+    if (items.length === 0) items.push({ label: 'No suggestions', enabled: false })
+    items.push(
+      { type: 'separator' },
+      {
+        label: `Add “${params.misspelledWord}” to dictionary`,
+        click: () => win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      },
+    )
+    Menu.buildFromTemplate(items).popup({ window: win })
   })
 
   // Nothing navigates away from the bundle, and nothing opens a window in-app.

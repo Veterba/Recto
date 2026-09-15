@@ -3,6 +3,7 @@ import * as md from '../editor/markdown-actions'
 import { getActiveEditor } from '../views/MarkdownView'
 import type { Command, CommandRegistry } from './commands'
 import { toggleOutline } from './outline'
+import { setFocusUnit, toggleAuthors, toggleFocus, toggleStyle, toggleSyntax, toggleTypewriter } from './writing'
 
 /**
  * The editor shortcut set, as registry entries.
@@ -113,6 +114,62 @@ export function registerEditorCommands(
       isAvailable: () => getActiveEditor() !== null,
       run: () => onToggleLivePreview(),
     },
+    // --- writing tools, after iA Writer ---------------------------------------
+    {
+      id: 'writing:toggle-focus',
+      name: 'Toggle focus mode',
+      section: 'Writing',
+      icon: 'focus',
+      hotkey: 'Mod+Shift+Enter',
+      isAvailable: () => getActiveEditor() !== null,
+      run: toggleFocus,
+    },
+    ...(['line', 'sentence', 'paragraph'] as const).map(
+      (unit): Command => ({
+        id: `writing:focus-${unit}`,
+        name: `Focus on the current ${unit}`,
+        section: 'Writing',
+        run: () => setFocusUnit(unit),
+      }),
+    ),
+    { id: 'writing:toggle-typewriter', name: 'Toggle typewriter scrolling', section: 'Writing', hotkey: 'Mod+Alt+T', run: toggleTypewriter },
+    { id: 'writing:toggle-syntax', name: 'Toggle syntax highlight', section: 'Writing', icon: 'highlighter', hotkey: 'Mod+Alt+S', run: toggleSyntax },
+    { id: 'writing:toggle-style', name: 'Toggle style check', section: 'Writing', icon: 'strikethrough', hotkey: 'Mod+Alt+C', run: toggleStyle },
+    { id: 'writing:toggle-authors', name: 'Show or hide authors', section: 'Writing', icon: 'user-round', hotkey: 'Mod+Alt+A', run: toggleAuthors },
+    ...([
+      ['human', 'Mark selection as written by me'],
+      ['ai', 'Mark selection as written by AI'],
+      ['reference', 'Mark selection as reference'],
+    ] as const).map(
+      ([author, name]): Command => ({
+        id: `writing:mark-${author}`,
+        name,
+        section: 'Writing',
+        isAvailable: () => getActiveEditor() !== null,
+        run: () => {
+          getActiveEditor()?.markSelection(author)
+        },
+      }),
+    ),
+    ...([
+      // Not ⌘⌥⇧V: that is the app menu's Paste and Match Style.
+      ['ai', 'Paste as AI text', 'Mod+Alt+V'],
+      ['reference', 'Paste as reference', undefined],
+    ] as const).map(
+      ([author, name, hotkey]): Command => ({
+        id: `writing:paste-${author}`,
+        name,
+        section: 'Writing',
+        scope: 'editor',
+        ...(hotkey === undefined ? {} : { hotkey }),
+        isAvailable: editorHasFocus,
+        run: () => {
+          void api.invoke('app:clipboard-text').then((text) => {
+            if (text !== '') getActiveEditor()?.insertAs(author, text)
+          })
+        },
+      }),
+    ),
     {
       id: 'editor:toggle-fold',
       name: 'Toggle fold on current line',
