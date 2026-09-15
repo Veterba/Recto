@@ -17,6 +17,14 @@ export type StartupState =
   | { kind: 'needs-vault'; reason: 'first-run' | 'missing' | 'unreadable'; lastPath?: string }
   | { kind: 'ready'; vault: VaultInfo }
 
+/**
+ * Where pasted, dropped and inserted images go, at the vault root.
+ *
+ * Hidden from the Data tree - it is the app's storage for images you put in
+ * notes, not a folder you file things into - and shown in Settings → Vault.
+ */
+export const ATTACHMENTS_FOLDER = 'attachments'
+
 export type RecentVault = { path: string; name: string; available: boolean }
 
 export type OpenVaultResult =

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FileNode, VaultInfo } from '@shared/ipc-contract'
+import { ATTACHMENTS_FOLDER, type FileNode, type VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { Breadcrumb } from '../components/Breadcrumb'
 import { Icon } from '../components/Icon'
@@ -211,7 +211,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     // Templates are NOT hidden: they are notes the user writes and edits, so
     // the folder sits in the tree with its own icon. Cards and chats are the
     // app's storage for features that have their own screens.
-    const hidden = new Set<string>([CARD_FOLDER, CHAT_FOLDER])
+    const hidden = new Set<string>([CARD_FOLDER, CHAT_FOLDER, ATTACHMENTS_FOLDER])
     const withoutCards = {
       roots: tree.roots.filter((node) => !(node.kind === 'folder' && hidden.has(node.path))),
       byPath: tree.byPath,
@@ -220,6 +220,20 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     const roots = filterTree(withoutCards.roots, query, (name) => fuzzyMatch(query, name) !== null)
     return { roots, byPath: tree.byPath }
   }, [tree, query])
+
+  /** Files in the attachments folder, for Settings - it is not in the tree any more. */
+  const attachmentFiles = useMemo(() => {
+    const out: string[] = []
+    const walk = (nodes: readonly (typeof tree.roots)[number][]): void => {
+      for (const node of nodes) {
+        if (node.kind === 'folder') walk(node.children ?? [])
+        else out.push(node.path)
+      }
+    }
+    const folder = tree.roots.find((node) => node.kind === 'folder' && node.path === ATTACHMENTS_FOLDER)
+    if (folder?.kind === 'folder') walk(folder.children ?? [])
+    return out
+  }, [tree.roots])
 
   /** Every folder in the vault, for expand-all. */
   const allFolders = useMemo(() => allFolderPaths(tree.roots), [tree.roots])
@@ -292,7 +306,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         context: new Map(context.map((entry) => [entry.path, { tags: entry.tags, links: entry.links }])),
         // The board owns one of these and templates are not notes you file;
         // a stray note landing in either would turn up where nobody put it.
-        reserved: [CARD_FOLDER, CHAT_FOLDER, templates.settings.folder, templates.settings.daily.folder],
+        reserved: [CARD_FOLDER, CHAT_FOLDER, ATTACHMENTS_FOLDER, templates.settings.folder, templates.settings.daily.folder],
       }),
     )
   }, [allNotes, allFolders, templates.settings])
@@ -472,6 +486,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     templates: templates.settings,
     updateTemplates: (_next: TemplateSettings) => {},
     notes: [] as string[],
+    attachments: [] as string[],
     openDailyNote: () => {},
   })
   settingsDepsRef.current = {
@@ -483,6 +498,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     templates: templates.settings,
     updateTemplates: (next: TemplateSettings) => void updateTemplates(next),
     notes: allNotes,
+    attachments: attachmentFiles,
     openDailyNote: () => void openDailyNote(),
   }
 
@@ -521,13 +537,16 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     [refresh, openFile],
   )
 
-  const createIn = useCallback(
-    (kind: 'file' | 'folder') => {
-      const parent = activePath === null ? '' : activePath.slice(0, Math.max(0, activePath.lastIndexOf('/')))
-      return createAt(parent, kind)
-    },
-    [activePath, createAt],
-  )
+  /**
+   * New note / new folder from the sidebar button, ⌘N or the palette: always
+   * at the top of the vault.
+   *
+   * It used to go into the folder of whatever note was open - an invisible
+   * rule that dropped new notes into some folder you had last been reading in.
+   * The top level is where loose notes belong until they are filed, and Tidy
+   * files them. Creating inside a specific folder is its right-click menu.
+   */
+  const createIn = useCallback((kind: 'file' | 'folder') => createAt('', kind), [createAt])
 
   /** The sidebar's bottom-left button means something different per section. */
   const onNew = useCallback(() => {
