@@ -23,6 +23,7 @@ import {
   PenLine,
   SpellCheck,
   UserRound,
+  Waypoints,
   CircleDot,
   Magnet,
   Network,
@@ -176,6 +177,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   'pen-line': PenLine,
   'spell-check': SpellCheck,
   'user-round': UserRound,
+  waypoints: Waypoints,
 }
 
 type Props = {

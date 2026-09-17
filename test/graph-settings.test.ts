@@ -30,6 +30,7 @@ describe('graph settings', () => {
       look: { ...DEFAULT_LOOK, dots: { ...DEFAULT_LOOK.dots, colors: ['#22d3ee', '#f0abfc'] } },
       layout: { mode: 'tree' as const, direction: 'right' as const, spacing: 1.5 },
       linkRange: { min: 2, max: 16 },
+      localOnly: true,
     }
     expect(parseSettings(JSON.parse(JSON.stringify(saved)))).toEqual(saved)
   })
@@ -76,7 +77,7 @@ describe('graph settings', () => {
 
   it('ignores unknown keys instead of carrying them into state', () => {
     const parsed = parseSettings({ showLabels: true, mysteryField: { deep: true } })
-    expect(Object.keys(parsed).sort()).toEqual(['layout', 'linkRange', 'look', 'showChats', 'showLabels', 'showOrphans', 'showTasks', 'tunables'])
+    expect(Object.keys(parsed).sort()).toEqual(['layout', 'linkRange', 'localOnly', 'look', 'showChats', 'showLabels', 'showOrphans', 'showTasks', 'tunables'])
   })
 
   it('does not mutate the shared defaults', () => {

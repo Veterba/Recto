@@ -98,7 +98,11 @@ async function generatedText(settings: TemplateSettings, now: Date): Promise<str
     // daily note with nothing to say why - which looks exactly like the
     // feature being broken. The built-in heading at least says what day it is;
     // Settings flags the empty template so it gets filled in.
-    if (template.ok && templateBody(template.content).trim() !== '') body = templateBody(template.content)
+    // The WHOLE template, frontmatter included: a daily template's properties
+    // are the point of writing them there, and stripping them left every daily
+    // note with none. (A template inserted into an existing note is the other
+    // case - see `mergeTemplateProperties`.)
+    if (template.ok && templateBody(template.content).trim() !== '') body = template.content
   }
   return fillTemplate(body, { title: target.key, path: target.path, now })
 }

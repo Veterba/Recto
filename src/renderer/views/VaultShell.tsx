@@ -16,7 +16,7 @@ import { StatusBar } from '../components/StatusBar'
 import { TemplatePicker } from '../components/TemplatePicker'
 import { TidyDialog } from '../components/TidyDialog'
 import { planTidy, type TidyPlan } from '../core/tidy'
-import { fillTemplate, templateBody, type TemplateSettings } from '../core/templates'
+import { fillTemplate, mergeTemplateProperties, templateBody, type TemplateSettings } from '../core/templates'
 import { dayKey, ensureDailyNote, retemplateDailyNote, useTemplateSettings } from '../core/daily-note'
 import { getActiveEditor } from './MarkdownView'
 import { WorkspaceView } from '../components/WorkspaceView'
@@ -267,6 +267,27 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     return out
   }, [tree.roots])
 
+  /**
+   * Tabs whose note is gone are closed.
+   *
+   * The workspace is restored from disk, so it remembers every note it ever
+   * had open - including ones since deleted or renamed elsewhere, which then
+   * sit in the bar and fail to open. Runs once the tree is known and again on
+   * every vault change.
+   */
+  useEffect(() => {
+    if (sections === null || tree.roots.length === 0) return
+    const files = new Set<string>()
+    const walk = (nodes: readonly FileNode[]): void => {
+      for (const node of nodes) {
+        if (node.kind === 'folder') walk(node.children ?? [])
+        else files.add(node.path)
+      }
+    }
+    walk(tree.roots)
+    for (const workspace of Object.values(sections)) workspace.pruneMissing((path) => files.has(path))
+  }, [sections, tree])
+
   /** Every folder in the vault, for expand-all. */
   const allFolders = useMemo(() => allFolderPaths(tree.roots), [tree.roots])
 
@@ -316,6 +337,11 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
           userEvent: 'input.template',
         }
       })
+
+      // The template's own properties join the note's, rather than being
+      // dropped with the frontmatter block the insert strips.
+      const merged = mergeTemplateProperties(editor.getValue(), read.content)
+      if (merged !== editor.getValue()) editor.setValue(merged)
     },
     [activePath],
   )
@@ -890,6 +916,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         vaultName={vault.name}
         graphOpen={graphWindow.open}
         onToggleGraph={() => setGraphWindow({ open: !graphWindow.open })}
+        onOpenDaily={() => void openDailyNote()}
         onOpenPalette={openPalette}
       />
       {templatesOpen && (

@@ -51,6 +51,10 @@ const ctx = self as unknown as {
 
 let simulation: Simulation<Node, Link> | null = null
 let nodes: Node[] = []
+/** Ticks posted so far, for thinning the stream on a big graph. */
+let ticks = 0
+/** Nodes pinned for the duration of a drag, so the rest of the graph holds still. */
+let held: Node[] = []
 /** What the current simulation was built from, so a layout change can re-aim it. */
 let current: {
   edges: [number, number][]
@@ -65,6 +69,10 @@ let buffer: Float32Array | null = null
 
 function post(): void {
   if (simulation === null) return
+  // Above a few hundred notes, transferring a frame every tick costs more than
+  // it shows: the view eases between frames anyway.
+  ticks++
+  if (nodes.length > 600 && ticks % 2 === 1) return
   // The main thread still holds the buffer, or it arrived back detached. Skip
   // this tick rather than allocating a replacement: the simulation is about to
   // produce another set of positions anyway, and dropping a frame is invisible
@@ -163,8 +171,12 @@ function build(
     // Nodes never overlap: a dot that sits on another is a dot you cannot see
     // or click, and piles of them are most of what made the graph look messy.
     .force('center', forceCenter(0, 0).strength(1))
-    .velocityDecay(0.35)
-    .alphaDecay(0.025)
+    // Heavier damping than d3's default: with a few thousand notes a lighter
+    // one lets the whole graph wobble for seconds after any nudge.
+    .velocityDecay(0.42)
+    // Cools in ~150 ticks rather than ~275: a thousand-note vault took the best
+    // part of a minute to come to rest, which reads as the graph never settling.
+    .alphaDecay(0.045)
     .on('tick', post)
     .on('end', () => {
       const response: WorkerResponse = { kind: 'settled' }
@@ -253,6 +265,42 @@ function configure(): void {
   )
 }
 
+/**
+ * Pin every node more than `depth` links away from `node`, and return them.
+ *
+ * Breadth-first over the links the simulation already holds, so it costs one
+ * pass over the edges rather than a second copy of the graph.
+ */
+function pinAllBut(node: Node, depth: number): Node[] {
+  const simulationLinks = (simulation?.force('link') as ReturnType<typeof forceLink<Node, Link>> | undefined)?.links() ?? []
+  const near = new Set<number>([node.index])
+  let frontier = [node.index]
+  for (let step = 0; step < depth; step++) {
+    const next: number[] = []
+    for (const link of simulationLinks) {
+      const a = (link.source as Node).index
+      const b = (link.target as Node).index
+      if (frontier.includes(a) && !near.has(b)) {
+        near.add(b)
+        next.push(b)
+      } else if (frontier.includes(b) && !near.has(a)) {
+        near.add(a)
+        next.push(a)
+      }
+    }
+    frontier = next
+    if (frontier.length === 0) break
+  }
+  const pinned: Node[] = []
+  for (const other of nodes) {
+    if (near.has(other.index) || other.fx !== undefined) continue
+    other.fx = other.x ?? 0
+    other.fy = other.y ?? 0
+    pinned.push(other)
+  }
+  return pinned
+}
+
 ctx.onmessage = (event): void => {
   try {
     handle(event)
@@ -291,8 +339,9 @@ function handle(event: MessageEvent<WorkerRequest & { positions?: Float32Array }
       if (simulation === null || current === null) break
       current.layout = message.layout
       configure()
-      // Hot enough to travel all the way from one shape to the other.
-      simulation.alpha(0.9).restart()
+      // Hot enough to travel all the way from one shape to the other, but not
+      // so hot that the graph snaps there: the view eases positions as well.
+      simulation.alphaTarget(0).alpha(0.75).restart()
       break
 
     case 'sizing':
@@ -309,10 +358,30 @@ function handle(event: MessageEvent<WorkerRequest & { positions?: Float32Array }
     case 'drag': {
       const node = nodes[message.index]
       if (node === undefined) break
+      /**
+       * Everything but this note's own neighbourhood is pinned while it is
+       * dragged.
+       *
+       * Otherwise one dragged note nudges its neighbours, which nudge theirs,
+       * and a thousand-note graph slowly rearranges itself around a gesture
+       * meant to move one dot. Pinned, the shape you had is exactly the shape
+       * you get back - and the note still pulls the links around it, which is
+       * what makes dragging feel physical rather than dead.
+       */
+      if (held.length === 0) held = pinAllBut(node, 2)
       // fx/fy pin the node; d3 then solves the rest around it.
       node.fx = message.x
       node.fy = message.y
-      simulation?.alpha(0.3).restart()
+      /**
+       * A gentle target rather than a fresh heat.
+       *
+       * `alpha(0.3)` re-ran the whole layout around one dragged note: the
+       * picture you had learned reshuffled every time you moved something. A
+       * low alphaTarget keeps the simulation barely awake, so the note follows
+       * the pointer, its neighbours give way, and the rest of the graph holds
+       * its shape - which is what Obsidian's feels like.
+       */
+      simulation?.alphaTarget(0.06).restart()
       break
     }
 
@@ -321,6 +390,13 @@ function handle(event: MessageEvent<WorkerRequest & { positions?: Float32Array }
       if (node === undefined) break
       delete node.fx
       delete node.fy
+      for (const pinned of held) {
+        delete pinned.fx
+        delete pinned.fy
+      }
+      held = []
+      // Let it cool back down to a standstill.
+      simulation?.alphaTarget(0)
       break
     }
 

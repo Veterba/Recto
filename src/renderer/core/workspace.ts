@@ -181,6 +181,54 @@ export class Workspace extends Events<WorkspaceEvents> {
     this.trigger('layout-change')
   }
 
+  /**
+   * Close every tab in the group that holds `leafId` - or in every group.
+   *
+   * One layout change rather than one per tab, so the workspace is saved once
+   * and nothing flickers through half-closed states.
+   */
+  closeAll(options: { except?: string } = {}): void {
+    const keep = options.except
+    for (const leaf of this.leaves()) {
+      if (leaf.id === keep) continue
+      const tabs = this.tabsContaining(leaf.id)
+      if (!tabs) continue
+      const i = tabs.children.findIndex((child) => child.id === leaf.id)
+      if (i !== -1) tabs.children.splice(i, 1)
+    }
+    for (const tabs of this.allTabs()) tabs.active = Math.max(0, Math.min(tabs.active, tabs.children.length - 1))
+    this.pruneEmpty()
+    const next = this.firstLeaf()
+    if (this.activeLeafId !== next?.id) {
+      this.activeLeafId = next?.id ?? null
+      this.trigger('active-leaf-change', this.activeLeaf)
+    }
+    this.trigger('layout-change')
+  }
+
+  /**
+   * Drop tabs whose note is gone - deleted, or renamed by another app.
+   *
+   * A workspace is restored from disk, so it outlives the notes in it: without
+   * this, every note ever opened stayed in the bar forever, and clicking one
+   * showed "could not open". Returns how many went.
+   */
+  pruneMissing(exists: (path: string) => boolean): number {
+    const gone = this.leaves().filter((leaf) => {
+      const path = (leaf.state as { path?: unknown }).path
+      return typeof path === 'string' && path !== '' && !exists(path)
+    })
+    for (const leaf of gone) this.closeLeaf(leaf.id)
+    return gone.length
+  }
+
+  /** Every tabs group in the tree. */
+  allTabs(node: WorkspaceNode = this.root): TabsNode[] {
+    if (node.kind === 'tabs') return [node]
+    if (node.kind === 'leaf') return []
+    return node.children.flatMap((child) => this.allTabs(child))
+  }
+
   /** Split the group containing `leafId`, moving a copy of that leaf into the new pane. */
   splitLeaf(leafId: string, direction: SplitNode['direction']): LeafNode | null {
     const leaf = this.getLeaf(leafId)
