@@ -9,6 +9,10 @@ internet is the AI chat, and only if you paste in your own API key.
 
 Electron 44, React 19, CodeMirror 6 and SQLite. Developed and tested on macOS.
 
+**Beta.** It is used daily and it does not lose notes, but there is no packaged
+installer yet — you run it from source — and the graph is still being worked
+on. What is missing is listed plainly in [Not built yet](#not-built-yet).
+
 ---
 
 ## Contents
