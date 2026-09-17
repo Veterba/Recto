@@ -46,6 +46,15 @@ const tagMark = Decoration.mark({ class: 'cm-tag' })
 const taskDone = Decoration.mark({ class: 'cm-task-done' })
 const taskBox = Decoration.mark({ class: 'cm-task-box' })
 const lineDone = Decoration.line({ class: 'cm-line-done' })
+/**
+ * The strike on a finished task, over its TEXT rather than its line.
+ *
+ * A line decoration's `line-through` is painted across the whole line box -
+ * which, on a nested item, includes the indentation and the strip the first row
+ * is pulled back into for its bullet, so the strike started somewhere out to
+ * the left of the checkbox. Obsidian strikes the words and nothing else.
+ */
+const textDone = Decoration.mark({ class: 'cm-text-done' })
 
 function build(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
@@ -65,12 +74,17 @@ function build(view: EditorView): DecorationSet {
       const checked = task?.[2] !== undefined && task[2] !== '[ ]'
       if (checked) builder.add(line.from, line.from, lineDone)
 
-      type Range = { from: number; to: number; deco: Decoration }
+      /** `over` marks a range that is allowed to contain the ones after it. */
+      type Range = { from: number; to: number; deco: Decoration; over?: boolean }
       const ranges: Range[] = []
 
       if (task?.[1] !== undefined && task[2] !== undefined) {
         const boxFrom = line.from + task[1].length
         ranges.push({ from: boxFrom, to: boxFrom + task[2].length, deco: checked ? taskDone : taskBox })
+        if (checked) {
+          const textFrom = boxFrom + task[2].length + (/^\s*/.exec(text.slice(task[1].length + task[2].length))?.[0].length ?? 0)
+          if (textFrom < line.to) ranges.push({ from: textFrom, to: line.to, deco: textDone, over: true })
+        }
       }
 
       for (const match of text.matchAll(WIKILINK)) {
@@ -99,9 +113,10 @@ function build(view: EditorView): DecorationSet {
       ranges.sort((a, b) => a.from - b.from || a.to - b.to)
       let lastTo = -1
       for (const range of ranges) {
-        if (range.from < lastTo) continue
+        if (range.over !== true && range.from < lastTo) continue
         builder.add(range.from, range.to, range.deco)
-        lastTo = range.to
+        // A containing range does not close the ones it contains.
+        if (range.over !== true) lastTo = range.to
       }
     }
   }

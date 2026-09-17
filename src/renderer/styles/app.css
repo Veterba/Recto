@@ -1684,9 +1684,13 @@ body.is-resizing {
 .cm-task-done {
   color: var(--accent);
 }
-/* A finished task dims its whole line, so a list reads at a glance. */
+/* A finished task dims its whole line, so a list reads at a glance - but the
+   strike belongs to the words, not to the line box: on a nested item the box
+   reaches back past the checkbox to where the bullet hangs. */
 .cm-line-done {
   color: var(--text-muted);
+}
+.cm-text-done {
   text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, var(--text-muted) 50%, transparent);
 }

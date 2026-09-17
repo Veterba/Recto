@@ -1,0 +1,72 @@
+# How Recto becomes an app you can double-click.
+#
+# `npm run dist` builds the code, wraps it with Electron and writes a .dmg to
+# dist/. `npm run app` does the same but skips the disk image and copies the
+# .app straight into /Applications, which is the short way to get the build you
+# just made into Launchpad.
+#
+# There is no code signing here: no Apple Developer ID, so `identity: null`
+# tells electron-builder not to look for one, and `afterPack` applies an ad-hoc
+# signature instead - required on Apple Silicon, where a completely unsigned
+# bundle will not launch at all. An app you built yourself opens normally. One
+# you DOWNLOAD carries macOS's quarantine flag and needs
+# `xattr -cr /Applications/Recto.app` once; the README says so.
+
+appId: com.veterba.recto
+productName: Recto
+copyright: MIT
+
+directories:
+  buildResources: build
+  output: dist
+
+# The bundle is out/ (built by electron-vite) plus whatever the main process
+# requires at runtime. electron-builder adds the production dependencies on its
+# own; everything else in the repo - src/, test/, the vite config - is build
+# input and has no business being shipped.
+files:
+  - out/**/*
+  - package.json
+
+# better-sqlite3 is a compiled binary. Node cannot dlopen a .node file from
+# inside an asar archive, so the native parts stay unpacked on disk.
+asarUnpack:
+  - '**/*.node'
+  - node_modules/better-sqlite3/**
+
+afterPack: build/adhoc-sign.cjs
+
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.icns
+  darkModeSupport: true
+  identity: null
+  # No arch list: it builds for the machine doing the building, which is the
+  # only arch whose native modules have been compiled.
+  target:
+    - dmg
+
+dmg:
+  title: Recto ${version}
+  # The whole window is "drag this there", so give it room and put the two
+  # icons where the eye expects them.
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 148
+      y: 190
+      type: file
+    - x: 392
+      y: 190
+      type: link
+      path: /Applications
+
+win:
+  target: nsis
+  icon: build/icon.png
+
+linux:
+  target: AppImage
+  category: Office
+  icon: build/icon.png
