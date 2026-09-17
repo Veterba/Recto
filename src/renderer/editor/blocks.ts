@@ -1,4 +1,5 @@
 import { syntaxTree } from '@codemirror/language'
+import type { SyntaxNode } from '@lezer/common'
 import { CALLOUT_HEAD, isLivePreviewOn } from './live-preview'
 import { calloutGroup } from './rich-widgets'
 import { RangeSetBuilder, type EditorState, type Extension } from '@codemirror/state'
@@ -143,13 +144,17 @@ const zero = (view: EditorView): number => widthOf(view, '0')
  * note copied from Obsidian looked like. The wrapped rows now line up with the
  * text after the marker, the way Obsidian and every word processor do it.
  */
-const hangCache = new Map<number, Decoration>()
-function hang(width: number): Decoration {
-  const px = Math.round(width * 2) / 2
-  let deco = hangCache.get(px)
+const hangCache = new Map<string, Decoration>()
+function hang(pad: number, pull: number): Decoration {
+  const padPx = Math.round(pad * 2) / 2
+  const pullPx = Math.round(pull * 2) / 2
+  const key = `${padPx}:${pullPx}`
+  let deco = hangCache.get(key)
   if (deco === undefined) {
-    deco = Decoration.line({ attributes: { style: `padding-left: calc(6px + ${px}px); text-indent: -${px}px` } })
-    hangCache.set(px, deco)
+    deco = Decoration.line({
+      attributes: { style: `padding-left: calc(6px + ${padPx}px); text-indent: -${pullPx}px` },
+    })
+    hangCache.set(key, deco)
   }
   return deco
 }
@@ -182,21 +187,45 @@ function continuation(column: number, typed: number): Decoration {
 }
 
 /**
- * Where a list item's text starts, in pixels from the line's left edge - as
- * the editor DRAWS it, which is not the same as what the source says:
+ * A list item's two widths, in pixels: the whitespace it was typed with, and
+ * its marker as the editor DRAWS it - which is not what the source says, since
  * Live Preview replaces `- ` with a dot two columns wide and `- [ ] ` with a
  * checkbox three columns wide.
  */
-function contentWidth(view: EditorView, text: string, livePreview: boolean): number | null {
+type ListGeometry = { lead: number; marker: number }
+
+function listGeometry(view: EditorView, text: string, livePreview: boolean): ListGeometry | null {
   const item = LIST_ITEM.exec(text)
   if (item === null) return null
   const lead = widthOf(view, item[1] ?? '')
   const marker = item[2] ?? '-'
   const spaces = item[3] ?? ' '
   const task = item[4]
-  if (livePreview && task !== undefined) return lead + 3 * zero(view)
-  if (livePreview && /^[-*+]$/.test(marker)) return lead + 2 * zero(view)
-  return lead + widthOf(view, marker + spaces + (task ?? ''))
+  if (livePreview && task !== undefined) return { lead, marker: 3 * zero(view) }
+  if (livePreview && /^[-*+]$/.test(marker)) return { lead, marker: 2 * zero(view) }
+  return { lead, marker: widthOf(view, marker + spaces + (task ?? '')) }
+}
+
+/**
+ * How far in a nested list item sits: one step per ancestor item, each step as
+ * wide as that ancestor's own marker.
+ *
+ * Indent by nesting LEVEL, not by the whitespace that happens to be in the
+ * file. Markdown nests on two spaces, and two spaces in a proportional font is
+ * nine pixels - so a child's bullet landed in its parent's column, the nesting
+ * was invisible, and the indent guide (drawn under the parent's bullet) ended
+ * up wedged between the child's dot and its text, looking like a line someone
+ * had pasted in. A step per level puts a child's bullet under the first
+ * character of its parent, which is what the eye actually reads as nesting and
+ * what Obsidian draws.
+ */
+function levelIndent(view: EditorView, state: EditorState, item: SyntaxNode, livePreview: boolean): number {
+  let indent = 0
+  for (let parent = item.parent; parent !== null; parent = parent.parent) {
+    if (parent.name !== 'ListItem') continue
+    indent += listGeometry(view, state.doc.lineAt(parent.from).text, livePreview)?.marker ?? 0
+  }
+  return indent
 }
 
 /** The language written after the opening fence, if any. */
@@ -313,6 +342,8 @@ function build(view: EditorView): DecorationSet {
      * their own column wins for the lines inside them.
      */
     const continues = new Map<number, number>()
+    /** Each item's own line, with where its bullet and its text belong. */
+    const items = new Map<number, { pad: number; pull: number }>()
     syntaxTree(state).iterate({
       from,
       to,
@@ -320,10 +351,22 @@ function build(view: EditorView): DecorationSet {
         if (node.name === 'FencedCode' || node.name === 'MathBlock' || node.name === 'Table') return false
         if (node.name !== 'ListItem') return undefined
         const first = state.doc.lineAt(node.from)
-        const column = contentWidth(view, first.text, livePreview)
-        if (column === null) return undefined
+        const geometry = listGeometry(view, first.text, livePreview)
+        if (geometry === null) return undefined
+        const indent = levelIndent(view, state, node.node, livePreview)
+        /**
+         * `pad` is where the item's TEXT sits, `pull` how far the first row is
+         * dragged back out of it so the marker lands in front of that text.
+         *
+         * The level indent wins over the typed whitespace, except where the
+         * file is indented wider than the level - four spaces a level, say.
+         * Then the wider one is used, because pulling the row further left than
+         * the padding would push the bullet off the edge of the editor.
+         */
+        const pad = Math.max(indent, geometry.lead) + geometry.marker
+        items.set(first.number, { pad, pull: geometry.lead + geometry.marker })
         const last = state.doc.lineAt(node.to).number
-        for (let n = first.number + 1; n <= last; n++) continues.set(n, column)
+        for (let n = first.number + 1; n <= last; n++) continues.set(n, pad)
         return undefined
       },
     })
@@ -339,12 +382,12 @@ function build(view: EditorView): DecorationSet {
       }
 
       if (!skipHang.has(n) && !QUOTE.test(line.text)) {
-        const own = contentWidth(view, line.text, livePreview)
+        const own = items.get(n)
         const inside = continues.get(n)
-        if (own !== null) {
+        if (own !== undefined) {
           // The item's own line: its marker hangs, its wrapped rows line up
           // with its text.
-          if (own > 0) entries.push({ from: line.from, to: line.from, deco: hang(own), sort: SORT.line })
+          entries.push({ from: line.from, to: line.from, deco: hang(own.pad, own.pull), sort: SORT.line })
         } else if (inside !== undefined && line.text.trim() !== '') {
           // A continuation: the whole line sits at the item's text column,
           // whatever indentation it was typed with.
@@ -354,7 +397,8 @@ function build(view: EditorView): DecorationSet {
         } else {
           const lead = /^[ \t]+/.exec(line.text)?.[0]
           if (lead !== undefined && line.text.trim() !== '') {
-            entries.push({ from: line.from, to: line.from, deco: hang(widthOf(view, lead)), sort: SORT.line })
+            const width = widthOf(view, lead)
+            entries.push({ from: line.from, to: line.from, deco: hang(width, width), sort: SORT.line })
           }
         }
       }

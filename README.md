@@ -9,9 +9,10 @@ internet is the AI chat, and only if you paste in your own API key.
 
 Electron 44, React 19, CodeMirror 6 and SQLite. Developed and tested on macOS.
 
-**Beta.** It is used daily and it does not lose notes, but there is no packaged
-installer yet — you run it from source — and the graph is still being worked
-on. What is missing is listed plainly in [Not built yet](#not-built-yet).
+**Beta.** It is used daily and it does not lose notes. There is no download:
+you build it from this repository, which takes two commands and leaves a real
+app in your Applications folder. The graph is still being worked on, and what
+is missing is listed plainly in [Not built yet](#not-built-yet).
 
 ---
 
@@ -40,7 +41,9 @@ on. What is missing is listed plainly in [Not built yet](#not-built-yet).
 
 ## Install and run
 
-There is **no packaged installer yet** — you run it from source. Two commands.
+There is no download — you build it yourself from this repository. Three
+commands, and you end up with a real **Recto.app** in your Applications folder,
+in Launchpad and in Spotlight like any other app.
 
 ### You need
 
@@ -51,17 +54,60 @@ There is **no packaged installer yet** — you run it from source. Two commands.
 | **Xcode Command Line Tools** | For the first install only: the search index uses a native module that is compiled on your machine. `xcode-select --install` |
 | **git** | To clone the repository. |
 
-### Steps
+### Install it as an app
 
 ```sh
-git clone <repository URL>
+git clone https://github.com/Veterba/Recto.git
 cd Recto
 npm install      # also compiles the SQLite module against Electron
-npm run dev      # starts the app
+npm run app      # builds Recto and puts it in /Applications
 ```
 
-`npm run dev` opens the app and reloads it when the code changes. Leave it
-running while you use it; closing the window or ⌘Q quits.
+That last command prints `Recto is in /Applications`. Open it from Launchpad,
+from Spotlight, or with `open -a Recto`. Drag it to the Dock and it behaves
+like anything else you installed — it does not need the terminal again, and it
+does not need this folder to stay where it is.
+
+**To update later**, pull and build again:
+
+```sh
+git pull
+npm install      # only if the dependencies changed
+npm run app      # replaces /Applications/Recto.app with the new build
+```
+
+`npm run app` always replaces the installed copy with the build you just made,
+so what is in your Applications folder is whatever the code in this folder says.
+Quit Recto before running it, or macOS will keep the old copy running.
+
+### Or make a disk image, to give it to someone
+
+```sh
+npm run dist     # writes dist/Recto-<version>-arm64.dmg
+```
+
+Open the `.dmg` and drag Recto into Applications, the ordinary way. That is the
+file to hand to a friend who does not want to build anything — with one caveat:
+the app is **not signed by Apple** (that needs a paid Developer ID), and macOS
+quarantines anything downloaded from an unsigned developer. It opens fine if
+you built it yourself; if you downloaded it, run this once:
+
+```sh
+xattr -cr /Applications/Recto.app
+```
+
+Right-click → Open works too. Building it yourself avoids the question
+entirely, which is why that is the route above.
+
+### Or run it from source, to change it
+
+```sh
+npm run dev
+```
+
+This is the developer loop: it opens the app and reloads it as you edit the
+code. It shares nothing with the installed copy except your vaults, so you can
+have both. Closing the window or ⌘Q quits it.
 
 ### If `npm install` fails
 
@@ -79,11 +125,15 @@ stay empty and the terminal mentions `NODE_MODULE_VERSION`.
 
 | Command | What it does |
 |---|---|
+| `npm run app` | Build and install into `/Applications`. |
+| `npm run dist` | Build a `.dmg` in `dist/`. |
+| `npm run dist:dir` | Build just the `.app` (no disk image), in `dist/`. |
 | `npm run dev` | Run the app, reloading on changes. |
 | `npm run build` | Type-check and build into `out/`. |
 | `npm start` | Run the built app from `out/`. |
 | `npm test` | Type-check and run the test suite (556 tests). |
 | `npm run typecheck` | Types only. |
+| `npm run rebuild` | Recompile the SQLite module against Electron. |
 
 ---
 
@@ -397,6 +447,8 @@ src/renderer/    the React app
   graph/         layouts, canvas renderer, physics worker, settings wheel
   views/         note, settings, first run, the shell
 test/            556 tests, vitest
+build/           app icon, and the two hooks electron-builder calls
+electron-builder.yml   how the .app and .dmg are assembled
 ```
 
 House rules, worth knowing before sending a patch:
@@ -409,6 +461,11 @@ House rules, worth knowing before sending a patch:
   truth.
 - **Tests cover logic, not pixels**: links, paths, layouts, parsing, merging,
   mapping. `npm test`.
+- **Packaging is a build step, not a checklist.** `build/icon.svg` is the
+  source of the icon (`icon.png` and `icon.icns` are generated from it), and
+  the native SQLite module is kept outside the asar archive because a compiled
+  binary cannot be loaded from inside one. If you touch either, check the
+  packaged app and not just `npm run dev`.
 
 ---
 
@@ -416,9 +473,15 @@ House rules, worth knowing before sending a patch:
 
 An honest list:
 
-- **No packaged app.** You run it from source. A signed `.dmg` with updates is
-  the next big piece; until it is signed, macOS would refuse an unsigned build
-  anyway.
+- **Not signed by Apple, and there are no automatic updates.** `npm run app`
+  builds a real app and installs it, and `npm run dist` makes a `.dmg` you can
+  hand over — but the signature is ad-hoc, so a `.dmg` someone *downloads*
+  needs `xattr -cr` once. A Developer ID (£/$99 a year) and `electron-updater`
+  are what turn this into a download-and-forget install; neither is done.
+- **The build is for the machine that builds it.** `npm run app` on an Apple
+  Silicon Mac makes an Apple Silicon app, because the SQLite module is compiled
+  locally. That is fine when everyone builds their own; a universal binary is
+  not set up. Windows and Linux targets are configured but have never been run.
 - **No mobile, no plugin API, no multi-window.**
 - **Graph:** an outward tree of a very large vault still bunches near the middle,
   and the circle layout only reads well if your folders match your topics.

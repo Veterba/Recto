@@ -351,9 +351,19 @@ function guideMarkers(view: EditorView): readonly RectangleMarker[] {
       enter: (node) => {
         if (node.name !== 'ListItem' || seen.has(node.from)) return undefined
         seen.add(node.from)
-        const nested = node.node.getChild('BulletList') ?? node.node.getChild('OrderedList')
         const mark = node.node.getChild('ListMark')
-        if (nested === null || mark === null) return undefined
+        if (mark === null) return undefined
+        /**
+         * Down to the last child if there is a nested list, otherwise down to
+         * the end of the item itself.
+         *
+         * An item can own lines without owning a sublist - an indented maths
+         * block or paragraph under a bullet - and those belong to it just as
+         * much as a child bullet does. Obsidian draws the guide beside them;
+         * requiring a nested list left exactly those blocks floating free.
+         */
+        const nested = node.node.getChild('BulletList') ?? node.node.getChild('OrderedList')
+        const body = nested ?? node.node
 
         const start = view.coordsAtPos(mark.from, 1)
         const end = view.coordsAtPos(mark.to, -1)
@@ -361,7 +371,7 @@ function guideMarkers(view: EditorView): readonly RectangleMarker[] {
         const x = Math.round((start.left + end.right) / 2 - origin.left)
 
         const first = view.lineBlockAt(node.from)
-        const last = view.lineBlockAt(trimEnd(state, nested.from, nested.to))
+        const last = view.lineBlockAt(trimEnd(state, body.from, body.to))
         const top = view.documentTop + first.bottom - origin.top
         const bottom = view.documentTop + last.bottom - origin.top
         // Folded: the children are hidden inside the item's own line, so there
