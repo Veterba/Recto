@@ -41,6 +41,11 @@ export type GraphSettings = {
   layout: GraphLayout
   /** Only notes with this many links are shown. */
   linkRange: LinkRange
+  /**
+   * Show only the open note and what it links to, either way - Obsidian's
+   * local graph, as a switch on the one graph rather than a second view.
+   */
+  localOnly: boolean
 }
 
 export const DEFAULT_SETTINGS: GraphSettings = {
@@ -52,6 +57,7 @@ export const DEFAULT_SETTINGS: GraphSettings = {
   look: DEFAULT_LOOK,
   layout: DEFAULT_LAYOUT,
   linkRange: ALL_LINKS,
+  localOnly: false,
 }
 
 /** Sane outer edges for each force, matching the slider ranges in the UI. */
@@ -90,5 +96,6 @@ export function parseSettings(raw: unknown): GraphSettings {
     look: coerceLook(record['look']),
     layout: coerceLayout(record['layout']),
     linkRange: coerceLinkRange(record['linkRange']),
+    localOnly: typeof record['localOnly'] === 'boolean' ? record['localOnly'] : false,
   }
 }

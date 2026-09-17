@@ -26,21 +26,19 @@ export class ViewBoundary extends Component<Props, State> {
     const { error } = this.state
     if (error === null) return this.props.children
     return (
-      <div className="pane-empty view-error">
-        <p>
-          <strong>This tab couldn’t be shown.</strong>
-          <br />
-          <code>{this.props.label}</code>
-          <br />
-          <span className="view-error__detail">{error.message}</span>
-        </p>
-        <div className="view-error__actions">
-          <button className="btn" onClick={() => this.setState({ error: null })}>
-            Try again
-          </button>
-          <button className="btn" onClick={this.props.onClose}>
-            Close tab
-          </button>
+      <div className="note-error">
+        <div className="note-error__card" role="alert">
+          <p className="note-error__title">This tab couldn’t be shown</p>
+          <code className="note-error__path">{this.props.label}</code>
+          <p className="note-error__detail">{error.message}</p>
+          <div className="note-error__actions">
+            <button className="btn btn--sm" onClick={() => this.setState({ error: null })}>
+              Try again
+            </button>
+            <button className="btn btn--ghost btn--sm" onClick={this.props.onClose}>
+              Close tab
+            </button>
+          </div>
         </div>
       </div>
     )

@@ -12,6 +12,8 @@
  * as a note any more.
  */
 
+import { parseFrontmatter, setField } from './frontmatter'
+
 /** Where templates live when the vault has not said otherwise. */
 export const TEMPLATE_FOLDER = 'templates'
 
@@ -183,7 +185,10 @@ export function fillTemplate(body: string, vars: TemplateVars): string {
 }
 
 /**
- * Strip a template's own frontmatter before inserting it.
+ * Strip a template's own frontmatter before inserting it INTO an existing note.
+ *
+ * Only for that case: a new note made from a template keeps the frontmatter, so
+ * the properties a template carries end up on the note it makes.
  *
  * A template is a note, so it may carry `title:` or `tags:` of its own from
  * being edited. Pasting that into the middle of another note would produce a
@@ -202,6 +207,25 @@ export function templateBody(text: string): string {
     return rest.join('\n')
   }
   return text
+}
+
+/**
+ * A template's own properties, for merging into the note it fills.
+ *
+ * Only the fields this editor understands: a nested map inside a template is
+ * left where it is rather than half-copied. Fields already on the target note
+ * win - the note's own `tags:` are not replaced by the template's.
+ */
+export function mergeTemplateProperties(target: string, template: string): string {
+  const from = parseFrontmatter(template)
+  if (!from.present || from.fields.length === 0) return target
+  const existing = new Set(parseFrontmatter(target).fields.map((field) => field.key.toLowerCase()))
+  let out = target
+  for (const field of from.fields) {
+    if (existing.has(field.key.toLowerCase())) continue
+    out = setField(out, field.key, field.value)
+  }
+  return out
 }
 
 /** Display name for a template file. */

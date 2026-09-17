@@ -18,6 +18,18 @@
   opacity: 0.55;
   cursor: default;
 }
+/* A plain `.btn` with no modifier used to be borderless and groundless - two
+   words floating in a grey pill. */
+.btn:not(.btn--primary):not(.btn--ghost) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.btn:not(.btn--primary):not(.btn--ghost):hover:not(:disabled) {
+  background: var(--accent-muted);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
 
 .btn--primary {
   background: var(--accent);
@@ -26,6 +38,12 @@
 }
 .btn--primary:hover:not(:disabled) {
   background: var(--accent-hover);
+}
+
+/* Smaller, for inline actions inside a message or a settings row. */
+.btn--sm {
+  padding: 5px var(--size-3);
+  font-size: 12px;
 }
 
 .btn--ghost {
@@ -808,12 +826,16 @@ body.is-resizing {
   display: none;
 }
 
+/* Every tab the same width: the close button then sits in the same place in
+   every one, which is what makes closing several in a row quick. They shrink
+   together when the bar runs out of room rather than scrolling away. */
 .tab {
-  flex: none;
+  flex: 0 1 var(--tab-w, 168px);
+  min-width: 96px;
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: var(--size-1);
-  max-width: 200px;
   padding: 5px var(--size-1) 5px var(--size-3);
   border-radius: var(--radius-s) var(--radius-s) 0 0;
   font-size: 12px;
@@ -850,7 +872,31 @@ body.is-resizing {
     inset -1px 0 0 var(--accent),
     inset 0 1px 0 var(--accent);
 }
+.tabs__clear {
+  all: unset;
+  flex: none;
+  align-self: center;
+  margin: 0 4px 0 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--anim-fast) var(--ease), background var(--anim-fast) var(--ease);
+}
+.tabs__clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-active, var(--bg-hover));
+}
+.tabs__clear:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
 .tab__title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1857,8 +1903,12 @@ body.is-resizing {
 }
 
 /* A real checkbox in place of the `[ ]` markers. */
+/* Three columns wide in total, matching what the hanging indent assumes for a
+   task's `- [ ] `. */
 .cm-task-checkbox {
   appearance: none;
+  box-sizing: content-box;
+  margin-right: calc(3ch - 18px) !important;
   width: 14px;
   height: 14px;
   margin: 0 2px -2px 0;
@@ -3043,10 +3093,30 @@ body.is-resizing {
    the muted grey it read as a speck of dust rather than as a list marker. The
    line-height stays at 1 so a larger glyph cannot stretch the line box - the
    editor's own line height is well above 1.3em, so nothing moves. */
+/*
+ * The dot that stands in for `- `.
+ *
+ * Exactly two columns wide, because that is what it replaces and what the
+ * hanging indent is calculated from: a narrower glyph left every wrapped row
+ * of a bullet sitting a few pixels right of the item's own text. Drawn rather
+ * than typed, so its size does not depend on the font's bullet glyph.
+ */
 .cm-bullet {
+  display: inline-block;
+  width: 2ch;
+  text-align: center;
   color: var(--text-secondary);
-  font-size: 1.3em;
+  font-size: 1em;
   line-height: 1;
+}
+.cm-bullet::before {
+  content: '';
+  display: inline-block;
+  width: 5.5px;
+  height: 5.5px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 0.14em;
 }
 
 /* ---------- tooltips ---------- */
@@ -6605,4 +6675,62 @@ body.is-resizing {
     opacity: 0;
     transform: translateX(24px);
   }
+}
+
+/* A note or a tab that could not be shown: one small card, centred, with the
+   two things you might do about it. Reusing `.pane-empty` put the message at
+   the top of the pane and the buttons at the bottom. */
+.note-error {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--size-6);
+}
+.note-error__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 46ch;
+  padding: var(--size-4) var(--size-5);
+  /*
+   * Nothing around it at all: no border, no ground, no shadow.
+   *
+   * A panel of its own read as a dialogue - something to dismiss - and in the
+   * dark theme its lighter ground sat as a grey box in the middle of the page.
+   * It is a message in an empty pane, so it looks like one.
+   */
+  background: transparent;
+  text-align: center;
+}
+.note-error__icon {
+  color: var(--danger);
+}
+.note-error__title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.note-error__path {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+.note-error__detail {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.note-error__actions {
+  display: flex;
+  gap: var(--size-2);
+  margin-top: 4px;
+}
+.note-error__actions .btn {
+  border-color: transparent;
+}
+.note-error__actions .btn:hover:not(:disabled) {
+  border-color: transparent;
 }

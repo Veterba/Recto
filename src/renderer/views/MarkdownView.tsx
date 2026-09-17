@@ -166,25 +166,46 @@ function MarkdownEditor({
   /** What we last wrote, so our own watcher echo is not mistaken for an edit. */
   const lastWritten = useRef<string | null>(null)
 
+  /** Bumped to read the file again - by the retry button, or by a watcher event. */
+  const [attempt, setAttempt] = useState(0)
+
   useEffect(() => {
     let cancelled = false
+    let retry: number | undefined
     setInitial(null)
     setError(null)
-    void api.invoke('fs:read', path).then((result) => {
-      if (cancelled) return
-      if (result.ok) {
-        setInitial(result.content)
-        setText(result.content)
-        lastWritten.current = result.content
-        setStatus('loaded')
-      } else {
-        setError(result.error)
-      }
-    })
+
+    /**
+     * Read, and try once more a moment later if it fails.
+     *
+     * A note can be missing for an instant through no fault of its own: the
+     * Obsidian sync writes to a temp file and renames it over the original, and
+     * an external editor may do the same. A read caught in that window left the
+     * tab showing "Could not open" until it was closed and reopened.
+     */
+    const load = (again: boolean): void => {
+      void api.invoke('fs:read', path).then((result) => {
+        if (cancelled) return
+        if (result.ok) {
+          setInitial(result.content)
+          setText(result.content)
+          lastWritten.current = result.content
+          setStatus('loaded')
+          setError(null)
+        } else if (again) {
+          retry = window.setTimeout(() => load(false), 400)
+        } else {
+          setError(result.error)
+        }
+      })
+    }
+    load(true)
+
     return () => {
       cancelled = true
+      window.clearTimeout(retry)
     }
-  }, [path])
+  }, [path, attempt])
 
   const save = useCallback(
     async (next: string) => {
@@ -327,7 +348,12 @@ function MarkdownEditor({
     () =>
       api.on('vault:changed', (changes) => {
         const touched = changes.some((c) => 'path' in c && c.path === path && c.type === 'change')
-        if (!touched) return
+        // A note that failed to open is retried when anything happens to it -
+        // an atomic save elsewhere arrives as add, not change.
+        if (!touched) {
+          if (error !== null && changes.some((c) => 'path' in c && c.path === path)) setAttempt((n) => n + 1)
+          return
+        }
         void api.invoke('fs:read', path).then((result) => {
           if (!result.ok || result.content === lastWritten.current) return
           lastWritten.current = result.content
@@ -336,17 +362,26 @@ function MarkdownEditor({
           setStatus('loaded')
         })
       }),
-    [path],
+    [path, error],
   )
 
   if (error !== null) {
     return (
-      <div className="pane-empty">
-        <p>
-          Could not open <code>{path}</code>
-          <br />
-          {error}
-        </p>
+      <div className="note-error">
+        <div className="note-error__card" role="alert">
+          <Icon name="alert-triangle" size={18} className="note-error__icon" />
+          <p className="note-error__title">Could not open this note</p>
+          <code className="note-error__path">{path}</code>
+          <p className="note-error__detail">{error}</p>
+          <div className="note-error__actions">
+            <button className="btn btn--sm" onClick={() => setAttempt((n) => n + 1)}>
+              Try again
+            </button>
+            <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke('fs:reveal', path)}>
+              Show in Finder
+            </button>
+          </div>
+        </div>
       </div>
     )
   }

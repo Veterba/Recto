@@ -124,7 +124,10 @@ class BulletWidget extends WidgetType {
   override toDOM(): HTMLElement {
     const dot = document.createElement('span')
     dot.className = 'cm-bullet'
-    dot.textContent = '•'
+    // The dot itself is drawn in CSS (`.cm-bullet::before`), so its size does
+    // not depend on the font's bullet glyph and its box is exactly the two
+    // columns the `- ` it replaces occupied.
+    dot.textContent = ''
     return dot
   }
 }
@@ -395,7 +398,12 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
           // Only unordered lists. `1.` is content - renumbering it as a dot
           // would lose the one thing an ordered list is for.
           if (!/^[-*+]$/.test(view.state.doc.sliceString(node.from, node.to))) return
-          ranges.push({ from: node.from, to: node.to, deco: bullet })
+          // The space after the marker goes too, so the dot's box stands for
+          // exactly `- ` and the item's hanging indent has one width to match
+          // rather than a dot plus a stray space that only shows on the first
+          // row.
+          const after = view.state.doc.sliceString(node.to, node.to + 1)
+          ranges.push({ from: node.from, to: after === ' ' ? node.to + 1 : node.to, deco: bullet })
           return
         }
         if (!MARKERS.has(node.name)) return

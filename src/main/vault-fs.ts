@@ -6,7 +6,7 @@ import { VAULT_STATE_DIR, type FileNode } from '../shared/ipc-contract'
 import { rewriteWikiLinks } from './link-rewrite'
 import { resolveInVault } from './paths'
 import { currentVault } from './vault'
-import { looksBinary } from './text-file'
+import { notTextMessage, notTextReason } from './text-file'
 
 /**
  * All vault file access. Every path arriving from the renderer goes through
@@ -84,7 +84,8 @@ export async function readFile(
     const data = await fsp.readFile(resolveInVault(requireVault(), relative))
     // Never hand binary to the editor: decoding it is lossy, and whatever reads
     // it is one save away from writing the loss back to disk.
-    if (looksBinary(data)) return { ok: false, error: 'This file is not text, so it is not opened as a note.' }
+    const notText = notTextReason(data)
+    if (notText !== null) return { ok: false, error: notTextMessage(notText, false) }
     return { ok: true, content: data.toString('utf8') }
   } catch (err) {
     return { ok: false, error: message(err) }
@@ -112,9 +113,8 @@ export async function writeFile(relative: string, content: string): Promise<{ ok
       },
       () => null,
     )
-    if (existing !== null && looksBinary(existing)) {
-      return { ok: false, error: 'Refused to overwrite a file that is not text.' }
-    }
+    const notText = existing === null ? null : notTextReason(existing, true)
+    if (notText !== null) return { ok: false, error: notTextMessage(notText, true) }
     const tmp = `${absolute}.tmp-${process.pid}`
     await fsp.mkdir(path.dirname(absolute), { recursive: true })
     await fsp.writeFile(tmp, content, 'utf8')

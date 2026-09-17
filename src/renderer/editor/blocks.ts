@@ -102,24 +102,101 @@ function calloutDecos(group: string): { body: Decoration; head: Decoration } {
 const columns = (whitespace: string): number => [...whitespace].reduce((n, c) => n + (c === '\t' ? 4 : 1), 0)
 
 /**
- * Hanging indent for a wrapped list item or an indented continuation line.
+ * How wide a piece of the editor's own text is, in pixels.
+ *
+ * Indents used to be written in `ch`, which is the width of a "0" - exact in a
+ * monospace font and wrong in every other, where a bullet's wrapped rows then
+ * sat a few pixels off its own text. Measured against the editor's real font
+ * instead, through a canvas, and cached per font: no layout reads, so this
+ * cannot start a measure loop.
+ */
+let fontKey = ''
+let measurer: CanvasRenderingContext2D | null = null
+const textWidths = new Map<string, number>()
+
+function widthOf(view: EditorView, text: string): number {
+  if (text === '') return 0
+  const style = getComputedStyle(view.contentDOM)
+  const key = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+  if (key !== fontKey) {
+    fontKey = key
+    textWidths.clear()
+    measurer ??= document.createElement('canvas').getContext('2d')
+    if (measurer !== null) measurer.font = key
+  }
+  const cached = textWidths.get(text)
+  if (cached !== undefined) return cached
+  // A tab is drawn as four columns; measuring one gives whatever the font says.
+  const width = measurer === null ? text.length * 8 : measurer.measureText(text.replace(/\t/g, '    ')).width
+  textWidths.set(text, width)
+  return width
+}
+
+/** The `ch` unit the widgets are sized in, in pixels. */
+const zero = (view: EditorView): number => widthOf(view, '0')
+
+/**
+ * Hanging indent for a wrapped list item, in pixels.
  *
  * Without it a long list item wraps back to the left margin, under its own
  * bullet, and a nested list turns into a ragged wall of text - which is what a
- * note copied from Obsidian looked like. The wrapped part now lines up with
- * the text after the marker, the way Obsidian and every word processor do it.
- *
- * Measured in `ch`, from the source: exact in the monospace editor font, a
- * close approximation in the proportional ones.
+ * note copied from Obsidian looked like. The wrapped rows now line up with the
+ * text after the marker, the way Obsidian and every word processor do it.
  */
 const hangCache = new Map<number, Decoration>()
 function hang(width: number): Decoration {
-  let deco = hangCache.get(width)
+  const px = Math.round(width * 2) / 2
+  let deco = hangCache.get(px)
   if (deco === undefined) {
-    deco = Decoration.line({ attributes: { style: `padding-left: calc(6px + ${width}ch); text-indent: -${width}ch` } })
-    hangCache.set(width, deco)
+    deco = Decoration.line({ attributes: { style: `padding-left: calc(6px + ${px}px); text-indent: -${px}px` } })
+    hangCache.set(px, deco)
   }
   return deco
+}
+
+/**
+ * A whole line pushed in to a column, wrapped rows included.
+ *
+ * For a line that CONTINUES a list item: it belongs under the item's text, and
+ * it may carry no indentation of its own at all ("lazy continuation", which
+ * markdown allows and people type constantly). A hanging indent is wrong here
+ * - that would leave its first row at the margin and only the wrapped rows
+ * indented, which is the text "floating left" then jumping right.
+ */
+const indentCache = new Map<string, Decoration>()
+function continuation(column: number, typed: number): Decoration {
+  const px = Math.round(column * 2) / 2
+  const typedPx = Math.round(typed * 2) / 2
+  const key = `${px}:${typedPx}`
+  let deco = indentCache.get(key)
+  if (deco === undefined) {
+    // Padding puts the whole line at the item's column; the negative indent
+    // cancels the spaces the line was typed with, so its first row and its
+    // wrapped rows land in the same place.
+    deco = Decoration.line({
+      attributes: { style: `padding-left: calc(6px + ${px}px); text-indent: -${typedPx}px` },
+    })
+    indentCache.set(key, deco)
+  }
+  return deco
+}
+
+/**
+ * Where a list item's text starts, in pixels from the line's left edge - as
+ * the editor DRAWS it, which is not the same as what the source says:
+ * Live Preview replaces `- ` with a dot two columns wide and `- [ ] ` with a
+ * checkbox three columns wide.
+ */
+function contentWidth(view: EditorView, text: string, livePreview: boolean): number | null {
+  const item = LIST_ITEM.exec(text)
+  if (item === null) return null
+  const lead = widthOf(view, item[1] ?? '')
+  const marker = item[2] ?? '-'
+  const spaces = item[3] ?? ' '
+  const task = item[4]
+  if (livePreview && task !== undefined) return lead + 3 * zero(view)
+  if (livePreview && /^[-*+]$/.test(marker)) return lead + 2 * zero(view)
+  return lead + widthOf(view, marker + spaces + (task ?? ''))
 }
 
 /** The language written after the opening fence, if any. */
@@ -227,6 +304,30 @@ function build(view: EditorView): DecorationSet {
     const endLine = state.doc.lineAt(to).number
     const livePreview = isLivePreviewOn(view)
 
+    /**
+     * Lines that continue a list item, and the column their item's text is at.
+     *
+     * From the tree, because whether a line belongs to the item above it is a
+     * question about the document's structure, not about how many spaces it
+     * happens to start with. Nested items are entered after their parents, so
+     * their own column wins for the lines inside them.
+     */
+    const continues = new Map<number, number>()
+    syntaxTree(state).iterate({
+      from,
+      to,
+      enter: (node) => {
+        if (node.name === 'FencedCode' || node.name === 'MathBlock' || node.name === 'Table') return false
+        if (node.name !== 'ListItem') return undefined
+        const first = state.doc.lineAt(node.from)
+        const column = contentWidth(view, first.text, livePreview)
+        if (column === null) return undefined
+        const last = state.doc.lineAt(node.to).number
+        for (let n = first.number + 1; n <= last; n++) continues.set(n, column)
+        return undefined
+      },
+    })
+
     for (let n = startLine; n <= endLine; n++) {
       const line = state.doc.line(n)
 
@@ -238,18 +339,24 @@ function build(view: EditorView): DecorationSet {
       }
 
       if (!skipHang.has(n) && !QUOTE.test(line.text)) {
-        const item = LIST_ITEM.exec(line.text)
-        let width = 0
-        if (item !== null) {
-          const lead = columns(item[1] ?? '')
-          // In Live Preview a task's `- [ ] ` is drawn as one checkbox, about
-          // three columns wide rather than six.
-          width = item[4] !== undefined && livePreview ? lead + 3 : lead + (item[2]?.length ?? 1) + (item[3]?.length ?? 1) + (item[4]?.length ?? 0)
+        const own = contentWidth(view, line.text, livePreview)
+        const inside = continues.get(n)
+        if (own !== null) {
+          // The item's own line: its marker hangs, its wrapped rows line up
+          // with its text.
+          if (own > 0) entries.push({ from: line.from, to: line.from, deco: hang(own), sort: SORT.line })
+        } else if (inside !== undefined && line.text.trim() !== '') {
+          // A continuation: the whole line sits at the item's text column,
+          // whatever indentation it was typed with.
+          const typed = widthOf(view, /^[ \t]*/.exec(line.text)?.[0] ?? '')
+          const column = Math.max(inside, typed)
+          if (column > 0) entries.push({ from: line.from, to: line.from, deco: continuation(column, typed), sort: SORT.line })
         } else {
           const lead = /^[ \t]+/.exec(line.text)?.[0]
-          if (lead !== undefined && line.text.trim() !== '') width = columns(lead)
+          if (lead !== undefined && line.text.trim() !== '') {
+            entries.push({ from: line.from, to: line.from, deco: hang(widthOf(view, lead)), sort: SORT.line })
+          }
         }
-        if (width > 0) entries.push({ from: line.from, to: line.from, deco: hang(width), sort: SORT.line })
       }
 
       for (const match of line.text.matchAll(HIGHLIGHT)) {

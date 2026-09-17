@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_TEMPLATE_SETTINGS,
   coerceTemplateSettings,
   dailyNotePath,
-  DEFAULT_TEMPLATE_SETTINGS,
   fillTemplate,
   isInFolder,
   isoWeek,
+  mergeTemplateProperties,
   normaliseFolder,
   templateBody,
   templateName,
@@ -175,5 +176,30 @@ describe('dailyNotePath', () => {
 
   it('uses the configured root', () => {
     expect(dailyNotePath(new Date(2026, 8, 14), 'life/journal').path.startsWith('life/journal/2026/')).toBe(true)
+  })
+})
+
+describe('mergeTemplateProperties', () => {
+  const template = '---\ntags:\n  - meeting\nattendees: \nwhen: 2026-09-17\n---\n\n## Agenda\n'
+
+  it('adds the template’s properties to a note that has none', () => {
+    const merged = mergeTemplateProperties('# Note\n\nbody\n', template)
+    expect(merged.startsWith('---\n')).toBe(true)
+    expect(merged).toContain('attendees:')
+    expect(merged).toContain('when: 2026-09-17')
+    expect(merged).toContain('# Note')
+  })
+
+  it('never overwrites a property the note already has', () => {
+    const note = '---\ntags:\n  - note\n---\n\n# Note\n'
+    const merged = mergeTemplateProperties(note, template)
+    expect(merged).toContain('- note')
+    expect(merged).not.toContain('- meeting')
+    expect(merged).toContain('attendees:')
+  })
+
+  it('leaves a note alone when the template has no properties', () => {
+    const note = '# Note\n\nbody\n'
+    expect(mergeTemplateProperties(note, '## Agenda\n')).toBe(note)
   })
 })

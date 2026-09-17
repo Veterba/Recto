@@ -206,6 +206,15 @@ export function registerEditorCommands(
       run: toggleOutline,
     },
     {
+      id: 'editor:save',
+      name: 'Save now',
+      section: 'Editor',
+      scope: 'editor',
+      hotkey: 'Mod+S',
+      isAvailable: editorHasFocus,
+      run: () => getActiveEditor()?.save(),
+    },
+    {
       id: 'editor:find',
       name: 'Find in note',
       section: 'Editor',

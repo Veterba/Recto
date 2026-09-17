@@ -198,3 +198,40 @@ describe('sections', () => {
     }
   })
 })
+
+describe('tabs that outlive their notes', () => {
+  const withNotes = (paths: readonly string[]): Workspace => {
+    const workspace = new Workspace()
+    for (const path of paths) workspace.openView('markdown', { path })
+    return workspace
+  }
+
+  it('closes tabs whose note is gone and keeps the rest', () => {
+    const workspace = withNotes(['a.md', 'b.md', 'gone.md', 'c.md'])
+    const removed = workspace.pruneMissing((path) => path !== 'gone.md')
+    expect(removed).toBe(1)
+    expect(workspace.leaves().map((leaf) => leaf.state['path'])).toEqual(['a.md', 'b.md', 'c.md'])
+  })
+
+  it('leaves views that are not notes alone', () => {
+    const workspace = new Workspace()
+    workspace.openView('graph')
+    workspace.openView('markdown', { path: 'gone.md' })
+    workspace.pruneMissing(() => false)
+    expect(workspace.leaves().map((leaf) => leaf.type)).toEqual(['graph'])
+  })
+
+  it('clears every tab at once', () => {
+    const workspace = withNotes(['a.md', 'b.md', 'c.md'])
+    workspace.closeAll()
+    expect(workspace.leaves()).toEqual([])
+    expect(workspace.activeLeaf).toBeNull()
+  })
+
+  it('can keep one tab while clearing the others', () => {
+    const workspace = withNotes(['a.md', 'b.md', 'c.md'])
+    const keep = workspace.leaves()[1]!
+    workspace.closeAll({ except: keep.id })
+    expect(workspace.leaves().map((leaf) => leaf.state['path'])).toEqual(['b.md'])
+  })
+})

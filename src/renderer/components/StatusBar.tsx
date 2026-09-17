@@ -14,6 +14,7 @@ type Props = {
   vaultName: string
   graphOpen: boolean
   onToggleGraph: () => void
+  onOpenDaily: () => void
   onOpenPalette: () => void
 }
 
@@ -22,6 +23,7 @@ export function StatusBar({
   vaultName,
   graphOpen,
   onToggleGraph,
+  onOpenDaily,
   onOpenPalette,
 }: Props): React.ReactElement {
   const leaf = workspace?.activeLeaf ?? null
@@ -33,6 +35,11 @@ export function StatusBar({
       <span className="status__sep" />
       <span className="status__item">{leaf ? viewTitle(leaf.type, leaf.state) : 'Nothing open'}</span>
       <span className="status__spacer" />
+      <Tip label="Today's note" hint={formatChord('Mod+Shift+D')} placement="top">
+        <button className="status__btn" onClick={onOpenDaily} aria-label="Daily note">
+          <Icon name="calendar-days" size={13} />
+        </button>
+      </Tip>
       <span className="status__item status__item--muted">
         {openCount} {openCount === 1 ? 'tab' : 'tabs'}
       </span>

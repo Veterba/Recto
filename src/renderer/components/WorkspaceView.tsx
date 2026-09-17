@@ -135,6 +135,17 @@ function Tabs({
             </button>
           </div>
         ))}
+        {node.children.length > 1 && (
+          <button
+            className="tabs__clear"
+            title="Close every tab"
+            aria-label="Close every tab"
+            onMouseDown={(ev) => ev.preventDefault()}
+            onClick={() => workspace.closeAll()}
+          >
+            Clear all
+          </button>
+        )}
       </div>
       <div className="tabs__content" role="tabpanel">
         {active ? <Leaf key={active.id} workspace={workspace} leafId={active.id} /> : <EmptyPane />}

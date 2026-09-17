@@ -56,6 +56,14 @@ export type EditorHandle = {
   setLivePreview: (on: boolean) => void
   /** Modal editing, toggled without rebuilding the editor. */
   setVim: (on: boolean) => void
+  /**
+   * Write now, rather than waiting for the debounce.
+   *
+   * Saving is automatic, so this exists for the habit: ⌘S is what people press
+   * when they want to be sure, and a text editor where it does nothing feels
+   * like one that is not saving.
+   */
+  save: () => void
   /** Focus mode, syntax, style and authorship settings, pushed live. */
   setWriting: (settings: WritingSettings) => void
   /** Load a note's saved authorship. */
@@ -307,6 +315,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       view.focus()
     },
     getCursorLine: () => view.state.doc.lineAt(view.state.selection.main.head).number,
+    save: () => options.onSave(),
     setWriting: (settings) => {
       view.dispatch({ effects: setWritingConfig.of(settings) })
     },
