@@ -389,17 +389,21 @@ code {
 }
 
 /*
- * No hairline between the chrome and the card while the chrome is glass.
+ * On glass the seam belongs to the CARD, not to the sidebar.
  *
- * A 1px line is the sharpest edge in a window whose whole left side is a
- * blurred, grainy surface, and it ran straight past the card's rounded corner -
- * a hard vertical ending in a curve. The card's own edge already says where one
- * side ends and the other begins; on glass it says it softly, which is the
- * point of the glass. (After the rule above, which sets the shorthand.)
+ * The sidebar's own border ran straight past the card's rounded corner - a hard
+ * vertical ending in a curve. Moved onto the card's left edge it follows that
+ * curve, and it has to be there: over a light backdrop the frosted panel and
+ * the white pane come out nearly the same value, and without a seam there is no
+ * telling where one ends and the other starts. Same hairline as everything else
+ * on the panel. (After the rule above, which sets the shorthand.)
  */
 :root:not([data-translucent='off']) .sidebar,
 :root:not([data-translucent='off']) .sidebar-stub {
   border-right-color: transparent;
+}
+:root:not([data-translucent='off']) .shell__content {
+  border-left: 1px solid var(--sidebar-line);
 }
 
 /**
@@ -3142,10 +3146,20 @@ body.is-resizing {
 
 /* The drawn `---`. A real element rather than a border on the line, so it
    centres in the line box at any font size. */
-.cm-rule {
+/* The line a `---` sits on: the marks are hidden, the rule is drawn across the
+   row itself, so the row keeps its place in the document and its cursor. */
+.cm-rule-line {
+  position: relative;
+}
+.cm-rule-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
   height: 1px;
-  margin: 0.65em 0;
   background: var(--border-strong);
+  pointer-events: none;
 }
 
 

@@ -450,12 +450,13 @@ export function indentListItems(state: EditorState, direction: 1 | -1): Transact
  * the new one - the indent, and the guide drawn from it, travelled down the
  * page with the cursor instead of staying where it was put.
  *
- * `carry` is the difference between the two keys. ⇧Enter repeats the indent:
- * the line you leave keeps it, the new one gets it too, and the guides stack
- * into a column you can keep writing in. Plain Enter takes it back - the line
- * loses the indent it was given and the new one starts at the margin - because
- * an indent nobody wrote anything into is not structure, it is a keystroke to
- * undo, and leaving its guide behind on an empty row is litter.
+ * `carry` is the difference between the two keys, and on a blank indented line
+ * they are opposites. ⇧Enter repeats the indent: the line keeps it, the new one
+ * gets it too, and the guides stack into a column you keep writing in. Enter
+ * takes one level back off, WITHOUT going anywhere - `||` becomes `|` under the
+ * same cursor - so the key that made the indent too deep is also the key that
+ * walks it back. Once there is no indent left, Enter is an ordinary newline
+ * again and this returns null.
  *
  * Only blank lines: a line with words on it, or a list item, belongs to the
  * markdown keymap, which has to continue bullets and numbering.
@@ -466,11 +467,12 @@ export function newlineFromIndent(state: EditorState, carry: boolean): Transacti
   const line = state.doc.lineAt(range.head)
   if (line.text.trim() !== '' || line.text.length === 0) return null
   if (!carry) {
+    const back = Math.min(INDENT_UNIT.length, line.text.length)
     return {
-      changes: { from: line.from, to: line.to, insert: '\n' },
-      selection: { anchor: line.from + 1 },
+      changes: { from: line.to - back, to: line.to },
+      selection: { anchor: line.to - back },
       scrollIntoView: true,
-      userEvent: 'input',
+      userEvent: 'delete.dedent',
     }
   }
   return {

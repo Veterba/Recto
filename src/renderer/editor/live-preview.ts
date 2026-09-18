@@ -132,20 +132,6 @@ class BulletWidget extends WidgetType {
   }
 }
 
-/** A drawn horizontal rule, in place of the `---` that produces it. */
-class RuleWidget extends WidgetType {
-  override eq(): boolean {
-    // Every rule is identical, so CodeMirror can reuse the DOM freely.
-    return true
-  }
-
-  override toDOM(): HTMLElement {
-    const hr = document.createElement('div')
-    hr.className = 'cm-rule'
-    return hr
-  }
-}
-
 /** An image embed. Rendered as the picture, not as its markdown. */
 class ImageWidget extends WidgetType {
   constructor(
@@ -224,7 +210,18 @@ const livePreviewEnabled = StateField.define<boolean>({
 const FENCE = /^\s*(`{3,}|~{3,})/
 
 const hiddenBlock = Decoration.replace({ block: true })
-const ruleBlock = Decoration.replace({ block: true, widget: new RuleWidget() })
+/**
+ * A horizontal rule, drawn ON its line rather than instead of it.
+ *
+ * It used to be a block widget replacing the whole line, which left the line
+ * with no place to put a cursor: arrowing down the note jumped straight over
+ * it, and a rule you cannot reach is a rule you cannot delete. The line stays a
+ * line - the `---` is hidden inline, the rule is drawn across the row in CSS -
+ * so the caret lands there like anywhere else and the markers come back, the
+ * way every other piece of syntax in Live Preview behaves.
+ */
+const ruleLine = Decoration.line({ class: 'cm-rule-line' })
+const ruleMarks = Decoration.replace({})
 
 const blockHiding = StateField.define<DecorationSet>({
   create: () => Decoration.none,
@@ -308,7 +305,8 @@ const blockHiding = StateField.define<DecorationSet>({
         for (let n = first.number; n <= last.number; n++) if (touched.has(n)) return false
 
         if (name === 'HorizontalRule') {
-          ranges.push({ from: first.from, to: last.to, deco: ruleBlock })
+          ranges.push({ from: first.from, to: first.from, deco: ruleLine })
+          if (last.to > first.from) ranges.push({ from: first.from, to: last.to, deco: ruleMarks })
         } else if (name === 'MathBlock') {
           const tex = mathSource(doc.sliceString(node.from, node.to))
           ranges.push({

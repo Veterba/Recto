@@ -342,14 +342,19 @@ describe('A newline from an indented blank line', () => {
     expect(plain(s, md.newlineFromIndent(s, true))).toBe('- alpha\n    \n    ')
   })
 
-  it('takes the indent back on Enter, leaving nothing behind', () => {
+  it('takes one level back on Enter, staying on the line', () => {
     const s = make('- alpha\n    |')
-    expect(plain(s, md.newlineFromIndent(s, false))).toBe('- alpha\n\n')
+    expect(apply(s, md.newlineFromIndent(s, false))).toBe('- alpha\n  |')
   })
 
-  it('puts the cursor on the new line, at the margin', () => {
+  it('takes the last level back too', () => {
     const s = make('  |')
-    expect(apply(s, md.newlineFromIndent(s, false))).toBe('\n|')
+    expect(apply(s, md.newlineFromIndent(s, false))).toBe('|')
+  })
+
+  it('leaves Enter alone once there is no indent left', () => {
+    const s = make('|')
+    expect(md.newlineFromIndent(s, false)).toBeNull()
   })
 
   it('puts the cursor at the end of the new indent', () => {
