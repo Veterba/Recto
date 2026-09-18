@@ -198,6 +198,21 @@ code {
   /* Views scroll their own content. */
   overflow: hidden;
 }
+
+/*
+ * What the card's rounded corners reveal.
+ *
+ * With translucency on that is the frosted ground, which is the point of the
+ * inset. With it OFF the ground painted nothing, so the corner cut through to
+ * the window itself and each corner came out as a white wedge against grey
+ * chrome - the one place in the window where a shape was defined by an absence
+ * rather than by a surface. It wears the chrome, like the sidebar and the stub
+ * beside it, so the cut reads as a notch in the frame.
+ */
+:root[data-translucent='off'] .shell__main {
+  background: var(--chrome);
+}
+
 .shell__content > .split,
 .shell__content > .tabs {
   flex: 1;
@@ -371,6 +386,20 @@ code {
 :root:not([data-translucent='off']) .status {
   color: var(--sidebar-text);
   border-color: var(--sidebar-line);
+}
+
+/*
+ * No hairline between the chrome and the card while the chrome is glass.
+ *
+ * A 1px line is the sharpest edge in a window whose whole left side is a
+ * blurred, grainy surface, and it ran straight past the card's rounded corner -
+ * a hard vertical ending in a curve. The card's own edge already says where one
+ * side ends and the other begins; on glass it says it softly, which is the
+ * point of the glass. (After the rule above, which sets the shorthand.)
+ */
+:root:not([data-translucent='off']) .sidebar,
+:root:not([data-translucent='off']) .sidebar-stub {
+  border-right-color: transparent;
 }
 
 /**
@@ -708,10 +737,20 @@ body.is-resizing .sidebar__resize {
   color: var(--text-muted);
 }
 
+/*
+ * The hairline between the vault's name and the note's.
+ *
+ * `--border` is a fixed grey meant for edges on the app's own grounds: on the
+ * frosted bar it came out near-white in the light theme and near-black in the
+ * dark one - the one element that ignored what it was sitting on. Drawn from
+ * the bar's own text colour instead, so it is the same hairline as everything
+ * beside it whatever tint the desktop is putting behind it.
+ */
 .status__sep {
   width: 1px;
   height: 12px;
-  background: var(--border);
+  background: currentColor;
+  opacity: 0.28;
 }
 
 .status__spacer {
@@ -815,14 +854,23 @@ body.is-resizing {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 2px;
+  gap: var(--size-1);
   padding: var(--size-1) var(--size-1) 0;
   background: var(--tint);
   border-bottom: 1px solid var(--border);
+}
+/* The tabs scroll; the button after them does not - see `.tabs__clear`. */
+.tabs__strip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 2px;
   overflow-x: auto;
   scrollbar-width: none;
 }
-.tabs__bar::-webkit-scrollbar {
+.tabs__strip::-webkit-scrollbar {
   display: none;
 }
 
@@ -872,26 +920,37 @@ body.is-resizing {
     inset -1px 0 0 var(--accent),
     inset 0 1px 0 var(--accent);
 }
+/*
+ * Close the other tabs.
+ *
+ * Outside the scrolling strip, so it is in the same corner whether two notes
+ * are open or twenty - a pill that drifted with the tab count was a moving
+ * target. Same shape as the focus and writing-tools buttons: it is a toolbar
+ * icon, not a label, and it wears the theme's own colours in both themes
+ * rather than a grey pill that reads as a chip in one and a smudge in the
+ * other.
+ */
 .tabs__clear {
   all: unset;
+  box-sizing: border-box;
   flex: none;
   align-self: center;
-  margin: 0 4px 0 6px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
+  width: 28px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-s);
   color: var(--text-muted);
-  background: var(--bg-hover);
   cursor: pointer;
-  white-space: nowrap;
   transition: color var(--anim-fast) var(--ease), background var(--anim-fast) var(--ease);
 }
 .tabs__clear:hover {
   color: var(--text-primary);
-  background: var(--bg-active, var(--bg-hover));
+  background: var(--bg-hover);
 }
 .tabs__clear:focus-visible {
   outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .tab__title {
@@ -3059,7 +3118,6 @@ body.is-resizing {
 .cm-quoteblock {
   position: relative;
   padding-left: var(--size-4) !important;
-  color: var(--text-secondary);
   font-style: italic;
 }
 .cm-quoteblock::before {
@@ -3109,6 +3167,15 @@ body.is-resizing {
   display: inline-block;
   width: 2ch;
   text-align: center;
+  /*
+   * An inline-block is a block container, so it inherits the line's own
+   * `text-indent` - and every list line carries a big negative one, the hanging
+   * indent that pulls its first row back under the marker. The dot was being
+   * shifted left by that much INSIDE its own cell: it drew nine pixels off the
+   * column the guides are on, which is what made the guides look misaligned
+   * with the bullets. They were always on the cell's centre; the dot was not.
+   */
+  text-indent: 0;
   color: var(--text-secondary);
   font-size: 1em;
   line-height: 1;

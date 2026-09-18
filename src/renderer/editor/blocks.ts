@@ -80,6 +80,8 @@ const codeLast = Decoration.line({ class: 'cm-codeblock cm-codeblock-last' })
 const codeOnly = Decoration.line({ class: 'cm-codeblock cm-codeblock-first cm-codeblock-last' })
 const quoteLine = Decoration.line({ class: 'cm-quoteblock' })
 const highlightMark = Decoration.mark({ class: 'cm-highlight' })
+/** A nested item's leading whitespace: structure, drawn as a column instead. */
+const hideLead = Decoration.replace({})
 
 const HIGHLIGHT = /==([^=\n]+)==/g
 const QUOTE = /^\s*>\s?/
@@ -206,26 +208,96 @@ function listGeometry(view: EditorView, text: string, livePreview: boolean): Lis
   return { lead, marker: widthOf(view, marker + spaces + (task ?? '')) }
 }
 
+/** The line's own left padding, the origin every list measurement starts from. */
+export const LIST_GUTTER = 6
+
 /**
- * How far in a nested list item sits: one step per ancestor item, each step as
- * wide as that ancestor's own marker.
+ * What one nesting level is worth, in pixels.
  *
- * Indent by nesting LEVEL, not by the whitespace that happens to be in the
- * file. Markdown nests on two spaces, and two spaces in a proportional font is
- * nine pixels - so a child's bullet landed in its parent's column, the nesting
- * was invisible, and the indent guide (drawn under the parent's bullet) ended
- * up wedged between the child's dot and its text, looking like a line someone
- * had pasted in. A step per level puts a child's bullet under the first
- * character of its parent, which is what the eye actually reads as nesting and
- * what Obsidian draws.
+ * A fixed step off the font size, not the width of the parent's marker: a
+ * marker is about two characters, which in a monospace font is exactly what
+ * two typed spaces already were - so indenting by it moved nothing, and the
+ * guide drawn between the two columns had nowhere to sit but on top of the
+ * child's own dot. 1.6em is Obsidian's step, near enough, and it is wide
+ * enough that a level is unmistakable at a glance.
  */
-function levelIndent(view: EditorView, state: EditorState, item: SyntaxNode, livePreview: boolean): number {
-  let indent = 0
+export function levelStep(view: EditorView): number {
+  const size = parseFloat(getComputedStyle(view.contentDOM).fontSize)
+  return Math.round((Number.isFinite(size) ? size : 14) * 1.6)
+}
+
+/** The width of a Live Preview bullet, which every guide column is centred on. */
+export const bulletWidth = (view: EditorView): number => 2 * zero(view)
+
+/**
+ * Levels of indentation on a line that is NOT a list item - a plain paragraph,
+ * or an empty line someone has just pressed Tab on.
+ *
+ * Markdown nests on two columns, so two columns is a level here too. Without
+ * this, Tab on an empty line moved the caret by the width of two spaces - about
+ * nine pixels in a proportional font - and then the text jumped to a different
+ * column the moment a `- ` turned it into a list item. One model for both means
+ * the caret, the text and the bullet all land in the same place.
+ */
+export function plainLevels(text: string): number {
+  if (LIST_ITEM.test(text)) return 0
+  const lead = /^[ \t]*/.exec(text)?.[0] ?? ''
+  if (lead.length === text.length && lead.length === 0) return 0
+  return Math.min(6, Math.floor(columns(lead) / 2))
+}
+
+/** How many list items enclose this one. */
+function listDepth(item: SyntaxNode): number {
+  let depth = 0
   for (let parent = item.parent; parent !== null; parent = parent.parent) {
-    if (parent.name !== 'ListItem') continue
-    indent += listGeometry(view, state.doc.lineAt(parent.from).text, livePreview)?.marker ?? 0
+    if (parent.name === 'ListItem') depth++
   }
-  return indent
+  return depth
+}
+
+/**
+ * Where a list item's bullet and text sit, in pixels from the line's left edge.
+ *
+ * Indent by nesting LEVEL, never by the whitespace in the file. Markdown nests
+ * on two spaces; whether those two spaces are nine pixels or twenty is an
+ * accident of the font, and letting them decide meant a child's bullet landed
+ * in its parent's column and the nesting was invisible. One step per level
+ * puts every bullet in a column that belongs to its depth and nothing else -
+ * which is also what makes the indent guides placeable, since their x is then
+ * a number this module can hand out rather than something measured off a
+ * widget after the fact.
+ */
+export function itemColumns(
+  view: EditorView,
+  state: EditorState,
+  item: SyntaxNode,
+  livePreview: boolean,
+): { indent: number; marker: number; step: number; orphan: number } | null {
+  const text = state.doc.lineAt(item.from).text
+  const geometry = listGeometry(view, text, livePreview)
+  if (geometry === null) return null
+  const step = levelStep(view)
+  const orphan = listDepth(item) === 0 ? orphanDepth(text) : 0
+  return { indent: (listDepth(item) || orphan) * step, marker: geometry.marker, step, orphan }
+}
+
+/**
+ * Levels the PARSER did not count.
+ *
+ * Indenting the first item of a list changes nothing as far as markdown is
+ * concerned - there is no sibling above it to become a child of, so the tree
+ * keeps it at the top level however far in it is typed. The editor still draws
+ * it where it was put, because a Tab that leaves the line exactly where it was
+ * reads as a broken key. Only consulted when the tree says depth zero: below
+ * that, the tree knows, and guessing over the top of it would show a
+ * four-space file one level deeper than it is.
+ */
+function orphanDepth(text: string): number {
+  const item = LIST_ITEM.exec(text)
+  if (item === null) return 0
+  const typed = (item[1] ?? '').length
+  const unit = (item[2] ?? '-').length + (item[3] ?? ' ').length
+  return Math.min(3, Math.floor(typed / Math.max(2, unit)))
 }
 
 /** The language written after the opening fence, if any. */
@@ -352,19 +424,31 @@ function build(view: EditorView): DecorationSet {
         if (node.name !== 'ListItem') return undefined
         const first = state.doc.lineAt(node.from)
         const geometry = listGeometry(view, first.text, livePreview)
-        if (geometry === null) return undefined
-        const indent = levelIndent(view, state, node.node, livePreview)
+        const columns = itemColumns(view, state, node.node, livePreview)
+        if (geometry === null || columns === null) return undefined
         /**
          * `pad` is where the item's TEXT sits, `pull` how far the first row is
          * dragged back out of it so the marker lands in front of that text.
          *
-         * The level indent wins over the typed whitespace, except where the
-         * file is indented wider than the level - four spaces a level, say.
-         * Then the wider one is used, because pulling the row further left than
-         * the padding would push the bullet off the edge of the editor.
+         * Live Preview hides the whitespace the item was typed with, so the
+         * bullet lands in its level's own column whether the file nests by two
+         * spaces or by four - the indentation is structure, and the structure
+         * is already being drawn. Source mode shows the file as it is, so
+         * there the typed indent is what the row is pulled back by, and the
+         * padding takes whichever is wider: pulling a row further left than its
+         * own padding would push the bullet out of the editor.
          */
-        const pad = Math.max(indent, geometry.lead) + geometry.marker
-        items.set(first.number, { pad, pull: geometry.lead + geometry.marker })
+        const pad = livePreview
+          ? columns.indent + geometry.marker
+          : Math.max(columns.indent, geometry.lead) + geometry.marker
+        items.set(first.number, {
+          pad,
+          pull: livePreview ? geometry.marker : geometry.lead + geometry.marker,
+        })
+        const leadLength = (LIST_ITEM.exec(first.text)?.[1] ?? '').length
+        if (livePreview && leadLength > 0) {
+          entries.push({ from: first.from, to: first.from + leadLength, deco: hideLead, sort: SORT.mark })
+        }
         const last = state.doc.lineAt(node.to).number
         for (let n = first.number + 1; n <= last; n++) continues.set(n, pad)
         return undefined
@@ -395,10 +479,13 @@ function build(view: EditorView): DecorationSet {
           const column = Math.max(inside, typed)
           if (column > 0) entries.push({ from: line.from, to: line.from, deco: continuation(column, typed), sort: SORT.line })
         } else {
-          const lead = /^[ \t]+/.exec(line.text)?.[0]
-          if (lead !== undefined && line.text.trim() !== '') {
+          // A plain line, or an empty one waiting to be typed on: its
+          // indentation is levels, the same as a list item's.
+          const levels = plainLevels(line.text)
+          if (levels > 0) {
+            const lead = /^[ \t]*/.exec(line.text)?.[0] ?? ''
             const width = widthOf(view, lead)
-            entries.push({ from: line.from, to: line.from, deco: hang(width, width), sort: SORT.line })
+            entries.push({ from: line.from, to: line.from, deco: hang(levels * levelStep(view), width), sort: SORT.line })
           }
         }
       }

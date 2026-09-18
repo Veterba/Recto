@@ -1,4 +1,5 @@
-import { defaultKeymap, history, historyKeymap, indentWithTab, redo, undo } from '@codemirror/commands'
+import { defaultKeymap, history, historyKeymap, redo, undo } from '@codemirror/commands'
+import * as md from './markdown-actions'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { foldedRanges, indentOnInput } from '@codemirror/language'
@@ -214,7 +215,41 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
           // and CodeMirror's own ⌘⌥[ folded by different rules - it would have
           // claimed the chord first and folded a section with its trailing
           // blank lines.
-          indentWithTab,
+          // Tab, ours rather than CodeMirror's `indentWithTab`: inside a list
+          // it moves the item a level, and anywhere else it is one plain unit.
+          // The language's own answer next to a list was six spaces, which is
+          // an indented code block, not an indent.
+          {
+            key: 'Tab',
+            run: (view) => {
+              const spec = md.indentListItems(view.state, 1)
+              if (spec === null) return false
+              view.dispatch(spec)
+              return true
+            },
+            shift: (view) => {
+              const spec = md.indentListItems(view.state, -1)
+              if (spec === null) return false
+              view.dispatch(spec)
+              return true
+            },
+          },
+          // From an indented blank line: ⇧Enter repeats the indent (the guides
+          // stack into a column), Enter starts empty at the margin. Both leave
+          // the line behind them as it was; everything else is the markdown
+          // keymap's business, bullets and numbering included.
+          ...[
+            { key: 'Enter', carry: false },
+            { key: 'Shift-Enter', carry: true },
+          ].map(({ key, carry }) => ({
+            key,
+            run: (view: EditorView) => {
+              const spec = md.newlineFromIndent(view.state, carry)
+              if (spec === null) return false
+              view.dispatch(spec)
+              return true
+            },
+          })),
           ...defaultKeymap,
         ]),
         EditorView.updateListener.of((update) => {

@@ -1,6 +1,8 @@
 import { useCallback, useRef } from 'react'
 import { getView, viewTitle } from '../core/view-registry'
 import type { SplitNode, TabsNode, Workspace, WorkspaceNode } from '../core/workspace'
+import { Icon } from './Icon'
+import { Tip } from './Tip'
 import { ViewBoundary } from './ViewBoundary'
 
 /**
@@ -105,7 +107,8 @@ function Tabs({
 
   return (
     <div className={`tabs${isFocusedGroup ? ' is-focused' : ''}`}>
-      <div className="tabs__bar" role="tablist">
+      <div className="tabs__bar">
+        <div className="tabs__strip" role="tablist">
         {node.children.map((leaf, i) => (
           <div
             key={leaf.id}
@@ -135,16 +138,18 @@ function Tabs({
             </button>
           </div>
         ))}
+        </div>
         {node.children.length > 1 && (
-          <button
-            className="tabs__clear"
-            title="Close every tab"
-            aria-label="Close every tab"
-            onMouseDown={(ev) => ev.preventDefault()}
-            onClick={() => workspace.closeAll()}
-          >
-            Clear all
-          </button>
+          <Tip label="Close other tabs" hint="Keeps the one you are in" placement="bottom">
+            <button
+              className="tabs__clear"
+              aria-label="Close other tabs"
+              onMouseDown={(ev) => ev.preventDefault()}
+              onClick={() => workspace.closeAll(active === undefined ? {} : { except: active.id })}
+            >
+              <Icon name="list-x" size={15} />
+            </button>
+          </Tip>
         )}
       </div>
       <div className="tabs__content" role="tabpanel">
