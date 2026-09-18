@@ -145,6 +145,19 @@ function footnoteRef(cx: InlineContext, next: number, pos: number): number {
   return cx.addElement(cx.elt('FootnoteRef', pos, pos + match[0].length))
 }
 
+/**
+ * Setext headings, off.
+ *
+ * `text` with `---` under it is an H2 in CommonMark - the old heading syntax,
+ * from before `#`. Nobody types it on purpose any more, but everybody types a
+ * horizontal rule under a line, and it silently swallowed the line above into a
+ * heading. Nothing else here knows about setext either: the outline, folding
+ * and the indexer all look for `#`, so a heading made this way was one the rest
+ * of the app could not see. With it removed, `---` is what it looks like - a
+ * rule under the text - and `# ` is the way to write a heading.
+ */
+export const noSetextHeadings: MarkdownConfig = { remove: ['SetextHeading'] }
+
 export const obsidianSyntax: MarkdownConfig = {
   defineNodes: [
     { name: 'MathBlock', block: true, style: tags.special(tags.string) },

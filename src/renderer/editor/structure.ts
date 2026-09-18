@@ -340,31 +340,27 @@ function base(view: EditorView): { left: number; top: number } {
  * space is not a column, and lines placed by counting spaces drifted off the
  * bullets they belonged to.
  */
-/** Whether the nearest line with anything on it, in this direction, is in a list. */
-function neighbourIsList(state: EditorState, tree: Tree, from: number, step: 1 | -1): boolean {
-  for (let n = from + step; n >= 1 && n <= state.doc.lines && Math.abs(n - from) <= 40; n += step) {
-    const line = state.doc.line(n)
-    if (line.text.trim() === '') continue
-    for (let node: SyntaxNode | null = tree.resolveInner(line.from, 1); node; node = node.parent) {
-      if (node.name === 'ListItem') return true
-    }
-    return false
-  }
-  return false
-}
-
 /**
- * A blank line that is padding INSIDE a list, rather than somewhere to write.
+ * The run of blank lines the cursor is standing in, or null.
  *
- * List rows are separated by blank lines carrying the list's indentation, and
- * drawing their levels put a second vertical beside every block in a note of
- * lists and maths. What tells them apart is what surrounds them: padding has
- * list on both sides. A blank line under a paragraph is nobody's padding, even
- * when a list happens to start further down - which is how indenting a few
- * empty lines and then starting a bullet list made the lines above vanish.
+ * A blank line's indentation is scaffolding: it is what Tab put there a moment
+ * ago, and its guide answers "did that key do anything". It is NOT content, and
+ * treating it as content meant every stray indented blank row in an existing
+ * note drew a line of its own - a note written in Obsidian is full of rows that
+ * hold four spaces and nothing else, which look empty, so the lines they drew
+ * could not be selected or deleted. Only the run being written in is lit, which
+ * keeps the column ⇧Enter builds while leaving everyone else's whitespace
+ * alone.
  */
-const isListPadding = (state: EditorState, tree: Tree, n: number): boolean =>
-  neighbourIsList(state, tree, n, -1) && neighbourIsList(state, tree, n, 1)
+function blankRun(state: EditorState): { from: number; to: number } | null {
+  const line = state.doc.lineAt(state.selection.main.head)
+  if (line.text.trim() !== '') return null
+  let from = line.number
+  let to = line.number
+  while (from > 1 && state.doc.line(from - 1).text.trim() === '') from--
+  while (to < state.doc.lines && state.doc.line(to + 1).text.trim() === '') to++
+  return { from, to }
+}
 
 function guideMarkers(view: EditorView): readonly RectangleMarker[] {
   const { state } = view
@@ -397,6 +393,7 @@ function guideMarkers(view: EditorView): readonly RectangleMarker[] {
    * is a caret that moved a few pixels. Lines inside a list item are skipped:
    * their item already draws the line they belong under.
    */
+  const run = blankRun(state)
   for (const { from, to } of view.visibleRanges) {
     const first = state.doc.lineAt(from).number
     const last = state.doc.lineAt(to).number
@@ -420,7 +417,7 @@ function guideMarkers(view: EditorView): readonly RectangleMarker[] {
         if (node.name === 'ListItem') { item = node; break }
       }
       if (line.text.trim() === '') {
-        if (isListPadding(state, tree, line.number)) continue
+        if (run === null || line.number < run.from || line.number > run.to) continue
       } else if (item !== null) {
         continue
       }
@@ -508,6 +505,8 @@ const guideLayer = layer({
     update.docChanged ||
     update.viewportChanged ||
     update.geometryChanged ||
+    // The blank run being written in is lit - see `blankRun`.
+    update.selectionSet ||
     foldsChanged(update) ||
     syntaxTree(update.startState) !== syntaxTree(update.state),
   markers: guideMarkers,

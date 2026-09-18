@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { parser as base, GFM } from '@lezer/markdown'
-import { obsidianSyntax } from '../src/renderer/editor/obsidian-syntax'
+import { noSetextHeadings, obsidianSyntax } from '../src/renderer/editor/obsidian-syntax'
 
-const parser = base.configure([GFM, obsidianSyntax])
+const parser = base.configure([GFM, obsidianSyntax, noSetextHeadings])
 
 /** Every node as `Name:text`, for the nodes a test cares about. */
 function nodes(doc: string, names: readonly string[]): string[] {
@@ -106,5 +106,25 @@ describe('footnotes', () => {
 
   it('is not a link', () => {
     expect(nodes('A claim.[^note]', ['Link'])).toEqual([])
+  })
+})
+
+describe('setext headings', () => {
+  it('leaves a line above a rule as a paragraph', () => {
+    const doc = 'Аналоговый синтез\n---\nАдитивный синтез звука'
+    expect(nodes(doc, ['SetextHeading1', 'SetextHeading2'])).toEqual([])
+    expect(nodes(doc, ['Paragraph']).length).toBe(2)
+  })
+
+  it('still parses the rule itself', () => {
+    expect(nodes('text\n---\n', ['HorizontalRule'])).toEqual(['HorizontalRule:---'])
+  })
+
+  it('leaves `=` under a line alone too', () => {
+    expect(nodes('Title\n===\n', ['SetextHeading1'])).toEqual([])
+  })
+
+  it('does not touch `#` headings', () => {
+    expect(nodes('## A heading\n', ['ATXHeading2'])).toEqual(['ATXHeading2:## A heading'])
   })
 })

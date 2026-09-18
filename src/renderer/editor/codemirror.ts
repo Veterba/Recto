@@ -17,7 +17,7 @@ import { vim } from '@replit/codemirror-vim'
 import { activeFormats, type Format } from './markdown-actions'
 import { blockDecorations } from './blocks'
 import { imageDrop } from './images'
-import { obsidianSyntax } from './obsidian-syntax'
+import { noSetextHeadings, obsidianSyntax } from './obsidian-syntax'
 import { foldAll, foldedLines, noteStructure, restoreFolds, toggleFoldAt, unfoldAll } from './structure'
 import { authorAnnotation, authorField, fromStored, setAuthorRanges, toStored, type Author, type StoredRange } from './authorship'
 import { setWritingConfig, writingTools } from './writing'
@@ -190,7 +190,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         // This is what `codeLanguages: []` was a placeholder for.
         // Plus Obsidian's own syntax - maths, comments, footnotes - in the
         // grammar, so a note copied out of Obsidian parses the same here.
-        markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true, extensions: [obsidianSyntax] }),
+        markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true, extensions: [obsidianSyntax, noSetextHeadings] }),
         markdownHighlighting(),
         markdownDecorations(),
         blockDecorations(),
