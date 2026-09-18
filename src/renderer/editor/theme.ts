@@ -129,9 +129,17 @@ export const markdownHighlighting = (): Extension =>
       { tag: tags.strikethrough, textDecoration: 'line-through', color: 'var(--text-muted)' },
       { tag: tags.link, color: 'var(--accent)', textDecoration: 'underline' },
       { tag: tags.url, color: 'var(--text-muted)' },
-      { tag: tags.quote, color: 'var(--text-secondary)', fontStyle: 'italic' },
+      /*
+       * A quote and a list item are BODY TEXT and are coloured like body text.
+       *
+       * Both used to be dimmed a step, which meant a note read as two shades:
+       * paragraphs at full strength, everything bulleted or quoted greyed out -
+       * the same words in a list looking less important than the same words in
+       * a paragraph. What recedes is markup (the `-`, the `>`, the `**`), never
+       * the writing.
+       */
+      { tag: tags.quote, fontStyle: 'italic' },
       { tag: tags.monospace, color: 'var(--accent)' },
-      { tag: tags.list, color: 'var(--text-secondary)' },
       // The syntax characters themselves - '##', '**', '`' - recede.
       { tag: tags.processingInstruction, color: 'var(--text-muted)', opacity: '0.6' },
       { tag: tags.contentSeparator, color: 'var(--text-muted)' },

@@ -111,7 +111,17 @@
      near-white and swallowed its own label and icon. */
   --sidebar-row-active: rgb(255 255 255 / 0.13);
   --sidebar-field: rgb(255 255 255 / 0.09);
-  --sidebar-line: rgb(255 255 255 / 0.12);
+  /*
+   * Dividers are the panel's own ink, faded - the same recipe as the hairline
+   * between the vault's name and the note's in the status bar.
+   *
+   * It was black at 10%, which over a panel that is itself only ~18% opaque is
+   * nearly all desktop: no colour of its own, and too faint to find. Attempts
+   * to mix it out of the panel's tint went the other way and vanished into the
+   * grain. Ink at 28% is what the separator already used and what reads at any
+   * grain setting, and it follows whatever colour the user tints the sidebar.
+   */
+  --sidebar-line: rgb(var(--sidebar-ink, 244 244 245) / 0.28);
 
   --chrome: var(--bg-secondary);
   --chrome-strong: var(--bg-secondary);
@@ -267,7 +277,7 @@
   --sidebar-row: rgb(255 255 255 / 0.07);
   --sidebar-row-active: rgb(255 255 255 / 0.12);
   --sidebar-field: rgb(255 255 255 / 0.07);
-  --sidebar-line: rgb(255 255 255 / 0.10);
+  --sidebar-line: rgb(var(--sidebar-ink) / 0.28);
 }
 
 @media (prefers-color-scheme: light) {
@@ -281,7 +291,7 @@
     --sidebar-row: rgb(0 0 0 / 0.06);
     --sidebar-row-active: rgb(0 0 0 / 0.10);
     --sidebar-field: rgb(0 0 0 / 0.06);
-    --sidebar-line: rgb(0 0 0 / 0.10);
+    --sidebar-line: rgb(var(--sidebar-ink) / 0.28);
   }
 }
 
@@ -294,7 +304,7 @@
   --sidebar-row: rgb(0 0 0 / 0.06);
   --sidebar-row-active: rgb(0 0 0 / 0.10);
   --sidebar-field: rgb(0 0 0 / 0.06);
-  --sidebar-line: rgb(0 0 0 / 0.10);
+  --sidebar-line: rgb(var(--sidebar-ink) / 0.28);
 }
 
 @media (prefers-reduced-motion: reduce) {

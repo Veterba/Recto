@@ -282,3 +282,88 @@ describe('horizontal rule', () => {
     expect(plain(s, md.insertHorizontalRule(s))).toBe('above\n\n---\n\nbelow')
   })
 })
+
+describe('Tab inside a list', () => {
+  it('nests an item under the item above it', () => {
+    const s = make('- alpha\n- bet|a\n- gamma')
+    expect(plain(s, md.indentListItems(s, 1))).toBe('- alpha\n  - beta\n- gamma')
+  })
+
+  it('indents by the sibling\'s content column, not a fixed unit', () => {
+    // "1. " is three columns, so its child needs three - two would not nest.
+    const s = make('1. alpha\n1. bet|a')
+    expect(plain(s, md.indentListItems(s, 1))).toBe('1. alpha\n   1. beta')
+  })
+
+  it('still indents the first item, which has nothing to nest under', () => {
+    const s = make('- alp|ha\n- beta')
+    expect(plain(s, md.indentListItems(s, 1))).toBe('  - alpha\n- beta')
+  })
+
+  it('carries the item\'s own children with it', () => {
+    const s = make('- alpha\n- bet|a\n  - child\n    text')
+    expect(plain(s, md.indentListItems(s, 1))).toBe('- alpha\n  - beta\n    - child\n      text')
+  })
+
+  it('outdents back out of its parent', () => {
+    const s = make('- alpha\n  - bet|a')
+    expect(plain(s, md.indentListItems(s, -1))).toBe('- alpha\n- beta')
+  })
+
+  it('does not outdent an item that is already at the margin', () => {
+    const s = make('- alp|ha')
+    expect(md.indentListItems(s, -1)).toBeNull()
+  })
+
+  it('gives a plain line one unit, not the language\'s six spaces', () => {
+    const s = make('just a para|graph')
+    expect(plain(s, md.indentListItems(s, 1))).toBe('  just a paragraph')
+  })
+
+  it('takes a unit back off a plain line', () => {
+    const s = make('    inden|ted')
+    expect(plain(s, md.indentListItems(s, -1))).toBe('  indented')
+  })
+
+  it('has nothing to take off a line at the margin', () => {
+    const s = make('at the mar|gin')
+    expect(md.indentListItems(s, -1)).toBeNull()
+  })
+
+  it('moves every selected item once', () => {
+    const s = make('- alpha\n- |beta\n- gamma|')
+    expect(plain(s, md.indentListItems(s, 1))).toBe('- alpha\n  - beta\n  - gamma')
+  })
+})
+
+describe('A newline from an indented blank line', () => {
+  it('repeats the indent on ⇧Enter', () => {
+    const s = make('- alpha\n    |')
+    expect(plain(s, md.newlineFromIndent(s, true))).toBe('- alpha\n    \n    ')
+  })
+
+  it('starts empty on Enter, leaving the indent behind', () => {
+    const s = make('- alpha\n    |')
+    expect(plain(s, md.newlineFromIndent(s, false))).toBe('- alpha\n    \n')
+  })
+
+  it('puts the cursor at the end of the new indent', () => {
+    const s = make('  |')
+    expect(apply(s, md.newlineFromIndent(s, true))).toBe('  \n  |')
+  })
+
+  it('leaves a line with words on it to the markdown keymap', () => {
+    const s = make('  some words|')
+    expect(md.newlineFromIndent(s, true)).toBeNull()
+  })
+
+  it('leaves an empty list item alone, so bullets still continue', () => {
+    const s = make('- |')
+    expect(md.newlineFromIndent(s, true)).toBeNull()
+  })
+
+  it('does nothing on a line with no indent at all', () => {
+    const s = make('|')
+    expect(md.newlineFromIndent(s, false)).toBeNull()
+  })
+})

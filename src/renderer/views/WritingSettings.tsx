@@ -92,6 +92,17 @@ export function WritingSettingsTab(): React.ReactElement {
       <Row label="Typewriter scrolling" hint={`Keep the line you write in the middle of the window, even outside focus mode${key('writing:toggle-typewriter')}`}>
         <Switch label="Typewriter scrolling" on={writing.typewriter} onChange={() => updateWriting((s) => ({ ...s, typewriter: !s.typewriter }))} />
       </Row>
+      <Row label="Text size" hint={`${writing.fontSize}px in focus mode — the editor keeps its own size`}>
+        <input
+          className="slider"
+          type="range"
+          min={12}
+          max={32}
+          step={1}
+          value={writing.fontSize}
+          onChange={(event) => updateWriting((s) => ({ ...s, fontSize: Number(event.target.value) }))}
+        />
+      </Row>
       <Row label="Faded text" hint={`${Math.round(writing.dim * 100)}% — how visible the rest of the note stays`}>
         <input
           className="slider"

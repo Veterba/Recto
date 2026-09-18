@@ -293,7 +293,9 @@ export function writingTools(): Extension {
         c.syntax.on ? 'cm-writing-syntax' : '',
         c.style.on ? 'cm-writing-style' : '',
       ].filter(Boolean)
-      return { class: classes.join(' '), style: `--focus-dim: ${c.dim}` }
+      // Focus mode brings its own text size; outside it the editor's own stands.
+      const size = c.focus ? `; --editor-font-size: ${c.fontSize}px` : ''
+      return { class: classes.join(' '), style: `--focus-dim: ${c.dim}${size}` }
     }),
     EditorView.contentAttributes.compute([writingConfig], (state) => ({
       spellcheck: state.field(writingConfig).spellcheck ? 'true' : 'false',

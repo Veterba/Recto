@@ -18,6 +18,15 @@ export type WritingSettings = {
   typewriter: boolean
   /** How faint the text outside focus is, 0.1-0.6 as opacity. */
   dim: number
+  /**
+   * Text size in focus mode, in pixels - its own setting, not the editor's.
+   *
+   * Focus mode is read at a different distance from the editor: people write
+   * in it with the window full of one paragraph, and the size that suits a
+   * note full of structure is not the size that suits that. Tying the two
+   * together meant choosing one and living with it in the other.
+   */
+  fontSize: number
   syntax: {
     on: boolean
     adjectives: boolean
@@ -50,6 +59,7 @@ export const DEFAULT_WRITING: WritingSettings = {
   focusUnit: 'line',
   typewriter: false,
   dim: 0.28,
+  fontSize: 19,
   syntax: { on: false, adjectives: true, nouns: true, adverbs: true, verbs: true, conjunctions: true },
   style: { on: false, fillers: true, cliches: true, redundancies: true, custom: true, customWords: [] },
   authors: { on: true, human: true, ai: true, reference: true },
@@ -82,6 +92,10 @@ export function coerceWriting(raw: unknown): WritingSettings {
     focusUnit: r['focusUnit'] === 'sentence' || r['focusUnit'] === 'paragraph' || r['focusUnit'] === 'line' ? r['focusUnit'] : d.focusUnit,
     typewriter: typeof r['typewriter'] === 'boolean' ? r['typewriter'] : d.typewriter,
     dim: typeof r['dim'] === 'number' && Number.isFinite(r['dim']) ? Math.min(0.6, Math.max(0.1, r['dim'])) : d.dim,
+    fontSize:
+      typeof r['fontSize'] === 'number' && Number.isFinite(r['fontSize'])
+        ? Math.min(32, Math.max(12, Math.round(r['fontSize'])))
+        : d.fontSize,
     syntax: flags(r['syntax'], d.syntax),
     style,
     authors: flags(r['authors'], d.authors),
