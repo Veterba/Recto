@@ -11,10 +11,17 @@ import {
 } from '../src/renderer/graph/look'
 
 describe('node radius', () => {
-  it('matches the original formula with the default look', () => {
-    for (const degree of [0, 1, 4, 20, 500]) {
-      expect(nodeRadius(degree)).toBeCloseTo(3 + Math.min(7, Math.sqrt(degree) * 2.2), 10)
-    }
+  it("follows Obsidian's curve: a floor, a square root, then a ceiling", () => {
+    // max(8, min(3 * sqrt(weight + 1), 30)), mapped onto [3 * size, size * (3 + 7 * growth)].
+    // Up to six links every note is drawn the same, which is why an Obsidian
+    // graph is a field of equal dots with a few obvious hubs.
+    expect(nodeRadius(0)).toBeCloseTo(3, 10)
+    expect(nodeRadius(6)).toBeCloseTo(3, 10)
+    expect(nodeRadius(7)).toBeGreaterThan(3)
+    expect(nodeRadius(99)).toBeCloseTo(10, 10)
+    expect(nodeRadius(400)).toBeCloseTo(10, 10)
+    // and in between, the hubs pull apart
+    expect(nodeRadius(40)).toBeGreaterThan(nodeRadius(15) + 1.5)
   })
 
   it('makes every node the same size with no growth', () => {

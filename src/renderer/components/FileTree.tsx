@@ -3,6 +3,7 @@ import type { FileNode } from '@shared/ipc-contract'
 import { api } from '../api'
 import { treeRowHeight } from '../core/appearance'
 import type { VaultTree } from '../core/file-tree-ops'
+import { coerceOrder, moveWithin, orderChildren, placeInto, type TreeOrder } from '../core/tree-order'
 import { ConfirmDialog } from './ConfirmDialog'
 import { NotePreviewCard } from './NotePreviewCard'
 import { ContextMenu, useContextMenu, type MenuItem } from './ContextMenu'
@@ -23,15 +24,46 @@ const INDENT = 13
 
 type Row = { node: FileNode; depth: number }
 
-function flatten(nodes: readonly FileNode[], expanded: ReadonlySet<string>, depth = 0, out: Row[] = []): Row[] {
-  for (const node of nodes) {
+function flatten(
+  nodes: readonly FileNode[],
+  expanded: ReadonlySet<string>,
+  order: TreeOrder,
+  parent = '',
+  depth = 0,
+  out: Row[] = [],
+): Row[] {
+  for (const node of orderChildren(nodes, order, parent)) {
     out.push({ node, depth })
     if (node.kind === 'folder' && expanded.has(node.path) && node.children) {
-      flatten(node.children, expanded, depth + 1, out)
+      flatten(node.children, expanded, order, node.path, depth + 1, out)
     }
   }
   return out
 }
+
+/** Where a dragged row would land: inside a folder, or between two rows. */
+type DropHint = { path: string; place: 'before' | 'after' | 'into' }
+
+/**
+ * Which third of the row the pointer is in.
+ *
+ * A row is three targets, not one: its edges put the dragged thing above or
+ * below, its middle puts it inside. A folder gets a generous middle, because
+ * that is the older gesture and the one people arrive with; a file has no
+ * inside, so it splits down the level into before and after.
+ *
+ * Read from the event rather than from what the last `dragover` decided - a
+ * drop that trusts state can act on a stale answer, and the stale answer here
+ * is "inside", which swallows the folder instead of moving it.
+ */
+function placeFor(node: FileNode, clientY: number, box: DOMRect): DropHint['place'] {
+  const at = (clientY - box.top) / Math.max(1, box.height)
+  if (node.kind !== 'folder') return at < 0.5 ? 'before' : 'after'
+  return at < 0.25 ? 'before' : at > 0.75 ? 'after' : 'into'
+}
+
+const parentOf = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/')))
+const nameOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 
 type Props = {
   tree: VaultTree
@@ -91,8 +123,22 @@ export function FileTree({
   const [selected, setSelected] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  /** Folder currently hovered as a drop target, or '' for the vault root. */
-  const [dropTarget, setDropTarget] = useState<string | null>(null)
+  /** Where the drag would land - a folder to go inside, or a row to sit above or below. */
+  const [hint, setHint] = useState<DropHint | null>(null)
+  /**
+   * The order folders were arranged in by hand, per vault.
+   *
+   * The filesystem has none, so without this a dragged folder would spring back
+   * to its alphabetical place the moment the tree refreshed.
+   */
+  const [order, setOrder] = useState<TreeOrder>({})
+  useEffect(() => {
+    void api.invoke('state:read', 'tree-order').then((raw) => setOrder(coerceOrder(raw)))
+  }, [])
+  const saveOrder = useCallback((next: TreeOrder) => {
+    setOrder(next)
+    void api.invoke('state:write', 'tree-order', next)
+  }, [])
   /** "Renamed, and N links in M notes were updated" - with an undo. */
   const [rewrite, setRewrite] = useState<{ files: number; links: number; undoId: string } | null>(null)
   /** The node a delete is waiting on confirmation for. */
@@ -146,7 +192,7 @@ export function FileTree({
 
   useEffect(() => () => window.clearTimeout(peekTimer.current), [])
 
-  const rows = useMemo(() => flatten(tree.roots, expanded), [tree.roots, expanded])
+  const rows = useMemo(() => flatten(tree.roots, expanded, order), [tree.roots, expanded, order])
   const contextMenu = useContextMenu<FileNode>()
 
   const copy = useCallback((text: string) => {
@@ -273,9 +319,41 @@ export function FileTree({
     [onChanged],
   )
 
+  /**
+   * Drop between two rows: rearrange, and move first if it came from elsewhere.
+   *
+   * Both halves of the gesture end here - dropping a folder above its sibling
+   * is an arrangement, dropping it above a row in another folder is a move AND
+   * an arrangement - so the two never disagree about where the thing ended up.
+   */
+  const dropBeside = useCallback(
+    async (from: string, target: FileNode, place: 'before' | 'after') => {
+      setHint(null)
+      if (from === target.path) return
+      const toParent = parentOf(target.path)
+      const siblings = toParent === '' ? tree.roots : (tree.byPath.get(toParent)?.children ?? [])
+      if (parentOf(from) === toParent) {
+        saveOrder(moveWithin(siblings, order, toParent, nameOf(from), target.name, place))
+        return
+      }
+      const result = await api.invoke('fs:move', from, toParent)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      saveOrder(placeInto(siblings, order, toParent, nameOf(result.path), target.name, place))
+      setSelected(result.path)
+      onChanged()
+      if (result.undoId !== undefined && result.rewrittenLinks > 0) {
+        setRewrite({ files: result.rewrittenFiles, links: result.rewrittenLinks, undoId: result.undoId })
+      }
+    },
+    [order, saveOrder, tree, onChanged],
+  )
+
   const drop = useCallback(
     async (from: string, toParent: string) => {
-      setDropTarget(null)
+      setHint(null)
       if (from === toParent) return
       // Dropping into the folder it already lives in is a no-op, not an error.
       const currentParent = from.slice(0, Math.max(0, from.lastIndexOf('/')))
@@ -416,9 +494,9 @@ export function FileTree({
         onKeyDown={onKeyDown}
         onDragOver={(ev) => {
           ev.preventDefault()
-          setDropTarget('')
+          setHint({ path: '', place: 'into' })
         }}
-        onDragLeave={() => setDropTarget(null)}
+        onDragLeave={() => setHint(null)}
         onDrop={(ev) => {
           // Empty space below the rows means "move to the vault root".
           ev.preventDefault()
@@ -446,7 +524,8 @@ export function FileTree({
                 isCursor={row.node.path === cursor}
                 onActivate={() => activate(row)}
                 onStartRename={() => setRenaming(row.node.path)}
-                isDropTarget={dropTarget === row.node.path}
+                isDropTarget={hint?.place === 'into' && hint.path === row.node.path}
+                dropLine={hint !== null && hint.path === row.node.path && hint.place !== 'into' ? hint.place : null}
                 onDragStart={(ev) => {
                   cancelPeek()
                   ev.dataTransfer.setData('text/plain', row.node.path)
@@ -454,24 +533,25 @@ export function FileTree({
                 }}
                 onDragOverRow={(ev) => {
                   ev.preventDefault()
+                  ev.stopPropagation()
                   ev.dataTransfer.dropEffect = 'move'
-                  // Files are not containers: dropping on one targets its folder.
-                  setDropTarget(
-                    row.node.kind === 'folder'
-                      ? row.node.path
-                      : row.node.path.slice(0, Math.max(0, row.node.path.lastIndexOf('/'))),
-                  )
+                  setHint({
+                    path: row.node.path,
+                    place: placeFor(row.node, ev.clientY, ev.currentTarget.getBoundingClientRect()),
+                  })
                 }}
                 onDelete={() => setConfirming(row.node)}
                 onDropRow={(ev) => {
                   ev.preventDefault()
                   ev.stopPropagation()
                   const from = ev.dataTransfer.getData('text/plain')
-                  const target =
-                    row.node.kind === 'folder'
-                      ? row.node.path
-                      : row.node.path.slice(0, Math.max(0, row.node.path.lastIndexOf('/')))
-                  if (from !== '') void drop(from, target)
+                  if (from === '') return
+                  const place = placeFor(row.node, ev.clientY, ev.currentTarget.getBoundingClientRect())
+                  if (place === 'into') {
+                    void drop(from, row.node.kind === 'folder' ? row.node.path : parentOf(row.node.path))
+                    return
+                  }
+                  void dropBeside(from, row.node, place)
                 }}
               />
             ))}
@@ -554,6 +634,8 @@ type RowProps = {
   onActivate: () => void
   onStartRename: () => void
   isDropTarget: boolean
+  /** A line above or below the row, where the dragged thing would land. */
+  dropLine: 'before' | 'after' | null
   onDelete: () => void
   onDragStart: (ev: React.DragEvent) => void
   onDragOverRow: (ev: React.DragEvent) => void
@@ -572,6 +654,7 @@ function TreeRow({
   onActivate,
   onStartRename,
   isDropTarget,
+  dropLine,
   onDelete,
   onDragStart,
   onDragOverRow,
@@ -588,6 +671,8 @@ function TreeRow({
         isActive ? 'is-active' : '',
         isCursor && !isActive ? 'is-cursor' : '',
         isDropTarget ? 'is-drop' : '',
+        dropLine === 'before' ? 'is-drop-above' : '',
+        dropLine === 'after' ? 'is-drop-below' : '',
       ]
         .filter(Boolean)
         .join(' ')}

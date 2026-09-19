@@ -53,8 +53,6 @@ let simulation: Simulation<Node, Link> | null = null
 let nodes: Node[] = []
 /** Ticks posted so far, for thinning the stream on a big graph. */
 let ticks = 0
-/** Nodes pinned for the duration of a drag, so the rest of the graph holds still. */
-let held: Node[] = []
 /** What the current simulation was built from, so a layout change can re-aim it. */
 let current: {
   edges: [number, number][]
@@ -104,9 +102,31 @@ const GOLDEN = Math.PI * (3 - Math.sqrt(5))
  * notes spread as far as the hubs did and settled into concentric rings that
  * filled the canvas - the structure was there, buried in dots.
  */
+/**
+ * How hard a note pushes its neighbours away. The same for every note.
+ *
+ * Including the unlinked ones, which is what sorts the picture into Obsidian's
+ * two parts. A note with no links feels only repulsion and the pull to the
+ * middle, so it cannot rest inside the woven core - the core pushes it out
+ * until the two forces balance, and since every unlinked note balances at the
+ * same distance they settle into rings around the structure, evenly spaced by
+ * their own collision. Weakening them (they used to push a third as hard) let
+ * them sink into the mesh instead, which is why the graph read as one
+ * undifferentiated heap.
+ */
+/**
+ * How hard a note pushes every other note away. The same for all of them.
+ *
+ * Including the unlinked ones, and this is what draws Obsidian's rings. A note
+ * with no links feels only this push and the pull to the middle; a crowd of
+ * equal particles under those two forces does not scatter, it settles into
+ * concentric shells - the same reason charges on a disc arrange themselves in
+ * rings. The rings in Obsidian's graph are not placed there, they fall out of
+ * the physics, and they only appear if the unlinked notes push as hard as
+ * everything else and can feel the core from where they are.
+ */
 function charge(node: Node, repel: number): number {
-  if (node.degree === 0) return -repel * 0.22
-  return -repel * (0.7 + Math.min(2.5, Math.sqrt(node.degree) * 0.45))
+  return -repel
 }
 
 /**
@@ -141,10 +161,24 @@ function build(
     }
   }
 
-  // Seed on a sunflower spiral, not a circle. Every node on one circle, pushed
-  // apart evenly, is exactly how rings are made; a golden-angle spiral packs a
-  // disc with no two nodes lined up, so there is nothing for rings to form from.
+  /*
+   * Linked notes start in the middle, unlinked ones outside them.
+   *
+   * Both kinds used to be seeded on one sunflower spiral, deliberately, so that
+   * no rings could form - which is the opposite of what the graph should show.
+   * The final positions are still the simulation's to decide, and an unlinked
+   * note is as draggable as any other; this only saves the physics from having
+   * to push a few hundred of them out through the cluster first, which at any
+   * sane cooling rate it never finishes doing.
+   *
+   * Each kind is laid on its own golden-angle spiral, which packs a disc evenly
+   * without lining anything up into spokes.
+   */
   let carried = 0
+  let linkedSeen = 0
+  let looseSeen = 0
+  const linkedCount = degree.filter((d) => d > 0).length
+  const core = 14 * Math.sqrt(Math.max(1, linkedCount))
   nodes = Array.from({ length: count }, (_, index) => {
     const d = degree[index] ?? 0
     const sx = seed?.[index * 2]
@@ -153,8 +187,10 @@ function build(
       carried++
       return { index, degree: d, x: sx, y: sy }
     }
-    const radius = 12 * Math.sqrt(index + 0.5)
-    return { index, degree: d, x: Math.cos(index * GOLDEN) * radius, y: Math.sin(index * GOLDEN) * radius }
+    const nth = d > 0 ? linkedSeen++ : looseSeen++
+    const radius = d > 0 ? 12 * Math.sqrt(nth + 0.5) : core + 14 * Math.sqrt(nth + 0.5)
+    const angle = nth * GOLDEN
+    return { index, degree: d, x: Math.cos(angle) * radius, y: Math.sin(angle) * radius }
   })
 
   // The one allocation this simulation makes. It ping-pongs to the main thread
@@ -174,9 +210,15 @@ function build(
     // Heavier damping than d3's default: with a few thousand notes a lighter
     // one lets the whole graph wobble for seconds after any nudge.
     .velocityDecay(0.42)
-    // Cools in ~150 ticks rather than ~275: a thousand-note vault took the best
-    // part of a minute to come to rest, which reads as the graph never settling.
-    .alphaDecay(0.045)
+    /*
+     * Cools in ~220 ticks.
+     *
+     * It was ~150, which is quick enough to look settled but not enough for a
+     * few hundred unlinked notes to sort themselves into rings around the
+     * cluster: that arrangement is an equilibrium the simulation has to be
+     * given time to find, and it was freezing halfway there.
+     */
+    .alphaDecay(0.032)
     .on('tick', post)
     .on('end', () => {
       const response: WorkerResponse = { kind: 'settled' }
@@ -206,20 +248,43 @@ function configure(): void {
 
   // Barnes-Hut approximation over a quadtree - this is what makes it O(n log n).
   // A shorter reach keeps clusters from shoving each other to the edges.
+  /*
+   * Reach: far enough for the core to push the outermost notes.
+   *
+   * A 420px cap was a performance habit from before Barnes-Hut was doing the
+   * work, and it quietly broke the shape: a note beyond that distance felt
+   * nothing from the cluster, so it stopped where it happened to be instead of
+   * being pushed out to where the centre pull balances the push. That is a
+   * scatter rather than a ring. Scaled with the graph, because a thousand notes
+   * settle into a wider disc than fifty.
+   */
+  const reach = Math.max(900, 90 * Math.sqrt(nodes.length))
   simulation.force(
     'charge',
     forceManyBody<Node>()
       .strength((node) => charge(node, tunables.repelStrength) * (targets?.charge ?? 1))
-      .distanceMax(420),
+      .distanceMax(structured ? 420 : reach),
   )
 
   const link = simulation.force('link') as ReturnType<typeof forceLink<Node, Link>> | undefined
   const cross = targets?.crossGroupLinks ?? 1
   link
     ?.distance((l) => linkLength(l, tunables.linkDistance))
+    /*
+     * d3's own normalisation, times the slider.
+     *
+     * A flat strength pulls a hub with twenty links twenty times as hard as a
+     * leaf with one, so hubs collapse into knots and the graph reads as blobs
+     * joined by threads. Dividing by the smaller endpoint's degree - which is
+     * what d3 does by default, and what makes Obsidian's graph look evenly
+     * woven - spreads that pull over the links that share it.
+     */
     .strength((l) => {
+      const a = (l.source as Node).degree
+      const b = (l.target as Node).degree
+      const share = 1 / Math.max(1, Math.min(a, b))
       const same = groups[(l.source as Node).index] === groups[(l.target as Node).index]
-      return tunables.linkStrength * (targets?.links ?? 1) * (same ? 1 : cross)
+      return tunables.linkStrength * share * (targets?.links ?? 1) * (same ? 1 : cross)
     })
 
   simulation.force(
@@ -234,11 +299,18 @@ function configure(): void {
   ;(simulation.force('center') as ReturnType<typeof forceCenter<Node>> | undefined)?.strength(structured ? 0 : 1)
 
   if (targets === null) {
-    // Pull toward the middle: linked groups more firmly, so the structure sits
-    // together in the centre, and unlinked notes gently, so they gather around
-    // it as a soft cloud instead of flying to the edges.
-    const pull = (node: Node): number =>
-      node.degree === 0 ? tunables.centerStrength * 1.2 : tunables.centerStrength * 1.6
+    /*
+     * Two pulls toward the middle, so there is a gap between the web and the
+     * notes that are not part of it.
+     *
+     * A note with no links feels nothing but the crowd pushing it outward and
+     * the centre holding it in, so where it settles is set entirely by that
+     * tether: loosen it and the whole unlinked population moves out together,
+     * leaving a band of empty space around the linked core - which is what
+     * Obsidian's graph looks like, and what one shared pull could not produce,
+     * because the springs already pull the linked notes inward on top of it.
+     */
+    const pull = (node: Node): number => tunables.centerStrength * 1.4 * (node.degree === 0 ? tunables.orphanPull : 1)
     simulation.force('x', forceX<Node>(0).strength(pull))
     simulation.force('y', forceY<Node>(0).strength(pull))
     simulation.force('radial', null)
@@ -263,42 +335,6 @@ function configure(): void {
     'radial',
     radius === null ? null : forceRadial<Node>((node) => radius[node.index] ?? 0, 0, 0).strength(targets.pull),
   )
-}
-
-/**
- * Pin every node more than `depth` links away from `node`, and return them.
- *
- * Breadth-first over the links the simulation already holds, so it costs one
- * pass over the edges rather than a second copy of the graph.
- */
-function pinAllBut(node: Node, depth: number): Node[] {
-  const simulationLinks = (simulation?.force('link') as ReturnType<typeof forceLink<Node, Link>> | undefined)?.links() ?? []
-  const near = new Set<number>([node.index])
-  let frontier = [node.index]
-  for (let step = 0; step < depth; step++) {
-    const next: number[] = []
-    for (const link of simulationLinks) {
-      const a = (link.source as Node).index
-      const b = (link.target as Node).index
-      if (frontier.includes(a) && !near.has(b)) {
-        near.add(b)
-        next.push(b)
-      } else if (frontier.includes(b) && !near.has(a)) {
-        near.add(a)
-        next.push(a)
-      }
-    }
-    frontier = next
-    if (frontier.length === 0) break
-  }
-  const pinned: Node[] = []
-  for (const other of nodes) {
-    if (near.has(other.index) || other.fx !== undefined) continue
-    other.fx = other.x ?? 0
-    other.fy = other.y ?? 0
-    pinned.push(other)
-  }
-  return pinned
 }
 
 ctx.onmessage = (event): void => {
@@ -359,43 +395,40 @@ function handle(event: MessageEvent<WorkerRequest & { positions?: Float32Array }
       const node = nodes[message.index]
       if (node === undefined) break
       /**
-       * Everything but this note's own neighbourhood is pinned while it is
-       * dragged.
+       * Only the dragged note is pinned. Everything else is free.
        *
-       * Otherwise one dragged note nudges its neighbours, which nudge theirs,
-       * and a thousand-note graph slowly rearranges itself around a gesture
-       * meant to move one dot. Pinned, the shape you had is exactly the shape
-       * you get back - and the note still pulls the links around it, which is
-       * what makes dragging feel physical rather than dead.
+       * It used to pin the whole graph bar the note's own neighbourhood, to
+       * keep a gesture from rearranging a thousand dots - but that also froze
+       * the thing the gesture is for. In Obsidian the note you pull tows its
+       * links, they tow theirs, and the web stretches and recovers; pinned, the
+       * neighbours sat still and the dragged dot slid through the picture like
+       * a cutout. The web is the point.
        */
-      if (held.length === 0) held = pinAllBut(node, 2)
-      // fx/fy pin the node; d3 then solves the rest around it.
       node.fx = message.x
       node.fy = message.y
       /**
-       * A gentle target rather than a fresh heat.
+       * Warm, not barely awake.
        *
-       * `alpha(0.3)` re-ran the whole layout around one dragged note: the
-       * picture you had learned reshuffled every time you moved something. A
-       * low alphaTarget keeps the simulation barely awake, so the note follows
-       * the pointer, its neighbours give way, and the rest of the graph holds
-       * its shape - which is what Obsidian's feels like.
+       * d3's own drag keeps `alphaTarget` at 0.3 for exactly this: high enough
+       * that the neighbours follow while the pointer moves, low enough that the
+       * layout is not re-run from scratch. At 0.06 the graph could not keep up
+       * with the hand, so links stretched and nothing followed.
        */
-      simulation?.alphaTarget(0.06).restart()
+      simulation?.alphaTarget(0.3).restart()
       break
     }
 
     case 'release': {
       const node = nodes[message.index]
       if (node === undefined) break
+      /*
+       * Released, it is let go rather than left where it was dropped: the
+       * forces take it the last short distance to wherever the links want it,
+       * which is why a dragged note in Obsidian drifts to meet the notes it is
+       * linked to instead of hanging exactly under the cursor.
+       */
       delete node.fx
       delete node.fy
-      for (const pinned of held) {
-        delete pinned.fx
-        delete pinned.fy
-      }
-      held = []
-      // Let it cool back down to a standstill.
       simulation?.alphaTarget(0)
       break
     }

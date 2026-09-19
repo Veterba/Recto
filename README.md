@@ -161,6 +161,10 @@ from the recent list there. Open notes are saved to the old vault first.
   - **AI** (⌘2) — conversations with Claude, which are themselves notes.
   - **Tasks** (⌘3) — kanban boards whose cards are notes.
   - ⌘B hides and shows it. Right-click empty space in it to recolour it.
+  - **Drag a row** to rearrange the tree: onto a folder puts it inside, between
+    two rows puts it there — a line shows which. The arrangement is yours and is
+    kept in `.recto/tree-order.json`; anything you have not arranged stays in
+    the old order, folders first and then by name.
 - **Tabs** — notes open in tabs, all the same width; middle-click or × closes
   one, **Clear all** is at the end of the bar, and a tab whose file is gone is
   dropped automatically. Split a pane with ⌘⌥→ or ⌘⌥↓.

@@ -99,14 +99,35 @@ export const GRAPH_SWATCHES: readonly { id: string; label: string; colors: strin
 // --- sizes --------------------------------------------------------------------
 
 /**
+ * Obsidian's own size curve, read out of its renderer:
+ *
+ *   getSize() { return fNodeSizeMult * Math.max(8, Math.min(3 * Math.sqrt(this.weight + 1), 30)) }
+ *
+ * with `weight` the number of related notes - links out plus links in. Two
+ * things in it matter more than the square root: a floor, so everything up to
+ * six links is drawn identically, and a ceiling at 99, so one enormous hub does
+ * not flatten the rest of the scale. That is why an Obsidian graph reads as a
+ * field of equal dots with a handful of obvious hubs rather than a gradient -
+ * and why a note with seven links looks like a note with one.
+ */
+const obsidianSize = (degree: number): number => Math.max(8, Math.min(3 * Math.sqrt(degree + 1), 30))
+
+/** Where a note sits on that curve, 0 at the floor and 1 at the ceiling. */
+const sizeT = (degree: number): number => (obsidianSize(degree) - 8) / (30 - 8)
+
+/**
  * A node's radius in world units.
  *
- * With the default size and growth this is exactly the old formula, so the
- * graph looks the same until someone moves a slider. The worker uses the same
- * function for collisions, so what is drawn and what is kept apart agree.
+ * `size` sets what the smallest note is drawn at and `growth` how much a note
+ * grows with its links, so the pair is exactly the two ends of the size
+ * control: `[3 x size, size x (3 + 7 x growth)]`. Obsidian's curve is what runs
+ * between them, so the hubs stand out in the same places its graph does.
+ *
+ * The worker uses the same function for collisions, so what is drawn and what
+ * is kept apart agree.
  */
 export const nodeRadius = (degree: number, size = 1, growth = 1): number =>
-  size * (3 + growth * Math.min(7, Math.sqrt(degree) * 2.2))
+  size * (3 + growth * 7 * sizeT(degree))
 
 /** Where a node sits between "few links" (0) and "most links" (1). */
 export function degreeT(degree: number, maxDegree: number, scale: GradientScale): number {

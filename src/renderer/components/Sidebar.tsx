@@ -27,8 +27,13 @@ type Props = {
   onNew: () => void
   /** Only the Data section has folders; omitted elsewhere. */
   onNewFolder?: (() => void) | undefined
-  onExpandAll?: (() => void) | undefined
-  onCollapseAll?: (() => void) | undefined
+  /**
+   * One control, two meanings: with any folder open it closes them, with all of
+   * them shut it opens them. Two buttons meant one of them was always the wrong
+   * one to press, and the pair read as a single unlabelled glyph anyway.
+   */
+  onToggleFolders?: (() => void) | undefined
+  foldersOpen?: boolean
   onTidy?: (() => void) | undefined
   onOpenArchive: () => void
   onOpenSettings: () => void
@@ -52,8 +57,8 @@ export function Sidebar({
   onResize,
   onNew,
   onNewFolder,
-  onExpandAll,
-  onCollapseAll,
+  onToggleFolders,
+  foldersOpen = false,
   onTidy,
   onOpenArchive,
   onOpenSettings,
@@ -144,19 +149,19 @@ export function Sidebar({
 
       {/* Tools sit under the search rather than beside it: three controls
           crammed against a text field left none of them room to be read. */}
-      {(onExpandAll !== undefined || onTidy !== undefined) && (
+      {(onToggleFolders !== undefined || onTidy !== undefined) && (
         <div className="sidebar__tools">
-          {onExpandAll !== undefined && (
-            <Tip label="Expand all folders" hint="Sidebar only — opens nothing">
-              <button className="tool-btn" onClick={onExpandAll} aria-label="Expand all folders">
-                <Icon name="chevrons-up-down" size={14} />
-              </button>
-            </Tip>
-          )}
-          {onCollapseAll !== undefined && (
-            <Tip label="Collapse all folders" hint="Sidebar only — closes nothing">
-              <button className="tool-btn" onClick={onCollapseAll} aria-label="Collapse all folders">
-                <Icon name="chevrons-down-up" size={14} />
+          {onToggleFolders !== undefined && (
+            <Tip
+              label={foldersOpen ? 'Collapse all folders' : 'Expand all folders'}
+              hint="Sidebar only — opens and closes nothing"
+            >
+              <button
+                className="tool-btn"
+                onClick={onToggleFolders}
+                aria-label={foldersOpen ? 'Collapse all folders' : 'Expand all folders'}
+              >
+                <Icon name={foldersOpen ? 'chevrons-down-up' : 'chevrons-up-down'} size={14} />
               </button>
             </Tip>
           )}

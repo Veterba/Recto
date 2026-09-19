@@ -14,13 +14,32 @@ export type Tunables = {
   linkDistance: number
   linkStrength: number
   centerStrength: number
+  /**
+   * How much of the centre pull a note with no links feels.
+   *
+   * Lower means further out and a wider gap between the linked web and the
+   * notes that are not part of it: a note with no links feels nothing but the
+   * crowd pushing it outward and this tether holding it in, so loosening the
+   * tether moves the whole unlinked population out together.
+   */
+  orphanPull: number
 }
 
+/**
+ * Where the organic layout starts, dialled by hand against a 908-note vault.
+ *
+ * A very long reach with a short spring and a firm pull to the centre: the
+ * repulsion spreads the web out, the centre keeps it one object rather than a
+ * scatter, and the notes with no links settle into the shells around it. Every
+ * Forces slider carries a mark at its value, so however far you wander there is
+ * a point to come back to.
+ */
 export const DEFAULT_TUNABLES: Tunables = {
-  repelStrength: 220,
-  linkDistance: 60,
+  repelStrength: 2400,
+  linkDistance: 125,
   linkStrength: 0.6,
-  centerStrength: 0.05,
+  centerStrength: 1,
+  orphanPull: 0.85,
 }
 
 export type WorkerRequest =

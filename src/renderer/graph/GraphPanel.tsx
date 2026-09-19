@@ -33,6 +33,21 @@ export const SECTIONS: readonly { id: SectionId; name: string; icon: string; hue
   { id: 'forces', name: 'Forces', icon: 'magnet', hue: '#6366f1' },
 ]
 
+/**
+ * The mark under each Forces slider, at the value the graph starts on.
+ *
+ * Read off `DEFAULT_TUNABLES` rather than typed in, so a slider can never claim
+ * a default the graph does not actually use - and so finding a better starting
+ * point is one number to change, not five.
+ */
+const DEFAULT_MARK: Record<keyof Tunables, readonly { value: number; label: string }[]> = {
+  repelStrength: [{ value: DEFAULT_TUNABLES.repelStrength, label: 'Default' }],
+  linkDistance: [{ value: DEFAULT_TUNABLES.linkDistance, label: 'Default' }],
+  linkStrength: [{ value: DEFAULT_TUNABLES.linkStrength, label: 'Default' }],
+  centerStrength: [{ value: DEFAULT_TUNABLES.centerStrength, label: 'Default' }],
+  orphanPull: [{ value: DEFAULT_TUNABLES.orphanPull, label: 'Default' }],
+}
+
 /** Distance between items along the wheel, and the radius of the arc they sit on. */
 const SPACING = 64
 const RADIUS = 520
@@ -689,8 +704,25 @@ function SectionBody({
     case 'forces':
       return (
         <>
-          <PillSlider variant="inset" label="Repel" value={tunables.repelStrength} min={0} max={1200} step={10} onChange={(repelStrength) => onTunables({ ...tunables, repelStrength })} />
-          <PillSlider label="Link length" value={tunables.linkDistance} min={10} max={400} step={5} onChange={(linkDistance) => onTunables({ ...tunables, linkDistance })} />
+          <PillSlider
+            variant="inset"
+            label="Repel"
+            value={tunables.repelStrength}
+            min={0}
+            max={4000}
+            step={10}
+            marks={DEFAULT_MARK.repelStrength}
+            onChange={(repelStrength) => onTunables({ ...tunables, repelStrength })}
+          />
+          <PillSlider
+            label="Link length"
+            value={tunables.linkDistance}
+            min={5}
+            max={400}
+            step={5}
+            marks={DEFAULT_MARK.linkDistance}
+            onChange={(linkDistance) => onTunables({ ...tunables, linkDistance })}
+          />
           <PillSlider
             variant="classic"
             label="Link pull"
@@ -701,12 +733,31 @@ function SectionBody({
             format={(v) => v.toFixed(2)}
             marks={[
               { value: 0.2, label: 'Loose' },
-              { value: 0.6, label: 'Default' },
+              ...DEFAULT_MARK.linkStrength,
               { value: 1.6, label: 'Tight' },
             ]}
             onChange={(linkStrength) => onTunables({ ...tunables, linkStrength })}
           />
-          <PillSlider label="Centre pull" value={tunables.centerStrength} min={0} max={0.5} step={0.01} format={(v) => v.toFixed(2)} onChange={(centerStrength) => onTunables({ ...tunables, centerStrength })} />
+          <PillSlider
+            label="Centre pull"
+            value={tunables.centerStrength}
+            min={0}
+            max={1}
+            step={0.01}
+            format={(v) => v.toFixed(2)}
+            marks={DEFAULT_MARK.centerStrength}
+            onChange={(centerStrength) => onTunables({ ...tunables, centerStrength })}
+          />
+          <PillSlider
+            label="Unlinked pull"
+            value={tunables.orphanPull}
+            min={0}
+            max={1}
+            step={0.01}
+            format={(v) => v.toFixed(2)}
+            marks={DEFAULT_MARK.orphanPull}
+            onChange={(orphanPull) => onTunables({ ...tunables, orphanPull })}
+          />
         </>
       )
   }
@@ -725,7 +776,7 @@ const nearestOf = <T extends number>(value: number, options: readonly T[]): T =>
 
 /** Put one section back as it was out of the box. */
 function resetSection(id: SectionId, props: Omit<Props, 'onClose'>): void {
-  const { look, onLook, onLayout, onTunables, onLinkRange } = props
+  const { look, onLook, layout, onLayout, onTunables, onLinkRange } = props
   const d = DEFAULT_LOOK
   switch (id) {
     case 'layout':

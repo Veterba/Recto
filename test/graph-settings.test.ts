@@ -82,7 +82,7 @@ describe('graph settings', () => {
 
   it('does not mutate the shared defaults', () => {
     parseSettings({ tunables: { repelStrength: 77 } })
-    expect(DEFAULT_TUNABLES.repelStrength).toBe(220)
+    expect(DEFAULT_TUNABLES.repelStrength).toBe(2400)
   })
 })
 
@@ -91,5 +91,30 @@ describe('showChats', () => {
     expect(parseSettings({}).showChats).toBe(true)
     expect(parseSettings({ showChats: false }).showChats).toBe(false)
     expect(parseSettings({ showChats: 'no' }).showChats).toBe(true)
+  })
+})
+
+describe('forces', () => {
+  it('starts the graph on the dialled-in defaults', () => {
+    expect(parseSettings({}).tunables).toEqual(DEFAULT_TUNABLES)
+  })
+
+  it('keeps the unlinked tether inside its range', () => {
+    // 0 is a graph whose unlinked notes drift off the canvas and cannot be
+    // brought back from a view that no longer shows them.
+    expect(parseSettings({ tunables: { orphanPull: 0.2 } }).tunables.orphanPull).toBe(0.2)
+    expect(parseSettings({ tunables: { orphanPull: 40 } }).tunables.orphanPull).toBe(1)
+    expect(parseSettings({ tunables: { orphanPull: -1 } }).tunables.orphanPull).toBe(0)
+    expect(parseSettings({ tunables: { orphanPull: 'far' } }).tunables.orphanPull).toBe(DEFAULT_TUNABLES.orphanPull)
+  })
+
+  it('reads a file the per-layout build wrote, keeping the organic set', () => {
+    // One build kept a set of forces per layout; its file is a map, not a set.
+    const parsed = parseSettings({
+      tunables: { organic: { repelStrength: 900, linkDistance: 40 }, tree: { repelStrength: 150 } },
+    })
+    expect(parsed.tunables.repelStrength).toBe(900)
+    expect(parsed.tunables.linkDistance).toBe(40)
+    expect(parsed.tunables.linkStrength).toBe(DEFAULT_TUNABLES.linkStrength)
   })
 })

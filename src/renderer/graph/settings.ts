@@ -18,6 +18,7 @@ import { ALL_LINKS, coerceLinkRange, type LinkRange } from './degree-bins'
  */
 
 export type GraphSettings = {
+  /** The forces, as the Forces sliders left them. */
   tunables: Tunables
   showLabels: boolean
   showOrphans: boolean
@@ -66,6 +67,7 @@ const LIMITS: Readonly<Record<keyof Tunables, [number, number]>> = {
   linkDistance: [1, 1000],
   linkStrength: [0, 2],
   centerStrength: [0, 1],
+  orphanPull: [0, 1],
 }
 
 const clamp = (value: number, [min, max]: [number, number]): number =>
@@ -75,17 +77,32 @@ export function parseSettings(raw: unknown): GraphSettings {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return DEFAULT_SETTINGS
   const record = raw as Record<string, unknown>
 
-  const tunables = { ...DEFAULT_TUNABLES }
-  const saved = record['tunables']
-  if (saved !== null && typeof saved === 'object' && !Array.isArray(saved)) {
-    const values = saved as Record<string, unknown>
+  const one = (raw: unknown, base: Tunables): Tunables => {
+    const out = { ...base }
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return out
+    const values = raw as Record<string, unknown>
     for (const key of Object.keys(DEFAULT_TUNABLES) as (keyof Tunables)[]) {
       const value = values[key]
-      if (typeof value === 'number' && Number.isFinite(value)) {
-        tunables[key] = clamp(value, LIMITS[key])
-      }
+      if (typeof value === 'number' && Number.isFinite(value)) out[key] = clamp(value, LIMITS[key])
     }
+    return out
   }
+
+  const layout = coerceLayout(record['layout'])
+  const saved = record['tunables']
+  /*
+   * One build kept a set of forces per layout, in a map keyed by layout name.
+   * A file it wrote reads as `{ organic: {...}, tree: {...} }`, so take the
+   * organic set out of it rather than throwing away a dialling someone did.
+   */
+  const perLayout =
+    saved !== null && typeof saved === 'object' && !Array.isArray(saved)
+      ? (saved as Record<string, unknown>)['organic']
+      : undefined
+  const flat = (Object.keys(DEFAULT_TUNABLES) as (keyof Tunables)[]).some(
+    (key) => saved !== null && typeof saved === 'object' && key in (saved as Record<string, unknown>),
+  )
+  const tunables = one(flat ? saved : (perLayout ?? saved), DEFAULT_TUNABLES)
 
   return {
     tunables,
@@ -94,7 +111,7 @@ export function parseSettings(raw: unknown): GraphSettings {
     showTasks: typeof record['showTasks'] === 'boolean' ? record['showTasks'] : false,
     showChats: typeof record['showChats'] === 'boolean' ? record['showChats'] : true,
     look: coerceLook(record['look']),
-    layout: coerceLayout(record['layout']),
+    layout,
     linkRange: coerceLinkRange(record['linkRange']),
     localOnly: typeof record['localOnly'] === 'boolean' ? record['localOnly'] : false,
   }

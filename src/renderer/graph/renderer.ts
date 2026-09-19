@@ -53,6 +53,14 @@ export type RenderState = {
   /** Indices one hop from the active note. */
   neighbours: ReadonlySet<number>
   hovered: number
+  /**
+   * The note under the pointer and everything it links to, or null.
+   *
+   * While it is set, the rest of the graph is veiled: the one question a graph
+   * is asked - what is this connected to - is answered by taking everything
+   * else away, which is what Obsidian does on hover and while dragging.
+   */
+  focus?: ReadonlySet<number> | null
   camera: Camera
   showLabels: boolean
   look?: GraphLook
@@ -647,6 +655,60 @@ export function draw(
   }
   if (hovered >= 0 && hovered !== active && hovered < nodes.length) single(hovered, false)
   if (active >= 0 && active < nodes.length) single(active, true)
+
+  /*
+   * The veil: paint the ground back over everything, then put the
+   * neighbourhood on top of it.
+   *
+   * Drawn as one rectangle rather than by dimming each batch, because the
+   * edges, their arrows, their pulses and the labels all have their own alphas
+   * and would each need the same rule applied by hand - and any one of them
+   * missed reads as a bug. One cover, then redraw what should stay lit.
+   */
+  const focus = state.focus ?? null
+  if (focus !== null && focus.size > 0) {
+    context.globalAlpha = 0.62
+    // The ground the graph is drawn on, so the veil hides rather than tints.
+    context.fillStyle = surface.dark ? '#171717' : '#fafafa'
+    context.fillRect(0, 0, width, height)
+    context.globalAlpha = 1
+
+    const lit: number[] = []
+    for (const i of focus) {
+      const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
+      const r = radiusIn(look, nodes[i]?.degree ?? 0) * zoomScale
+      if (sx < -r || sy < -r || sx > width + r || sy > height + r) continue
+      lit.push(i, sx, sy, r)
+    }
+    context.globalAlpha = 0.9
+    context.strokeStyle = surface.edge
+    context.lineWidth = Math.max(1, edgeWidth * zoomScale)
+    context.beginPath()
+    for (const [a, b] of edges) {
+      if (!focus.has(a) || !focus.has(b)) continue
+      const [x1, y1] = worldToScreen(camera, positions[a * 2] ?? 0, positions[a * 2 + 1] ?? 0, width, height)
+      const [x2, y2] = worldToScreen(camera, positions[b * 2] ?? 0, positions[b * 2 + 1] ?? 0, width, height)
+      context.moveTo(x1, y1)
+      context.lineTo(x2, y2)
+    }
+    context.stroke()
+    for (let k = 0; k < lit.length; k += 4) {
+      const i = lit[k]!
+      paint(i === active ? palette.nodeActive : (nodeColours[i] ?? surface.node), [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!], 1)
+    }
+    // Their names too: the neighbourhood is worth reading, not just seeing.
+    context.font = `${look.label.size * Math.max(0.82, Math.min(1.2, camera.zoom))}px -apple-system, system-ui, sans-serif`
+    context.textAlign = 'center'
+    context.textBaseline = 'top'
+    context.globalAlpha = 1
+    context.fillStyle = surface.label
+    for (let k = 0; k < lit.length; k += 4) {
+      const i = lit[k]!
+      const label = nodes[i]?.label
+      if (label === undefined) continue
+      context.fillText(fitLabel(context, label, look.label.size * 16), lit[k + 1]!, lit[k + 2]! + lit[k + 3]! + 4)
+    }
+  }
 
   // --- labels, culled by zoom and crowding --------------------------------
   //

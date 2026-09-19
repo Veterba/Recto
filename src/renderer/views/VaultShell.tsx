@@ -827,8 +827,12 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
             onResize={(sidebarWidth) => update({ sidebarWidth })}
             onNew={onNew}
             onNewFolder={activeSection === 'data' ? () => void createIn('folder') : undefined}
-            onExpandAll={activeSection === 'data' ? () => setExpanded(new Set(allFolders)) : undefined}
-            onCollapseAll={activeSection === 'data' ? () => setExpanded(new Set()) : undefined}
+            foldersOpen={expanded.size > 0}
+            onToggleFolders={
+              activeSection === 'data'
+                ? () => setExpanded(expanded.size > 0 ? new Set() : new Set(allFolders))
+                : undefined
+            }
             onTidy={activeSection === 'data' ? () => void openTidy() : undefined}
             onOpenArchive={() => openExtension('archive')}
             onOpenSettings={() => setSettingsOpen(true)}

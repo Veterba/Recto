@@ -146,7 +146,8 @@ describe('visibility after a resize', () => {
 
 describe('node radius', () => {
   it('grows with degree but flattens, so a hub is not a blob', () => {
-    expect(radiusOf(0)).toBeLessThan(radiusOf(4))
+    // Flat to six links - Obsidian's floor - then growing, then capped.
+    expect(radiusOf(4)).toBe(radiusOf(0))
     expect(radiusOf(4)).toBeLessThan(radiusOf(50))
     expect(radiusOf(10_000)).toBeLessThanOrEqual(10)
   })

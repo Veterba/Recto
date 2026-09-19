@@ -1254,6 +1254,8 @@ body.is-resizing {
   border-top: 1px solid transparent;
   border-bottom: 1px solid transparent;
   background-clip: padding-box;
+  /* The drop line is drawn on the row's own edges - see `.is-drop-above`. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -1404,9 +1406,36 @@ body.is-resizing {
 
 /* Drop target during a drag. Folders highlight themselves; dragging over a file
    highlights nothing, because the drop lands in that file's folder. */
+/* Dropping INTO a folder: the folder itself is the target. */
 .tree__row.is-drop {
   background: var(--accent-muted);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/*
+ * Dropping BETWEEN rows: a line in the gap, where the row will land.
+ *
+ * Two different answers to "what will this drop do" need two different shapes,
+ * or the gesture is a guess: a filled row means inside, a line means here. The
+ * line is drawn over the row's edge and inset to the text column, so it reads
+ * as a place in the list rather than a border on a box.
+ */
+.tree__row.is-drop-above::before,
+.tree__row.is-drop-below::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.tree__row.is-drop-above::before {
+  top: -1px;
+}
+.tree__row.is-drop-below::after {
+  bottom: -1px;
 }
 
 /* ---------- search results ---------- */

@@ -38,6 +38,12 @@ type Props = {
 
 const GLIDE_MS = 220
 const KNOB = 22
+/**
+ * How close to a mark the pointer has to come, in px, before the value sticks
+ * to it. Enough to land on the default without aiming, small enough that the
+ * values either side of it are still reachable by dragging.
+ */
+const STICK_PX = 7
 
 const snap = (value: number, min: number, max: number, step: number): number => {
   const stepped = Math.round((value - min) / step) * step + min
@@ -63,9 +69,15 @@ export function PillSlider({ variant = 'ruler', label, value, min, max, step, on
       // each end, so the fill never pokes out past the knob at 0 or 100.
       const usable = Math.max(1, box.width - KNOB)
       const t = Math.min(1, Math.max(0, (clientX - box.left - KNOB / 2) / usable))
+      // A mark within reach catches the pointer: the default is the value you
+      // come back to most, and hunting for it a hundredth at a time is a chore.
+      for (const mark of marks ?? []) {
+        const at = (mark.value - min) / (max - min)
+        if (Math.abs(at - t) * usable <= STICK_PX) return mark.value
+      }
       return snap(min + t * (max - min), min, max, step)
     },
-    [max, min, step, value],
+    [marks, max, min, step, value],
   )
 
   const press = (event: React.PointerEvent): void => {
