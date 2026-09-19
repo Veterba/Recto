@@ -98,3 +98,38 @@ describe('extracting link targets', () => {
     expect(extractTargets('# just text')).toEqual([])
   })
 })
+
+describe('markdown links', () => {
+  const run = (text: string, from = 'Books/Atomic Habits.md', to = 'Books/Atomic Habits Renamed.md') =>
+    rewriteWikiLinks(text, from, to)
+
+  it('follows the note through a [text](path) link', () => {
+    expect(run('see [the book](Books/Atomic Habits.md)').text).toBe('see [the book](Books/Atomic Habits Renamed.md)')
+  })
+
+  it('keeps the encoding the link was written with', () => {
+    expect(run('[a](Books/Atomic%20Habits.md)').text).toBe('[a](Books/Atomic%20Habits%20Renamed.md)')
+    expect(run('[a](Atomic Habits)').text).toBe('[a](Atomic Habits Renamed)')
+  })
+
+  it('keeps a heading, a title and angle brackets', () => {
+    expect(run('[a](<Books/Atomic Habits.md#Chapter 2>)').text).toBe('[a](<Books/Atomic Habits Renamed.md#Chapter 2>)')
+    expect(run('[a](Atomic Habits.md "The book")').text).toBe('[a](Atomic Habits Renamed.md "The book")')
+  })
+
+  it('leaves the link text, embeds and foreign URLs alone', () => {
+    expect(run('[Atomic Habits](Atomic Habits.md)').text).toBe('[Atomic Habits](Atomic Habits Renamed.md)')
+    expect(run('![shot](Atomic Habits.md)').text).toBe('![shot](Atomic Habits.md)')
+    expect(run('[site](https://example.com/Atomic Habits.md)').text).toBe('[site](https://example.com/Atomic Habits.md)')
+  })
+
+  it('counts both kinds together', () => {
+    const result = run('[[Atomic Habits]] and [the book](Atomic Habits.md)')
+    expect(result.count).toBe(2)
+    expect(result.text).toBe('[[Atomic Habits Renamed]] and [the book](Atomic Habits Renamed.md)')
+  })
+
+  it('does not touch a fenced block', () => {
+    expect(run('```\n[a](Atomic Habits.md)\n```').text).toBe('```\n[a](Atomic Habits.md)\n```')
+  })
+})

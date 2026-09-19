@@ -49,6 +49,17 @@ const MARKERS = new Set([
 
 const hidden = Decoration.replace({})
 
+/**
+ * The visible half of `[text](target)`.
+ *
+ * Live Preview already hides the brackets and the URL, so what is left reads
+ * as a link and behaved like plain prose: nothing to click. The target rides
+ * along as an attribute, so the click handler does not have to re-parse the
+ * line to find out where it goes.
+ */
+const mdLink = (href: string): Decoration =>
+  Decoration.mark({ class: 'cm-mdlink', attributes: { 'data-href': href } })
+
 /** A real checkbox in place of `[ ]` / `[x]`. */
 class TaskBox extends WidgetType {
   constructor(
@@ -182,6 +193,16 @@ const EMBED = /!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g
 export const CALLOUT_HEAD = /^(\s*>\s*)\[!([\w-]+)\]([+-]?)(.*)$/
 const HIGHLIGHT = /==([^=\n]+)==/g
 const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
+/**
+ * `[text](a path with spaces.md)`.
+ *
+ * CommonMark says a destination with a space in it must be escaped or wrapped
+ * in `<>`, so the grammar does not see this as a link at all - but it is what
+ * people type, and Obsidian follows it. Handled here, the way wikilinks and
+ * tasks are, and only for the spaced case: anything the grammar does recognise
+ * is left to it.
+ */
+const LOOSE_LINK = /(?<!!)\[([^\]\n]+)\]\(([^)\n]*\s[^)\n]*)\)/g
 const FENCE_LINE = /^---\s*$/
 
 const livePreviewEnabled = StateField.define<boolean>({
@@ -420,6 +441,25 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
           ranges.push({ from: node.from, to: after === ' ' ? node.to + 1 : node.to, deco: bullet })
           return
         }
+        if (node.name === 'Link' && !active.has(view.state.doc.lineAt(node.from).number)) {
+          // `[text](target)`: mark the text, and keep walking so the brackets
+          // and the URL are hidden by the marker rule below.
+          const whole = view.state.doc.sliceString(node.from, node.to)
+          const close = whole.indexOf('](')
+          const end = whole.lastIndexOf(')')
+          // A label with its own markup - `[**bold**](x)` - keeps the emphasis
+          // hiding it would otherwise swallow: this mark spans the whole label,
+          // and the builder drops anything that falls inside it. Such a link is
+          // still clickable; the handler finds it in the syntax tree instead.
+          const plainLabel = !/[*_`~=[\]]/.test(whole.slice(1, close))
+          if (close > 1 && end > close && plainLabel) {
+            ranges.push({
+              from: node.from + 1,
+              to: node.from + close,
+              deco: mdLink(whole.slice(close + 2, end).trim()),
+            })
+          }
+        }
         if (!MARKERS.has(node.name)) return
         if (active.has(view.state.doc.lineAt(node.from).number)) return
         if (node.to <= node.from) return
@@ -472,6 +512,16 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
           to: start + match[0].length,
           deco: Decoration.replace({ widget: new ImageWidget(match[2] ?? '', match[1] ?? '') }),
         })
+      }
+
+      for (const match of line.text.matchAll(LOOSE_LINK)) {
+        const start = line.from + (match.index ?? 0)
+        const label = match[1] ?? ''
+        const href = (match[2] ?? '').trim()
+        if (href === '') continue
+        ranges.push({ from: start, to: start + 1, deco: hidden })
+        ranges.push({ from: start + 1, to: start + 1 + label.length, deco: mdLink(href) })
+        ranges.push({ from: start + 1 + label.length, to: start + match[0].length, deco: hidden })
       }
 
       // Obsidian's embed, `![[file]]` or `![[file|300]]`. Before the wikilink

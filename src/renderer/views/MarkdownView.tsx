@@ -47,6 +47,30 @@ let activeHandle: EditorHandle | null = null
 export const getActiveEditor = (): EditorHandle | null => activeHandle
 
 /**
+ * Put the caret in the editor of the next note that opens.
+ *
+ * Opening a note from the tree, a link, the switcher or the New note button
+ * left the keyboard nowhere - focus stayed on `<body>`, so the first thing you
+ * typed went into the void and you had to click into the text before writing.
+ * Set by whoever opens a note on purpose; startup restores a layout without it,
+ * so reopening the app does not yank focus into a note you have not asked for.
+ *
+ * Two paths, because opening the note you are already in remounts nothing and
+ * `onReady` would never fire: the flag is cleared by whichever gets there
+ * first.
+ */
+let focusOnOpen = false
+
+export function focusEditorOnOpen(): void {
+  focusOnOpen = true
+  window.setTimeout(() => {
+    if (!focusOnOpen) return
+    focusOnOpen = false
+    activeHandle?.focus()
+  }, 120)
+}
+
+/**
  * The note's name, as an editable heading above the text.
  *
  * It IS the file name - not the first `# heading`, and not a `title:`
@@ -451,6 +475,10 @@ function MarkdownEditor({
         onReady={(editor: EditorHandle) => {
           handle.current = editor
           activeHandle = editor
+          if (focusOnOpen) {
+            focusOnOpen = false
+            editor.focus()
+          }
           editor.setWriting(writing)
           void loadAuthors(path).then((stored) => {
             if (stored.length > 0 && handle.current === editor) editor.setAuthors(stored)

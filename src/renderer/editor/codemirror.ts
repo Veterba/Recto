@@ -2,7 +2,7 @@ import { defaultKeymap, history, historyKeymap, redo, undo } from '@codemirror/c
 import * as md from './markdown-actions'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
-import { foldedRanges, indentOnInput } from '@codemirror/language'
+import { foldedRanges, indentOnInput, syntaxTree } from '@codemirror/language'
 import { search, searchKeymap } from '@codemirror/search'
 import { Compartment, EditorState, type Extension, type TransactionSpec } from '@codemirror/state'
 import {
@@ -122,19 +122,77 @@ const editable = new Compartment()
 const vimMode = new Compartment()
 
 export function createEditor(parent: HTMLElement, options: EditorOptions): EditorHandle {
-  /** Clicking a `[[wikilink]]` navigates; clicking elsewhere is a normal click. */
+  /** Where a `[text](target)` link goes, given a position inside its label. */
+  const markdownHrefAt = (view: EditorView, pos: number): string | null => {
+    let node = syntaxTree(view.state).resolveInner(pos, 1)
+    while (node.parent !== null && node.name !== 'Link') node = node.parent
+    if (node.name !== 'Link') return null
+    // The label only: a click in the URL half is someone editing it.
+    const whole = view.state.doc.sliceString(node.from, node.to)
+    const close = whole.indexOf('](')
+    if (close < 0 || pos > node.from + close) return null
+    const end = whole.lastIndexOf(')')
+    return end > close ? whole.slice(close + 2, end).trim() : null
+  }
+
+  /**
+   * Clicking a link follows it; clicking elsewhere is a normal click.
+   *
+   * Both spellings work. `[[wikilinks]]` carry their target as their own text;
+   * `[text](target)` hides the target in Live Preview, so the decoration puts
+   * it in `data-href` - and when the label is too complicated to decorate, the
+   * syntax tree still knows where the link goes. An `http(s)` target leaves for
+   * the browser through the window-open handler, which is the one path in the
+   * app allowed to open anything outside it.
+   */
   const linkClick = EditorView.domEventHandlers({
     mousedown: (event, view) => {
       const target = event.target as HTMLElement | null
-      if (!target?.classList.contains('cm-wikilink')) return false
-      // The decoration spans the whole inside of the brackets, so the element's
-      // own text is the link - no need to re-scan the line and guess.
-      const inner = target.textContent ?? ''
-      const parsed = /^([^#|]+)(?:#([^|]+))?/.exec(inner.trim())
-      const name = parsed?.[1]?.trim()
-      if (name === undefined || name === '') return false
+      if (target?.classList.contains('cm-wikilink') === true) {
+        // The decoration spans the whole inside of the brackets, so the
+        // element's own text is the link - no need to re-scan the line.
+        const inner = target.textContent ?? ''
+        const parsed = /^([^#|]+)(?:#([^|]+))?/.exec(inner.trim())
+        const name = parsed?.[1]?.trim()
+        if (name === undefined || name === '') return false
+        event.preventDefault()
+        options.onOpenLink(name, parsed?.[2]?.trim() ?? null)
+        return true
+      }
+
+      const marked = target?.closest('.cm-mdlink')?.getAttribute('data-href') ?? null
+      let href = marked
+      if (href === null) {
+        // No decoration here: either the label carries its own markup, or the
+        // line is showing raw syntax because the cursor is on it. The second is
+        // editing, not following, so only a rendered line navigates.
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
+        if (pos === null) return false
+        const line = view.state.doc.lineAt(pos).number
+        const caret = view.state.doc.lineAt(view.state.selection.main.head).number
+        if (line === caret) return false
+        href = markdownHrefAt(view, pos)
+      }
+      if (href === null || href === '') return false
+
       event.preventDefault()
-      options.onOpenLink(name, parsed?.[2]?.trim() ?? null)
+      if (/^https?:\/\//i.test(href)) {
+        // Denied as a window by the main process, which hands it to the OS.
+        window.open(href, '_blank', 'noopener,noreferrer')
+        return true
+      }
+      if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return true
+      const hash = href.indexOf('#')
+      const path = (hash === -1 ? href : href.slice(0, hash)).trim()
+      const heading = hash === -1 ? null : href.slice(hash + 1).trim()
+      if (path === '') return true
+      let decoded = path
+      try {
+        decoded = decodeURIComponent(path)
+      } catch {
+        // A stray '%' is not an escape; take the path as written.
+      }
+      options.onOpenLink(decoded.replace(/\.md$/i, ''), heading === '' ? null : heading)
       return true
     },
   })

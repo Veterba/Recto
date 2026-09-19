@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SearchResult } from '@shared/ipc-contract'
 import { api } from '../api'
+import { plainSnippet } from '../core/snippet'
 
 /**
  * Full-text search over the whole vault.
@@ -126,7 +127,7 @@ export function SearchPanel({ open, onClose, onOpenFile }: Props): React.ReactEl
  * can be rendered as text: nothing a user writes can inject markup here.
  */
 function Snippet({ text }: { text: string }): React.ReactElement {
-  const parts = text.split(/(<<[^>]*>>)/g)
+  const parts = plainSnippet(text).split(/(<<[^>]*>>)/g)
   return (
     <span className="result__snippet">
       {parts.map((part, i) =>

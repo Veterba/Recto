@@ -36,6 +36,46 @@ const CODE_FENCE = /^\s*(```|~~~)/
 /** `[[target#heading|alias]]`, all parts optional but the target. */
 const WIKILINK = /\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g
 /**
+ * `[text](target)` - the other way to link a note, and one Obsidian writes
+ * itself when a path has characters a wikilink cannot carry.
+ *
+ * A link the user typed as markdown is still a link: it belongs in the graph,
+ * in the target's backlinks, and in the rewrite when that target is renamed.
+ * It used to be none of those, so renaming a note broke every markdown link to
+ * it silently.
+ *
+ * The leading `(?<!!)` keeps `![alt](image.png)` out: an embed is not a
+ * reference to a note.
+ */
+const MARKDOWN_LINK = /(?<!!)\[([^\]]*)\]\(([^)\n]*)\)/g
+/** Schemes and shapes that are not a note in this vault. */
+const NOT_A_NOTE = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i
+
+/**
+ * The note a markdown link points at, or null when it points elsewhere.
+ *
+ * `%20` and friends are decoded because that is how a path with a space is
+ * written in a URL, and `<...>` unwrapped for the same reason.
+ */
+function markdownTarget(raw: string): { target: string; heading: string | null } | null {
+  let value = raw.trim().replace(/^<(.*)>$/, '$1')
+  if (value === '' || NOT_A_NOTE.test(value)) return null
+  // A title after the path - `(note.md "Title")` - is not part of it.
+  value = value.replace(/\s+"[^"]*"$/, '').trim()
+  const hash = value.indexOf('#')
+  const heading = hash === -1 ? null : value.slice(hash + 1).trim()
+  const path = hash === -1 ? value : value.slice(0, hash)
+  let decoded = path
+  try {
+    decoded = decodeURIComponent(path)
+  } catch {
+    // A stray '%' is not an escape; take the path as written.
+  }
+  decoded = decoded.trim()
+  if (decoded === '') return null
+  return { target: decoded, heading: heading === '' ? null : heading }
+}
+/**
  * `#tag`, Unicode-aware.
  *
  * Obsidian's rule, kept deliberately: a tag must contain at least one
@@ -141,6 +181,13 @@ export function parseNote(content: string): ParsedNote {
         alias: match[3]?.trim() ?? null,
         line: i,
       })
+    }
+
+    for (const match of scannable.matchAll(MARKDOWN_LINK)) {
+      const parsed = markdownTarget(match[2] ?? '')
+      if (parsed === null) continue
+      const text = match[1]?.trim() ?? ''
+      links.push({ target: parsed.target, heading: parsed.heading, alias: text === '' ? null : text, line: i })
     }
 
     // Strip wikilinks before tag scanning, so `[[note#heading]]` is not a tag.

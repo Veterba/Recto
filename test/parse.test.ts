@@ -131,3 +131,33 @@ describe('links in frontmatter', () => {
     expect(parsed.links.map((l) => l.target)).toEqual(['x'])
   })
 })
+
+describe('markdown links', () => {
+  it('counts [text](note) as a link to that note', () => {
+    const { links } = parseNote('see [the book](Books/Atomic Habits.md) and [again](Atomic%20Habits)')
+    expect(links.map((l) => [l.target, l.alias])).toEqual([
+      ['Books/Atomic Habits.md', 'the book'],
+      ['Atomic Habits', 'again'],
+    ])
+  })
+
+  it('keeps the heading and drops a title', () => {
+    const { links } = parseNote('[basis](Vectors.md#Basis) and [titled](Note.md "A title")')
+    expect(links.map((l) => [l.target, l.heading])).toEqual([
+      ['Vectors.md', 'Basis'],
+      ['Note.md', null],
+    ])
+  })
+
+  it('leaves what is not a note alone', () => {
+    const { links } = parseNote(
+      '[site](https://example.com) [mail](mailto:a@b.c) [here](#Heading) ![shot](img.png) [empty]()',
+    )
+    expect(links).toEqual([])
+  })
+
+  it('ignores links inside a fenced block, like wikilinks', () => {
+    const { links } = parseNote('```\n[code](Atomic Habits.md)\n```\n[real](Atomic Habits.md)')
+    expect(links.map((l) => l.alias)).toEqual(['real'])
+  })
+})

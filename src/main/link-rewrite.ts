@@ -1,5 +1,5 @@
 /**
- * Rewriting `[[wikilinks]]` when the note they point at is renamed.
+ * Rewriting links when the note they point at is renamed.
  *
  * Pure and string-only, so it is tested directly. This is the operation that
  * silently corrupts notes if it is slightly wrong - it edits files the user is
@@ -16,6 +16,10 @@
 
 const FENCE = /^\s*(```|~~~)/
 const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
+/** `[text](target)`, the other way to write a link. `!` in front is an embed. */
+const MARKDOWN_LINK = /(?<!!)(\[[^\]]*\])\(([^)\n]*)\)/g
+/** Schemes and shapes that are not a note in this vault. */
+const NOT_A_NOTE = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i
 
 const normalize = (value: string): string =>
   value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
@@ -51,6 +55,37 @@ function replacementTarget(original: string, oldPath: string, newPath: string): 
   return hadExtension ? `${kept}.md` : kept
 }
 
+/**
+ * Take a markdown link's `(...)` apart: the note it points at, and everything
+ * around it that has to come back untouched - angle brackets, a `#heading`, a
+ * `"title"`. Returns null when it does not point at a note in this vault.
+ */
+function splitUrl(
+  url: string,
+): { path: string; prefix: string; suffix: string; encoded: boolean } | null {
+  const angled = /^<(.*)>$/.exec(url.trim())
+  const inner = angled?.[1] ?? url
+  const title = /\s+"[^"]*"$/.exec(inner)
+  const withoutTitle = title === null ? inner : inner.slice(0, title.index)
+  const hash = withoutTitle.indexOf('#')
+  const raw = hash === -1 ? withoutTitle : withoutTitle.slice(0, hash)
+  const heading = hash === -1 ? '' : withoutTitle.slice(hash)
+  const trimmed = raw.trim()
+  if (trimmed === '' || NOT_A_NOTE.test(trimmed)) return null
+  let decoded = trimmed
+  try {
+    decoded = decodeURIComponent(trimmed)
+  } catch {
+    // A stray '%' is not an escape; take the path as written.
+  }
+  return {
+    path: decoded,
+    prefix: angled === null ? '' : '<',
+    suffix: `${heading}${title?.[0] ?? ''}${angled === null ? '' : '>'}`,
+    encoded: trimmed.includes('%20'),
+  }
+}
+
 export type RewriteResult = { text: string; count: number }
 
 /**
@@ -69,7 +104,7 @@ export function rewriteWikiLinks(text: string, oldPath: string, newPath: string)
     }
     if (inCode) return line
 
-    return line.replace(WIKILINK, (whole, target: string, heading = '', alias = '') => {
+    const wiki = line.replace(WIKILINK, (whole, target: string, heading = '', alias = '') => {
       if (!pointsAt(target, oldPath)) return whole
       count++
       // Leading/trailing spaces inside the brackets are preserved so the
@@ -77,6 +112,18 @@ export function rewriteWikiLinks(text: string, oldPath: string, newPath: string)
       const leading = /^\s*/.exec(target)?.[0] ?? ''
       const trailing = /\s*$/.exec(target)?.[0] ?? ''
       return `[[${leading}${replacementTarget(target, oldPath, newPath)}${trailing}${heading}${alias}]]`
+    })
+
+    return wiki.replace(MARKDOWN_LINK, (whole, text: string, url: string) => {
+      const parsed = splitUrl(url)
+      if (parsed === null || !pointsAt(parsed.path, oldPath)) return whole
+      count++
+      const replaced = replacementTarget(parsed.path, oldPath, newPath)
+      // A link written with `%20` keeps its encoding; one written with plain
+      // spaces keeps those. Either is valid markdown, and the smaller edit is
+      // the one that does not change how the rest of the note is written.
+      const encoded = parsed.encoded ? replaced.replace(/ /g, '%20') : replaced
+      return `${text}(${parsed.prefix}${encoded}${parsed.suffix})`
     })
   })
 

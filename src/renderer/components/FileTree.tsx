@@ -490,7 +490,21 @@ export function FileTree({
           // The card is anchored to a row that just moved.
           cancelPeek()
         }}
-        onPointerDown={cancelPeek}
+        onPointerDown={(ev) => {
+          cancelPeek()
+          /*
+           * Take the keyboard when a row is clicked.
+           *
+           * Rows are divs, and clicking one moved focus nowhere - so the arrow
+           * keys, Enter, F2 and the trash shortcut, all of which are handled
+           * here, did nothing until you had tabbed into the tree. Clicking a
+           * note hands focus on to its editor a moment later, which is what
+           * you want from a note; clicking a folder leaves it here, where the
+           * arrows are.
+           */
+          const target = ev.target as HTMLElement
+          if (target.closest('input, textarea') === null) ev.currentTarget.focus()
+        }}
         onKeyDown={onKeyDown}
         onDragOver={(ev) => {
           ev.preventDefault()

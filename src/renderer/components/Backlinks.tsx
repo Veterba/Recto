@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { BacklinkResult } from '@shared/ipc-contract'
 import { api } from '../api'
 import { Icon } from './Icon'
+import { plainSnippet } from '../core/snippet'
 
 /**
  * Notes that link to the one you are reading.
@@ -77,7 +78,7 @@ export function Backlinks({ path, revision, onOpen }: Props): React.ReactElement
                       {link.title ?? link.path.slice(link.path.lastIndexOf('/') + 1).replace(/\.md$/, '')}
                     </span>
                     {link.context !== null && link.context !== '' && (
-                      <span className="backlink__context">{link.context}</span>
+                      <span className="backlink__context">{plainSnippet(link.context)}</span>
                     )}
                     <Icon name="arrow-right" size={13} className="backlink__go" />
                   </button>

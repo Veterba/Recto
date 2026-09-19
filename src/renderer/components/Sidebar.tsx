@@ -75,7 +75,11 @@ export function Sidebar({
       const startWidth = width
 
       const onMove = (move: PointerEvent): void => {
-        onResize(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidth + move.clientX - startX)))
+        // Never past a sliver of window: a 520px sidebar in a 720px window
+        // leaves a column of note too narrow to read, and the only way back is
+        // to drag a handle that is no longer where you expect it.
+        const room = Math.max(SIDEBAR_MIN, Math.round(window.innerWidth * 0.45))
+        onResize(Math.min(SIDEBAR_MAX, room, Math.max(SIDEBAR_MIN, startWidth + move.clientX - startX)))
       }
       const onUp = (): void => {
         window.removeEventListener('pointermove', onMove)

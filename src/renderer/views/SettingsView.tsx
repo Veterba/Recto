@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AI_MODELS, ATTACHMENTS_FOLDER, type ArchiveState, type IndexStats, type RecentVault, type VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { HotkeyEditor } from '../components/HotkeyEditor'
@@ -778,6 +778,16 @@ function Settings(deps: Deps): React.ReactElement {
  * Mac app.
  */
 export function SettingsDialog({ onClose, ...deps }: Deps & { onClose: () => void }): React.ReactElement {
+  const sheet = useRef<HTMLDivElement | null>(null)
+  /*
+   * Take focus when it opens.
+   *
+   * macOS does not focus a button when you click it, so opening settings from
+   * the gear left the keyboard on `<body>` - outside this element - and Escape,
+   * which is handled here, never arrived. A modal that cannot be dismissed by
+   * the key every Mac dialog is dismissed by reads as stuck.
+   */
+  useEffect(() => sheet.current?.focus(), [])
   return createPortal(
     <div
       className="dialog__backdrop"
@@ -791,6 +801,8 @@ export function SettingsDialog({ onClose, ...deps }: Deps & { onClose: () => voi
         role="dialog"
         aria-modal="true"
         aria-label="Settings"
+        ref={sheet}
+        tabIndex={-1}
         onKeyDown={(event) => {
           event.stopPropagation()
           if (event.key === 'Escape') onClose()

@@ -61,6 +61,15 @@ export type RenderState = {
    * else away, which is what Obsidian does on hover and while dragging.
    */
   focus?: ReadonlySet<number> | null
+  /**
+   * How far the veil has come up, 0 to 1.
+   *
+   * The highlight used to arrive and leave in one frame, which reads as the
+   * picture being replaced rather than a layer coming over it. The caller eases
+   * this; everything the focus draws is scaled by it, so the veil, the lit
+   * edges and their names all arrive together.
+   */
+  focusFade?: number
   camera: Camera
   showLabels: boolean
   look?: GraphLook
@@ -666,8 +675,9 @@ export function draw(
    * missed reads as a bug. One cover, then redraw what should stay lit.
    */
   const focus = state.focus ?? null
-  if (focus !== null && focus.size > 0) {
-    context.globalAlpha = 0.62
+  const focusFade = Math.max(0, Math.min(1, state.focusFade ?? 1))
+  if (focus !== null && focus.size > 0 && focusFade > 0.002) {
+    context.globalAlpha = 0.62 * focusFade
     // The ground the graph is drawn on, so the veil hides rather than tints.
     context.fillStyle = surface.dark ? '#171717' : '#fafafa'
     context.fillRect(0, 0, width, height)
@@ -680,7 +690,7 @@ export function draw(
       if (sx < -r || sy < -r || sx > width + r || sy > height + r) continue
       lit.push(i, sx, sy, r)
     }
-    context.globalAlpha = 0.9
+    context.globalAlpha = 0.9 * focusFade
     context.strokeStyle = surface.edge
     context.lineWidth = Math.max(1, edgeWidth * zoomScale)
     context.beginPath()
@@ -694,19 +704,26 @@ export function draw(
     context.stroke()
     for (let k = 0; k < lit.length; k += 4) {
       const i = lit[k]!
-      paint(i === active ? palette.nodeActive : (nodeColours[i] ?? surface.node), [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!], 1)
+      paint(i === active ? palette.nodeActive : (nodeColours[i] ?? surface.node), [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!], focusFade)
     }
-    // Their names too: the neighbourhood is worth reading, not just seeing.
-    context.font = `${look.label.size * Math.max(0.82, Math.min(1.2, camera.zoom))}px -apple-system, system-ui, sans-serif`
+    /*
+     * Their names too: the neighbourhood is worth reading, not just seeing.
+     *
+     * A shade smaller than the labels elsewhere, and less eager to grow with
+     * the zoom: nothing else is drawn while the veil is up, so these are the
+     * only text on screen and at full size they read as shouting.
+     */
+    const focusSize = look.label.size * 0.85 * Math.max(0.82, Math.min(1.1, camera.zoom))
+    context.font = `${focusSize}px -apple-system, system-ui, sans-serif`
     context.textAlign = 'center'
     context.textBaseline = 'top'
-    context.globalAlpha = 1
+    context.globalAlpha = focusFade
     context.fillStyle = surface.label
     for (let k = 0; k < lit.length; k += 4) {
       const i = lit[k]!
       const label = nodes[i]?.label
       if (label === undefined) continue
-      context.fillText(fitLabel(context, label, look.label.size * 16), lit[k + 1]!, lit[k + 2]! + lit[k + 3]! + 4)
+      context.fillText(fitLabel(context, label, focusSize * 16), lit[k + 1]!, lit[k + 2]! + lit[k + 3]! + 4)
     }
   }
 

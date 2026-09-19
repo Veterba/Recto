@@ -18,7 +18,7 @@ import { TidyDialog } from '../components/TidyDialog'
 import { planTidy, type TidyPlan } from '../core/tidy'
 import { fillTemplate, mergeTemplateProperties, templateBody, type TemplateSettings } from '../core/templates'
 import { dayKey, ensureDailyNote, retemplateDailyNote, useTemplateSettings } from '../core/daily-note'
-import { getActiveEditor } from './MarkdownView'
+import { focusEditorOnOpen, getActiveEditor } from './MarkdownView'
 import { WorkspaceView } from '../components/WorkspaceView'
 import { useAppearance, type Theme } from '../core/appearance'
 import { commands } from '../core/commands'
@@ -435,6 +435,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     (path: string, heading?: string | null) => {
       // Opening a note always lands in Data, even if you clicked from elsewhere.
       setActiveSection('data')
+      // You opened it to read or write in it, so the keyboard goes there too.
+      focusEditorOnOpen()
       // The heading is part of the leaf state, so reopening the tab from a
       // saved layout lands in the same place.
       sections?.data.openView('markdown', heading ? { path, heading } : { path })

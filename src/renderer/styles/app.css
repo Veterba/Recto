@@ -313,6 +313,10 @@ code {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* The stored width is a preference, not a promise: a narrow window keeps the
+     note readable and the sidebar goes back to its full width when there is
+     room again. */
+  max-width: 45vw;
   border-right: 1px solid var(--sidebar-line);
   /* The one translucent surface in the app. */
   background: var(--sidebar-bg);
@@ -1772,6 +1776,19 @@ body.is-resizing {
 .cm-wikilink:hover {
   text-decoration-color: var(--accent);
 }
+/* `[text](target)` in Live Preview: the label is all that is left of it, so it
+   has to look and behave like the link it is. The colour comes from the
+   highlighter; this adds the part that says "clickable". */
+.cm-mdlink {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 2px;
+}
+.cm-mdlink:hover {
+  text-decoration-color: currentColor;
+}
+
 .cm-wikilink-bracket {
   color: var(--text-muted);
   opacity: 0.5;
@@ -2064,11 +2081,28 @@ body.is-resizing {
   padding: var(--size-1) var(--size-2);
   border-bottom: 1px solid var(--border);
   background: var(--tint);
+}
+
+/* Only the formatting buttons scroll; what sits after them stays reachable. */
+.formatbar__scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 1px;
   overflow-x: auto;
   scrollbar-width: none;
 }
-.formatbar::-webkit-scrollbar {
+.formatbar__scroll::-webkit-scrollbar {
   display: none;
+}
+
+.formatbar__trail {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-left: var(--size-2);
 }
 
 .formatbar__sep {
@@ -6665,10 +6699,6 @@ body.is-resizing {
 .focusbar__exit:hover {
   background: var(--accent-muted);
   color: var(--accent);
-}
-.formatbar__spacer {
-  flex: 1;
-  min-width: 8px;
 }
 
 /* --- the writing tools menu --- */

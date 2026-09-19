@@ -74,40 +74,43 @@ type Props = {
 export function FormatBar({ active, onRun, shortcutFor, trailing }: Props): React.ReactElement {
   return (
     <div className="formatbar" role="toolbar" aria-label="Formatting">
-      {ITEMS.map((item, i) => {
-        if (item.kind === 'sep') return <span key={`sep-${i}`} className="formatbar__sep" aria-hidden="true" />
+      {/*
+        The formatting buttons scroll on their own, so a narrow window pushes
+        bold and italic out of sight rather than the focus and writing controls
+        on the right - which used to be the first things clipped, and are the
+        ones with no other way in.
+      */}
+      <div className="formatbar__scroll">
+        {ITEMS.map((item, i) => {
+          if (item.kind === 'sep') return <span key={`sep-${i}`} className="formatbar__sep" aria-hidden="true" />
 
-        const isActive = item.format !== undefined && active.has(item.format)
-        const shortcut = shortcutFor(item.commandId)
+          const isActive = item.format !== undefined && active.has(item.format)
+          const shortcut = shortcutFor(item.commandId)
 
-        // The hint carries the shortcut, or an explanation when the label
-        // cannot say enough on its own.
-        const hint = [item.hint, shortcut].filter(Boolean).join(' · ')
+          // The hint carries the shortcut, or an explanation when the label
+          // cannot say enough on its own.
+          const hint = [item.hint, shortcut].filter(Boolean).join(' · ')
 
-        return (
-          <Tip key={item.commandId} label={item.label} hint={hint} placement="bottom">
-            <button
-              className={`formatbar__btn${isActive ? ' is-active' : ''}${item.text === undefined ? '' : ' formatbar__btn--text'}`}
-              aria-label={item.label}
-              aria-pressed={item.format === undefined ? undefined : isActive}
-              // mousedown, not click: the editor must not lose its selection
-              // before the command reads it.
-              onMouseDown={(ev) => {
-                ev.preventDefault()
-                onRun(item.commandId)
-              }}
-            >
-              {item.text !== undefined ? item.text : <Icon name={item.icon ?? ''} size={15} />}
-            </button>
-          </Tip>
-        )
-      })}
-      {trailing !== undefined && (
-        <>
-          <span className="formatbar__spacer" />
-          {trailing}
-        </>
-      )}
+          return (
+            <Tip key={item.commandId} label={item.label} hint={hint} placement="bottom">
+              <button
+                className={`formatbar__btn${isActive ? ' is-active' : ''}${item.text === undefined ? '' : ' formatbar__btn--text'}`}
+                aria-label={item.label}
+                aria-pressed={item.format === undefined ? undefined : isActive}
+                // mousedown, not click: the editor must not lose its selection
+                // before the command reads it.
+                onMouseDown={(ev) => {
+                  ev.preventDefault()
+                  onRun(item.commandId)
+                }}
+              >
+                {item.text !== undefined ? item.text : <Icon name={item.icon ?? ''} size={15} />}
+              </button>
+            </Tip>
+          )
+        })}
+      </div>
+      {trailing !== undefined && <div className="formatbar__trail">{trailing}</div>}
     </div>
   )
 }
