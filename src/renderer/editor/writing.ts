@@ -231,7 +231,17 @@ const typewriterPlugin = ViewPlugin.fromClass(
       if (!centring(config)) return
       const toggled = !centring(update.startState.field(writingConfig))
       const pointer = update.transactions.some((tr) => tr.isUserEvent('select.pointer'))
-      if (toggled || update.docChanged || (update.selectionSet && !pointer) || update.geometryChanged) {
+      /*
+       * Typing and moving the caret recentre. Scrolling does NOT.
+       *
+       * `geometryChanged` used to be in here, to recentre after a resize - but
+       * it also fires as new lines are measured during a scroll, so scrolling
+       * down a note with focus mode on pulled the view straight back to the
+       * caret: the note appeared to scroll itself up. Reading around the line
+       * you are writing is a thing people do, and the next keystroke recentres
+       * anyway.
+       */
+      if (toggled || update.docChanged || (update.selectionSet && !pointer)) {
         this.schedule(!toggled)
       }
     }

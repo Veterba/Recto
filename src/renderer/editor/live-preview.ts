@@ -1,4 +1,5 @@
 import { syntaxTree } from '@codemirror/language'
+import { writingConfig } from './writing'
 import { Compartment, RangeSetBuilder, StateEffect, StateField, type Extension } from '@codemirror/state'
 import { vaultFileUrl } from '../core/vault-url'
 import {
@@ -365,6 +366,8 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
   if (!isLivePreviewOn(view)) return Decoration.none
 
   const active = activeLines(view)
+  const focus = view.state.field(writingConfig, false)?.focus ?? false
+  const head = view.state.selection.main.head
   type Range = { from: number; to: number; deco: Decoration }
   const ranges: Range[] = []
 
@@ -379,7 +382,20 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
         if (node.name === 'MathBlock' || node.name === 'Table' || node.name === 'FencedCode') return false
 
         if (node.name === 'InlineMath' || node.name === 'FootnoteRef') {
-          if (active.has(view.state.doc.lineAt(node.from).number)) return false
+          /*
+           * In focus mode the cursor has to be INSIDE the formula, not merely
+           * on its line, before the `$...$` comes back.
+           *
+           * Focus mode moves the cursor down the note a line at a time, and
+           * with the ordinary line rule every line it landed on turned its
+           * maths into source: the one line you are meant to be reading was
+           * the one written in LaTeX. Standing in the formula is still how you
+           * edit it.
+           */
+          const reveal = focus
+            ? head >= node.from && head <= node.to
+            : active.has(view.state.doc.lineAt(node.from).number)
+          if (reveal) return false
           const text = view.state.doc.sliceString(node.from, node.to)
           if (node.name === 'InlineMath') {
             const display = text.startsWith('$$')

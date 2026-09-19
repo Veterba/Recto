@@ -213,6 +213,19 @@ code {
   background: var(--chrome);
 }
 
+/*
+ * With the sidebar collapsed the card is not inset into anything.
+ *
+ * The rounding exists so the editor sits ON the sidebar's panel, and its
+ * corners reveal that panel. Against the narrow stub that replaces the sidebar
+ * there is nothing to reveal but two notches of bare ground at the window's
+ * edge - most obvious on glass, where they show the desktop. Square there, and
+ * the seam alone divides the two.
+ */
+.shell__main:has(> .sidebar-stub) .shell__content {
+  border-radius: 0;
+}
+
 .shell__content > .split,
 .shell__content > .tabs {
   flex: 1;
@@ -5221,27 +5234,9 @@ body.is-resizing {
 }
 
 /* What stands in for a folded section. */
+/* The fold placeholder draws nothing: the arrow in the margin is the marker. */
 .cm-fold-more {
-  display: inline-block;
-  /* A list item's hanging indent is a negative text-indent, which an
-     inline-block inherits - it pushed the ellipsis out of its own pill. */
-  text-indent: 0;
-  margin-left: 8px;
-  padding: 0 7px;
-  border-radius: 999px;
-  background: var(--bg-hover);
-  color: var(--text-muted);
-  font-family: var(--font-ui, system-ui);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 18px;
-  height: 18px;
-  vertical-align: 0.15em;
-  cursor: pointer;
-}
-.cm-fold-more:hover {
-  color: var(--text-primary);
-  background: var(--bg-active, var(--bg-hover));
+  display: none;
 }
 
 /* One quiet line from each bullet down through its children. */
@@ -6417,9 +6412,26 @@ body.is-resizing {
   background-color: transparent !important;
   border-color: transparent !important;
 }
-/* Pictures, maths, checkboxes and other widgets have no text colour to fade. */
+/*
+ * Pictures, maths, checkboxes and other widgets have no text colour to fade.
+ *
+ * The floor matters: text faded to 16% still reads as greyed words, while a
+ * formula's hairline strokes at 16% are gone altogether - so widgets fade to
+ * the same setting or 0.3, whichever is more visible.
+ */
 .cm-writing-focus .cm-focus-dim [contenteditable='false'] {
-  opacity: calc(var(--focus-dim) + 0.1);
+  opacity: max(calc(var(--focus-dim) + 0.06), 0.22);
+}
+/*
+ * A block widget - a `$$` block, a table, an image, a rule - replaces its
+ * lines outright, so it is a sibling of the `.cm-line`s rather than inside
+ * one, and the line decoration that dims everything else never reaches it.
+ * Every maths block in a note stayed at full strength while the prose around
+ * it faded. Dimmed here directly; the cursor cannot be inside one (standing on
+ * those lines brings the source back), so nothing needs to be lit again.
+ */
+.cm-writing-focus .cm-content > :not(.cm-line) {
+  opacity: max(calc(var(--focus-dim) + 0.06), 0.22);
 }
 .cm-writing-focus .cm-activeLine {
   background: transparent;
@@ -6432,6 +6444,17 @@ body.is-resizing {
 .cm-typewriter .cm-scroller {
   padding-bottom: 52vh !important;
   scrollbar-width: none;
+  /*
+   * No scroll anchoring.
+   *
+   * The editor only measures the lines it has drawn and estimates the rest, so
+   * scrolling through a long note corrects heights ABOVE the viewport - and the
+   * browser, trying to be helpful, shifts the scroll position to keep its
+   * anchor still. In a note of maths blocks the correction is large and the
+   * view crept back up a second after each scroll, on top of the recentring
+   * the typewriter used to do. CodeMirror does its own scroll keeping.
+   */
+  overflow-anchor: none;
 }
 .cm-typewriter .cm-scroller::-webkit-scrollbar {
   width: 0;

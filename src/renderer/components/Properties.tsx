@@ -256,7 +256,15 @@ type Props = {
 }
 
 export function Properties({ text, onChange, onOpenLink, getLinkCandidates }: Props): React.ReactElement {
-  const [collapsed, setCollapsed] = useState(false)
+  /**
+   * Shut until it is opened.
+   *
+   * It used to open itself on every note, so a header, a table and an "Add
+   * property" button stood between the title and the first line of the text -
+   * on a daily note, a third of the window spent on one `Link:` field. The
+   * count in the header says whether there is anything in there worth opening.
+   */
+  const [collapsed, setCollapsed] = useState(true)
   const [adding, setAdding] = useState(false)
   const [newKey, setNewKey] = useState('')
   const [renaming, setRenaming] = useState<string | null>(null)
