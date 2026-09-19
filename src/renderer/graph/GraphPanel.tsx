@@ -643,6 +643,7 @@ function SectionBody({
             step={0.5}
             format={(v) => `${v}`}
             ruler={[1, 10, 20, 30, 40]}
+            defaults={sizeRange(DEFAULT_LOOK.node)}
             onChange={(a, b) => setNode(fromSizeRange(a, Math.max(a, b)))}
           />
           <HistogramRange

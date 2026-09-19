@@ -237,6 +237,61 @@ function build(
  * One function for build and for every later change, so a slider moved while
  * a tree layout is showing cannot quietly put back the organic forces.
  */
+/**
+ * The note under the pointer right now, if any.
+ *
+ * A dragged note's own links are put on a short leash while the gesture lasts:
+ * stronger, and wanting to sit closer. Obsidian's dragged note tows its
+ * neighbours in a tight bundle, and d3's degree normalisation is what stopped
+ * that here - a hub's links are divided by its degree, so pulling a hub with
+ * forty links moved almost nothing and the links just stretched.
+ */
+let dragging: number | null = null
+
+/** Does this link touch the note being dragged? */
+const leashed = (link: Link): boolean =>
+  dragging !== null && ((link.source as Node).index === dragging || (link.target as Node).index === dragging)
+
+/**
+ * Set the spring lengths and strengths.
+ *
+ * Its own function because d3 reads these once, when the accessor is set - so
+ * picking a note up or putting it down has to set them again for the leash to
+ * take effect.
+ */
+function tuneLinks(): void {
+  if (simulation === null || current === null) return
+  const { tunables, groups, targets } = current
+  const cross = targets?.crossGroupLinks ?? 1
+  const link = simulation.force('link') as ReturnType<typeof forceLink<Node, Link>> | undefined
+  link
+    ?.distance((l) => {
+      const base = linkLength(l, tunables.linkDistance)
+      return leashed(l) ? base * 0.62 : base
+    })
+    /*
+     * d3's own normalisation, times the slider.
+     *
+     * A flat strength pulls a hub with twenty links twenty times as hard as a
+     * leaf with one, so hubs collapse into knots and the graph reads as blobs
+     * joined by threads. Dividing by the smaller endpoint's degree - which is
+     * what d3 does by default, and what makes Obsidian's graph look evenly
+     * woven - spreads that pull over the links that share it.
+     *
+     * The exception is the note in your hand: its links hold at a floor no
+     * matter how many of them there are, or dragging a hub leaves its
+     * neighbours behind.
+     */
+    .strength((l) => {
+      const a = (l.source as Node).degree
+      const b = (l.target as Node).degree
+      const share = 1 / Math.max(1, Math.min(a, b))
+      const same = groups[(l.source as Node).index] === groups[(l.target as Node).index]
+      const base = tunables.linkStrength * share * (targets?.links ?? 1) * (same ? 1 : cross)
+      return leashed(l) ? Math.max(base, 0.4) : base
+    })
+}
+
 function configure(): void {
   if (simulation === null || current === null) return
   const { tunables, layout, groups, sizing, edges } = current
@@ -266,26 +321,7 @@ function configure(): void {
       .distanceMax(structured ? 420 : reach),
   )
 
-  const link = simulation.force('link') as ReturnType<typeof forceLink<Node, Link>> | undefined
-  const cross = targets?.crossGroupLinks ?? 1
-  link
-    ?.distance((l) => linkLength(l, tunables.linkDistance))
-    /*
-     * d3's own normalisation, times the slider.
-     *
-     * A flat strength pulls a hub with twenty links twenty times as hard as a
-     * leaf with one, so hubs collapse into knots and the graph reads as blobs
-     * joined by threads. Dividing by the smaller endpoint's degree - which is
-     * what d3 does by default, and what makes Obsidian's graph look evenly
-     * woven - spreads that pull over the links that share it.
-     */
-    .strength((l) => {
-      const a = (l.source as Node).degree
-      const b = (l.target as Node).degree
-      const share = 1 / Math.max(1, Math.min(a, b))
-      const same = groups[(l.source as Node).index] === groups[(l.target as Node).index]
-      return tunables.linkStrength * share * (targets?.links ?? 1) * (same ? 1 : cross)
-    })
+  tuneLinks()
 
   simulation.force(
     'collide',
@@ -406,6 +442,13 @@ function handle(event: MessageEvent<WorkerRequest & { positions?: Float32Array }
        */
       node.fx = message.x
       node.fy = message.y
+      if (dragging !== message.index) {
+        dragging = message.index
+        tuneLinks()
+        // Lighter damping while the hand is moving: the neighbourhood has to
+        // keep up with a pointer, not settle politely after it.
+        simulation?.velocityDecay(0.3)
+      }
       /**
        * Warm, not barely awake.
        *
@@ -429,6 +472,11 @@ function handle(event: MessageEvent<WorkerRequest & { positions?: Float32Array }
        */
       delete node.fx
       delete node.fy
+      if (dragging !== null) {
+        dragging = null
+        tuneLinks()
+        simulation?.velocityDecay(0.42)
+      }
       simulation?.alphaTarget(0)
       break
     }

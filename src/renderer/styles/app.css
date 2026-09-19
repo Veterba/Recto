@@ -6305,6 +6305,18 @@ body.is-resizing {
   background: var(--pill-fill);
   transition: left 120ms var(--ease), right 120ms var(--ease);
 }
+/* Where the pair started out: two notches under the bar, quiet until you look. */
+.range__default {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  margin: 7px 0 0 -1.5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.55;
+}
+
 .range__knob {
   position: absolute;
   top: 50%;

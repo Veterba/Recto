@@ -106,6 +106,9 @@ function useTrackDrag(
   return { track, valueAt }
 }
 
+/** How close, in px, a knob has to come to a default before it sticks. */
+const STICK_PX = 7
+
 /** Which of two knobs a press grabs: the nearer, and on a tie the one that can move that way. */
 function nearer(value: number, low: number, high: number): 0 | 1 {
   if (low === high) return value < low ? 0 : 1
@@ -135,6 +138,7 @@ export function RangeSlider({
   onChange,
   format = String,
   ruler,
+  defaults,
 }: {
   label: string
   low: number
@@ -146,10 +150,26 @@ export function RangeSlider({
   format?: (value: number) => string
   /** Numbered ticks under the track. */
   ruler?: readonly number[]
+  /**
+   * Where the pair started out, marked on the track and slightly magnetic.
+   *
+   * A range you have dialled is hard to undo from memory - these say what it
+   * was before you touched it, and catch the knob on the way past.
+   */
+  defaults?: readonly number[]
 }): React.ReactElement {
   const { track, valueAt } = useTrackDrag(min, max, step)
   const [held, setHeld] = useState<0 | 1 | null>(null)
   const at = (v: number): number => (v - min) / (max - min)
+
+  /** A default within a few pixels catches the knob. */
+  const stick = (value: number): number => {
+    const width = track.current?.getBoundingClientRect().width ?? 0
+    if (defaults === undefined || width <= 0) return value
+    const reach = (STICK_PX / width) * (max - min)
+    for (const mark of defaults) if (Math.abs(mark - value) <= reach) return mark
+    return value
+  }
 
   const press = (event: React.PointerEvent): void => {
     event.preventDefault()
@@ -158,7 +178,7 @@ export function RangeSlider({
     const knob = nearer(value, low, high)
     setHeld(knob)
     const apply = (clientX: number): void => {
-      const v = valueAt(clientX)
+      const v = stick(valueAt(clientX))
       if (knob === 0) onChange(Math.min(v, high), high)
       else onChange(low, Math.max(v, low))
     }
@@ -176,6 +196,9 @@ export function RangeSlider({
       </div>
       <div className="range__track" ref={track} onPointerDown={press} role="group" aria-label={label}>
         <span className="range__bar" style={{ left: `${at(low) * 100}%`, right: `${(1 - at(high)) * 100}%` }} />
+        {defaults?.map((mark) => (
+          <span key={`default-${mark}`} className="range__default" style={{ left: `${at(mark) * 100}%` }} aria-hidden="true" />
+        ))}
         {[low, high].map((v, i) => (
           <span
             key={i}
