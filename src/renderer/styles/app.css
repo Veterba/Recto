@@ -671,6 +671,8 @@ code {
   gap: var(--size-1);
   padding: var(--size-2);
   border-top: 1px solid var(--border);
+  /* Measured against its own width, not the window's - see the labels below. */
+  container-type: inline-size;
 }
 
 .sidebar__new {
@@ -3379,6 +3381,7 @@ body.is-resizing {
 .footer-btn {
   all: unset;
   box-sizing: border-box;
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3400,6 +3403,25 @@ body.is-resizing {
 .footer-btn--icon {
   width: 28px;
   padding: 0;
+}
+
+/*
+ * Narrow sidebar: the words go, the icons stay.
+ *
+ * "New note" and "New folder" carry labels, and at a dragged-in sidebar width
+ * the row could not fit them - so the two icon buttons at the end were squeezed
+ * into each other and pushed past the edge of the panel. Nothing in a flex row
+ * of nowrap buttons gives way on its own. Below the width where the labels fit,
+ * every button becomes the same 28px square and the row has room again.
+ */
+@container (max-width: 234px) {
+  .sidebar__footer .footer-btn {
+    width: 28px;
+    padding: 0;
+  }
+  .sidebar__footer .footer-btn > span {
+    display: none;
+  }
 }
 
 .sidebar__footer-gap {
