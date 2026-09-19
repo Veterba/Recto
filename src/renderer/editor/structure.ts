@@ -516,16 +516,21 @@ const guideLayer = layer({
   markers: guideMarkers,
 })
 
-/** What a folded section shows in its place: a quiet, clickable ellipsis. */
+/**
+ * A folded section shows NOTHING in its place.
+ *
+ * CodeMirror wants a placeholder and its own is an ellipsis; a count of the
+ * hidden lines was no better. Both are a second mark for a state the arrow in
+ * the margin already carries - it turns, and it stays visible while the fold is
+ * closed, which is the whole signal. An empty node keeps the editor happy and
+ * leaves the line ending where the writing ends.
+ */
 const placeholder = codeFolding({
-  placeholderDOM: (_view, onclick) => {
-    const more = document.createElement('span')
-    more.className = 'cm-fold-more'
-    more.textContent = '…'
-    more.title = 'Unfold'
-    more.setAttribute('aria-label', 'Unfold')
-    more.onclick = onclick
-    return more
+  placeholderDOM: () => {
+    const nothing = document.createElement('span')
+    nothing.className = 'cm-fold-more'
+    nothing.setAttribute('aria-hidden', 'true')
+    return nothing
   },
 })
 
