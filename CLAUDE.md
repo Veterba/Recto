@@ -31,6 +31,7 @@ NEVER commit. only user commits. can stage, merge, resolve conflicts, etc - but 
 ## Linear
 
 NEVER create, update, or manage Linear issues/projects yourself. only help identify where things should go and help draft content. user will create/update manually.
+For new feature make new branch and work in it
 
 ---
 
