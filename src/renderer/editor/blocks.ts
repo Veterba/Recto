@@ -472,9 +472,23 @@ function build(view: EditorView): DecorationSet {
           // The item's own line: its marker hangs, its wrapped rows line up
           // with its text.
           entries.push({ from: line.from, to: line.from, deco: hang(own.pad, own.pull), sort: SORT.line })
-        } else if (inside !== undefined && line.text.trim() !== '') {
-          // A continuation: the whole line sits at the item's text column,
-          // whatever indentation it was typed with.
+        } else if (inside !== undefined && line.text.trim() !== '' && /^[ \t]/.test(line.text)) {
+          /*
+           * A continuation the writer asked for.
+           *
+           * Markdown's lazy continuation folds a line typed hard against the
+           * margin into the item above it, so a note that reads
+           *
+           *   - a list item
+           *   a new sentence
+           *
+           * is one paragraph as far as the parser is concerned, and drawing it
+           * that way pushes the second line under the first one's text. Nobody
+           * typing at the margin means "put this inside the bullet"; the way
+           * to say that is Tab, which puts whitespace at the front. So only a
+           * line that carries indentation of its own is placed at the item's
+           * column - the rest stay where they were written.
+           */
           const typed = widthOf(view, /^[ \t]*/.exec(line.text)?.[0] ?? '')
           const column = Math.max(inside, typed)
           if (column > 0) entries.push({ from: line.from, to: line.from, deco: continuation(column, typed), sort: SORT.line })

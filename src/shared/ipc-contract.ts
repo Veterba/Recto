@@ -226,6 +226,7 @@ export type IpcApi = {
   'index:search': (query: string, limit?: number) => SearchResult[]
   'index:backlinks': (path: string) => BacklinkResult[]
   'index:stats': () => IndexStats
+  'index:home-stats': () => VaultUsage
   'index:reindex': () => { ok: boolean }
   'index:resolve-link': (target: string) => string | null
   'index:resolve-links': (targets: string[]) => Record<string, string | null>
@@ -345,6 +346,25 @@ export type RenameOutcome = {
 }
 export type IndexStats = { notes: number; links: number; unresolved: number; tags: number }
 
+/**
+ * The vault's own account of itself, for the home overlay.
+ *
+ * `mtime` is the only date the filesystem keeps that survives a clone or a
+ * sync, so everything dated here means *touched*, not created.
+ */
+export type VaultUsage = {
+  notes: number
+  links: number
+  unresolved: number
+  tags: number
+  touchedThisWeek: number
+  /** Notes touched per day, oldest first, seven entries. */
+  weekTrend: number[]
+  topFolders: { name: string; count: number }[]
+  topTags: { tag: string; count: number }[]
+  hubs: { name: string; links: number }[]
+}
+
 export type IpcChannel = keyof IpcApi
 export type IpcRequest<C extends IpcChannel> = Parameters<IpcApi[C]>
 export type IpcResponse<C extends IpcChannel> = Awaited<ReturnType<IpcApi[C]>>
@@ -385,6 +405,7 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'index:search',
   'index:backlinks',
   'index:stats',
+  'index:home-stats',
   'index:reindex',
   'index:resolve-link',
   'index:resolve-links',

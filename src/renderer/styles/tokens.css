@@ -22,6 +22,13 @@
   --accent: hsl(var(--accent-h) var(--accent-s) var(--accent-l));
   --accent-hover: hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) + 6%));
   --accent-muted: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.14);
+  /*
+   * The one hue on the home overlay: its CTA, its back control, the single
+   * figure worth reading first, and its focus rings. It follows the vault's
+   * accent rather than carrying its own, so a surface that is already a room
+   * of its own is still recognisably this app's.
+   */
+  --recto-accent: var(--accent);
 
   --font-ui: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;

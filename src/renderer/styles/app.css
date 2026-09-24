@@ -5271,12 +5271,17 @@ body.is-resizing {
 
 /* ---------- note structure: fold arrows, indent guides, outline ---------- */
 
-/* The arrow sits in the margin, left of the heading or bullet it folds.
-   Absolutely positioned with no offsets, so it lands where the line's text
-   starts - past any indentation - and the negative margin moves it out. It
-   takes no room in the line, so a note does not reflow when it appears. */
+/* The arrows all share one column in the margin, whatever they fold and however
+   deeply it is nested. Positioned against the line rather than against its
+   text, which is what used to make a nested bullet's arrow sit further in than
+   its parent's. They take no room in the line, so a note does not reflow when
+   one appears. */
+.cm-line {
+  position: relative;
+}
 .cm-fold-toggle {
   position: absolute;
+  left: 0;
   margin-left: -22px;
   width: 18px;
   height: 1.75em;
@@ -6934,4 +6939,363 @@ body.is-resizing {
 }
 .note-error__actions .btn:hover:not(:disabled) {
   border-color: transparent;
+}
+
+/* ---------- home overlay ----------
+ *
+ * A surface with no route, no menu entry and no button, opened by its shortcut
+ * and closed by Escape. It is a window over the app rather than a screen in it:
+ * everything behind stays exactly where it was, blurred, and comes back
+ * untouched.
+ */
+
+.home {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  /* Left is set inline when the overlay is told not to cover the sidebar. */
+}
+
+/*
+ * No backdrop-filter anywhere near this canvas.
+ *
+ * The overlay is the whole window and opaque, so there is nothing behind it to
+ * blur - and a backdrop-filter over a canvas that repaints every frame makes
+ * the compositor re-blur the lot on every one of them. A flat scrim is all
+ * this needs, and it is only visible during the two hundred milliseconds the
+ * overlay takes to arrive.
+ */
+.home__backdrop {
+  position: absolute;
+  inset: 0;
+  background: #0b0b0b;
+  opacity: 0;
+  transition: opacity 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.home.is-shown .home__backdrop {
+  opacity: 1;
+}
+
+.home__window {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #eee;
+  opacity: 0;
+  transition: opacity 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  touch-action: none;
+}
+.home.is-shown .home__window {
+  opacity: 1;
+}
+
+.home__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.home__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.home__track {
+  position: relative;
+  display: flex;
+  /*
+   * One window wide, with panes that each fill it and overflow to the right.
+   *
+   * A 200%-wide track looks tidier and is wrong: a percentage translate is a
+   * percentage of the element's own width, so -100% on a double-width track
+   * moves it two windows and lands past the far side of pane two.
+   */
+  width: 100%;
+  height: 100%;
+  /* No transition: the frame loop writes this every tick, from the same value
+     the shader slides by, so the two cannot drift apart. */
+  will-change: transform;
+}
+
+.home__pane {
+  flex: 0 0 100%;
+  display: grid;
+  place-items: center;
+  padding: clamp(24px, 5vw, 72px);
+  box-sizing: border-box;
+}
+
+/*
+ * Page one: a grid, not a centred block.
+ *
+ * Margins of 40, a column line at a third of the width, a row line at 78% of
+ * the height; the name and the statement hang off the column, the meta sits
+ * in the corners and along the row. The rules themselves are not DOM - they
+ * are drawn into the text texture from the same numbers, so the river bends
+ * them with the words. Every element here is transparent ink: the shader
+ * draws it, the DOM keeps layout, accessibility and the one button.
+ */
+.home__pane--hero {
+  position: relative;
+  padding: 0;
+}
+.home__hero {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  cursor: default;
+  user-select: none;
+  --m: 40px;
+  --col: calc(100% / 3);
+  --row: 78%;
+}
+.home__hero p {
+  margin: 0;
+}
+
+.home__meta {
+  position: absolute;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 1.55;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home__meta--tl { left: var(--m); top: var(--m); }
+.home__meta--top { left: calc(var(--col) + 44px); top: var(--m); }
+.home__meta--tr { right: var(--m); top: var(--m); text-align: right; }
+/* The vault path runs down beside the column rule, and stops short of the
+   row's gap rather than crossing it. */
+.home__meta--vault {
+  writing-mode: vertical-rl;
+  right: calc(100% - var(--col) + 8px);
+  top: var(--m);
+  max-height: calc(var(--row) - 18px - var(--m) - 8px);
+}
+.home__meta--creed {
+  left: var(--m);
+  bottom: calc(100% - var(--row) + 66px);
+  display: grid;
+  max-width: calc(var(--col) - var(--m) - 26px);
+}
+.home__meta--counts {
+  left: var(--m);
+  top: calc(var(--row) + 14px);
+  max-width: calc(var(--col) - var(--m) - 26px);
+}
+.home__meta--edit {
+  left: calc(var(--col) + 44px);
+  top: calc(var(--row) + 14px);
+  /* Up to the tick at three quarters, never across it. */
+  max-width: calc(75% - var(--col) - 44px - 16px);
+}
+.home__meta--bl { left: var(--m); bottom: var(--m); }
+.home__meta--bottom { left: calc(var(--col) + 44px); bottom: var(--m); }
+.home__meta--br { right: var(--m); bottom: var(--m); text-align: right; }
+
+.home__title {
+  position: absolute;
+  left: calc(var(--col) + 44px);
+  top: 31%;
+  display: grid;
+  justify-items: start;
+  gap: 34px;
+}
+/* Title case, not caps: the italic's capitals are its least elegant letters. */
+.home__name {
+  margin: 0;
+  font-family: 'Bodoni Moda', Didot, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: min(176px, 12vh);
+  line-height: 0.86;
+}
+.home__statement {
+  display: grid;
+  font-family: 'Geist Sans', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 30px;
+  line-height: 1.08;
+  text-transform: uppercase;
+}
+
+.home__cta {
+  all: unset;
+  position: absolute;
+  right: var(--m);
+  top: calc(var(--row) + 12px);
+  box-sizing: border-box;
+  cursor: pointer;
+  font-family: 'Geist Sans', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1.55;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: transparent;
+  white-space: nowrap;
+}
+
+.home__back {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: clamp(14px, 1.5vw, 21px);
+  font-style: italic;
+  font-weight: 500;
+}
+
+/*
+ * The way back is light, not ink.
+ *
+ * Pane two damps the whole field to read the figures against, so its ground is
+ * reliably dark - and ink on it would need a shelf of its own for no reason.
+ * Same type, opposite polarity, because the ground is opposite.
+ */
+.home__back {
+  order: -1;
+  margin: 0;
+  color: #f2f2f2;
+}
+.home__back:hover {
+  color: #fff;
+}
+.home__cta:focus-visible {
+  outline: 1px solid #151515;
+  outline-offset: 4px;
+}
+.home__back:focus-visible {
+  outline: 2px solid #f2f2f2;
+  outline-offset: 3px;
+  border-radius: 999px;
+}
+.home__arrow {
+  display: inline-block;
+  transition: transform 180ms var(--ease);
+}
+.home__back:hover .home__arrow {
+  transform: translateX(-6px);
+}
+
+/* --- statistics --- */
+
+/*
+ * A compact column, with the glass around it.
+ *
+ * The field is held deep blue behind every block of statistics, so white
+ * type keeps its contrast wherever it sits - which means the blocks decide
+ * how much of the page is held dark. Spread across the full width they made
+ * one solid blue slab; kept to a column, the bright masses have the rest of
+ * the page to move through, around and between the content.
+ */
+.home__stats {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  justify-self: start;
+  gap: clamp(16px, 3vh, 32px);
+  width: min(100%, 40vw, 560px);
+  margin-left: clamp(0px, 2vw, 32px);
+  color: #f2f2f2;
+}
+.home__stats--waiting {
+  justify-items: center;
+  color: #8a8a8a;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.home__figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: clamp(16px, 3vw, 40px) clamp(20px, 4vw, 56px);
+  width: 100%;
+}
+
+.home__figure {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.home__number {
+  margin: 0;
+  font-size: clamp(28px, 3.4vw, 46px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: #f2f2f2;
+}
+
+.home__label {
+  margin: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #ececec;
+}
+
+.home__spark {
+  width: 100%;
+  max-width: 120px;
+  height: 20px;
+  margin-top: 6px;
+  color: #ececec;
+}
+
+.home__lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: clamp(16px, 3vw, 48px);
+  width: 100%;
+}
+.home__list {
+  display: grid;
+  gap: 2px;
+}
+.home__list .home__label {
+  margin-bottom: 4px;
+}
+.home__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  font-size: 14px;
+  color: #f2f2f2;
+}
+.home__count {
+  color: #ececec;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A still frame, deliberately: no ramp, no slide, no letters moving. */
+  .home__backdrop,
+  .home__window,
+  .home__track,
+  .home__arrow {
+    transition: none;
+  }
 }

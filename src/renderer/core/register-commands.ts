@@ -2,6 +2,7 @@ import type { CommandRegistry } from './commands'
 import { EXTENSION_VIEWS, SECTIONS, type SectionId } from './sections'
 import { listViews } from './view-registry'
 import type { Workspace } from './workspace'
+import { HOME_HOTKEY } from '../home/HomeOverlay'
 
 /**
  * The app's command set, declared as data.
@@ -31,6 +32,7 @@ export type CommandContext = {
   openSwitcher: () => void
   toggleHistory: () => void
   reindex: () => void
+  toggleHome: () => void
 }
 
 export function registerAppCommands(registry: CommandRegistry, ctx: CommandContext): () => void {
@@ -113,6 +115,22 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       hotkey: 'Mod+Shift+Y',
       isAvailable: () => typeof workspace.activeLeaf?.state['path'] === 'string',
       run: ctx.toggleHistory,
+    }),
+    registry.register({
+      /*
+       * The home overlay.
+       *
+       * Registered like anything else, which is the only reason a surface with
+       * no route, no menu entry and no button is still discoverable: it shows
+       * up in the palette and in Settings -> Shortcuts, where every binding in
+       * the app is listed and can be changed.
+       */
+      id: 'app:home',
+      name: 'Home',
+      section: 'Open',
+      icon: 'sparkles',
+      hotkey: HOME_HOTKEY,
+      run: ctx.toggleHome,
     }),
     registry.register({
       id: 'app:settings',

@@ -64,7 +64,11 @@ export function registerEditorCommands(
     editorCommand('editor:italic', 'Italic', 'Mod+I', md.toggleItalic),
     editorCommand('editor:inline-code', 'Inline code', 'Mod+E', md.toggleInlineCode),
     editorCommand('editor:strikethrough', 'Strikethrough', 'Mod+Shift+X', md.toggleStrikethrough),
-    editorCommand('editor:highlight', 'Highlight', 'Mod+Shift+H', md.toggleHighlight),
+    // Mod+Alt+H, not Mod+Shift+H: the home overlay took that, and an
+    // editor-scoped binding wins whenever a note has focus - which would have
+    // made the overlay unreachable from the place you spend all your time. The
+    // letter is the part worth keeping.
+    editorCommand('editor:highlight', 'Highlight', 'Mod+Alt+H', md.toggleHighlight),
     editorCommand('editor:checklist', 'Toggle checklist item', 'Mod+Shift+C', md.toggleChecklist),
     editorCommand('editor:bullet-list', 'Toggle bullet list', 'Mod+Shift+8', md.toggleBulletList),
     editorCommand('editor:numbered-list', 'Toggle numbered list', 'Mod+Shift+7', md.toggleNumberedList),

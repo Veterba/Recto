@@ -305,6 +305,22 @@ export function registerIpc(): void {
       ? { notes: response.notes, links: response.links, unresolved: response.unresolved, tags: response.tags }
       : { notes: 0, links: 0, unresolved: 0, tags: 0 }
   })
+  handle('index:home-stats', async () => {
+    const response = await send({ kind: 'home-stats' }, 15_000)
+    return response.kind === 'home-stats-result'
+      ? response.stats
+      : {
+          notes: 0,
+          links: 0,
+          unresolved: 0,
+          tags: 0,
+          touchedThisWeek: 0,
+          weekTrend: [0, 0, 0, 0, 0, 0, 0],
+          topFolders: [],
+          topTags: [],
+          hubs: [],
+        }
+  })
   handle('index:resolve-link', async (target) => {
     const response = await send({ kind: 'resolve-link', target }, 15_000)
     return response.kind === 'resolve-link-result' ? response.path : null

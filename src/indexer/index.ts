@@ -21,6 +21,7 @@ import type {
   IndexResponse,
   SearchHit,
   Snapshot,
+  VaultUsage,
 } from './protocol'
 
 /**
@@ -467,6 +468,84 @@ function boards(): { board: string; count: number }[] {
  * once, and a query per note on a few thousand notes is the difference between
  * instant and a visible pause.
  */
+/**
+ * What the home overlay reads: the shape of the vault and the last week of
+ * writing in it.
+ *
+ * One pass of small aggregates rather than a query per figure, because the
+ * overlay asks for all of them at once and the whole point of an index is that
+ * this costs nothing. `mtime` is the last write: the only date the filesystem
+ * keeps that survives a clone, a sync or a restore, so every "this week" figure
+ * here means touched, not created.
+ */
+function vaultUsage(): VaultUsage {
+  const handle = requireDb()
+  const one = (sql: string, ...args: unknown[]): number =>
+    (handle.prepare(sql).get(...args) as { n: number } | undefined)?.n ?? 0
+
+  const DAY = 86_400_000
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const weekStart = startOfToday.getTime() - 6 * DAY
+
+  const perDay = handle
+    .prepare(
+      `SELECT CAST((mtime - ?) / ? AS INTEGER) AS bucket, COUNT(*) AS n
+         FROM notes WHERE mtime >= ? GROUP BY bucket`,
+    )
+    .all(weekStart, DAY, weekStart) as { bucket: number; n: number }[]
+  const weekTrend = Array.from({ length: 7 }, () => 0)
+  for (const row of perDay) if (row.bucket >= 0 && row.bucket < 7) weekTrend[row.bucket] = row.n
+
+  const topFolders = (
+    handle
+      .prepare(
+        // `folder`, not `name`: SQLite resolves a bare `name` in GROUP BY to
+        // the table's own column, so grouping by the alias silently grouped by
+        // filename and every folder came back with a count of one.
+        `SELECT substr(path, 1, instr(path, '/') - 1) AS folder, COUNT(*) AS count
+           FROM notes WHERE instr(path, '/') > 0
+          GROUP BY folder ORDER BY count DESC, folder LIMIT 4`,
+      )
+      .all() as { folder: string; count: number }[]
+  )
+    .filter((row) => row.folder !== '')
+    .map((row) => ({ name: row.folder, count: row.count }))
+
+  const topTags = handle
+    .prepare('SELECT tag, COUNT(*) AS count FROM tags GROUP BY tag ORDER BY count DESC, tag LIMIT 5')
+    .all() as { tag: string; count: number }[]
+
+  // Degree, both directions, over resolved links only - an unresolved link
+  // points at a note that is not there to be a hub.
+  const hubs = (
+    handle
+      .prepare(
+        `SELECT n.title AS title, n.name AS name, COUNT(*) AS links
+           FROM (
+             SELECT source_path AS path FROM links WHERE target_path IS NOT NULL
+             UNION ALL
+             SELECT target_path AS path FROM links WHERE target_path IS NOT NULL
+           ) AS ends
+           JOIN notes n ON n.path = ends.path
+          GROUP BY ends.path ORDER BY links DESC, name LIMIT 3`,
+      )
+      .all() as { title: string | null; name: string; links: number }[]
+  ).map((row) => ({ name: row.title ?? row.name.replace(/\.md$/i, ''), links: row.links }))
+
+  return {
+    notes: one('SELECT COUNT(*) AS n FROM notes'),
+    links: one('SELECT COUNT(*) AS n FROM links'),
+    unresolved: one('SELECT COUNT(*) AS n FROM links WHERE target_path IS NULL'),
+    tags: one('SELECT COUNT(DISTINCT tag) AS n FROM tags'),
+    touchedThisWeek: one('SELECT COUNT(*) AS n FROM notes WHERE mtime >= ?', weekStart),
+    weekTrend,
+    topFolders,
+    topTags,
+    hubs,
+  }
+}
+
 function context(): NoteContext[] {
   const handle = requireDb()
   const notes = handle.prepare('SELECT path FROM notes ORDER BY path').all() as { path: string }[]
@@ -557,6 +636,8 @@ function handle(request: IndexRequest): IndexResponse {
       const tags = (handleDb.prepare('SELECT COUNT(DISTINCT tag) AS n FROM tags').get() as { n: number }).n
       return { kind: 'stats-result', notes, links, unresolved, tags }
     }
+    case 'home-stats':
+      return { kind: 'home-stats-result', stats: vaultUsage() }
     case 'close':
       db?.close()
       db = null

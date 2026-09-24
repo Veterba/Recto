@@ -51,6 +51,28 @@ export type NoteChange = { type: 'upserted' | 'removed'; path: string }
 /** One stored version of a note. `content` is omitted when listing. */
 export type Snapshot = { id: number; path: string; ts: number; bytes: number; content?: string }
 
+/**
+ * What the vault itself can say about how it is being used.
+ *
+ * Everything here is a GROUP BY over the index - no counters are stored, so
+ * nothing can drift. Note that `mtime` is the last write, not the creation
+ * date: the filesystem does not keep one we can trust across a git clone or a
+ * sync, so "touched" is the honest word for it.
+ */
+export type VaultUsage = {
+  notes: number
+  links: number
+  unresolved: number
+  tags: number
+  /** Notes written to in the last seven days. */
+  touchedThisWeek: number
+  /** Notes written to per day, oldest first, seven entries. */
+  weekTrend: number[]
+  topFolders: { name: string; count: number }[]
+  topTags: { tag: string; count: number }[]
+  hubs: { name: string; links: number }[]
+}
+
 export type IndexRequest =
   | { kind: 'open'; vaultPath: string; dbPath: string }
   | { kind: 'reindex'; force?: boolean }
@@ -69,6 +91,7 @@ export type IndexRequest =
   | { kind: 'history-get'; id: number }
   | { kind: 'history-prune' }
   | { kind: 'stats' }
+  | { kind: 'home-stats' }
   | { kind: 'close' }
 
 export type IndexResponse =
@@ -88,5 +111,6 @@ export type IndexResponse =
   | { kind: 'history-get-result'; snapshot: Snapshot | null }
   | { kind: 'history-prune-result'; removed: number }
   | { kind: 'stats-result'; notes: number; links: number; unresolved: number; tags: number }
+  | { kind: 'home-stats-result'; stats: VaultUsage }
   | { kind: 'closed' }
   | { kind: 'error'; message: string }

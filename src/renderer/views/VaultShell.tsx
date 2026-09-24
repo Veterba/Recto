@@ -46,6 +46,8 @@ import { registerMarkdownView } from './MarkdownView'
 import { SettingsDialog } from './SettingsView'
 import { registerStubViews } from './stubs'
 import { registerUnresolvedView } from './UnresolvedView'
+import { HOME_HOTKEY, HomeOverlay, typingInField } from '../home/HomeOverlay'
+import { chordFromEvent, normalizeChord } from '../core/hotkeys'
 
 type Props = {
   vault: VaultInfo
@@ -76,6 +78,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const boards = useBoards()
   const { tree, refresh } = useVault(true)
   const templates = useTemplateSettings(vault.path)
+  const [homeOpen, setHomeOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -674,6 +677,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       openExtension,
       openSearch: () => setSearchOpen(true),
       openSwitcher: () => setSwitcherOpen(true),
+      toggleHome: () => setHomeOpen((open) => !open),
       toggleHistory: () => setHistoryWindow({ open: !historyWindow.open }),
       reindex: () => void api.invoke('index:reindex'),
     })
@@ -795,6 +799,10 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         setSwitcherOpen(false)
         return
       }
+      // The home overlay's chord belongs to whatever you are typing into,
+      // while you are typing into it - the note editor excepted, which is the
+      // place you actually open it from.
+      if (normalizeChord(HOME_HOTKEY) === chordFromEvent(ev) && typingInField()) return
       if (commands.handleKeyEvent(ev)) {
         ev.preventDefault()
         return
@@ -950,6 +958,13 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
           onCancel={() => setTidy(null)}
         />
       )}
+      <HomeOverlay
+        open={homeOpen}
+        onClose={() => setHomeOpen(false)}
+        sidebarWidth={appearance.sidebarOpen ? appearance.sidebarWidth : 0}
+        vaultPath={vault.path}
+        roots={tree.roots}
+      />
       <CommandPalette registry={commands} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={openFile} />
       <QuickSwitcher

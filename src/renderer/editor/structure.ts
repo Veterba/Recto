@@ -60,6 +60,23 @@ function trimEnd(state: EditorState, from: number, to: number): number {
   return Math.max(from, line.to)
 }
 
+/**
+ * The end of what an item actually draws inside itself.
+ *
+ * A line typed hard against the margin under a bullet is a lazy continuation as
+ * far as the parser is concerned - the ListItem node swallows it - but it is
+ * laid out at the margin rather than under the item's text, so the item's guide
+ * must not run down beside it: the line would sit against a paragraph that is
+ * visibly not in the list, which reads as a stray tick rather than as an
+ * indent. Walk back to the last row that carries indentation of its own.
+ */
+function ownEnd(state: EditorState, node: SyntaxNode): number {
+  const first = state.doc.lineAt(node.from).number
+  let n = state.doc.lineAt(trimEnd(state, node.from, node.to)).number
+  while (n > first && !/^[ \t]/.test(state.doc.line(n).text)) n--
+  return state.doc.line(n).to
+}
+
 /** The heading that starts on this line, if any, as a top-level node. */
 function headingOn(tree: Tree, lineFrom: number): SyntaxNode | null {
   const top = tree.topNode
@@ -490,7 +507,9 @@ function guideMarkers(view: EditorView): readonly RectangleMarker[] {
         }
 
         const first = view.lineBlockAt(node.from)
-        const last = view.lineBlockAt(trimEnd(state, body.from, body.to))
+        const last = view.lineBlockAt(
+          nested === null ? ownEnd(state, node.node) : trimEnd(state, body.from, body.to),
+        )
         const top = view.documentTop + first.bottom - origin.top
         const bottom = view.documentTop + last.bottom - origin.top
         // Folded: the children are hidden inside the item's own line, so there
