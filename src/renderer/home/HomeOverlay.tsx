@@ -268,7 +268,14 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
      */
     const measureText = (): HeroLine[] => {
       if (hero === null) return []
-      const box = host.getBoundingClientRect()
+      /*
+       * Against page one's own pane, not the window. The texture is drawn
+       * again whenever something on the page changes - the clock, the counts,
+       * the call to action's hover - and that can happen mid-slide or with
+       * page two on screen, when every rect in the window's frame is shifted
+       * by the slide. Measured that way, the words came back somewhere else.
+       */
+      const box = (hero.closest('.home__pane') ?? host).getBoundingClientRect()
       const out: HeroLine[] = []
       for (const el of Array.from(hero.querySelectorAll<HTMLElement>('[data-hero-line]'))) {
         const style = getComputedStyle(el)
