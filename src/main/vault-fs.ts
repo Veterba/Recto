@@ -92,6 +92,8 @@ export async function readFile(
   }
 }
 
+const WRITE_LOG = process.env['RECTO_WRITE_LOG'] === '1'
+
 /**
  * Write-then-rename, so a crash mid-write cannot truncate a note. Callers are
  * expected to have registered the path as a self-write first (see watcher).
@@ -99,25 +101,21 @@ export async function readFile(
 export async function writeFile(relative: string, content: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const absolute = resolveInVault(requireVault(), relative)
+    const existing = await fsp.readFile(absolute).catch(() => null)
     // The last line of defence for the bug above: text is never written over a
     // file that holds binary data, whatever the renderer asks for.
-    const existing = await fsp.open(absolute, 'r').then(
-      async (handle) => {
-        try {
-          const buffer = new Uint8Array(8192)
-          const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
-          return buffer.subarray(0, bytesRead)
-        } finally {
-          await handle.close()
-        }
-      },
-      () => null,
-    )
-    const notText = existing === null ? null : notTextReason(existing, true)
+    const notText = existing === null ? null : notTextReason(existing.subarray(0, 8192), true)
     if (notText !== null) return { ok: false, error: notTextMessage(notText, true) }
+    const bytes = Buffer.from(content, 'utf8')
+    // Nothing to write: leave the file alone. A rewrite of the same bytes
+    // still moves the mtime, and the mtime is what sync compares and what the
+    // auto-links quiet period counts from.
+    if (existing !== null && existing.equals(bytes)) return { ok: true }
+    // A write nobody asked for is found by its caller. Off unless asked.
+    if (WRITE_LOG) console.error('[write]', relative, existing?.length ?? 'new', '->', bytes.length, new Error().stack?.split('\n').slice(2, 6).join(' <- '))
     const tmp = `${absolute}.tmp-${process.pid}`
     await fsp.mkdir(path.dirname(absolute), { recursive: true })
-    await fsp.writeFile(tmp, content, 'utf8')
+    await fsp.writeFile(tmp, bytes)
     await fsp.rename(tmp, absolute)
     return { ok: true }
   } catch (err) {

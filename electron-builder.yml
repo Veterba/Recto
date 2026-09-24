@@ -27,12 +27,23 @@ directories:
 files:
   - out/**/*
   - package.json
+  # transformers.js depends on onnxruntime-web but its Node build carries its
+  # own copy and runs on onnxruntime-node; the package is 140 MB of browser
+  # runtime nothing here loads. Nor are other platforms' ORT binaries.
+  - '!node_modules/onnxruntime-web/**'
+  - '!node_modules/onnxruntime-node/bin/napi-v6/{linux,win32}/**'
 
 # better-sqlite3 is a compiled binary. Node cannot dlopen a .node file from
 # inside an asar archive, so the native parts stay unpacked on disk.
 asarUnpack:
   - '**/*.node'
   - node_modules/better-sqlite3/**
+  # The embedder's runtime: onnxruntime-node's binding loads libonnxruntime
+  # from beside itself, and transformers.js imports sharp (libvips) at load
+  # even though no image ever goes through it.
+  - node_modules/onnxruntime-node/**
+  - node_modules/sharp/**
+  - node_modules/@img/**
 
 afterPack: build/adhoc-sign.cjs
 

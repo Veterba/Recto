@@ -8,6 +8,7 @@ import { PREVIEW_DELAY_MAX, PREVIEW_DELAY_MIN, type Appearance } from '../core/a
 import { dailyNotePath, isInFolder, normaliseFolder, templateName, type TemplateSettings } from '../core/templates'
 import { createPortal } from 'react-dom'
 import { WritingSettingsTab } from './WritingSettings'
+import { AutolinkSettingsTab } from './AutolinkSettings'
 
 /**
  * Settings.
@@ -19,13 +20,14 @@ import { WritingSettingsTab } from './WritingSettings'
  * there is no "apply" button and nothing to get out of sync.
  */
 
-type Tab = 'appearance' | 'editor' | 'writing' | 'templates' | 'obsidian' | 'ai' | 'shortcuts' | 'vault'
+type Tab = 'appearance' | 'editor' | 'writing' | 'templates' | 'autolinks' | 'obsidian' | 'ai' | 'shortcuts' | 'vault'
 
 const TABS: readonly { id: Tab; label: string }[] = [
   { id: 'appearance', label: 'Appearance' },
   { id: 'editor', label: 'Editor' },
   { id: 'writing', label: 'Writing' },
   { id: 'templates', label: 'Templates' },
+  { id: 'autolinks', label: 'Auto-links' },
   { id: 'obsidian', label: 'Obsidian' },
   { id: 'ai', label: 'AI' },
   { id: 'shortcuts', label: 'Shortcuts' },
@@ -759,6 +761,7 @@ function Settings(deps: Deps): React.ReactElement {
         {tab === 'editor' && <EditorSettings {...deps} />}
         {tab === 'writing' && <WritingSettingsTab />}
         {tab === 'templates' && <TemplateSettingsTab {...deps} />}
+        {tab === 'autolinks' && <AutolinkSettingsTab />}
         {tab === 'obsidian' && <ObsidianSync />}
         {tab === 'ai' && <AiSettings {...deps} />}
         {tab === 'shortcuts' && <HotkeyEditor />}

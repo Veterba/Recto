@@ -15,8 +15,9 @@
     "app": "npm run dist:dir && node build/install-app.cjs",
     "typecheck": "tsc --noEmit",
     "test": "tsc --noEmit && vitest run",
-    "postinstall": "electron-rebuild -f -w better-sqlite3",
-    "rebuild": "electron-rebuild -f -w better-sqlite3"
+    "postinstall": "electron-rebuild -f -w better-sqlite3,onnxruntime-node",
+    "rebuild": "electron-rebuild -f -w better-sqlite3,onnxruntime-node",
+    "test:e2e": "electron-vite build && RECTO_E2E=1 vitest run test/e2e"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
@@ -47,6 +48,7 @@
     "@fontsource/bodoni-moda": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
     "@fontsource/geist-sans": "^5.3.0",
+    "@huggingface/transformers": "^4.3.0",
     "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "^1.7.2",
     "@replit/codemirror-vim": "^6.4.0",
@@ -57,6 +59,7 @@
     "d3-hierarchy": "^3.1.2",
     "katex": "^0.16.47",
     "lucide-react": "^1.45.0",
+    "onnxruntime-node": "1.30.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   }

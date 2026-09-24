@@ -26,10 +26,12 @@ type Props = {
   /** Second line, smaller - for a shortcut or a one-line explanation. */
   hint?: string | undefined
   placement?: TipPlacement | undefined
+  /** Let the hint wrap - for a sentence rather than a shortcut. */
+  wrap?: boolean
   children: React.ReactElement
 }
 
-export function Tip({ label, hint, placement = 'bottom', children }: Props): React.ReactElement {
+export function Tip({ label, hint, placement = 'bottom', wrap = false, children }: Props): React.ReactElement {
   const wrapper = useRef<HTMLSpanElement | null>(null)
   const bubble = useRef<HTMLDivElement | null>(null)
   const [shown, setShown] = useState(false)
@@ -81,7 +83,7 @@ export function Tip({ label, hint, placement = 'bottom', children }: Props): Rea
       </span>
       {shown &&
         createPortal(
-          <div className="tip" ref={bubble} role="tooltip" style={{ left: at.x, top: at.y }}>
+          <div className={`tip${wrap ? ' tip--wrap' : ''}`} ref={bubble} role="tooltip" style={{ left: at.x, top: at.y }}>
             <span className="tip__label">{label}</span>
             {hint !== undefined && hint !== '' && <span className="tip__hint">{hint}</span>}
           </div>,

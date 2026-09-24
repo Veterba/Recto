@@ -3,6 +3,8 @@
  * Every channel the renderer can reach is listed here and nowhere else.
  */
 
+import type { AutolinkAdded, AutolinkSettings, AutolinkStatus, AutolinkSuggestions, PreviewLink } from './autolinks'
+
 export const VAULT_STATE_DIR = '.recto'
 
 export type VaultInfo = {
@@ -153,6 +155,12 @@ export type IpcEvents = {
   'ai:delta': (delta: AiDelta) => void
   'ai:done': (done: AiDone) => void
   'ai:error': (error: AiError) => void
+  /** Model download, backfill and calibration progress. */
+  'autolinks:status': (status: AutolinkStatus) => void
+  /** These notes have new suggestions. */
+  'autolinks:changed': (paths: string[]) => void
+  /** Auto just wrote links into a note - for the status-bar notice. */
+  'autolinks:added': (added: AutolinkAdded) => void
 }
 
 export type IpcEventChannel = keyof IpcEvents
@@ -164,6 +172,9 @@ export const IPC_EVENT_CHANNELS: readonly IpcEventChannel[] = [
   'ai:delta',
   'ai:done',
   'ai:error',
+  'autolinks:status',
+  'autolinks:changed',
+  'autolinks:added',
 ] as const
 
 /** Invoke channels: renderer -> main, request/response. */
@@ -281,6 +292,24 @@ export type IpcApi = {
   'obsidian:disable': () => ObsidianSyncStatus
   /** Run a pass now. `force` runs one the deletion guard stopped. */
   'obsidian:sync-now': (force?: boolean) => ObsidianSyncStatus
+  'autolinks:settings': () => AutolinkSettings
+  'autolinks:set-settings': (patch: Partial<AutolinkSettings>) => AutolinkSettings
+  'autolinks:status': () => AutolinkStatus
+  'autolinks:download': () => { ok: boolean }
+  'autolinks:calibrate': () => { ok: boolean; error?: string }
+  'autolinks:clear-rejections': () => { ok: boolean }
+  'autolinks:suggestions': (path: string) => AutolinkSuggestions
+  /** A chip was clicked and the renderer has written the link into the note. */
+  'autolinks:accept': (source: string, target: string) => { ok: boolean }
+  'autolinks:reject': (source: string, target: string) => { ok: boolean }
+  /** Take back links Auto just added; they count as rejections. */
+  'autolinks:undo': (source: string, targets: string[]) => { ok: boolean }
+  /** Remove what the most recent Auto run wrote; counts as rejections. */
+  'autolinks:undo-last-run': () => { ok: boolean; removed: number }
+  /** What Auto's first run would write, computed without writing. */
+  'autolinks:preview': () => { notes: number; links: PreviewLink[] }
+  /** Settings has shown the first-run line; the next scheduled run may write. */
+  'autolinks:seen': () => { ok: boolean }
 }
 
 /** One archived item. `originalPath` is where restore puts it back. */
@@ -436,4 +465,17 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'obsidian:enable',
   'obsidian:disable',
   'obsidian:sync-now',
+  'autolinks:settings',
+  'autolinks:set-settings',
+  'autolinks:status',
+  'autolinks:download',
+  'autolinks:calibrate',
+  'autolinks:clear-rejections',
+  'autolinks:suggestions',
+  'autolinks:accept',
+  'autolinks:reject',
+  'autolinks:undo',
+  'autolinks:preview',
+  'autolinks:seen',
+  'autolinks:undo-last-run',
 ] as const

@@ -1,6 +1,7 @@
 import { BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import { ATTACHMENTS_FOLDER as ATTACHMENTS, type IpcApi, type RenameOutcome } from '../shared/ipc-contract'
 import * as ai from './ai'
+import * as autolinks from './autolinks/service'
 import * as archive from './archive'
 import * as obsidianSync from './sync'
 import { openIndexForVault, send, stopIndexer } from './index-client'
@@ -32,7 +33,10 @@ const renameUndo = new Map<string, { from: string; to: string; entries: { path: 
 function rewatch(): void {
   const window = BrowserWindow.getAllWindows()[0]
   if (window) startWatching(window)
-  void openIndexForVault().catch((err: unknown) => console.error('[indexer]', err))
+  // Auto-links reads the index, so it starts once the index is open.
+  void openIndexForVault()
+    .then(() => autolinks.start())
+    .catch((err: unknown) => console.error('[indexer]', err))
   // Retention is enforced on open rather than on a timer: the app may not be
   // running on the day something expires, and a check at open always catches up.
   void archive.purgeExpired().catch((err: unknown) => console.error('[archive]', err))
@@ -91,6 +95,7 @@ export function registerIpc(): void {
     // running against a vault that is no longer on screen.
     const previous = currentVault()
     stopWatching()
+    autolinks.stop()
     stopIndexer()
     obsidianSync.stopAll()
     const result = openVault(dir)
@@ -101,6 +106,7 @@ export function registerIpc(): void {
   })
   handle('vault:close', () => {
     stopWatching()
+    autolinks.stop()
     stopIndexer()
     // A closed vault must not keep syncing in the background.
     obsidianSync.stopAll()
@@ -157,6 +163,7 @@ export function registerIpc(): void {
      */
     void send({ kind: 'note-renamed', from, to: moved.path }, 15_000).catch(() => undefined)
     moveAuthorship(from, moved.path)
+    void autolinks.moved(from, moved.path).catch((err: unknown) => console.error('[autolinks]', err))
 
     const rewrite = await vaultFs.rewriteLinksTo(sources, from, moved.path)
     let undoId: string | undefined
@@ -352,6 +359,44 @@ export function registerIpc(): void {
   })
   handle('index:reindex', async () => {
     await send({ kind: 'reindex', force: true })
+    return { ok: true }
+  })
+  handle('autolinks:settings', () => autolinks.readSettings())
+  handle('autolinks:set-settings', (patch) => autolinks.updateSettings(patch))
+  handle('autolinks:status', () => autolinks.status())
+  handle('autolinks:download', () => {
+    void autolinks.download()
+    return { ok: true }
+  })
+  handle('autolinks:calibrate', async () => {
+    try {
+      await autolinks.calibrate()
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+  handle('autolinks:clear-rejections', () => {
+    autolinks.clearRejections()
+    return { ok: true }
+  })
+  handle('autolinks:suggestions', (p) => autolinks.suggestionsFor(p))
+  handle('autolinks:accept', async (source, target) => {
+    await autolinks.accept(source, target)
+    return { ok: true }
+  })
+  handle('autolinks:reject', async (source, target) => {
+    await autolinks.reject(source, target)
+    return { ok: true }
+  })
+  handle('autolinks:undo', async (source, targets) => {
+    await autolinks.undo(source, targets)
+    return { ok: true }
+  })
+  handle('autolinks:preview', () => autolinks.preview())
+  handle('autolinks:undo-last-run', async () => ({ ok: true, removed: await autolinks.undoLastRun() }))
+  handle('autolinks:seen', () => {
+    autolinks.seen()
     return { ok: true }
   })
   handle('state:read', (feature) => readState(feature))

@@ -149,6 +149,42 @@ export const MIGRATIONS: readonly Migration[] = [
       UPDATE notes SET mtime = -1;
     `,
   },
+  {
+    version: 6,
+    name: 'autolinks',
+    sql: `
+      -- Auto-links. Written by the embedder process, never by the indexer; the
+      -- migration lives here only because the indexer opens the file first.
+      -- A cache like everything else: the user's decisions (rejections) live
+      -- in .recto/autolinks.json, not here.
+      --
+      -- idx -1 is the note's title vector (title + aliases + headings).
+      CREATE TABLE autolink_chunks (
+        path TEXT NOT NULL,
+        idx  INTEGER NOT NULL,
+        hash TEXT NOT NULL,
+        vec  BLOB NOT NULL,
+        PRIMARY KEY (path, idx)
+      );
+
+      -- mean_vec, own_words and evaluated_at describe the note as it was at its
+      -- last evaluation, which is what the drift rule compares against.
+      -- embedded_mtime and suggested: when the chunks were last brought up to
+      -- date, and the chips waiting for the user. What we WROTE to a note is
+      -- not here: that decides what may be removed from a user's file, so it
+      -- lives in the vault and survives a rebuild.
+      CREATE TABLE autolink_state (
+        path           TEXT PRIMARY KEY,
+        mean_vec       BLOB,
+        own_words      INTEGER,
+        evaluated_at   INTEGER,
+        embedded_mtime REAL,
+        suggested      TEXT
+      );
+
+      CREATE TABLE autolink_meta (key TEXT PRIMARY KEY, value TEXT);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

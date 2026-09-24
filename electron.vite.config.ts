@@ -12,6 +12,9 @@ export default defineConfig({
           // The indexer runs as a utilityProcess, so it is a second entry point
           // in the same (Node) build - not a renderer and not a worker.
           'indexer/index': resolve('src/indexer/index.ts'),
+          // Auto-links' model runs in a third process, so inference never
+          // holds up a search.
+          'embedder/index': resolve('src/embedder/index.ts'),
         },
         output: { entryFileNames: '[name].js' },
       },

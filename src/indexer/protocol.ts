@@ -73,6 +73,13 @@ export type VaultUsage = {
   hubs: { name: string; links: number }[]
 }
 
+/** What auto-links reasons over: every note's mtime, resolved links and tags. */
+export type AutolinkGraph = {
+  notes: { path: string; mtime: number }[]
+  links: { source: string; target: string }[]
+  tags: { path: string; tag: string }[]
+}
+
 export type IndexRequest =
   | { kind: 'open'; vaultPath: string; dbPath: string }
   | { kind: 'reindex'; force?: boolean }
@@ -92,6 +99,7 @@ export type IndexRequest =
   | { kind: 'history-prune' }
   | { kind: 'stats' }
   | { kind: 'home-stats' }
+  | { kind: 'autolink-graph' }
   | { kind: 'close' }
 
 export type IndexResponse =
@@ -112,5 +120,6 @@ export type IndexResponse =
   | { kind: 'history-prune-result'; removed: number }
   | { kind: 'stats-result'; notes: number; links: number; unresolved: number; tags: number }
   | { kind: 'home-stats-result'; stats: VaultUsage }
+  | { kind: 'autolink-graph-result'; graph: AutolinkGraph }
   | { kind: 'closed' }
   | { kind: 'error'; message: string }

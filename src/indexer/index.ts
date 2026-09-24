@@ -638,6 +638,21 @@ function handle(request: IndexRequest): IndexResponse {
     }
     case 'home-stats':
       return { kind: 'home-stats-result', stats: vaultUsage() }
+    case 'autolink-graph': {
+      const handleDb = requireDb()
+      return {
+        kind: 'autolink-graph-result',
+        graph: {
+          notes: handleDb.prepare('SELECT path, mtime FROM notes').all() as { path: string; mtime: number }[],
+          links: handleDb
+            .prepare(
+              'SELECT DISTINCT source_path AS source, target_path AS target FROM links WHERE target_path IS NOT NULL',
+            )
+            .all() as { source: string; target: string }[],
+          tags: handleDb.prepare('SELECT DISTINCT path, tag FROM tags').all() as { path: string; tag: string }[],
+        },
+      }
+    }
     case 'close':
       db?.close()
       db = null

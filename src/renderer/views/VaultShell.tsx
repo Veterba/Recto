@@ -680,6 +680,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       toggleHome: () => setHomeOpen((open) => !open),
       toggleHistory: () => setHistoryWindow({ open: !historyWindow.open }),
       reindex: () => void api.invoke('index:reindex'),
+      // Progress and the result are in Settings → Auto-links.
+      calibrateAutolinks: () => void api.invoke('autolinks:calibrate'),
     })
     return () => {
       offApp()
