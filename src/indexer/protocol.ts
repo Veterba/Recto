@@ -14,7 +14,8 @@ export type SearchHit = {
 }
 
 /** The link graph. Degree is precomputed so the renderer can size nodes. */
-export type GraphNode = { path: string; name: string; title: string | null; degree: number }
+/** `topic`: a topic (a `topics/` link with no note behind it, or a note under topics/). */
+export type GraphNode = { path: string; name: string; title: string | null; degree: number; topic: boolean }
 /** `auto`: every link between the pair is in the auto-links property. */
 export type GraphEdge = { source: string; target: string; auto: boolean }
 export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[] }
@@ -101,6 +102,8 @@ export type IndexRequest =
   | { kind: 'stats' }
   | { kind: 'home-stats' }
   | { kind: 'autolink-graph' }
+  /** Notes carrying a link written as `target`, resolved or not - a topic link never resolves. */
+  | { kind: 'link-sources'; target: string }
   | { kind: 'close' }
 
 export type IndexResponse =
@@ -122,5 +125,6 @@ export type IndexResponse =
   | { kind: 'stats-result'; notes: number; links: number; unresolved: number; tags: number }
   | { kind: 'home-stats-result'; stats: VaultUsage }
   | { kind: 'autolink-graph-result'; graph: AutolinkGraph }
+  | { kind: 'link-sources-result'; paths: string[] }
   | { kind: 'closed' }
   | { kind: 'error'; message: string }

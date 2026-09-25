@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AutolinkAdded } from '@shared/autolinks'
+import type { TopicsRunNotice } from '@shared/topics'
 import { api } from '../api'
 import { Icon } from './Icon'
 
@@ -8,16 +8,15 @@ const SHOW_MS = 6_000
 const QUIET_MS = 1_500
 
 /**
- * "Added 2 links to Sourdough starter · Undo", in the status bar.
+ * "Topics added to 12 notes · Undo", in the status bar, once per run.
  *
- * The one visible trace of an Auto write: no modal, no popup, and nothing
- * while you type - a notice that arrives mid-sentence waits until the keyboard
- * has been still for a moment, then stays six seconds. Undo takes the links
- * back out and counts them as rejections, the same as deleting them by hand.
+ * The one visible trace of a run: no modal, no popup, and nothing while you
+ * type - a notice that arrives mid-sentence waits until the keyboard has been
+ * still for a moment, then stays six seconds. Undo reverses the whole run.
  */
-export function AutolinkNotice(): React.ReactElement | null {
-  const [shown, setShown] = useState<AutolinkAdded | null>(null)
-  const queue = useRef<AutolinkAdded[]>([])
+export function TopicsNotice(): React.ReactElement | null {
+  const [shown, setShown] = useState<TopicsRunNotice | null>(null)
+  const queue = useRef<TopicsRunNotice[]>([])
   const lastKey = useRef(0)
   const timer = useRef<number | undefined>(undefined)
   const showing = useRef(false)
@@ -41,8 +40,8 @@ export function AutolinkNotice(): React.ReactElement | null {
       if (item !== null) timer.current = window.setTimeout(next, SHOW_MS)
     }
 
-    const off = api.on('autolinks:added', (added) => {
-      queue.current.push(added)
+    const off = api.on('topics:run', (run) => {
+      queue.current.push(run)
       if (!showing.current) next()
     })
     return () => {
@@ -53,18 +52,15 @@ export function AutolinkNotice(): React.ReactElement | null {
   }, [])
 
   if (shown === null) return null
-  const count = shown.targets.length
 
   return (
-    <span className="status__notice" role="status" title={shown.targets.map((t) => t.name).join(', ')}>
-      <Icon name="link" size={12} />
-      <span className="status__notice-text">
-        Added {count} {count === 1 ? 'link' : 'links'} to {shown.name}
-      </span>
+    <span className="status__notice" role="status">
+      <Icon name="tags" size={12} />
+      <span className="status__notice-text">{shown.label}</span>
       <button
         className="status__notice-undo"
         onClick={() => {
-          void api.invoke('autolinks:undo', shown.path, shown.targets.map((t) => t.target))
+          void api.invoke('topics:undo-last-run')
           showing.current = false
           setShown(null)
         }}

@@ -32,7 +32,6 @@ export type CommandContext = {
   openSwitcher: () => void
   toggleHistory: () => void
   reindex: () => void
-  calibrateAutolinks: () => void
   toggleHome: () => void
 }
 
@@ -104,12 +103,6 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       name: 'Rebuild search index',
       section: 'Search',
       run: ctx.reindex,
-    }),
-    registry.register({
-      id: 'autolinks:calibrate',
-      name: 'Auto-links: check against my links',
-      section: 'Vault',
-      run: ctx.calibrateAutolinks,
     }),
     registry.register({
       id: 'history:toggle',

@@ -39,6 +39,8 @@ export type GraphNodeView = {
   degree: number
   /** Top-level folder, as an index - for colouring by folder. */
   group?: number
+  /** A topic: drawn as a hollow circle, never filled. */
+  topic?: boolean
 }
 
 export type Camera = { x: number; y: number; zoom: number }
@@ -634,22 +636,25 @@ export function draw(
 
   // --- nodes, batched by colour -----------------------------------------------
   const batches = new Map<string, number[]>()
+  /** Topics: the same colours, drawn hollow. */
+  const hollowBatches = new Map<string, number[]>()
   for (let i = 0; i < nodes.length; i++) {
     if (i === active || i === hovered) continue
     const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
     const r = radiusIn(look, nodes[i]?.degree ?? 0) * zoomScale
     if (sx < -r || sy < -r || sx > width + r || sy > height + r) continue
     const colour = nodeColours[i] ?? surface.node
-    let batch = batches.get(colour)
+    const target = nodes[i]?.topic === true ? hollowBatches : batches
+    let batch = target.get(colour)
     if (batch === undefined) {
       batch = []
-      batches.set(colour, batch)
+      target.set(colour, batch)
     }
     batch.push(sx, sy, r)
   }
 
   const ring = look.node.shape === 'ring'
-  const paint = (colour: string, coords: number[], alpha: number): void => {
+  const paint = (colour: string, coords: number[], alpha: number, hollow = false): void => {
     context.globalAlpha = alpha
     context.beginPath()
     for (let i = 0; i < coords.length; i += 3) {
@@ -659,7 +664,7 @@ export function draw(
       context.moveTo(x + r, y)
       context.arc(x, y, r, 0, Math.PI * 2)
     }
-    if (ring) {
+    if (ring || hollow) {
       context.strokeStyle = colour
       context.lineWidth = Math.max(1, 1.4 * zoomScale)
       context.stroke()
@@ -669,6 +674,7 @@ export function draw(
     }
   }
   for (const [colour, coords] of batches) paint(colour, coords, look.node.opacity)
+  for (const [colour, coords] of hollowBatches) paint(colour, coords, look.node.opacity, true)
 
   // Hovered and open notes last, on top of everything.
   const single = (i: number, isActive: boolean): void => {
@@ -676,7 +682,7 @@ export function draw(
     const r = radiusIn(look, nodes[i]?.degree ?? 0) * zoomScale
     if (sx < -r * 2 || sy < -r * 2 || sx > width + r * 2 || sy > height + r * 2) return
     const colour = isActive ? palette.nodeActive : (nodeColours[i] ?? surface.node)
-    paint(colour, [sx, sy, isActive ? r * 1.6 : r * 1.25], 1)
+    paint(colour, [sx, sy, isActive ? r * 1.6 : r * 1.25], 1, nodes[i]?.topic === true)
     // A ring around the open note, so it reads even against a dense cluster.
     if (isActive) {
       context.globalAlpha = 0.35
@@ -736,7 +742,7 @@ export function draw(
     context.setLineDash?.([])
     for (let k = 0; k < lit.length; k += 4) {
       const i = lit[k]!
-      paint(i === active ? palette.nodeActive : (nodeColours[i] ?? surface.node), [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!], focusFade)
+      paint(i === active ? palette.nodeActive : (nodeColours[i] ?? surface.node), [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!], focusFade, nodes[i]?.topic === true)
     }
     /*
      * Their names too: the neighbourhood is worth reading, not just seeing.

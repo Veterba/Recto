@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { dialog } from 'electron'
 import { VAULT_STATE_DIR, type OpenVaultResult, type StartupState, type VaultInfo } from '../shared/ipc-contract'
+import { devVaultPath } from './dev-guard'
 import { readState, writeState } from './store'
 
 let current: VaultInfo | null = null
@@ -67,11 +68,13 @@ function scaffold(dir: string): boolean {
 }
 
 export function openVault(dir: string): OpenVaultResult {
-  const abs = path.resolve(dir)
-  const status = check(abs)
+  const asked = path.resolve(dir)
+  const status = check(asked)
   if (status !== 'ok') {
     return { ok: false, error: status === 'missing' ? 'Folder does not exist.' : 'Folder is not readable and writable.' }
   }
+  // A dev build works on a copy, never the folder itself.
+  const abs = devVaultPath(asked)
   const scaffolded = scaffold(abs)
   current = { path: abs, name: path.basename(abs) }
   const recent = [abs, ...(readState().recentVaults ?? []).filter((p) => p !== abs)].slice(0, MAX_RECENT)

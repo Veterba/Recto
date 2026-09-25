@@ -52,6 +52,7 @@
     "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "^1.7.2",
     "@replit/codemirror-vim": "^6.4.0",
+    "az": "^0.2.3",
     "better-sqlite3": "^13.0.3",
     "chokidar": "^5.0.0",
     "compromise": "^14.17.0",

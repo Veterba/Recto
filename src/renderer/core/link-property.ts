@@ -1,11 +1,11 @@
 /**
- * The auto-links property (`related` by default): reading its links and
- * writing a new set of them.
+ * A frontmatter property that holds links (`topics`, and the old `related`):
+ * reading its links and writing a new set of them.
  *
- * Shared by main (Auto mode, cleanups) and the renderer (a clicked
- * suggestion), so both write the same shape. Every write goes through
- * `setField` / `removeField` - the tested frontmatter editor - and nothing
- * outside the one key changes, byte for byte.
+ * Shared by main (topic runs, undo) and the renderer (removing a topic chip),
+ * so both write the same shape. Every write goes through `setField` /
+ * `removeField` - the tested frontmatter editor - and nothing outside the one
+ * key changes, byte for byte.
  */
 
 import { parseFrontmatter, removeField, setField } from './frontmatter'
@@ -13,7 +13,7 @@ import { parseFrontmatter, removeField, setField } from './frontmatter'
 const WIKILINK = /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g
 
 /** The link targets in `key`, as written (`Note`, `folder/Note`). */
-export function relatedTargets(text: string, key: string): string[] {
+export function linksIn(text: string, key: string): string[] {
   const field = parseFrontmatter(text).fields.find((f) => f.key === key)
   if (field === undefined || field.value === null) return []
   const values = Array.isArray(field.value) ? field.value : [String(field.value)]
@@ -25,7 +25,7 @@ export function relatedTargets(text: string, key: string): string[] {
  * key. Line endings are kept: a CRLF note stays CRLF, since `setField` itself
  * joins on `\n`.
  */
-export function writeRelated(text: string, key: string, targets: readonly string[]): string {
+export function writeLinks(text: string, key: string, targets: readonly string[]): string {
   const crlf = text.includes('\r\n') && !/(?<!\r)\n/.test(text)
   const plain = crlf ? text.replace(/\r\n/g, '\n') : text
   const next =
@@ -33,7 +33,7 @@ export function writeRelated(text: string, key: string, targets: readonly string
   // The safety net: this writes one key. If anything else in the note came
   // out different, the editor misread something - keep the note as it was.
   if (!onlyKeyChanged(plain, next, key)) {
-    console.error(`[related] refused a write that would change more than "${key}"`, new Error().stack)
+    console.error(`[link-property] refused a write that would change more than "${key}"`, new Error().stack)
     return text
   }
   return crlf ? next.replace(/\n/g, '\r\n') : next
@@ -61,19 +61,4 @@ function onlyKeyChanged(before: string, after: string, key: string): boolean {
   const a = allBut(before, key)
   const b = allBut(after, key)
   return a.body === b.body && a.frontmatter.length === b.frontmatter.length && a.frontmatter.every((line, i) => line === b.frontmatter[i])
-}
-
-/**
- * How to write a link to `path`: its bare name when that is unique in the
- * vault, the path without `.md` when it is not - the same rule a rename
- * rewrite follows, so the link survives one.
- */
-export function linkTextFor(path: string, allPaths: Iterable<string>): string {
-  const name = path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
-  const key = name.normalize('NFC').toLowerCase()
-  let same = 0
-  for (const other of allPaths) {
-    if (other.slice(other.lastIndexOf('/') + 1).replace(/\.md$/i, '').normalize('NFC').toLowerCase() === key) same++
-  }
-  return same > 1 ? path.replace(/\.md$/i, '') : name
 }

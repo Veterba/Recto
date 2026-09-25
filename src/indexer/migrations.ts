@@ -196,6 +196,21 @@ export const MIGRATIONS: readonly Migration[] = [
       UPDATE notes SET mtime = -1;
     `,
   },
+  {
+    version: 8,
+    name: 'topic-centroids',
+    sql: `
+      -- Topic centroids, the mean of each topic's member vectors. A cache:
+      -- \`members\` is a key of the membership it was computed from, and a
+      -- different membership recomputes it. The topics themselves live in
+      -- .recto/topics.json.
+      CREATE TABLE topic_centroids (
+        id      TEXT PRIMARY KEY,
+        members TEXT NOT NULL,
+        vec     BLOB NOT NULL
+      );
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

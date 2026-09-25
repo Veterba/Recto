@@ -259,6 +259,8 @@ export async function rewriteLinksTo(
   sources: readonly string[],
   oldPath: string,
   newPath: string,
+  /** Only links that spell out the whole path - see `rewriteWikiLinks`. */
+  exact = false,
 ): Promise<{ changed: { path: string; before: string }[]; links: number }> {
   const root = requireVault()
   const changed: { path: string; before: string }[] = []
@@ -278,7 +280,7 @@ export async function rewriteLinksTo(
       continue
     }
 
-    const result = rewriteWikiLinks(before, oldPath, newPath)
+    const result = rewriteWikiLinks(before, oldPath, newPath, exact)
     if (result.count === 0 || result.text === before) continue
 
     await fsp.writeFile(absolute, result.text, 'utf8')

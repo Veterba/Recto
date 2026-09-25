@@ -1,7 +1,8 @@
 import Database from 'better-sqlite3'
-import { compareVectors, meanVector } from '../main/autolinks/score'
-import { createEncoder, type Encoder } from './encoder'
-import type { EmbedRequest, EmbedResponse, Match, Piece, StateRow } from './protocol'
+import { meanVector } from '../main/autolinks/score'
+import { capped, centre, noteVector, vaultMean } from '../main/topics/vectors'
+import { createEncoder, DIMS, type Encoder } from './encoder'
+import type { EmbedRequest, EmbedResponse, Piece, StateRow } from './protocol'
 
 /**
  * The embedder, in its own process.
@@ -84,36 +85,40 @@ async function embed(path: string, pieces: Piece[]): Promise<{ mean: number[] | 
   return { mean: entry.chunks.length === 0 ? null : [...meanVector(entry.chunks)], computed: missing.length }
 }
 
-/** A note's chunk vectors against another's chunks and title. */
-const compare = (source: Vectors, target: Vectors): { sem: number; bestChunk: number } =>
-  compareVectors(source.chunks, target.title === null ? target.chunks : [...target.chunks, target.title])
+/**
+ * The vault's mean chunk, over the chunks note vectors use: a 500-chunk log
+ * counts as one note here too, or it would be most of the mean.
+ */
+const meanChunk = (): Float32Array => vaultMean([...loadStore().values()].flatMap((v) => capped(v.chunks)), DIMS)
 
-function similar(path: string, allowed: string[], include: string[], top: number): Match[] {
+/**
+ * Note vectors for topics: every chunk centred on the vault's mean chunk
+ * vector, then averaged per note (at most 48 chunks, evenly spaced).
+ */
+function noteVectors(paths: string[]): Record<string, number[]> {
   const vectors = loadStore()
-  const source = vectors.get(path)
-  if (source === undefined || source.chunks.length === 0) return []
-  const all: Match[] = []
-  for (const target of new Set([...allowed, ...include])) {
-    const other = vectors.get(target)
-    if (target === path || other === undefined) continue
-    all.push({ path: target, ...compare(source, other) })
+  const mean = meanChunk()
+  const out: Record<string, number[]> = {}
+  for (const p of paths) {
+    const v = vectors.get(p)
+    const note = v === undefined ? null : noteVector(v.chunks, mean)
+    if (note !== null) out[p] = [...note]
   }
-  all.sort((a, b) => b.sem - a.sem)
-  const wanted = new Set(include)
-  return all.filter((m, i) => i < top || wanted.has(m.path))
+  return out
 }
 
-function reverse(path: string, allowed: string[], top: number): Match[] {
-  const vectors = loadStore()
-  const target = vectors.get(path)
-  if (target === undefined) return []
-  const all: Match[] = []
-  for (const source of allowed) {
-    const from = vectors.get(source)
-    if (source === path || from === undefined || from.chunks.length === 0) continue
-    all.push({ path: source, ...compare(from, target) })
+/** Candidate words for topic names: each embedded once per process, centred on the vault mean. */
+const termCache = new Map<string, Float32Array>()
+
+async function termVectors(terms: string[]): Promise<number[][]> {
+  const missing = [...new Set(terms)].filter((t) => !termCache.has(t))
+  if (missing.length > 0) {
+    encoder ??= createEncoder(modelDir)
+    const vecs = await (await encoder)(missing)
+    missing.forEach((t, i) => termCache.set(t, vecs[i]!))
   }
-  return all.sort((a, b) => b.sem - a.sem).slice(0, top)
+  const mean = meanChunk()
+  return terms.map((t) => [...centre(termCache.get(t)!, mean)])
 }
 
 type RawState = {
@@ -122,16 +127,6 @@ type RawState = {
   own_words: number | null
   evaluated_at: number | null
   embedded_mtime: number | null
-  suggested: string | null
-}
-
-const parseList = <T>(raw: string | null): T[] => {
-  try {
-    const value = JSON.parse(raw ?? '[]') as unknown
-    return Array.isArray(value) ? (value as T[]) : []
-  } catch {
-    return []
-  }
 }
 
 function stateAll(): StateRow[] {
@@ -141,7 +136,6 @@ function stateAll(): StateRow[] {
     ownWords: r.own_words ?? 0,
     evaluatedAt: r.evaluated_at,
     embeddedMtime: r.embedded_mtime,
-    suggested: parseList<StateRow['suggested'][number]>(r.suggested),
   }))
 }
 
@@ -152,7 +146,6 @@ function statePut(rows: (Partial<StateRow> & { path: string })[]): void {
     own_words: (r) => r.ownWords,
     evaluated_at: (r) => r.evaluatedAt,
     embedded_mtime: (r) => r.embeddedMtime,
-    suggested: (r) => (r.suggested === undefined ? undefined : JSON.stringify(r.suggested)),
   }
   handle.transaction(() => {
     for (const row of rows) {
@@ -187,6 +180,7 @@ async function run(request: EmbedRequest): Promise<EmbedResponse> {
       db.pragma('synchronous = NORMAL')
       modelDir = request.modelDir
       store = null
+      termCache.clear()
       return { kind: 'ok' }
     }
     case 'embed':
@@ -209,29 +203,26 @@ async function run(request: EmbedRequest): Promise<EmbedResponse> {
       if (request.value === null) requireDb().prepare('DELETE FROM autolink_meta WHERE key = ?').run(request.key)
       else requireDb().prepare('INSERT OR REPLACE INTO autolink_meta (key, value) VALUES (?, ?)').run(request.key, request.value)
       return { kind: 'ok' }
-    case 'similar':
-      return { kind: 'matches', matches: similar(request.path, request.allowed, request.include, request.top) }
-    case 'reverse':
-      return { kind: 'matches', matches: reverse(request.path, request.allowed, request.top) }
-    case 'sample': {
-      const vectors = loadStore()
-      const sems: number[] = []
-      for (const [a, b] of request.pairs) {
-        const from = vectors.get(a)
-        const to = vectors.get(b)
-        if (from !== undefined && to !== undefined && from.chunks.length > 0) sems.push(compare(from, to).sem)
-      }
-      return { kind: 'sems', sems }
+    case 'note-vectors':
+      return { kind: 'note-vectors', vectors: noteVectors(request.paths) }
+    case 'term-vectors':
+      return { kind: 'term-vectors', vectors: await termVectors(request.terms) }
+    case 'centroids-get': {
+      const rows = requireDb().prepare('SELECT id, members, vec FROM topic_centroids').all() as {
+        id: string
+        members: string
+        vec: Buffer
+      }[]
+      return { kind: 'centroids', rows: rows.map((r) => ({ id: r.id, members: r.members, vector: [...fromBlob(r.vec)] })) }
     }
-    case 'means': {
-      const vectors = loadStore()
-      const means: Record<string, number[]> = {}
-      for (const p of request.paths) {
-        const v = vectors.get(p)
-        const list = v === undefined ? [] : v.chunks.length > 0 ? v.chunks : v.title === null ? [] : [v.title]
-        if (list.length > 0) means[p] = [...meanVector(list)]
-      }
-      return { kind: 'means', means }
+    case 'centroids-put': {
+      const handle = requireDb()
+      handle.transaction(() => {
+        handle.prepare('DELETE FROM topic_centroids').run()
+        const insert = handle.prepare('INSERT INTO topic_centroids (id, members, vec) VALUES (?, ?, ?)')
+        for (const r of request.rows) insert.run(r.id, r.members, toBlob(Float32Array.from(r.vector)))
+      })()
+      return { kind: 'ok' }
     }
     case 'stats': {
       const handle = requireDb()

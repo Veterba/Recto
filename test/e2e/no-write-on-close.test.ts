@@ -83,10 +83,14 @@ describe.skipIf(!RUN)('closing a note it did not change', () => {
     fs.writeFileSync(path.join(vault, 'Other.md'), '# Other\n\nSomething else.')
     for (const f of ['Notes/Слепой набор.md', 'Other.md']) fs.utimesSync(path.join(vault, f), OLD, OLD)
     fs.writeFileSync(path.join(userData, 'app-state.json'), JSON.stringify({ lastVaultPath: vault }))
-    // Auto-links off: this is about the editor alone.
+    // Topics off: this is about the editor alone.
     fs.mkdirSync(path.join(vault, '.recto'))
-    fs.writeFileSync(path.join(vault, '.recto', 'autolinks-settings.json'), JSON.stringify({ mode: 'off' }))
-    app = spawn(ELECTRON, [ROOT, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`], { stdio: 'ignore' })
+    fs.writeFileSync(path.join(vault, '.recto', 'topics-settings.json'), JSON.stringify({ enabled: false }))
+    app = spawn(ELECTRON, [ROOT, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`], {
+      stdio: 'ignore',
+      // The test vault is already a throwaway copy: open it as it is.
+      env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
+    })
     cdp = await connect()
     await sleep(2500)
   }, 60_000)

@@ -1,9 +1,12 @@
 import { app, BrowserWindow } from 'electron'
+import { isolateDevState } from './dev-guard'
 import { registerIpc } from './ipc'
 import { handleVaultScheme, registerVaultScheme } from './vault-protocol'
 import { createWindow } from './window'
 
 app.setName('Recto')
+// Before anything reads userData: a dev build keeps its own state (see dev-guard).
+isolateDevState()
 
 // Before ready, or the scheme is registered without its privileges and every
 // image load fails as an opaque cross-origin request.

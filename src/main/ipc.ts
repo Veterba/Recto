@@ -1,7 +1,7 @@
 import { BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import { ATTACHMENTS_FOLDER as ATTACHMENTS, type IpcApi, type RenameOutcome } from '../shared/ipc-contract'
 import * as ai from './ai'
-import * as autolinks from './autolinks/service'
+import * as topics from './topics/service'
 import * as archive from './archive'
 import * as obsidianSync from './sync'
 import { openIndexForVault, send, stopIndexer } from './index-client'
@@ -35,7 +35,7 @@ function rewatch(): void {
   if (window) startWatching(window)
   // Auto-links reads the index, so it starts once the index is open.
   void openIndexForVault()
-    .then(() => autolinks.start())
+    .then(() => topics.start())
     .catch((err: unknown) => console.error('[indexer]', err))
   // Retention is enforced on open rather than on a timer: the app may not be
   // running on the day something expires, and a check at open always catches up.
@@ -95,7 +95,7 @@ export function registerIpc(): void {
     // running against a vault that is no longer on screen.
     const previous = currentVault()
     stopWatching()
-    autolinks.stop()
+    topics.stop()
     stopIndexer()
     obsidianSync.stopAll()
     const result = openVault(dir)
@@ -106,7 +106,7 @@ export function registerIpc(): void {
   })
   handle('vault:close', () => {
     stopWatching()
-    autolinks.stop()
+    topics.stop()
     stopIndexer()
     // A closed vault must not keep syncing in the background.
     obsidianSync.stopAll()
@@ -163,7 +163,7 @@ export function registerIpc(): void {
      */
     void send({ kind: 'note-renamed', from, to: moved.path }, 15_000).catch(() => undefined)
     moveAuthorship(from, moved.path)
-    void autolinks.moved(from, moved.path).catch((err: unknown) => console.error('[autolinks]', err))
+    void topics.moved(from, moved.path).catch((err: unknown) => console.error('[topics]', err))
 
     const rewrite = await vaultFs.rewriteLinksTo(sources, from, moved.path)
     let undoId: string | undefined
@@ -342,7 +342,7 @@ export function registerIpc(): void {
     return response.kind === 'unresolved-result' ? response.entries : []
   })
   handle('index:graph', async () => {
-    const response = await send({ kind: 'graph', autoProperty: autolinks.readSettings().property }, 30_000)
+    const response = await send({ kind: 'graph', autoProperty: 'topics' }, 30_000)
     return response.kind === 'graph-result' ? response.graph : { nodes: [], edges: [] }
   })
   handle('index:board', async (board) => {
@@ -361,44 +361,29 @@ export function registerIpc(): void {
     await send({ kind: 'reindex', force: true })
     return { ok: true }
   })
-  handle('autolinks:settings', () => autolinks.readSettings())
-  handle('autolinks:set-settings', (patch) => autolinks.updateSettings(patch))
-  handle('autolinks:status', () => autolinks.status())
-  handle('autolinks:download', () => {
-    void autolinks.download()
+  handle('topics:settings', () => topics.readSettings())
+  handle('topics:set-settings', (patch) => topics.updateSettings(patch))
+  handle('topics:status', () => topics.status())
+  handle('topics:download', () => {
+    void topics.download()
     return { ok: true }
   })
-  handle('autolinks:calibrate', async () => {
-    try {
-      await autolinks.calibrate()
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
-    }
-  })
-  handle('autolinks:clear-rejections', () => {
-    autolinks.clearRejections()
+  handle('topics:list', () => topics.list())
+  handle('topics:rename', (id, name) => topics.rename(id, name))
+  handle('topics:delete', async (id) => {
+    await topics.remove(id)
     return { ok: true }
   })
-  handle('autolinks:suggestions', (p) => autolinks.suggestionsFor(p))
-  handle('autolinks:accept', async (source, target) => {
-    await autolinks.accept(source, target)
+  handle('topics:rebuild', async () => {
+    await topics.rebuild()
     return { ok: true }
   })
-  handle('autolinks:reject', async (source, target) => {
-    await autolinks.reject(source, target)
+  handle('topics:preview', () => topics.preview())
+  handle('topics:seen', () => {
+    topics.seen()
     return { ok: true }
   })
-  handle('autolinks:undo', async (source, targets) => {
-    await autolinks.undo(source, targets)
-    return { ok: true }
-  })
-  handle('autolinks:preview', () => autolinks.preview())
-  handle('autolinks:undo-last-run', async () => ({ ok: true, removed: await autolinks.undoLastRun() }))
-  handle('autolinks:seen', () => {
-    autolinks.seen()
-    return { ok: true }
-  })
+  handle('topics:undo-last-run', async () => ({ ok: true, changes: await topics.undoLastRun() }))
   handle('state:read', (feature) => readState(feature))
   handle('state:write', (feature, data) => writeState(feature, data))
   handle('shell:open-external', async (url) => {

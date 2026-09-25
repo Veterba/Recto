@@ -9,8 +9,6 @@ import { WritingButtons } from '../components/WritingButtons'
 import { useWriting } from '../core/writing'
 import { flushAuthors, loadAuthors, saveAuthors } from '../core/authors-store'
 import { Properties } from '../components/Properties'
-import { SuggestedLinks } from '../components/SuggestedLinks'
-import { relatedTargets, writeRelated } from '../core/related'
 import { commands } from '../core/commands'
 import { formatChord } from '../core/hotkeys'
 import { extractTargets } from '../core/link-targets'
@@ -439,19 +437,6 @@ function MarkdownEditor({
           handle.current?.setValue(next)
           setText(next)
           onChange(next)
-        }}
-      />
-      <SuggestedLinks
-        path={path}
-        onAccept={async (property, link) => {
-          const current = handle.current?.getValue() ?? text
-          const next = writeRelated(current, property, [...relatedTargets(current, property), link])
-          handle.current?.setValue(next)
-          setText(next)
-          // Saved now rather than after the debounce, so main never sees the
-          // link recorded as ours while the file does not have it yet.
-          window.clearTimeout(saveTimer.current)
-          await save(next)
         }}
       />
       {/* The path bar stays where it always was, top left, whether the name is

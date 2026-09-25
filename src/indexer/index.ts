@@ -374,9 +374,29 @@ function graph(autoProperty: string | null): GraphData {
   const degree = new Map<string, number>()
   const byPair = new Map<string, GraphEdge>()
 
-  for (const link of links) {
+  // A topic is a link to a note that does not exist, under topics/. It has no
+  // file and no row of its own, so it becomes a node here, from its links.
+  const topics = new Map<string, string>()
+  const topicLinks = handleDb
+    .prepare(
+      `SELECT source_path AS source, target_text AS text, MAX(COALESCE(property, '') <> ?) AS manual
+       FROM links WHERE target_path IS NULL AND lower(target_text) LIKE 'topics/%' GROUP BY source_path, lower(target_text)`,
+    )
+    .all(autoProperty ?? '\u0000') as { source: string; text: string; manual: number }[]
+  for (const link of topicLinks) {
+    const id = `topics/${link.text.slice('topics/'.length).replace(/\.md$/i, '').trim()}`
+    const key = id.toLowerCase()
+    if (!topics.has(key)) topics.set(key, id)
+  }
+  const resolvedTopics = topicLinks.map((l) => ({
+    source: l.source,
+    target: topics.get(`topics/${l.text.slice('topics/'.length).replace(/\.md$/i, '').trim()}`.toLowerCase())!,
+    manual: l.manual,
+  }))
+
+  for (const link of [...links, ...resolvedTopics]) {
     if (link.source === link.target) continue
-    if (!known.has(link.source) || !known.has(link.target)) continue
+    if (!known.has(link.source) || (!known.has(link.target) && !topics.has(link.target.toLowerCase()))) continue
     // Undirected for layout purposes: A->B and B->A are one spring.
     const key = link.source < link.target ? `${link.source}\u0000${link.target}` : `${link.target}\u0000${link.source}`
     const seen = byPair.get(key)
@@ -390,12 +410,22 @@ function graph(autoProperty: string | null): GraphData {
   }
   const edges = [...byPair.values()]
 
-  const nodes: GraphNode[] = rows.map((row) => ({
-    path: row.path,
-    name: row.name.replace(/\.md$/i, ''),
-    title: row.title,
-    degree: degree.get(row.path) ?? 0,
-  }))
+  const nodes: GraphNode[] = [
+    ...rows.map((row) => ({
+      path: row.path,
+      name: row.name.replace(/\.md$/i, ''),
+      title: row.title,
+      degree: degree.get(row.path) ?? 0,
+      topic: row.path.toLowerCase().startsWith('topics/'),
+    })),
+    ...[...topics.values()].map((id) => ({
+      path: id,
+      name: id.slice('topics/'.length),
+      title: null,
+      degree: degree.get(id) ?? 0,
+      topic: true,
+    })),
+  ]
 
   return { nodes, edges }
 }
@@ -649,6 +679,15 @@ function handle(request: IndexRequest): IndexResponse {
     }
     case 'home-stats':
       return { kind: 'home-stats-result', stats: vaultUsage() }
+    case 'link-sources':
+      return {
+        kind: 'link-sources-result',
+        paths: (
+          requireDb()
+            .prepare('SELECT DISTINCT source_path AS path FROM links WHERE lower(target_text) = lower(?) ORDER BY source_path')
+            .all(request.target) as { path: string }[]
+        ).map((r) => r.path),
+      }
     case 'autolink-graph': {
       const handleDb = requireDb()
       return {

@@ -1,7 +1,7 @@
 import { formatChord } from '../core/hotkeys'
 import { viewTitle } from '../core/view-registry'
 import type { Workspace } from '../core/workspace'
-import { AutolinkNotice } from './AutolinkNotice'
+import { TopicsNotice } from './TopicsNotice'
 import { Icon } from './Icon'
 import { Tip } from './Tip'
 
@@ -36,7 +36,7 @@ export function StatusBar({
       <span className="status__sep" />
       <span className="status__item">{leaf ? viewTitle(leaf.type, leaf.state) : 'Nothing open'}</span>
       <span className="status__spacer" />
-      <AutolinkNotice />
+      <TopicsNotice />
       <Tip label="Today's note" hint={formatChord('Mod+Shift+D')} placement="top">
         <button className="status__btn" onClick={onOpenDaily} aria-label="Daily note">
           <Icon name="calendar-days" size={13} />

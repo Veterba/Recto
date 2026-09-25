@@ -24,11 +24,16 @@ const NOT_A_NOTE = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i
 const normalize = (value: string): string =>
   value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
 
-/** Does this link target refer to `path`? */
-function pointsAt(target: string, path: string): boolean {
+/**
+ * Does this link target refer to `path`? With `exact`, only a link that spells
+ * out the whole path does - how a topic (`topics/Python`) is renamed without
+ * touching `[[Python]]`, which names an ordinary note.
+ */
+function pointsAt(target: string, path: string, exact = false): boolean {
   const cleanTarget = normalize(target.replace(/\\/g, '/').replace(/^\.\//, '').trim())
   const cleanPath = normalize(path)
   if (cleanTarget === cleanPath) return true
+  if (exact) return false
   // A bare name matches the note's filename.
   const basename = cleanPath.slice(cleanPath.lastIndexOf('/') + 1)
   if (!cleanTarget.includes('/') && cleanTarget === basename) return true
@@ -92,7 +97,7 @@ export type RewriteResult = { text: string; count: number }
  * Rewrite every link in `text` that points at `oldPath` so it points at
  * `newPath`. Returns the new text and how many links changed.
  */
-export function rewriteWikiLinks(text: string, oldPath: string, newPath: string): RewriteResult {
+export function rewriteWikiLinks(text: string, oldPath: string, newPath: string, exact = false): RewriteResult {
   const lines = text.split(/\r?\n/)
   let count = 0
   let inCode = false
@@ -105,7 +110,7 @@ export function rewriteWikiLinks(text: string, oldPath: string, newPath: string)
     if (inCode) return line
 
     const wiki = line.replace(WIKILINK, (whole, target: string, heading = '', alias = '') => {
-      if (!pointsAt(target, oldPath)) return whole
+      if (!pointsAt(target, oldPath, exact)) return whole
       count++
       // Leading/trailing spaces inside the brackets are preserved so the
       // rewrite is as small an edit as possible.
@@ -116,7 +121,7 @@ export function rewriteWikiLinks(text: string, oldPath: string, newPath: string)
 
     return wiki.replace(MARKDOWN_LINK, (whole, text: string, url: string) => {
       const parsed = splitUrl(url)
-      if (parsed === null || !pointsAt(parsed.path, oldPath)) return whole
+      if (parsed === null || !pointsAt(parsed.path, oldPath, exact)) return whole
       count++
       const replaced = replacementTarget(parsed.path, oldPath, newPath)
       // A link written with `%20` keeps its encoding; one written with plain

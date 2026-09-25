@@ -12,10 +12,10 @@ export type StateRow = {
   ownWords: number
   evaluatedAt: number | null
   embeddedMtime: number | null
-  suggested: { target: string; score: number; reason: string }[]
 }
 
-export type Match = { path: string; sem: number; bestChunk: number }
+/** A topic centroid, cached with a key of its membership so a change invalidates it. */
+export type CentroidRow = { id: string; members: string; vector: number[] }
 
 export type EmbedRequest =
   | { kind: 'open'; dbPath: string; modelDir: string }
@@ -25,14 +25,13 @@ export type EmbedRequest =
   | { kind: 'state-put'; rows: (Partial<StateRow> & { path: string })[] }
   | { kind: 'meta-get'; key: string }
   | { kind: 'meta-set'; key: string; value: string | null }
-  /** Targets for `path`, from `allowed`, best first; `include` always comes back. */
-  | { kind: 'similar'; path: string; allowed: string[]; include: string[]; top: number }
-  /** Sources that `path` would suit, from `allowed`: sem(source -> path). */
-  | { kind: 'reverse'; path: string; allowed: string[]; top: number }
-  /** sem for each [source, target] pair: the vault's chance similarity. */
-  | { kind: 'sample'; pairs: [string, string][] }
-  /** Mean chunk vector per note, for spotting near-duplicates. */
-  | { kind: 'means'; paths: string[] }
+  /** Centred note vectors (see topics/vectors), for the notes that have chunks. */
+  | { kind: 'note-vectors'; paths: string[] }
+  /** Words embedded like a chunk and centred the same way, to compare with note vectors. */
+  | { kind: 'term-vectors'; terms: string[] }
+  | { kind: 'centroids-get' }
+  /** Replaces the whole cache. */
+  | { kind: 'centroids-put'; rows: CentroidRow[] }
   | { kind: 'stats' }
 
 export type EmbedResponse =
@@ -40,8 +39,8 @@ export type EmbedResponse =
   | { kind: 'embedded'; mean: number[] | null; computed: number }
   | { kind: 'state'; rows: StateRow[] }
   | { kind: 'meta'; value: string | null }
-  | { kind: 'matches'; matches: Match[] }
-  | { kind: 'sems'; sems: number[] }
-  | { kind: 'means'; means: Record<string, number[]> }
+  | { kind: 'note-vectors'; vectors: Record<string, number[]> }
+  | { kind: 'term-vectors'; vectors: number[][] }
+  | { kind: 'centroids'; rows: CentroidRow[] }
   | { kind: 'stats'; notes: number; chunks: number; rss: number }
   | { kind: 'error'; message: string }

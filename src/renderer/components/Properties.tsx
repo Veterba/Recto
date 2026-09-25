@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import type { LinkCandidate } from '../editor/link-complete'
+import { TOPIC_PREFIX, TOPICS_PROPERTY } from '@shared/topics'
+import { linksIn, writeLinks } from '../core/link-property'
 import { Icon } from './Icon'
 import { LinkInput } from './LinkInput'
 import { Tip } from './Tip'
@@ -169,6 +171,29 @@ function LinkValue({
   )
 }
 
+/**
+ * `topics`, as chips: the topic's name without the `topics/` it is stored
+ * under, in the dashed style of anything the machine wrote. × takes the topic
+ * off this note - and the machine never gives it back.
+ */
+function TopicChips({ links, onRemove }: { links: string[]; onRemove: (link: string) => void }): React.ReactElement {
+  return (
+    <div className="prop__topics">
+      {links.map((link) => {
+        const label = link.toLowerCase().startsWith(TOPIC_PREFIX) ? link.slice(TOPIC_PREFIX.length) : link
+        return (
+          <span className="prop__topic" key={link}>
+            {label}
+            <button className="prop__topic-x" aria-label={`Remove topic ${label}`} onClick={() => onRemove(link)}>
+              <Icon name="x" size={10} />
+            </button>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 /** Editing widget per type; text is the fallback for anything else. */
 function ValueEditor({
   field,
@@ -324,12 +349,21 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates }: Pr
                 )}
               </span>
 
-              <ValueEditor
-                field={field}
-                onChange={(value) => onChange(setField(text, field.key, value))}
-                onOpenLink={onOpenLink}
-                getCandidates={getLinkCandidates}
-              />
+              {field.key === TOPICS_PROPERTY ? (
+                <TopicChips
+                  links={linksIn(text, TOPICS_PROPERTY)}
+                  onRemove={(link) =>
+                    onChange(writeLinks(text, TOPICS_PROPERTY, linksIn(text, TOPICS_PROPERTY).filter((l) => l !== link)))
+                  }
+                />
+              ) : (
+                <ValueEditor
+                  field={field}
+                  onChange={(value) => onChange(setField(text, field.key, value))}
+                  onOpenLink={onOpenLink}
+                  getCandidates={getLinkCandidates}
+                />
+              )}
 
               <Tip label={`Remove “${field.key}”`}>
                 <button

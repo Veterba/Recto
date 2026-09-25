@@ -133,3 +133,38 @@ describe('markdown links', () => {
     expect(run('```\n[a](Atomic Habits.md)\n```').text).toBe('```\n[a](Atomic Habits.md)\n```')
   })
 })
+
+describe('renaming a topic never touches links to real notes (regression)', () => {
+  /**
+   * The bug: renaming the topic `Python` rewrote every link whose bare name
+   * was `Python` - including `[[Python]]`, a link to an ordinary note of that
+   * name - because a bare name matches any note's filename. A topic rename is
+   * exact: only links that spell out `topics/Python` move.
+   */
+  const text = [
+    '---',
+    'topics: ["[[topics/Python]]"]',
+    '---',
+    'Read [[Python]] and [[Python|the language]] and [[Python#Syntax]].',
+    'Also [Python](Python.md) and [the topic](topics/Python.md) and [[topics/Python|topic]].',
+  ].join('\n')
+
+  it('rewrites only the topic links', () => {
+    const { text: out, count } = rewriteWikiLinks(text, 'topics/Python.md', 'topics/Python 3.md', true)
+    expect(count).toBe(3)
+    expect(out).toBe(
+      [
+        '---',
+        'topics: ["[[topics/Python 3]]"]',
+        '---',
+        'Read [[Python]] and [[Python|the language]] and [[Python#Syntax]].',
+        'Also [Python](Python.md) and [the topic](topics/Python 3.md) and [[topics/Python 3|topic]].',
+      ].join('\n'),
+    )
+  })
+
+  it('a note rename still follows bare names, as before', () => {
+    const { count } = rewriteWikiLinks('See [[Python]].', 'Programming/Python.md', 'Programming/Py.md')
+    expect(count).toBe(1)
+  })
+})

@@ -1,0 +1,11 @@
+Topic-naming dictionaries
+
+ru-en.json.gz, nb-en.json.gz and nb-lemma.json.gz are derived from the English
+Wiktionary (https://en.wiktionary.org), via the machine-readable extracts at
+https://kaikki.org (Tatu Ylonen, "Wiktextract: Wiktionary as Machine-Readable
+Structured Data", LREC 2022). They are built by scripts/build-dictionaries.mjs.
+
+Wiktionary content is available under the Creative Commons Attribution-ShareAlike
+4.0 license (https://creativecommons.org/licenses/by-sa/4.0/) and the GNU Free
+Documentation License. These derived tables are distributed under CC BY-SA 4.0;
+the rest of Recto's code is not affected by that license.

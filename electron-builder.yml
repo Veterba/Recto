@@ -32,6 +32,8 @@ files:
   # runtime nothing here loads. Nor are other platforms' ORT binaries.
   - '!node_modules/onnxruntime-web/**'
   - '!node_modules/onnxruntime-node/bin/napi-v6/{linux,win32}/**'
+  # Az.js (Russian lemmas) needs its dist/ and dicts/; the rest is its demo site and tests.
+  - '!node_modules/az/{demo,src,test,coverage.html}'
 
 # better-sqlite3 is a compiled binary. Node cannot dlopen a .node file from
 # inside an asar archive, so the native parts stay unpacked on disk.
@@ -44,6 +46,12 @@ asarUnpack:
   - node_modules/onnxruntime-node/**
   - node_modules/sharp/**
   - node_modules/@img/**
+
+# Topic naming's dictionaries (Wiktionary, CC BY-SA - see resources/dictionaries/NOTICE)
+# sit beside the app, read from process.resourcesPath.
+extraResources:
+  - from: resources/dictionaries
+    to: dictionaries
 
 afterPack: build/adhoc-sign.cjs
 

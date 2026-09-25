@@ -3,7 +3,7 @@
  * Every channel the renderer can reach is listed here and nowhere else.
  */
 
-import type { AutolinkAdded, AutolinkSettings, AutolinkStatus, AutolinkSuggestions, PreviewLink } from './autolinks'
+import type { TopicInfo, TopicsPreview, TopicsRunNotice, TopicsSettings, TopicsStatus } from './topics'
 
 export const VAULT_STATE_DIR = '.recto'
 
@@ -155,12 +155,10 @@ export type IpcEvents = {
   'ai:delta': (delta: AiDelta) => void
   'ai:done': (done: AiDone) => void
   'ai:error': (error: AiError) => void
-  /** Model download, backfill and calibration progress. */
-  'autolinks:status': (status: AutolinkStatus) => void
-  /** These notes have new suggestions. */
-  'autolinks:changed': (paths: string[]) => void
-  /** Auto just wrote links into a note - for the status-bar notice. */
-  'autolinks:added': (added: AutolinkAdded) => void
+  /** Model download, backfill and the first-run review. */
+  'topics:status': (status: TopicsStatus) => void
+  /** A run wrote something - for the status-bar notice with Undo. */
+  'topics:run': (run: TopicsRunNotice) => void
 }
 
 export type IpcEventChannel = keyof IpcEvents
@@ -172,9 +170,8 @@ export const IPC_EVENT_CHANNELS: readonly IpcEventChannel[] = [
   'ai:delta',
   'ai:done',
   'ai:error',
-  'autolinks:status',
-  'autolinks:changed',
-  'autolinks:added',
+  'topics:status',
+  'topics:run',
 ] as const
 
 /** Invoke channels: renderer -> main, request/response. */
@@ -292,24 +289,22 @@ export type IpcApi = {
   'obsidian:disable': () => ObsidianSyncStatus
   /** Run a pass now. `force` runs one the deletion guard stopped. */
   'obsidian:sync-now': (force?: boolean) => ObsidianSyncStatus
-  'autolinks:settings': () => AutolinkSettings
-  'autolinks:set-settings': (patch: Partial<AutolinkSettings>) => AutolinkSettings
-  'autolinks:status': () => AutolinkStatus
-  'autolinks:download': () => { ok: boolean }
-  'autolinks:calibrate': () => { ok: boolean; error?: string }
-  'autolinks:clear-rejections': () => { ok: boolean }
-  'autolinks:suggestions': (path: string) => AutolinkSuggestions
-  /** A chip was clicked and the renderer has written the link into the note. */
-  'autolinks:accept': (source: string, target: string) => { ok: boolean }
-  'autolinks:reject': (source: string, target: string) => { ok: boolean }
-  /** Take back links Auto just added; they count as rejections. */
-  'autolinks:undo': (source: string, targets: string[]) => { ok: boolean }
-  /** Remove what the most recent Auto run wrote; counts as rejections. */
-  'autolinks:undo-last-run': () => { ok: boolean; removed: number }
-  /** What Auto's first run would write, computed without writing. */
-  'autolinks:preview': () => { notes: number; links: PreviewLink[] }
+  'topics:settings': () => TopicsSettings
+  'topics:set-settings': (patch: Partial<TopicsSettings>) => TopicsSettings
+  'topics:status': () => TopicsStatus
+  'topics:download': () => { ok: boolean }
+  'topics:list': () => TopicInfo[]
+  /** Rewrites every `[[topics/Old]]` to the new name; never renamed automatically after. */
+  'topics:rename': (id: string, name: string) => { ok: boolean; error?: string }
+  /** Out of every note, and never created again. */
+  'topics:delete': (id: string) => { ok: boolean }
+  'topics:rebuild': () => { ok: boolean }
+  /** What the next run would write, computed without writing. */
+  'topics:preview': () => TopicsPreview
   /** Settings has shown the first-run line; the next scheduled run may write. */
-  'autolinks:seen': () => { ok: boolean }
+  'topics:seen': () => { ok: boolean }
+  /** Reverse the most recent run: added topics come out (and are blocked), removed entries go back. */
+  'topics:undo-last-run': () => { ok: boolean; changes: number }
 }
 
 /** One archived item. `originalPath` is where restore puts it back. */
@@ -329,7 +324,8 @@ export type ArchiveState = {
 }
 
 /** The link graph, for the graph view. */
-export type GraphNodeInfo = { path: string; name: string; title: string | null; degree: number }
+/** `topic`: drawn as a hollow circle, and has no note to open. */
+export type GraphNodeInfo = { path: string; name: string; title: string | null; degree: number; topic: boolean }
 /** `auto`: the pair is linked only through the auto-links property. */
 export type GraphEdgeInfo = { source: string; target: string; auto: boolean }
 export type GraphInfo = { nodes: GraphNodeInfo[]; edges: GraphEdgeInfo[] }
@@ -466,17 +462,15 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'obsidian:enable',
   'obsidian:disable',
   'obsidian:sync-now',
-  'autolinks:settings',
-  'autolinks:set-settings',
-  'autolinks:status',
-  'autolinks:download',
-  'autolinks:calibrate',
-  'autolinks:clear-rejections',
-  'autolinks:suggestions',
-  'autolinks:accept',
-  'autolinks:reject',
-  'autolinks:undo',
-  'autolinks:preview',
-  'autolinks:seen',
-  'autolinks:undo-last-run',
+  'topics:settings',
+  'topics:set-settings',
+  'topics:status',
+  'topics:download',
+  'topics:list',
+  'topics:rename',
+  'topics:delete',
+  'topics:rebuild',
+  'topics:preview',
+  'topics:seen',
+  'topics:undo-last-run',
 ] as const
