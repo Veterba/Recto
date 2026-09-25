@@ -768,7 +768,11 @@ export function draw(
   // --- labels, culled by zoom and crowding --------------------------------
   //
   // Text rendering is what actually kills naive graph views, not the physics.
-  if (state.showLabels) {
+  //
+  // While the veil is up its own labels are the only text: these fade out as
+  // it fades in, or every lit note would be named twice, a size apart.
+  const veiled = focus !== null && focus.size > 0 ? focusFade : 0
+  if (state.showLabels && veiled < 0.998) {
     const fontSize = look.label.size * Math.max(0.82, Math.min(1.2, camera.zoom))
     context.font = `${fontSize}px -apple-system, system-ui, sans-serif`
     context.textAlign = 'center'
@@ -799,7 +803,7 @@ export function draw(
       if (sx < 0 || sy < 0 || sx > width || sy > height) continue
 
       const r = radiusIn(look, node.degree) * zoomScale
-      context.globalAlpha = isActive || isHovered ? 1 : 0.8 * fade
+      context.globalAlpha = (isActive || isHovered ? 1 : 0.8 * fade) * (1 - veiled)
       context.fillStyle = isActive ? palette.labelActive : surface.label
       context.fillText(fitLabel(context, node.label, fontSize * 16), sx, sy + (isActive ? r * 1.6 : r) + 4)
     }
