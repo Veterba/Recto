@@ -342,7 +342,7 @@ export function registerIpc(): void {
     return response.kind === 'unresolved-result' ? response.entries : []
   })
   handle('index:graph', async () => {
-    const response = await send({ kind: 'graph' }, 30_000)
+    const response = await send({ kind: 'graph', autoProperty: autolinks.readSettings().property }, 30_000)
     return response.kind === 'graph-result' ? response.graph : { nodes: [], edges: [] }
   })
   handle('index:board', async (board) => {

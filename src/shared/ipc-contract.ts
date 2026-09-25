@@ -330,7 +330,8 @@ export type ArchiveState = {
 
 /** The link graph, for the graph view. */
 export type GraphNodeInfo = { path: string; name: string; title: string | null; degree: number }
-export type GraphEdgeInfo = { source: string; target: string }
+/** `auto`: the pair is linked only through the auto-links property. */
+export type GraphEdgeInfo = { source: string; target: string; auto: boolean }
 export type GraphInfo = { nodes: GraphNodeInfo[]; edges: GraphEdgeInfo[] }
 
 /**

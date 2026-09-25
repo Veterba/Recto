@@ -15,7 +15,8 @@ export type SearchHit = {
 
 /** The link graph. Degree is precomputed so the renderer can size nodes. */
 export type GraphNode = { path: string; name: string; title: string | null; degree: number }
-export type GraphEdge = { source: string; target: string }
+/** `auto`: every link between the pair is in the auto-links property. */
+export type GraphEdge = { source: string; target: string; auto: boolean }
 export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[] }
 
 export type Backlink = {
@@ -89,7 +90,7 @@ export type IndexRequest =
   | { kind: 'resolve-link'; target: string }
   | { kind: 'resolve-links'; targets: string[] }
   | { kind: 'unresolved' }
-  | { kind: 'graph' }
+  | { kind: 'graph'; autoProperty?: string }
   | { kind: 'board'; board: string }
   | { kind: 'boards' }
   | { kind: 'context' }

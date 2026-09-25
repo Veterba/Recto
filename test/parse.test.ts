@@ -118,11 +118,21 @@ describe('links in frontmatter', () => {
     ])
   })
 
+  it('knows which property a link sits under, block lists included', () => {
+    const parsed = parseNote('---\nLinks: "[[mine]]"\nrelated:\n  - "[[auto a]]"\n- "[[auto b]]"\ntitle: x\n---\nBody [[body]]')
+    expect(parsed.links.map((l) => [l.target, l.property ?? null])).toEqual([
+      ['mine', 'Links'],
+      ['auto a', 'related'],
+      ['auto b', 'related'],
+      ['body', null],
+    ])
+  })
+
   it('reads links from a list property, with headings and aliases', () => {
     const parsed = parseNote('---\nrefs: ["[[a#Intro|first]]", "[[b]]"]\n---\n')
     expect(parsed.links).toEqual([
-      { target: 'a', heading: 'Intro', alias: 'first', line: 1 },
-      { target: 'b', heading: null, alias: null, line: 1 },
+      { target: 'a', heading: 'Intro', alias: 'first', line: 1, property: 'refs' },
+      { target: 'b', heading: null, alias: null, line: 1, property: 'refs' },
     ])
   })
 

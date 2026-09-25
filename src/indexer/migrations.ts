@@ -185,6 +185,17 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE TABLE autolink_meta (key TEXT PRIMARY KEY, value TEXT);
     `,
   },
+  {
+    version: 7,
+    name: 'link-property',
+    sql: `
+      -- The frontmatter key a link sits under (null in the body), so the graph
+      -- can draw links from the auto-links property apart from the user's own.
+      -- Every note is re-parsed once to fill it, like migration 5.
+      ALTER TABLE links ADD COLUMN property TEXT;
+      UPDATE notes SET mtime = -1;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

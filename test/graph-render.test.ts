@@ -210,3 +210,65 @@ describe('the open note does not hide the rest', () => {
     expect(strokes[0]).toBe(0.55)
   })
 })
+
+describe('auto-links are drawn apart from the links you wrote', () => {
+  /** Records the dash and width of every stroke. */
+  function dashContext(): { context: CanvasRenderingContext2D; strokes: { dash: number[]; width: number }[] } {
+    const strokes: { dash: number[]; width: number }[] = []
+    let dash: number[] = []
+    const fake = {
+      globalAlpha: 1,
+      lineWidth: 1,
+      clearRect: (): void => {},
+      fillRect: (): void => {},
+      beginPath: (): void => {},
+      moveTo: (): void => {},
+      lineTo: (): void => {},
+      quadraticCurveTo: (): void => {},
+      arc: (): void => {},
+      fillText: (): void => {},
+      measureText: (): { width: number } => ({ width: 10 }),
+      fill: (): void => {},
+      setLineDash: (next: number[]): void => {
+        dash = [...next]
+      },
+      stroke: (): void => {
+        strokes.push({ dash, width: fake.lineWidth })
+      },
+    }
+    return { context: fake as unknown as CanvasRenderingContext2D, strokes }
+  }
+
+  const palette: Palette = {
+    edge: '#999',
+    edgeActive: '#00f',
+    node: '#999',
+    nodeActive: '#00f',
+    nodeOrphan: '#ccc',
+    label: '#333',
+    labelActive: '#000',
+  }
+  const base = {
+    ...stateWith([0, 0, 40, 0, 80, 0], { x: 40, y: 0, zoom: 1 }, [1, 2, 1]),
+    edges: [[0, 1], [1, 2]] as [number, number][],
+    autoEdges: new Set([1]),
+    showLabels: false,
+  }
+
+  it('draws auto-links thinner and dashed, manual links solid', () => {
+    const { context, strokes } = dashContext()
+    draw(context, base, palette, WIDTH, HEIGHT)
+    const solid = strokes.filter((s) => s.dash.length === 0)
+    const dashed = strokes.filter((s) => s.dash.length > 0)
+    expect(solid.length).toBeGreaterThan(0)
+    expect(dashed).toHaveLength(1)
+    expect(dashed[0]!.width).toBeLessThan(solid[0]!.width)
+  })
+
+  it('keeps them dashed under the hover veil', () => {
+    const { context, strokes } = dashContext()
+    draw(context, { ...base, focus: new Set([0, 1, 2]), focusFade: 1 }, palette, WIDTH, HEIGHT)
+    // Once in the ordinary pass, once more over the veil.
+    expect(strokes.filter((s) => s.dash.length > 0)).toHaveLength(2)
+  })
+})

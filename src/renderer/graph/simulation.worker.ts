@@ -34,7 +34,10 @@ import {
  */
 
 type Node = SimulationNodeDatum & { index: number; degree: number }
-type Link = SimulationLinkDatum<Node>
+/** `weak`: an auto-link, pulled at half strength. */
+type Link = SimulationLinkDatum<Node> & { weak?: boolean }
+
+const AUTO_LINK_STRENGTH = 0.5
 
 /**
  * `self` inside a worker, typed narrowly.
@@ -150,6 +153,7 @@ function build(
   groups: number[],
   sizing: Sizing,
   seed?: Float32Array,
+  auto: readonly number[] = [],
 ): void {
   simulation?.stop()
 
@@ -197,8 +201,14 @@ function build(
   // and back for the rest of its life.
   buffer = new Float32Array(count * 2)
 
-  const valid = edges.filter(([a, b]) => a < count && b < count)
-  const links: Link[] = valid.map(([a, b]) => ({ source: nodes[a]!, target: nodes[b]! }))
+  const weak = new Set(auto)
+  const links: Link[] = []
+  const valid: [number, number][] = []
+  edges.forEach(([a, b], i) => {
+    if (a >= count || b >= count) return
+    valid.push([a, b])
+    links.push({ source: nodes[a]!, target: nodes[b]!, weak: weak.has(i) })
+  })
 
   current = { edges: valid, tunables, layout, groups, sizing, targets: null }
 
@@ -287,7 +297,9 @@ function tuneLinks(): void {
       const b = (l.target as Node).degree
       const share = 1 / Math.max(1, Math.min(a, b))
       const same = groups[(l.source as Node).index] === groups[(l.target as Node).index]
-      const base = tunables.linkStrength * share * (targets?.links ?? 1) * (same ? 1 : cross)
+      // Auto-links pull at half strength: the links the user wrote stay the
+      // shape of the graph however many auto-links accumulate around them.
+      const base = tunables.linkStrength * share * (targets?.links ?? 1) * (same ? 1 : cross) * (l.weak === true ? AUTO_LINK_STRENGTH : 1)
       return leashed(l) ? Math.max(base, 0.4) : base
     })
 }
@@ -395,7 +407,7 @@ function handle(event: MessageEvent<WorkerRequest & { positions?: Float32Array }
 
   switch (message.kind) {
     case 'start':
-      build(message.count, message.edges, message.tunables, message.layout, message.groups, message.sizing, message.seed)
+      build(message.count, message.edges, message.tunables, message.layout, message.groups, message.sizing, message.seed, message.auto)
       break
 
     case 'tunables':

@@ -81,6 +81,11 @@ export type RenderState = {
    * that close loops - faintly, or they cross the whole picture and hide it.
    */
   treeEdges?: ReadonlySet<number> | null
+  /**
+   * Links only the auto-links property makes, by edge index. Drawn thinner and
+   * dashed, so the links the user wrote stay the visible structure.
+   */
+  autoEdges?: ReadonlySet<number>
   treeDirection?: 'down' | 'up' | 'left' | 'right' | 'out' | null
   /** In the circle layout: bow every link toward the centre, like a chord diagram. */
   bundle?: boolean
@@ -418,6 +423,10 @@ export function draw(
   /** Links outside the tree, in a tree layout. */
   const loops = new Map<string, number[]>()
   const lit: number[] = []
+  /** Auto-links: their own batches, drawn thin and dashed. */
+  const dashed = new Map<string, number[]>()
+  const litDashed: number[] = []
+  const autoEdges = state.autoEdges
   const flow = state.treeEdges != null ? (state.treeDirection ?? null) : null
   const bundleAt = ((): { x: number; y: number; r: number } | null => {
     if (state.bundle !== true || nodes.length === 0) return null
@@ -452,12 +461,13 @@ export function draw(
       return
     }
     visibleEdges.push(index)
+    const auto = autoEdges?.has(index) === true
     if (highlighting && (a === active || b === active)) {
-      lit.push(x1, y1, x2, y2)
+      ;(auto ? litDashed : lit).push(x1, y1, x2, y2)
       return
     }
     const colour = edgeColour(a, b)
-    const target = state.treeEdges != null && !state.treeEdges.has(index) ? loops : plain
+    const target = auto ? dashed : state.treeEdges != null && !state.treeEdges.has(index) ? loops : plain
     let batch = target.get(colour)
     if (batch === undefined) {
       batch = []
@@ -466,11 +476,19 @@ export function draw(
     batch.push(x1, y1, x2, y2)
   })
 
-  const strokeBatch = (coords: number[], colour: string, alpha: number, lineWidth: number, branches = false): void => {
+  const strokeBatch = (
+    coords: number[],
+    colour: string,
+    alpha: number,
+    lineWidth: number,
+    branches = false,
+    dash: readonly number[] = [],
+  ): void => {
     if (coords.length === 0) return
     context.globalAlpha = alpha
     context.strokeStyle = colour
     context.lineWidth = lineWidth
+    context.setLineDash?.(dash)
     context.beginPath()
     for (let i = 0; i < coords.length; i += 4) {
       const x1 = coords[i] ?? 0
@@ -509,7 +527,14 @@ export function draw(
   // them by how many there are, so the bundles show.
   const chordFade = bundleAt === null ? 1 : Math.min(1, 220 / Math.max(1, edges.length)) ** 0.6
   for (const [colour, coords] of plain) strokeBatch(coords, colour, look.edge.opacity * chordFade, edgeWidth, flow !== null)
+  // Auto-links: 0.6 of the width and a short dash, in screen pixels so the
+  // rhythm reads the same at every zoom.
+  const autoWidth = Math.max(0.5, edgeWidth * 0.6)
+  const autoDash = [Math.max(2, 3 * autoWidth), Math.max(2, 3 * autoWidth)]
+  for (const [colour, coords] of dashed) strokeBatch(coords, colour, look.edge.opacity * chordFade, autoWidth, flow !== null, autoDash)
   strokeBatch(lit, palette.edgeActive, Math.max(0.9, look.edge.opacity), edgeWidth + 0.5, flow !== null)
+  strokeBatch(litDashed, palette.edgeActive, Math.max(0.9, look.edge.opacity), autoWidth + 0.5, flow !== null, autoDash)
+  context.setLineDash?.([])
 
   // --- arrows, pointing at the note a link goes to ---------------------------
   if (look.edge.arrows && camera.zoom > 0.35 && visibleEdges.length < 4000) {
@@ -692,16 +717,23 @@ export function draw(
     }
     context.globalAlpha = 0.9 * focusFade
     context.strokeStyle = surface.edge
-    context.lineWidth = Math.max(1, edgeWidth * zoomScale)
-    context.beginPath()
-    for (const [a, b] of edges) {
-      if (!focus.has(a) || !focus.has(b)) continue
-      const [x1, y1] = worldToScreen(camera, positions[a * 2] ?? 0, positions[a * 2 + 1] ?? 0, width, height)
-      const [x2, y2] = worldToScreen(camera, positions[b * 2] ?? 0, positions[b * 2 + 1] ?? 0, width, height)
-      context.moveTo(x1, y1)
-      context.lineTo(x2, y2)
+    // Manual links solid, auto-links thin and dashed - the same distinction
+    // the veil is lifted off, or hovering would make every link look manual.
+    for (const autoPass of [false, true]) {
+      const focusWidth = Math.max(1, edgeWidth * zoomScale)
+      context.lineWidth = autoPass ? Math.max(0.5, focusWidth * 0.6) : focusWidth
+      context.setLineDash?.(autoPass ? [Math.max(2, 3 * focusWidth * 0.6), Math.max(2, 3 * focusWidth * 0.6)] : [])
+      context.beginPath()
+      edges.forEach(([a, b], index) => {
+        if (!focus.has(a) || !focus.has(b) || (autoEdges?.has(index) === true) !== autoPass) return
+        const [x1, y1] = worldToScreen(camera, positions[a * 2] ?? 0, positions[a * 2 + 1] ?? 0, width, height)
+        const [x2, y2] = worldToScreen(camera, positions[b * 2] ?? 0, positions[b * 2 + 1] ?? 0, width, height)
+        context.moveTo(x1, y1)
+        context.lineTo(x2, y2)
+      })
+      context.stroke()
     }
-    context.stroke()
+    context.setLineDash?.([])
     for (let k = 0; k < lit.length; k += 4) {
       const i = lit[k]!
       paint(i === active ? palette.nodeActive : (nodeColours[i] ?? surface.node), [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!], focusFade)

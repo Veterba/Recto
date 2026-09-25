@@ -15,6 +15,11 @@ export type WikiLink = {
   heading: string | null
   alias: string | null
   line: number
+  /**
+   * The frontmatter key the link sits under, or null for a link in the body.
+   * The graph uses it to tell the auto-links property from links the user wrote.
+   */
+  property?: string | null
 }
 
 export type Heading = { text: string; level: number; line: number }
@@ -143,11 +148,21 @@ export function parseNote(content: string): ParsedNote {
    * Line numbers are the file's own (frontmatter starts after the opening
    * fence on line 0), so backlink context points at the right line.
    */
+  // A key line starts a field; indented and `- item` lines continue it.
+  let key: string | null = null
   yaml.forEach((line, index) => {
+    const own = /^([^\s#-][^:]*):/.exec(line)
+    if (own !== null) key = own[1]!.trim()
     for (const match of line.matchAll(WIKILINK)) {
       const target = match[1]?.trim()
       if (target === undefined || target === '') continue
-      links.push({ target, heading: match[2]?.trim() ?? null, alias: match[3]?.trim() ?? null, line: index + 1 })
+      links.push({
+        target,
+        heading: match[2]?.trim() ?? null,
+        alias: match[3]?.trim() ?? null,
+        line: index + 1,
+        property: key,
+      })
     }
   })
 

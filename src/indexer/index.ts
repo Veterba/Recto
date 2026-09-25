@@ -115,14 +115,14 @@ function writeNote(relative: string, content: string, mtime: number, size: numbe
   }
 
   const insertLink = handle.prepare(
-    'INSERT INTO links (source_path, target_text, target_path, heading, alias, line, context) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO links (source_path, target_text, target_path, heading, alias, line, context, property) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   )
   const bodyLines = parsed.body.split('\n')
   for (const link of parsed.links) {
     // Trim the context: a backlinks row shows a sentence, not a paragraph.
     const raw = bodyLines[link.line] ?? ''
     const context = raw.trim().slice(0, 300)
-    insertLink.run(relative, link.target, null, link.heading, link.alias, link.line, context)
+    insertLink.run(relative, link.target, null, link.heading, link.alias, link.line, context, link.property ?? null)
   }
 
   const insertTag = handle.prepare('INSERT INTO tags (path, tag, line) VALUES (?, ?, ?)')
@@ -349,7 +349,12 @@ function resolveOne(target: string): string | null {
  * treats a duplicated edge as a stronger spring and two notes that link each
  * other five times are not five times closer.
  */
-function graph(): GraphData {
+/**
+ * @param autoProperty the auto-links property. A pair is an auto edge when
+ * every link between the two notes, either way, sits in that property; one
+ * link the user wrote makes it theirs.
+ */
+function graph(autoProperty: string | null): GraphData {
   const handleDb = requireDb()
 
   const rows = handleDb.prepare('SELECT path, name, title FROM notes ORDER BY path').all() as {
@@ -359,25 +364,31 @@ function graph(): GraphData {
   }[]
 
   const links = handleDb
-    .prepare('SELECT DISTINCT source_path AS source, target_path AS target FROM links WHERE target_path IS NOT NULL')
-    .all() as { source: string; target: string }[]
+    .prepare(
+      `SELECT source_path AS source, target_path AS target, MAX(COALESCE(property, '') <> ?) AS manual
+       FROM links WHERE target_path IS NOT NULL GROUP BY source_path, target_path`,
+    )
+    .all(autoProperty ?? '\u0000') as { source: string; target: string; manual: number }[]
 
   const known = new Set(rows.map((row) => row.path))
   const degree = new Map<string, number>()
-  const seen = new Set<string>()
-  const edges: GraphEdge[] = []
+  const byPair = new Map<string, GraphEdge>()
 
   for (const link of links) {
     if (link.source === link.target) continue
     if (!known.has(link.source) || !known.has(link.target)) continue
     // Undirected for layout purposes: A->B and B->A are one spring.
     const key = link.source < link.target ? `${link.source}\u0000${link.target}` : `${link.target}\u0000${link.source}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    edges.push({ source: link.source, target: link.target })
+    const seen = byPair.get(key)
+    if (seen !== undefined) {
+      if (link.manual === 1) seen.auto = false
+      continue
+    }
+    byPair.set(key, { source: link.source, target: link.target, auto: link.manual === 0 })
     degree.set(link.source, (degree.get(link.source) ?? 0) + 1)
     degree.set(link.target, (degree.get(link.target) ?? 0) + 1)
   }
+  const edges = [...byPair.values()]
 
   const nodes: GraphNode[] = rows.map((row) => ({
     path: row.path,
@@ -610,7 +621,7 @@ function handle(request: IndexRequest): IndexResponse {
     case 'unresolved':
       return { kind: 'unresolved-result', entries: unresolved() }
     case 'graph':
-      return { kind: 'graph-result', graph: graph() }
+      return { kind: 'graph-result', graph: graph(request.autoProperty ?? null) }
     case 'board':
       return { kind: 'board-result', cards: board(request.board) }
     case 'boards':

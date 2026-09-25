@@ -47,6 +47,11 @@ export type WorkerRequest =
       kind: 'start'
       count: number
       edges: [number, number][]
+      /**
+       * Indices into `edges` of auto-links: pulled at half strength, so the
+       * links the user wrote stay the shape of the graph as auto-links pile up.
+       */
+      auto?: number[]
       tunables: Tunables
       /**
        * Optional `[x, y]` per node from the previous layout. Nodes that survive
