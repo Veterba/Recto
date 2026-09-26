@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { allFolderPaths, applyChanges, filterTree } from '../../../../src/renderer/features/file-tree/file-tree-ops'
+import {
+  allFolderPaths,
+  applyChanges,
+  editableName,
+  filterTree,
+  renamedName,
+} from '../../../../src/renderer/features/file-tree/file-tree-ops'
 import type { FileNode, VaultChange } from '../../../../src/shared/vault'
 
 const file = (p: string): FileNode => ({ path: p, name: p.slice(p.lastIndexOf('/') + 1), kind: 'file', mtime: 1, size: 0 })
@@ -120,5 +126,25 @@ describe('filtering the tree', () => {
 
   it('allFolderPaths lists every folder, so a search can auto-expand', () => {
     expect(allFolderPaths(tree)).toEqual(['work', 'work/2026'])
+  })
+})
+
+describe('renaming keeps a note a note', () => {
+  it('edits a note without its .md', () => {
+    expect(editableName('index.md')).toBe('index')
+    expect(editableName('summary')).toBe('summary')
+    expect(editableName('photo.png')).toBe('photo.png')
+  })
+
+  it('gives .md back to a note renamed without it (regression: the note became a file that was no longer a note)', () => {
+    expect(renamedName('index.md', 'Overview')).toBe('Overview.md')
+    expect(renamedName('index.md', '  Overview  ')).toBe('Overview.md')
+    expect(renamedName('index.md', 'Overview.md')).toBe('Overview.md')
+    expect(renamedName('index.md', 'v1.2 notes')).toBe('v1.2 notes.md')
+  })
+
+  it('leaves folders and other files as typed', () => {
+    expect(renamedName('summary', 'Summary notes')).toBe('Summary notes')
+    expect(renamedName('photo.png', 'cover.png')).toBe('cover.png')
   })
 })

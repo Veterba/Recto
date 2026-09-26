@@ -143,6 +143,21 @@ export function filterTree(roots: readonly FileNode[], query: string, match: (te
   return keep(roots)
 }
 
+/**
+ * The name a rename should give a file. A note keeps being a note: the
+ * dialog edits its name without `.md`, and a name typed without it gets it
+ * back - otherwise "index.md" renamed to "Overview" becomes a file that is no
+ * longer a note, and seems to vanish while an odd new one appears.
+ */
+export function renamedName(current: string, typed: string): string {
+  const name = typed.trim()
+  if (!/\.md$/i.test(current)) return name
+  return /\.md$/i.test(name) ? name : `${name}.md`
+}
+
+/** What the rename dialog shows for editing: a note's name without `.md`, anything else as it is. */
+export const editableName = (current: string): string => current.replace(/\.md$/i, '')
+
 /** Every folder path in the tree - what a search result expands to. */
 export function allFolderPaths(roots: readonly FileNode[], out: string[] = []): string[] {
   for (const node of roots) {

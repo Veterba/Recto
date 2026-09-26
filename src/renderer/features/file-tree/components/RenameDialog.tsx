@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../../../ui/Icon'
+import { editableName, renamedName } from '../file-tree-ops'
 
 /**
  * Renaming a file or folder, in a dialog.
@@ -27,22 +28,25 @@ type Props = {
 
 export function RenameDialog({ name, path, onCommit, onCancel }: Props): React.ReactElement {
   const input = useRef<HTMLInputElement | null>(null)
-  const [value, setValue] = useState(name)
+  // A note is edited without its `.md`, which stays on: see renamedName.
+  const isNote = /\.md$/i.test(name)
+  const [value, setValue] = useState(editableName(name))
 
   useEffect(() => {
     const element = input.current
     if (element === null) return
     element.focus()
     // Select the stem, not the extension - renaming almost never means
-    // renaming '.md', and having to skip past it every time is friction.
-    const dot = name.lastIndexOf('.')
-    element.setSelectionRange(0, dot > 0 ? dot : name.length)
-  }, [name])
+    // renaming the extension, and having to skip past it every time is friction.
+    const shown = editableName(name)
+    const dot = isNote ? -1 : shown.lastIndexOf('.')
+    element.setSelectionRange(0, dot > 0 ? dot : shown.length)
+  }, [name, isNote])
 
   const trimmed = value.trim()
   const submit = (): void => {
     if (trimmed === '') return
-    onCommit(trimmed)
+    onCommit(renamedName(name, trimmed))
   }
 
   return createPortal(
@@ -92,6 +96,7 @@ export function RenameDialog({ name, path, onCommit, onCancel }: Props): React.R
             aria-label="New name"
             onChange={(event) => setValue(event.target.value)}
           />
+          {isNote && <span className="dialog__suffix">.md</span>}
           <button className="dialog__submit" type="submit" disabled={trimmed === ''}>
             Rename
           </button>

@@ -108,6 +108,12 @@
 .dialog__input:focus {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
+/* The ".md" a note keeps: shown, not editable. */
+.dialog__suffix {
+  margin-left: calc(-1 * var(--size-1));
+  font-size: var(--font-size-13);
+  color: var(--text-muted);
+}
 .dialog__input::selection {
   background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
