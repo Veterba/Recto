@@ -1,16 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  channels,
-  coerceSidebarTheme,
-  colorAt,
-  grainLevels,
-  MAX_STOPS,
-  nextStop,
-  NO_THEME,
-  padPosition,
-  PRESETS,
-  tintCss,
-} from '../../../src/renderer/app/sidebar-theme'
+import { coerceSidebarTheme, NO_THEME, PRESETS } from '../../../src/renderer/app/sidebar-theme'
+import { channels, colorAt, grainLevels, MAX_STOPS, nextStop, padPosition, tintCss } from '../../../src/renderer/ui/tint'
 import { wavePath } from '../../../src/renderer/ui/StrengthSlider'
 
 describe('tintCss', () => {

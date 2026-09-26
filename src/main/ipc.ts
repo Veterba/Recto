@@ -14,8 +14,6 @@ import { chooseVaultFolder, closeVault, currentVault, forgetRecentVault, openVau
 import { clearKey, keyStatus, writeKey } from './secrets'
 import { markSelfWrite, startWatching, stopWatching } from './watcher'
 
-/** Where images land. A folder in the vault, so the vault stays portable. */
-
 /** Typed handler registration - the channel name and its signature stay in sync. */
 function handle<C extends keyof IpcApi>(
   channel: C,
@@ -36,7 +34,7 @@ const renameUndo = new Map<string, { from: string; to: string; entries: { path: 
 function rewatch(): void {
   const window = BrowserWindow.getAllWindows()[0]
   if (window) startWatching(window)
-  // Auto-links reads the index, so it starts once the index is open.
+  // Topics reads the index, so it starts once the index is open.
   void openIndexForVault()
     .then(() => topics.start())
     .catch((err: unknown) => console.error('[indexer]', err))
@@ -316,10 +314,10 @@ export function registerIpc(): void {
       ? { notes: response.notes, links: response.links, unresolved: response.unresolved, tags: response.tags }
       : { notes: 0, links: 0, unresolved: 0, tags: 0 }
   })
-  handle(IPC.indexHomeStats, async () => {
-    const response = await send({ kind: 'home-stats' }, 15_000)
-    return response.kind === 'home-stats-result'
-      ? response.stats
+  handle(IPC.indexVaultUsage, async () => {
+    const response = await send({ kind: 'vault-usage' }, 15_000)
+    return response.kind === 'vault-usage-result'
+      ? response.usage
       : {
           notes: 0,
           links: 0,

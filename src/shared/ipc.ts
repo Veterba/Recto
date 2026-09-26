@@ -74,7 +74,7 @@ export const IPC = {
   indexSearch: 'index:search',
   indexBacklinks: 'index:backlinks',
   indexStats: 'index:stats',
-  indexHomeStats: 'index:home-stats',
+  indexVaultUsage: 'index:vault-usage',
   indexReindex: 'index:reindex',
   indexResolveLink: 'index:resolve-link',
   indexResolveLinks: 'index:resolve-links',
@@ -217,7 +217,7 @@ export type IpcApi = Exhaustive<
     [IPC.indexSearch]: (query: string, limit?: number) => SearchResult[]
     [IPC.indexBacklinks]: (path: string) => BacklinkResult[]
     [IPC.indexStats]: () => IndexStats
-    [IPC.indexHomeStats]: () => VaultUsage
+    [IPC.indexVaultUsage]: () => VaultUsage
     [IPC.indexReindex]: () => { ok: boolean }
     [IPC.indexResolveLink]: (target: string) => string | null
     [IPC.indexResolveLinks]: (targets: string[]) => Record<string, string | null>

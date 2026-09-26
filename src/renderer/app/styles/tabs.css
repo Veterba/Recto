@@ -60,7 +60,7 @@
   color: var(--accent);
 }
 
-/* Auto-links' one visible trace: a line of text and an Undo, no chrome. */
+/* Topics' one visible trace: a line of text and an Undo, no chrome. */
 .status__notice {
   display: inline-flex;
   align-items: center;

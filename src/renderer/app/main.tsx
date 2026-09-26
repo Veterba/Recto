@@ -1,6 +1,7 @@
 // Stylesheets first: the build orders CSS by when modules are evaluated, and
-// these must come before every feature's own (imported from its index.ts),
-// in the order the single app.css had them.
+// these must come before every feature's own (imported from its index.ts).
+// Their order is the cascade: tokens, element rules, layout, the shell, then
+// the UI primitives the features build on.
 // KaTeX's own stylesheet and fonts, bundled - maths renders offline, like the rest.
 import 'katex/dist/katex.min.css'
 import '../styles/tokens.css'
@@ -18,6 +19,8 @@ import '../ui/styles/dialog.css'
 import '../ui/styles/color-editor.css'
 import '../ui/styles/pill-slider.css'
 import '../ui/styles/sliders.css'
+import '../ui/styles/chip.css'
+import '../ui/styles/setting-row.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'

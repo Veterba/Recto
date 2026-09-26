@@ -93,7 +93,7 @@ export async function writeFile(relative: string, content: string): Promise<{ ok
     const bytes = Buffer.from(content, 'utf8')
     // Nothing to write: leave the file alone. A rewrite of the same bytes
     // still moves the mtime, and the mtime is what sync compares and what the
-    // auto-links quiet period counts from.
+    // topics quiet period counts from.
     if (existing !== null && existing.equals(bytes)) return { ok: true }
     // A write nobody asked for is found by its caller. Off unless asked.
     if (writeLog)

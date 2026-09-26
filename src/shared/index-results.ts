@@ -1,9 +1,11 @@
 /** What the index answers with: search hits, backlinks, the graph, boards, history and stats. */
 
-/** The link graph, for the graph view. */
-/** `topic`: drawn as a hollow circle, and has no note to open. */
+/**
+ * The link graph, for the graph view.
+ * `topic`: drawn as a hollow circle, and has no note to open.
+ */
 export type GraphNodeInfo = { path: string; name: string; title: string | null; degree: number; topic: boolean }
-/** `auto`: the pair is linked only through the auto-links property. */
+/** `auto`: the pair is linked only through the topics property. */
 export type GraphEdgeInfo = { source: string; target: string; auto: boolean }
 export type GraphInfo = { nodes: GraphNodeInfo[]; edges: GraphEdgeInfo[] }
 

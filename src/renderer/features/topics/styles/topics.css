@@ -1,21 +1,21 @@
-/* ---------- suggested links (auto-links) ---------- */
+/* ---------- topics settings ---------- */
 
 /* Settings: the first-run line, and what Auto would write. */
-.autolinks__first {
+.topics__first {
   max-width: 72ch;
   margin: 0 auto var(--size-4);
 }
-.autolinks__first .setting__note {
+.topics__first .setting__note {
   max-width: none;
   margin: 0;
 }
-.autolinks__first code {
+.topics__first code {
   white-space: nowrap;
 }
-.autolinks__preview-btn {
+.topics__preview-btn {
   margin-left: var(--size-2);
 }
-.autolinks__preview {
+.topics__preview {
   max-height: 240px;
   overflow-y: auto;
   margin: var(--size-2) 0 0;
@@ -23,24 +23,24 @@
   border-radius: var(--radius-s);
   background: var(--bg-hover);
 }
-.autolinks__preview-row {
+.topics__preview-row {
   display: flex;
   justify-content: space-between;
   gap: var(--size-3);
   padding: 2px 0;
   font-size: var(--font-size-12-5);
 }
-.autolinks__preview-names {
+.topics__preview-names {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-primary);
 }
-.autolinks__arrow {
+.topics__arrow {
   color: var(--text-muted);
 }
-.autolinks__preview-score {
+.topics__preview-score {
   flex: none;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
@@ -113,29 +113,16 @@
 }
 
 /* Settings: the model download's progress, a hairline under its row. */
-.autolinks__bar {
+.topics__bar {
   height: 2px;
   margin: -4px 0 var(--size-2);
   border-radius: 1px;
   background: var(--bg-hover);
   overflow: hidden;
 }
-.autolinks__bar > span {
+.topics__bar > span {
   display: block;
   height: 100%;
   background: var(--accent);
   transition: width 200ms var(--ease);
-}
-
-/* One quiet row under the properties: a label and up to three chips. Styled
-   as a continuation of the properties strip, not a panel of its own. */
-.suggested {
-  flex: none;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px var(--size-2);
-  padding: 5px var(--size-3);
-  border-bottom: 1px solid var(--border);
-  background: var(--tint);
 }

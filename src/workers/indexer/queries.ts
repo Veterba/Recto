@@ -100,9 +100,8 @@ export function resolveOne(target: string): string | null {
  * Self-links and duplicate pairs are collapsed, because the force simulation
  * treats a duplicated edge as a stronger spring and two notes that link each
  * other five times are not five times closer.
- */
-/**
- * @param autoProperty the auto-links property. A pair is an auto edge when
+ *
+ * @param autoProperty the topics property. A pair is an auto edge when
  * every link between the two notes, either way, sits in that property; one
  * link the user wrote makes it theirs.
  */

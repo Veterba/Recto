@@ -291,8 +291,8 @@ function tuneLinks(): void {
       const b = (l.target as Node).degree
       const share = 1 / Math.max(1, Math.min(a, b))
       const same = groups[(l.source as Node).index] === groups[(l.target as Node).index]
-      // Auto-links pull at half strength: the links the user wrote stay the
-      // shape of the graph however many auto-links accumulate around them.
+      // Topic links pull at half strength: the links the user wrote stay the
+      // shape of the graph however many topic links accumulate around them.
       const base = tunables.linkStrength * share * (targets?.links ?? 1) * (same ? 1 : cross) * (l.weak === true ? AUTO_LINK_STRENGTH : 1)
       return leashed(l) ? Math.max(base, 0.4) : base
     })

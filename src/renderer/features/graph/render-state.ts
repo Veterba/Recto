@@ -55,7 +55,7 @@ export type RenderState = {
    */
   treeEdges?: ReadonlySet<number> | null
   /**
-   * Links only the auto-links property makes, by edge index. Drawn thinner and
+   * Links only the topics property makes, by edge index. Drawn thinner and
    * dashed, so the links the user wrote stay the visible structure.
    */
   autoEdges?: ReadonlySet<number>

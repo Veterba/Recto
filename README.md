@@ -426,10 +426,10 @@ Settings → Shortcuts, and all of them are in the command palette.
 |---|---|
 | Your notes | the vault folder you picked — plain `.md` files, nothing else |
 | Images you paste or drop | `<vault>/attachments/` |
-| App state for that vault | `<vault>/.recto/` — `appearance.json`, `workspace.json`, `graph.json`, `writing.json`, `templates.json`, `boards.json`, `archive.json`, `hotkeys.json`, `authors.json` |
+| App state for that vault | `<vault>/.recto/` — `appearance.json`, `workspace.json`, `graph.json`, `writing.json`, `templates.json`, `boards.json`, `archive.json`, `hotkeys.json`, `authors.json`, `tree-order.json`, `topics.json`, `topics-settings.json` |
 | Search index and version history | `<vault>/.recto/index.db` — **a cache.** Delete it and it rebuilds from your files; you lose version history, which cannot be rebuilt. |
 | Deleted notes | `<vault>/.recto/archive/` until they expire |
-| Your Anthropic API key | your OS keychain, via Electron `safeStorage`. Never in the vault, never in the bundle. |
+| Your Anthropic API key | your user app-data folder, encrypted with Electron `safeStorage` (the macOS Keychain holds the key). Never in the vault, never in the bundle. |
 | Last-opened vault, recent vaults, Obsidian pairing | your user app-data folder (`~/Library/Application Support/Recto/`) |
 
 A vault is safe to put in git: no keys, no absolute paths. `.recto/` carries a
@@ -441,7 +441,7 @@ A vault is safe to put in git: no keys, no absolute paths. `.recto/` carries a
 
 ```
 src/main/        Electron main: window, vault, files, watcher, sync, AI, secrets, topics
-src/preload/     one allowlisted `invoke`, nothing else
+src/preload/     the allow-listed `invoke` and `on`, nothing else
 src/workers/     utility processes: indexer (SQLite + FTS5, migrations), embedder (the model)
 src/shared/      what more than one process uses: the IPC contract, worker protocols, parsers
 src/renderer/    the React app
@@ -449,11 +449,14 @@ src/renderer/    the React app
   features/      one folder per feature: editor, file-tree, search, graph, boards, topics,
                  tidy, home, settings, ai, templates, archive, links
   ui/            shared primitives: icons, tooltips, dialogs, menus, sliders
-  styles/        the stylesheets
+  styles/        the global stylesheets; each feature keeps its own in features/<name>/styles/
 test/            tests, vitest - the same folders as src/
 build/           app icon, and the two hooks electron-builder calls
 electron-builder.yml   how the .app and .dmg are assembled
 ```
+
+How the processes fit together, what crosses IPC, the on-disk formats and why the index is a cache:
+`docs/ARCHITECTURE.md`. Each folder in `src/` has a README saying what it holds and what may import it.
 
 House rules, worth knowing before sending a patch:
 

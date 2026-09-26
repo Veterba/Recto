@@ -13,10 +13,12 @@ export type SearchHit = {
   score: number
 }
 
-/** The link graph. Degree is precomputed so the renderer can size nodes. */
-/** `topic`: a topic (a `topics/` link with no note behind it, or a note under topics/). */
+/**
+ * The link graph. Degree is precomputed so the renderer can size nodes.
+ * `topic`: a topic (a `topics/` link with no note behind it, or a note under topics/).
+ */
 export type GraphNode = { path: string; name: string; title: string | null; degree: number; topic: boolean }
-/** `auto`: every link between the pair is in the auto-links property. */
+/** `auto`: every link between the pair is in the topics property. */
 export type GraphEdge = { source: string; target: string; auto: boolean }
 export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[] }
 
@@ -75,7 +77,7 @@ export type VaultUsage = {
   hubs: { name: string; links: number }[]
 }
 
-/** What auto-links reasons over: every note's mtime, resolved links and tags. */
+/** What topics reasons over: every note's mtime, resolved links and tags. */
 export type AutolinkGraph = {
   notes: { path: string; mtime: number }[]
   links: { source: string; target: string }[]
@@ -100,7 +102,7 @@ export type IndexRequest =
   | { kind: 'history-get'; id: number }
   | { kind: 'history-prune' }
   | { kind: 'stats' }
-  | { kind: 'home-stats' }
+  | { kind: 'vault-usage' }
   | { kind: 'autolink-graph' }
   /** Notes carrying a link written as `target`, resolved or not - a topic link never resolves. */
   | { kind: 'link-sources'; target: string }
@@ -123,7 +125,7 @@ export type IndexResponse =
   | { kind: 'history-get-result'; snapshot: Snapshot | null }
   | { kind: 'history-prune-result'; removed: number }
   | { kind: 'stats-result'; notes: number; links: number; unresolved: number; tags: number }
-  | { kind: 'home-stats-result'; stats: VaultUsage }
+  | { kind: 'vault-usage-result'; usage: VaultUsage }
   | { kind: 'autolink-graph-result'; graph: AutolinkGraph }
   | { kind: 'link-sources-result'; paths: string[] }
   | { kind: 'closed' }

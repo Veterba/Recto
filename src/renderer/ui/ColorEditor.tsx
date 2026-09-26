@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { colorAt, MAX_STOPS, nextStop, padPosition, SIDEBAR_PAD, tintCss, type PadRange } from '../app/sidebar-theme'
+import { colorAt, MAX_STOPS, nextStop, padPosition, SIDEBAR_PAD, tintCss, type PadRange } from './tint'
 import { Icon } from './Icon'
 import { StrengthSlider } from './StrengthSlider'
 import { Tip } from './Tip'

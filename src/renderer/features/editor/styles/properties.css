@@ -163,7 +163,7 @@
 
 /* ---------- topics in properties ---------- */
 
-/* The machine's own entries: dashed, like auto-links in the graph. */
+/* The machine's own entries: dashed, like topic links in the graph. */
 .prop__topics {
   display: flex;
   flex-wrap: wrap;

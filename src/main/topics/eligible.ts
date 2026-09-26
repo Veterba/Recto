@@ -2,7 +2,7 @@ import type { TemplateSettings } from '../../shared/templates'
 import { isInFolder } from '../../shared/templates'
 
 /**
- * Which notes auto-links may touch, as source or as target. Daily notes,
+ * Which notes topics may touch. Daily notes,
  * templates, chats, task cards and attachments never are - they are made by
  * the app or by a template, not written as ideas - plus whatever the user
  * lists. (The archive lives under .recto/, which is never indexed at all.)

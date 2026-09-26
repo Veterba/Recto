@@ -259,8 +259,3 @@
 .chat__send--stop {
   background: var(--text-secondary);
 }
-
-/* A failed test reads as a failure rather than as more prose. */
-.setting__note--bad {
-  color: var(--danger);
-}

@@ -9,9 +9,9 @@ import type { ChangeSpec, EditorState, TransactionSpec } from '@codemirror/state
  * on every line of a multi-line selection, and putting the cursor somewhere
  * sensible afterwards.
  *
- * CodeMirror types appear in these signatures but are never re-exported from
- * anything the rest of the app imports - the wrapper in `editor.ts` is the only
- * boundary that knows about CM.
+ * CodeMirror types appear in these signatures. The rest of the app reaches the
+ * editor through the wrapper in `codemirror.ts` (`createEditor`, `EditorHandle`),
+ * not through these.
  */
 
 /** Lines touched by any selection range, de-duplicated. */

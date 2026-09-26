@@ -13,7 +13,7 @@ import { IPC, IPC_EVENT } from '@shared/ipc'
  * separate feature, and a preview that half-behaves like a window invites
  * exactly the drag it cannot finish.
  *
- * The summary is compiled locally (see core/note-preview). Claude is one button
+ * The summary is compiled locally (see `note-preview.ts`). Claude is one button
  * away when a key is saved, and only when pressed: a hover is not consent to
  * send a note anywhere, and it is not a reason to spend money.
  */
@@ -125,7 +125,7 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
 
   return createPortal(
     <div
-      className="peek"
+      className="note-peek"
       ref={card}
       role="dialog"
       aria-label="Note preview"
@@ -137,21 +137,21 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
       onDragStart={(event) => event.preventDefault()}
     >
       {error !== null ? (
-        <p className="peek__error">{error}</p>
+        <p className="note-peek__error">{error}</p>
       ) : preview === null ? (
-        <div className="peek__loading" aria-live="polite">
+        <div className="note-peek__loading" aria-live="polite">
           <span />
           <span />
           <span />
         </div>
       ) : (
         <>
-          <header className="peek__head">
-            <button className="peek__title" onClick={() => onOpen(path)} title="Open note">
+          <header className="note-peek__head">
+            <button className="note-peek__title" onClick={() => onOpen(path)} title="Open note">
               {preview.title}
             </button>
-            {folder !== '' && <span className="peek__folder">{folder}</span>}
-            <div className="peek__meta">
+            {folder !== '' && <span className="note-peek__folder">{folder}</span>}
+            <div className="note-peek__meta">
               {mtime !== undefined && <span>{edited(mtime)}</span>}
               <span>{readingTime(preview.words)}</span>
               {backlinks !== null && backlinks > 0 && (
@@ -163,9 +163,9 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
           </header>
 
           {preview.tags.length > 0 && (
-            <div className="peek__tags">
+            <div className="note-peek__tags">
               {preview.tags.slice(0, 8).map((tag) => (
-                <span className="peek__tag" key={tag}>
+                <span className="note-peek__tag" key={tag}>
                   #{tag}
                 </span>
               ))}
@@ -173,21 +173,21 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
           )}
 
           {summary !== null ? (
-            <p className={`peek__summary${summary.state === 'error' ? ' is-error' : ''}`}>
+            <p className={`note-peek__summary${summary.state === 'error' ? ' is-error' : ''}`}>
               <Icon name="sparkles" size={12} />
               <span>
                 {summary.text}
-                {summary.state === 'streaming' && <i className="peek__caret" />}
+                {summary.state === 'streaming' && <i className="note-peek__caret" />}
               </span>
             </p>
           ) : preview.excerpt !== '' ? (
-            <p className="peek__excerpt">{preview.excerpt}</p>
+            <p className="note-peek__excerpt">{preview.excerpt}</p>
           ) : (
-            <p className="peek__excerpt is-empty">No text yet.</p>
+            <p className="note-peek__excerpt is-empty">No text yet.</p>
           )}
 
           {preview.properties.length > 0 && (
-            <dl className="peek__props">
+            <dl className="note-peek__props">
               {preview.properties.map((prop) => (
                 <div key={prop.key}>
                   <dt>{prop.key}</dt>
@@ -198,7 +198,7 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
           )}
 
           {preview.outline.length > 0 && (
-            <ul className="peek__outline">
+            <ul className="note-peek__outline">
               {preview.outline.map((heading, index) => (
                 <li key={index} className={heading.level === 3 ? 'is-sub' : ''}>
                   {heading.text}
@@ -208,8 +208,8 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
           )}
 
           {preview.tasks.total > 0 && (
-            <div className="peek__tasks">
-              <div className="peek__bar">
+            <div className="note-peek__tasks">
+              <div className="note-peek__bar">
                 <span style={{ width: `${(preview.tasks.done / preview.tasks.total) * 100}%` }} />
               </div>
               <span>
@@ -219,8 +219,8 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
           )}
 
           {hasKey && preview.words > 0 && (summary === null || summary.state === 'error') && (
-            <footer className="peek__foot">
-              <button className="peek__ai" onClick={summarise}>
+            <footer className="note-peek__foot">
+              <button className="note-peek__ai" onClick={summarise}>
                 <Icon name="sparkles" size={12} />
                 Summarize with Claude
               </button>

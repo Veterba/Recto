@@ -185,7 +185,6 @@ export const block = (s: TopicsState, path: string, id: string): TopicsState => 
   ),
 })
 
-/** A run that changed nothing is not kept - unless it has state to put back. */
 /** The user took topic `id` out of note `path`: blocked there for good, and counted against the topic. */
 export const reject = (s: TopicsState, path: string, id: string): TopicsState => {
   const next = block(s, path, id)
@@ -240,6 +239,7 @@ export const isDeletedAgain = (s: TopicsState, members: ReadonlySet<string>): bo
     new Set(),
   ) !== null
 
+/** A run that changed nothing is not kept - unless it has state to put back. */
 export const addRun = (s: TopicsState, run: Run): TopicsState =>
   run.changes.length === 0 && run.restore === undefined ? s : { ...s, runs: [...s.runs, run].slice(-RUNS_KEPT) }
 

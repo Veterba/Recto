@@ -271,7 +271,7 @@ export function drawVeil({
     }
     context.globalAlpha = 0.9 * focusFade
     context.strokeStyle = surface.edge
-    // Manual links solid, auto-links thin and dashed - the same distinction
+    // Manual links solid, topic links thin and dashed - the same distinction
     // the veil is lifted off, or hovering would make every link look manual.
     for (const autoPass of [false, true]) {
       const focusWidth = Math.max(1, edgeWidth * zoomScale)

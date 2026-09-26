@@ -101,7 +101,7 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
   /** Links outside the tree, in a tree layout. */
   const loops = new Map<string, number[]>()
   const lit: number[] = []
-  /** Auto-links: their own batches, drawn thin and dashed. */
+  /** Topic links: their own batches, drawn thin and dashed. */
   const dashed = new Map<string, number[]>()
   const litDashed: number[] = []
   const autoEdges = state.autoEdges
@@ -205,7 +205,7 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
   // them by how many there are, so the bundles show.
   const chordFade = bundleAt === null ? 1 : Math.min(1, 220 / Math.max(1, edges.length)) ** 0.6
   for (const [colour, coords] of plain) strokeBatch(coords, colour, look.edge.opacity * chordFade, edgeWidth, flow !== null)
-  // Auto-links: 0.6 of the width and a short dash, in screen pixels so the
+  // Topic links: 0.6 of the width and a short dash, in screen pixels so the
   // rhythm reads the same at every zoom.
   const autoWidth = Math.max(0.5, edgeWidth * 0.6)
   const autoDash = [Math.max(2, 3 * autoWidth), Math.max(2, 3 * autoWidth)]

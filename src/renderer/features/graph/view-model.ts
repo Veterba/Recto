@@ -32,7 +32,7 @@ type GraphFilters = {
 export type GraphViewModel = {
   nodes: GraphNodeView[]
   edges: [number, number][]
-  /** Indices into `edges` of the links only the auto-links property makes. */
+  /** Indices into `edges` of the links only the topics property makes. */
   auto: number[]
   paths: string[]
   groups: number[]
@@ -101,7 +101,7 @@ export function visibleGraph(
     group: groupIndex.get(folderOf(node.path)) ?? 0,
   }))
   const edges: [number, number][] = []
-  /** Indices into `edges` of the links only the auto-links property makes. */
+  /** Indices into `edges` of the links only the topics property makes. */
   const auto: number[] = []
   for (const edge of graph.edges) {
     const a = indexOf.get(edge.source)

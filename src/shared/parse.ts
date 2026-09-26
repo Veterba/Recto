@@ -19,7 +19,7 @@ type WikiLink = {
   line: number
   /**
    * The frontmatter key the link sits under, or null for a link in the body.
-   * The graph uses it to tell the auto-links property from links the user wrote.
+   * The graph uses it to tell the topics property from links the user wrote.
    */
   property?: string | null
 }

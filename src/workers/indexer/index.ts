@@ -16,8 +16,9 @@ import { search, backlinks, resolveOne, unresolved, graph, board, boards, contex
  * freezes the window, and doing it in the renderer means giving the renderer
  * the filesystem.
  *
- * Everything here is a cache. Delete index.db and it rebuilds from the markdown
- * on next launch, losing usage history and nothing else.
+ * Everything here is a cache of the markdown, except two tables: `events`
+ * (usage history) and `snapshots` (version history). Delete index.db and the
+ * rest rebuilds on next launch; those two are lost.
  */
 
 /** Every markdown file in the vault, with its stat. */
@@ -262,8 +263,8 @@ function handle(request: IndexRequest): IndexResponse {
       const tags = (handleDb.prepare('SELECT COUNT(DISTINCT tag) AS n FROM tags').get() as { n: number }).n
       return { kind: 'stats-result', notes, links, unresolved, tags }
     }
-    case 'home-stats':
-      return { kind: 'home-stats-result', stats: vaultUsage() }
+    case 'vault-usage':
+      return { kind: 'vault-usage-result', usage: vaultUsage() }
     case 'link-sources':
       return {
         kind: 'link-sources-result',

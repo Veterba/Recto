@@ -152,7 +152,7 @@ async function screens(page, dir) {
   await key(page, 'Mod+Shift+F')
   await page.keyboard.type('soil')
   // Results arrive after a debounce and a query; wait for them, then for them to stop changing.
-  await page.waitForSelector('.palette--search .result')
+  await page.waitForSelector('.palette--search .search-result')
   await shoot(page, dir, '05-search-open', 1000)
   await page.keyboard.press('Escape')
   await page.waitForSelector('.palette--search', { state: 'detached' })

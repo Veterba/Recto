@@ -69,7 +69,7 @@ const EMPTY: HomeStats = {
  */
 export async function getHomeStats(): Promise<HomeStats> {
   try {
-    const usage: VaultUsage = await api.invoke(IPC.indexHomeStats)
+    const usage: VaultUsage = await api.invoke(IPC.indexVaultUsage)
     return {
       ...usage,
       // TODO: real data. These three need the `events` table populated.

@@ -15,7 +15,7 @@ import { Toggle } from '../../../ui/Toggle'
  *
  * The panel edits the note's own text - there is no separate store - so what
  * you see here and what is in the file cannot drift. Every change goes through
- * the tested pure functions in `core/frontmatter`, which is where the rule
+ * the tested pure functions in `shared/frontmatter.ts`, which is where the rule
  * lives that anything unrecognised is preserved untouched.
  *
  * This is also the data layer the Tasks board reads: a card's `status`,

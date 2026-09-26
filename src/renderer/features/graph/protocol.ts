@@ -48,8 +48,8 @@ export type WorkerRequest =
       count: number
       edges: [number, number][]
       /**
-       * Indices into `edges` of auto-links: pulled at half strength, so the
-       * links the user wrote stay the shape of the graph as auto-links pile up.
+       * Indices into `edges` of topic links: pulled at half strength, so the
+       * links the user wrote stay the shape of the graph as topic links pile up.
        */
       auto?: number[]
       tunables: Tunables

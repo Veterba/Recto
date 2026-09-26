@@ -1,4 +1,4 @@
-import type { PadRange } from '../../../app/sidebar-theme'
+import type { PadRange } from '../../../ui/tint'
 import { useState, useRef, useCallback } from 'react'
 import { gradientAt, type GraphLook, GRAPH_SWATCHES } from '../look'
 import { Tip } from '../../../ui/Tip'

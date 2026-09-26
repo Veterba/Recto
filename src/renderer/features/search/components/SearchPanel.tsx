@@ -89,15 +89,15 @@ export function SearchPanel({ open, onClose, onOpenFile }: Props): React.ReactEl
                 key={hit.path}
                 role="option"
                 aria-selected={i === cursor}
-                className={`result${i === cursor ? ' is-active' : ''}`}
+                className={`search-result${i === cursor ? ' is-active' : ''}`}
                 onMouseEnter={() => setCursor(i)}
                 onMouseDown={(ev) => {
                   ev.preventDefault()
                   commit(i)
                 }}
               >
-                <span className="result__name">{hit.path.slice(hit.path.lastIndexOf('/') + 1).replace(/\.md$/, '')}</span>
-                <span className="result__path">{hit.path}</span>
+                <span className="search-result__name">{hit.path.slice(hit.path.lastIndexOf('/') + 1).replace(/\.md$/, '')}</span>
+                <span className="search-result__path">{hit.path}</span>
                 <Snippet text={hit.snippet} />
               </li>
             ))}
@@ -117,7 +117,7 @@ export function SearchPanel({ open, onClose, onOpenFile }: Props): React.ReactEl
 function Snippet({ text }: { text: string }): React.ReactElement {
   const parts = plainSnippet(text).split(/(<<[^>]*>>)/g)
   return (
-    <span className="result__snippet">
+    <span className="search-result__snippet">
       {parts.map((part, i) =>
         part.startsWith('<<') && part.endsWith('>>') ? (
           <mark key={i} className="hl">

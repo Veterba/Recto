@@ -39,28 +39,6 @@
   color: var(--text-muted);
 }
 
-.chip {
-  all: unset;
-  box-sizing: border-box;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: var(--font-size-12);
-  color: var(--text-secondary);
-  background: var(--bg-hover);
-  cursor: pointer;
-  transition:
-    background var(--anim-fast) var(--ease),
-    color var(--anim-fast) var(--ease);
-}
-.chip:hover {
-  color: var(--text-primary);
-}
-.chip.is-active {
-  background: var(--accent-muted);
-  color: var(--accent);
-  font-weight: 500;
-}
-
 .archive__empty {
   max-width: 70ch;
   margin: 0 auto;

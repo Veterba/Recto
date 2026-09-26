@@ -5,7 +5,7 @@ import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { fuzzyMatch } from '../../../ui/fuzzy'
 import { columnId, DEFAULT_BOARDS, type Board } from '../boards'
-import { updateBoards, useBoards } from '../hooks/use-boards'
+import { updateBoards, useBoards } from '../boards-store'
 
 /**
  * The Tasks sidebar: which boards exist.

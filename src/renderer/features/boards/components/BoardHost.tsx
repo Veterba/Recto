@@ -1,5 +1,5 @@
 import { registerView } from '../../../app/view-registry'
-import { currentBoards, useBoards, updateBoards } from '../hooks/use-boards'
+import { currentBoards, useBoards, updateBoards } from '../boards-store'
 import { BoardView } from './BoardView'
 
 /**

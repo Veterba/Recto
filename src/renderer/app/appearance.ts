@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api'
 import { isAiModel, type AiModelId } from '@shared/ai'
 import { IPC, IPC_EVENT, type VibrancyMaterial } from '@shared/ipc'
-import { coerceSidebarTheme, grainLevels, NO_THEME, tintCss, type SidebarTheme } from './sidebar-theme'
+import { coerceSidebarTheme, NO_THEME, type SidebarTheme } from './sidebar-theme'
+import { grainLevels, tintCss } from '../ui/tint'
 
 /**
  * Appearance and shell layout, persisted to `.recto/appearance.json`.

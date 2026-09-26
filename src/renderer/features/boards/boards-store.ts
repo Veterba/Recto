@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { api } from '../../../app/api'
-import { DEFAULT_BOARDS, parseBoards, type BoardsFile } from '../boards'
+import { api } from '../../app/api'
+import { DEFAULT_BOARDS, parseBoards, type BoardsFile } from './boards'
 import { IPC } from '@shared/ipc'
 
 /**
@@ -8,7 +8,7 @@ import { IPC } from '@shared/ipc'
  *
  * A module-level store rather than component state, because two things read it
  * - the sidebar list and the board itself - and they must not be able to
- * disagree about which boards exist. Same shape as `core/note-bus`: a value
+ * disagree about which boards exist. Same shape as `app/note-bus.ts`: a value
  * outside React, read through `useSyncExternalStore`.
  */
 

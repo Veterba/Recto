@@ -161,7 +161,7 @@ export function TopicsSettingsTab(): React.ReactElement {
   return (
     <>
       {firstLook !== null && settings.enabled && (
-        <div className="autolinks__first">
+        <div className="topics__first">
           <p className="setting__note">
             <Icon name="tags" size={13} />
             {firstLook > 0
@@ -169,7 +169,7 @@ export function TopicsSettingsTab(): React.ReactElement {
               : 'Topics are made once every note has been read.'}{' '}
             {status.review.devGuarded ? 'Dev build: nothing is written.' : 'Nothing is written yet.'}
             <button
-              className="btn btn--ghost btn--sm autolinks__preview-btn"
+              className="btn btn--ghost btn--sm topics__preview-btn"
               disabled={preview === 'loading'}
               onClick={() => {
                 setPreview('loading')
@@ -180,16 +180,16 @@ export function TopicsSettingsTab(): React.ReactElement {
             </button>
           </p>
           {preview !== null && preview !== 'loading' && (
-            <div className="autolinks__preview" role="list" aria-label="Topics the next run would write">
+            <div className="topics__preview" role="list" aria-label="Topics the next run would write">
               <p className="setting__hint">
                 {preview.topics.length} topics, {preview.assignments.length} of {preview.notes} notes.
               </p>
               {preview.topics.map((t) => (
-                <div className="autolinks__preview-row" role="listitem" key={t.name}>
-                  <span className="autolinks__preview-names">
-                    {t.name} <span className="autolinks__arrow">·</span> {t.sample.map(name).join(', ')}
+                <div className="topics__preview-row" role="listitem" key={t.name}>
+                  <span className="topics__preview-names">
+                    {t.name} <span className="topics__arrow">·</span> {t.sample.map(name).join(', ')}
                   </span>
-                  <span className="autolinks__preview-score">{t.size}</span>
+                  <span className="topics__preview-score">{t.size}</span>
                 </div>
               ))}
             </div>
@@ -223,7 +223,7 @@ export function TopicsSettingsTab(): React.ReactElement {
         )}
       </SettingRow>
       {status.model.state === 'downloading' && (
-        <div className="autolinks__bar" aria-hidden>
+        <div className="topics__bar" aria-hidden>
           <span style={{ width: `${(status.model.received / status.model.bytes) * 100}%` }} />
         </div>
       )}
