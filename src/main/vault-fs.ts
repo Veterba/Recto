@@ -2,22 +2,19 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { shell } from 'electron'
-import { VAULT_STATE_DIR, type FileNode } from '../shared/ipc-contract'
+import type { FileNode } from '../shared/vault'
+import { writeLog } from './config'
 import { rewriteWikiLinks } from './link-rewrite'
 import { resolveInVault } from './paths'
 import { currentVault } from './vault'
 import { notTextMessage, notTextReason } from './text-file'
+import { isHidden, sortNodes } from '../shared/vault'
 
 /**
  * All vault file access. Every path arriving from the renderer goes through
  * `resolveInVault`, which throws rather than returning something a caller could
  * forget to check.
  */
-
-/** Names never shown in the tree or watched. */
-const HIDDEN = new Set([VAULT_STATE_DIR, '.git', '.DS_Store', 'node_modules', '.trash'])
-
-const isHidden = (name: string): boolean => HIDDEN.has(name) || name.startsWith('.')
 
 function requireVault(): string {
   const vault = currentVault()
@@ -68,18 +65,7 @@ export function listTree(): FileNode[] {
   return walk(root)
 }
 
-/** Folders first, then files, each alphabetical and numeric-aware. */
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-function sortNodes(nodes: FileNode[]): FileNode[] {
-  return nodes.sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1
-    return collator.compare(a.name, b.name)
-  })
-}
-
-export async function readFile(
-  relative: string,
-): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
+export async function readFile(relative: string): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
   try {
     const data = await fsp.readFile(resolveInVault(requireVault(), relative))
     // Never hand binary to the editor: decoding it is lossy, and whatever reads
@@ -91,8 +77,6 @@ export async function readFile(
     return { ok: false, error: message(err) }
   }
 }
-
-const WRITE_LOG = process.env['RECTO_WRITE_LOG'] === '1'
 
 /**
  * Write-then-rename, so a crash mid-write cannot truncate a note. Callers are
@@ -109,10 +93,18 @@ export async function writeFile(relative: string, content: string): Promise<{ ok
     const bytes = Buffer.from(content, 'utf8')
     // Nothing to write: leave the file alone. A rewrite of the same bytes
     // still moves the mtime, and the mtime is what sync compares and what the
-    // auto-links quiet period counts from.
+    // topics quiet period counts from.
     if (existing !== null && existing.equals(bytes)) return { ok: true }
     // A write nobody asked for is found by its caller. Off unless asked.
-    if (WRITE_LOG) console.error('[write]', relative, existing?.length ?? 'new', '->', bytes.length, new Error().stack?.split('\n').slice(2, 6).join(' <- '))
+    if (writeLog)
+      console.error(
+        '[write]',
+        relative,
+        existing?.length ?? 'new',
+        '->',
+        bytes.length,
+        new Error().stack?.split('\n').slice(2, 6).join(' <- '),
+      )
     const tmp = `${absolute}.tmp-${process.pid}`
     await fsp.mkdir(path.dirname(absolute), { recursive: true })
     await fsp.writeFile(tmp, bytes)
@@ -144,10 +136,7 @@ function uniquePath(absolute: string): string {
  * notes are a folder you can move" is the whole promise. The cost is disk
  * space, which is the right thing to spend.
  */
-export async function importFile(
-  source: string,
-  folder: string,
-): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+export async function importFile(source: string, folder: string): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   try {
     const root = requireVault()
     const bare = sanitiseName(path.basename(source))
@@ -208,10 +197,7 @@ export async function create(
   }
 }
 
-export async function rename(
-  relative: string,
-  newName: string,
-): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+export async function rename(relative: string, newName: string): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   try {
     const root = requireVault()
     const from = resolveInVault(root, relative)
@@ -227,10 +213,7 @@ export async function rename(
   }
 }
 
-export async function move(
-  relative: string,
-  newParent: string,
-): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+export async function move(relative: string, newParent: string): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   try {
     const root = requireVault()
     const from = resolveInVault(root, relative)
@@ -336,13 +319,8 @@ const ILLEGAL_IN_NAME = new RegExp('[/\\\\:*?"<>|\\u0000-\\u001f]', 'g')
  * Unicode intact - Cabinet's ASCII-only slug rule destroys any non-Latin title
  * (finding #2), and there is no reason a note cannot be called `Заметка.md`.
  */
-export function sanitiseName(name: string): string {
-  return name
-    .normalize('NFC')
-    .replace(ILLEGAL_IN_NAME, '')
-    .replace(/^\.+/, '')
-    .trim()
-    .slice(0, 255)
+function sanitiseName(name: string): string {
+  return name.normalize('NFC').replace(ILLEGAL_IN_NAME, '').replace(/^\.+/, '').trim().slice(0, 255)
 }
 
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err))

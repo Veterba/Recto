@@ -1,7 +1,7 @@
-import { linksIn, writeLinks } from '../../renderer/core/link-property'
+import { linksIn, writeLinks } from '../../shared/link-property'
 import { rewriteWikiLinks } from '../link-rewrite'
 import type { Lang } from './naming'
-import { addRun, allowed, block, topicLink, TOPICS_PROPERTY, type Change, type Run, type TopicsState } from './state'
+import { addRun, allowed, block, topicLink, TOPICS_PROPERTY, type Change, type Run, type TopicsState, withoutId } from './state'
 
 /**
  * The two runs that change many notes at once, as pure functions of the state
@@ -10,18 +10,11 @@ import { addRun, allowed, block, topicLink, TOPICS_PROPERTY, type Change, type R
  */
 
 /** A note's current text, or null if it is gone. */
-export type Read = (path: string) => string | null
+type Read = (path: string) => string | null
 
 export const sameLink = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 const LANGUAGE_NAME: Record<Lang, string> = { en: 'English', ru: 'Russian', no: 'Norwegian' }
-
-const strip = (m: Record<string, string[]>, id: string): Record<string, string[]> =>
-  Object.fromEntries(
-    Object.entries(m)
-      .map(([k, v]): [string, string[]] => [k, v.filter((x) => x !== id)])
-      .filter(([, v]) => v.length > 0),
-  )
 
 /**
  * Switch topic names to `to`, all in one run. `names` has, per machine-named
@@ -50,12 +43,21 @@ export function switchLanguage(
         const before = text(p)
         if (before === null) continue
         const entries = linksIn(before, TOPICS_PROPERTY)
-        const after = writeLinks(before, TOPICS_PROPERTY, entries.filter((e) => !sameLink(e, from)))
+        const after = writeLinks(
+          before,
+          TOPICS_PROPERTY,
+          entries.filter((e) => !sameLink(e, from)),
+        )
         if (after === before) continue
         writes.set(p, after)
         changes.push({ path: p, property: TOPICS_PROPERTY, link: from, op: 'remove', topic: topic.id })
       }
-      next = { ...next, topics: next.topics.filter((t) => t.id !== topic.id), assigned: strip(next.assigned, topic.id), owned: strip(next.owned, topic.id) }
+      next = {
+        ...next,
+        topics: next.topics.filter((t) => t.id !== topic.id),
+        assigned: withoutId(next.assigned, topic.id),
+        owned: withoutId(next.owned, topic.id),
+      }
       continue
     }
     if (name === topic.name) continue
@@ -103,7 +105,11 @@ export function undoLast(state: TopicsState, read: Read): { state: TopicsState; 
     } else {
       const entries = linksIn(before, c.property)
       if (c.op === 'add') {
-        after = writeLinks(before, c.property, entries.filter((e) => !sameLink(e, c.link)))
+        after = writeLinks(
+          before,
+          c.property,
+          entries.filter((e) => !sameLink(e, c.link)),
+        )
         if (c.topic !== undefined) next = block(next, c.path, c.topic)
       } else if (!entries.some((e) => sameLink(e, c.link)) && (c.topic === undefined || allowed(state, c.path, c.topic))) {
         after = writeLinks(before, c.property, [...entries, c.link])

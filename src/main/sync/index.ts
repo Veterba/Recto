@@ -4,11 +4,13 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { ObsidianSyncStatus, ObsidianVaultInfo, SyncProblem } from '../../shared/ipc-contract'
+import type { ObsidianSyncStatus, ObsidianVaultInfo, SyncProblem } from '../../shared/obsidian-sync'
 import * as archive from '../archive'
 import { currentVault } from '../vault'
 import { ignored } from './plan'
 import { nested, previewSync, runSync, type EngineOptions, type SyncOutcome } from './engine'
+import { IPC_EVENT } from '../../shared/ipc'
+import { sendEvent } from '../events'
 
 /**
  * Two-way sync with an Obsidian vault: the app side.
@@ -46,7 +48,9 @@ function writeConfig(config: Config): void {
 
 /** One base per pairing: the same Recto vault paired with a different folder starts fresh. */
 function manifestFor(rectoPath: string, obsidianPath: string): string {
-  const id = createHash('sha1').update(`${path.resolve(rectoPath)}\0${path.resolve(obsidianPath)}`).digest('hex')
+  const id = createHash('sha1')
+    .update(`${path.resolve(rectoPath)}\0${path.resolve(obsidianPath)}`)
+    .digest('hex')
   return path.join(app.getPath('userData'), 'obsidian-sync', `${id}.json`)
 }
 
@@ -81,7 +85,7 @@ export function status(): ObsidianSyncStatus {
 
 function push(): void {
   const window = BrowserWindow.getAllWindows()[0]
-  if (window !== undefined && !window.isDestroyed()) window.webContents.send('obsidian:status', status())
+  if (window !== undefined && !window.isDestroyed()) sendEvent(window, IPC_EVENT.obsidianStatus, status())
 }
 
 function optionsFor(rectoPath: string, obsidianPath: string, force = false): EngineOptions {

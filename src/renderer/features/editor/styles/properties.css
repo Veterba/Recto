@@ -1,0 +1,282 @@
+/* ---------- properties ---------- */
+
+.props {
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--tint);
+}
+
+.props__head {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--size-2) var(--size-3);
+  font-size: var(--font-size-11);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.props__head:hover {
+  color: var(--text-secondary);
+}
+
+.props__body {
+  padding: 0 var(--size-3) var(--size-2);
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.prop {
+  display: grid;
+  grid-template-columns: minmax(90px, 180px) 1fr auto;
+  align-items: center;
+  gap: var(--size-2);
+  padding: 2px 0;
+}
+
+.prop__key {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-muted);
+}
+
+.prop__keyname {
+  all: unset;
+  font-size: var(--font-size-12-5);
+  color: var(--text-secondary);
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop__rename,
+.prop__input {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: var(--font-size-12-5);
+  color: var(--text-primary);
+  background: transparent;
+  transition:
+    background var(--anim-fast) var(--ease),
+    box-shadow var(--anim-fast) var(--ease);
+}
+.prop__input::placeholder {
+  color: var(--text-muted);
+}
+.prop__input:hover {
+  background: var(--bg-hover);
+}
+.prop__input:focus,
+.prop__rename:focus {
+  background: var(--bg-elevated);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.prop__input--key {
+  grid-column: 1;
+}
+
+.prop__remove {
+  all: unset;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    opacity var(--anim-fast) var(--ease),
+    background var(--anim-fast) var(--ease);
+}
+.prop:hover .prop__remove {
+  opacity: 1;
+}
+.prop__remove:hover {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+
+.toggle--sm {
+  width: 30px;
+  height: 17px;
+}
+.toggle--sm .toggle__knob {
+  width: 13px;
+  height: 13px;
+}
+.toggle--sm.is-on .toggle__knob {
+  transform: translateX(13px);
+}
+
+/* Frontmatter this editor deliberately does not touch. */
+.prop--opaque {
+  grid-template-columns: 1fr;
+  gap: 2px;
+  margin: var(--size-1) 0;
+  padding: var(--size-2);
+  border-radius: var(--radius-s);
+  background: var(--bg-hover);
+}
+
+.prop__opaque {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-11-5);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.prop__opaque-note {
+  font-size: var(--font-size-10-5);
+  color: var(--text-muted);
+}
+
+.props__add {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-1);
+  margin-top: var(--size-1);
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: var(--font-size-11-5);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.props__add:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ---------- topics in properties ---------- */
+
+/* The machine's own entries: dashed, like topic links in the graph. */
+.prop__topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-1);
+  padding: 2px 6px;
+}
+.prop__topic {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 3px 1px var(--size-2);
+  border: 1px dashed color-mix(in srgb, var(--text-muted) 60%, transparent);
+  border-radius: 999px;
+  font-size: var(--font-size-12);
+  color: var(--text-secondary);
+}
+.prop__topic-x {
+  all: unset;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.prop__topic-x:hover {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+
+/* ---------- links in properties ---------- */
+
+/* Read mode for a property that holds links. The row is the edit target; the
+   links inside it are the go targets - so the gaps between them must be
+   clickable too, which is why this fills the value column. */
+.prop__links {
+  flex: 1;
+  min-width: 0;
+  min-height: 26px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-1);
+  padding: 2px 6px;
+  border-radius: var(--radius-s);
+  cursor: text;
+}
+.prop__links:hover {
+  background: var(--bg-hover);
+}
+.prop__link {
+  all: unset;
+  padding: 0 2px;
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: var(--font-size-13);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.prop__link:hover {
+  background: var(--accent-muted);
+  text-decoration-color: var(--accent);
+}
+.prop__link.is-unresolved {
+  color: var(--text-secondary);
+  text-decoration-style: dashed;
+  text-decoration-color: var(--text-muted);
+}
+.prop__plain {
+  font-size: var(--font-size-13);
+  color: var(--text-primary);
+}
+.prop__plain + .prop__link::before,
+.prop__link + .prop__link::before,
+.prop__link + .prop__plain::before {
+  content: '';
+}
+
+/* ---------- note suggestions after [[ in a property ---------- */
+
+.link-suggest {
+  position: fixed;
+  z-index: 90;
+  max-height: 260px;
+  margin: 0;
+  padding: var(--size-1);
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-md);
+}
+.link-suggest__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-2);
+  padding: 5px var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-13);
+  cursor: pointer;
+}
+.link-suggest__item.is-cursor {
+  background: var(--accent-muted);
+}
+.link-suggest__name {
+  color: var(--text-primary);
+}
+.link-suggest__folder {
+  margin-left: auto;
+  font-size: var(--font-size-11-5);
+  color: var(--text-muted);
+}

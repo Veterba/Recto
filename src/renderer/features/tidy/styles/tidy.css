@@ -1,0 +1,140 @@
+/* ---------- tidy preview ---------- */
+
+.dialog--wide {
+  width: min(620px, calc(100vw - 2 * var(--size-6)));
+}
+
+.dialog__lede {
+  margin: 2px 0 var(--size-3);
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.dialog__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--size-2);
+  margin-top: var(--size-4);
+}
+
+.dialog__ghost {
+  all: unset;
+  box-sizing: border-box;
+  padding: 9px var(--size-3);
+  border-radius: var(--radius-m);
+  color: var(--text-secondary);
+  font-size: var(--font-size-14);
+  cursor: pointer;
+}
+.dialog__ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tidy__plan {
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  margin: 0 calc(-1 * var(--size-1));
+  padding: 0 var(--size-1);
+}
+
+.tidy__group + .tidy__group {
+  margin-top: var(--size-3);
+}
+
+.tidy__folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 var(--size-1);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.tidy__folder svg {
+  color: var(--text-muted);
+}
+
+.tidy__new {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-size: var(--font-size-10);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.tidy__notes {
+  margin: 0;
+  padding: 0 0 0 var(--size-4);
+  list-style: none;
+}
+.tidy__notes--skipped {
+  margin-top: var(--size-2);
+  opacity: 0.75;
+}
+
+.tidy__note {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-2);
+  padding: 3px 0;
+  font-size: var(--font-size-12-5);
+}
+
+.tidy__name {
+  flex: none;
+  max-width: 55%;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tidy__reason {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-11-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tidy__toggle {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--size-3);
+  padding: var(--size-1) 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-12);
+  cursor: pointer;
+}
+.tidy__toggle:hover {
+  color: var(--text-primary);
+}
+
+/* Settings is wider and taller than a prompt: it holds four tabs of content,
+   and scrolling a settings panel in a 520px box is miserable. */
+.dialog--settings {
+  width: min(760px, calc(100vw - 2 * var(--size-6)));
+  max-height: min(80vh, 720px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-bottom: var(--size-2);
+}
+.dialog--settings .settings {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}

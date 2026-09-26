@@ -1,0 +1,311 @@
+/* ---------- graph settings: gear, wheel, section ---------- */
+
+.graph {
+  position: relative;
+  /* The settings wheel hangs a little past the right edge on purpose. */
+  overflow: hidden;
+}
+/* Under the canvas, not over it: grain is texture for the background, and on
+   top it speckled every dot and label too. */
+.graph__canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--graph-grain, 0);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+/* The way in: a round gear at the middle of the right edge. */
+.graph__gear {
+  all: unset;
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  z-index: 4;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  animation: gear-in 320ms var(--ease-pop) both;
+  transition:
+    color var(--anim-fast) var(--ease),
+    transform 260ms var(--ease-pop);
+}
+.graph__gear:hover {
+  color: var(--text-primary);
+  transform: rotate(60deg);
+}
+.graph__gear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@keyframes gear-in {
+  from {
+    opacity: 0;
+    transform: translateX(40px) rotate(-120deg);
+  }
+}
+
+/* Everything the settings put on screen, over the right side of the graph. */
+.gset {
+  position: absolute;
+  top: 0;
+  /* Pushed a little past the edge: the wheel's far curve can go off-screen,
+     and the section beside it gets the room back. */
+  right: -14px;
+  bottom: 44px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding-right: var(--size-1);
+  overflow: hidden;
+  pointer-events: none;
+}
+.gset > * {
+  pointer-events: auto;
+}
+
+/* --- the wheel --- */
+.gwheel {
+  position: relative;
+  flex: none;
+  width: 212px;
+  overflow: visible;
+  touch-action: none;
+  outline: none;
+  animation: wheel-in 380ms var(--ease-pop) both;
+}
+.gset.is-closing .gwheel {
+  animation: wheel-out 240ms var(--ease) both;
+}
+@keyframes wheel-in {
+  from {
+    opacity: 0;
+    transform: translateX(90px);
+  }
+}
+@keyframes wheel-out {
+  to {
+    opacity: 0;
+    transform: translateX(90px);
+  }
+}
+.gwheel__arc {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.gwheel__arc path {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.gwheel__handle {
+  all: unset;
+  position: absolute;
+  width: 30px;
+  height: 11px;
+  margin-top: -5.5px;
+  border-radius: 999px;
+  background: var(--text-primary);
+  opacity: 0.8;
+  cursor: pointer;
+  transition:
+    opacity var(--anim-fast) var(--ease),
+    transform 200ms var(--ease-pop);
+}
+.gwheel__handle:hover {
+  opacity: 1;
+  transform: scaleX(1.15);
+}
+.gwheel__item {
+  all: unset;
+  position: absolute;
+  top: 0;
+  margin-top: -21px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform-origin: 100% 50%;
+  cursor: pointer;
+  will-change: transform, opacity;
+}
+.gwheel__label {
+  font-size: var(--font-size-13);
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  padding: 3px var(--size-2);
+  border-radius: 8px;
+  border: 1px solid transparent;
+  /* A faint ground of its own: over a tinted graph, bare muted text vanished. */
+  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+  transition:
+    color 160ms var(--ease),
+    background 160ms var(--ease),
+    border-color 160ms var(--ease);
+}
+.gwheel__icon {
+  width: 52px;
+  height: 38px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--hue);
+  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+  border: 1.5px solid transparent;
+  transition:
+    background 200ms var(--ease),
+    border-color 200ms var(--ease),
+    transform 220ms var(--ease-pop);
+}
+.gwheel__item:hover .gwheel__icon {
+  transform: scale(1.06);
+}
+.gwheel__item.is-centre .gwheel__label {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.gwheel__item.is-centre .gwheel__icon {
+  background: color-mix(in srgb, var(--hue) 16%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--hue) 70%, transparent);
+}
+
+/* --- the section beside it --- */
+.gset__panel {
+  width: 300px;
+  max-height: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-lg);
+  animation: section-in 300ms var(--ease-pop) both;
+  cursor: default;
+}
+.gset.is-closing .gset__panel {
+  animation: section-out 200ms var(--ease) both;
+}
+@keyframes section-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.97);
+  }
+}
+@keyframes section-out {
+  to {
+    opacity: 0;
+    transform: translateX(24px) scale(0.97);
+  }
+}
+.gset__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--size-3) 10px var(--size-1) var(--size-4);
+}
+.gset__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2);
+  font-size: var(--font-size-13);
+  font-weight: 600;
+}
+.gset__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hue);
+}
+.gset__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4);
+  padding: 10px var(--size-4) 18px;
+}
+/* The colour editor brings its own padding. */
+.gset__body > .arcpick__editor {
+  margin: -4px -6px 0;
+}
+.gset__below {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+}
+.gset__below:empty {
+  display: none;
+}
+.gset__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-2);
+  font-size: var(--font-size-12);
+}
+.gset__label {
+  color: var(--text-secondary);
+}
+.gset__layout:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.gset__layouts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--size-1);
+}
+.gset__layout {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 0 5px;
+  border-radius: var(--radius-m);
+  border: 1.5px solid transparent;
+  font-size: var(--font-size-10);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 160ms var(--ease),
+    border-color 160ms var(--ease);
+}
+.gset__layout:hover {
+  background: var(--bg-hover);
+}
+.gset__layout.is-on {
+  border-color: color-mix(in srgb, var(--hue) 65%, transparent);
+  background: color-mix(in srgb, var(--hue) 12%, transparent);
+  color: var(--text-primary);
+}
+.gset__glyph {
+  width: 32px;
+  height: 30px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 0.8;
+  stroke-opacity: 0.55;
+}

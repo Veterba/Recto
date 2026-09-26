@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { AiMessage } from '../../shared/ipc-contract'
+import type { AiMessage } from '../../shared/ai'
 
 /**
  * How the app talks to a model.

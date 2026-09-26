@@ -22,8 +22,7 @@
  * A cluster that leaves fewer than two words is not a topic.
  */
 
-import { cosine } from './vectors'
-
+import { cosine } from '../../shared/vectors'
 
 export type Lang = 'en' | 'ru' | 'no'
 
@@ -80,18 +79,18 @@ const CYRILLIC = /\p{Script=Cyrillic}/u
  * Low, because a word in another language than the notes sits ~0.1 lower
  * against them than the word it translates.
  */
-export const TRANSLATION_FLOOR = 0.05
+const TRANSLATION_FLOOR = 0.05
 /** And this close to the word it translates: the same meaning, not another sense of it. */
-export const SAME_MEANING = 0.8
+const SAME_MEANING = 0.8
 
 /** A vault's language changes only when another leads it by this many notes. */
 export const LANGUAGE_MARGIN = 5
 
 /** A noun in more than this share of the vault's eligible notes names nothing in particular. */
-export const VAULT_SHARE_CAP = 0.5
+const VAULT_SHARE_CAP = 0.5
 
 /** How many c-TF-IDF candidates the embedding reranks. */
-export const CANDIDATES = 15
+const CANDIDATES = 15
 
 const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n(---|\.\.\.)[ \t]*(\r?\n|$)/
 const FENCED = /^[ \t]*(```|~~~)[^\n]*\n[\s\S]*?(^[ \t]*\1[ \t]*$|(?![\s\S]))/gm
@@ -138,11 +137,7 @@ export function language(text: string): Lang {
  * so a vault that is half and half does not flip back and forth - and never to
  * `declined`, a switch the user undid.
  */
-export function vaultLanguage(
-  counts: Partial<Record<Lang, number>>,
-  current: Lang | null,
-  declined: Lang | null = null,
-): Lang | null {
+export function vaultLanguage(counts: Partial<Record<Lang, number>>, current: Lang | null, declined: Lang | null = null): Lang | null {
   const n = (l: Lang | null): number => (l === null ? 0 : (counts[l] ?? 0))
   const leader = (Object.keys(counts) as Lang[])
     .filter((l) => n(l) > 0)
@@ -154,15 +149,14 @@ export function vaultLanguage(
 }
 
 /** A word written in the language's own script, and nothing else: no Latin in a Russian name, no Cyrillic in an English one. */
-export function inScript(word: string, lang: Lang): boolean {
+function inScript(word: string, lang: Lang): boolean {
   if (lang === 'ru') return /^\p{Script=Cyrillic}+(-\p{Script=Cyrillic}+)*$/u.test(word)
   if (lang === 'no') return /^[a-zæøå]+(-[a-zæøå]+)*$/.test(word)
   return /^[a-z]+(-[a-z]+)*$/.test(word)
 }
 
 /** A lemma that may name a topic: three letters or more, in the script, not a stopword. */
-export const nameable = (lemma: string, lang: Lang): boolean =>
-  [...lemma].length >= 3 && inScript(lemma, lang) && !ALL_STOP.has(lemma)
+export const nameable = (lemma: string, lang: Lang): boolean => [...lemma].length >= 3 && inScript(lemma, lang) && !ALL_STOP.has(lemma)
 
 /**
  * The best CANDIDATES nouns for a topic, by c-TF-IDF. `members` and `vault`
@@ -224,10 +218,13 @@ const sameStem = (a: string, b: string): boolean => {
 }
 
 /** The language most of a cluster's notes are in; a tie goes to the vault's. */
-export function clusterLanguage(langs: readonly Lang[], vault: Lang): Lang {
+function clusterLanguage(langs: readonly Lang[], vault: Lang): Lang {
   const counts = new Map<Lang, number>()
   for (const l of langs) counts.set(l, (counts.get(l) ?? 0) + 1)
-  return [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] === vault ? -1 : b[0] === vault ? 1 : a[0].localeCompare(b[0])))[0]?.[0] ?? vault
+  return (
+    [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] === vault ? -1 : b[0] === vault ? 1 : a[0].localeCompare(b[0])))[0]?.[0] ??
+    vault
+  )
 }
 
 /** A word written capitalised in most of its occurrences is a name: "Rust" the language, not rust. */
@@ -244,7 +241,7 @@ export function isProperName(word: string, texts: readonly string[]): boolean {
   return all > 0 && upper * 2 > all
 }
 
-export type NamingInput = {
+type NamingInput = {
   /** The cluster's notes: their language, nameable lemmas and prose. */
   members: readonly { lang: Lang; terms: readonly string[]; prose: string }[]
   /** Every eligible note's nameable lemmas, for rarity. */
@@ -259,11 +256,14 @@ export type NamingInput = {
   isNoun: (word: string, lang: Lang) => boolean
 }
 
-export type Naming = { name: string | null; from: Lang; failed?: 'candidates' | 'translation' }
+type Naming = { name: string | null; from: Lang; failed?: 'candidates' | 'translation' }
 
 /** A cluster's name in the vault's language, or null - then it is not a topic. */
 export async function nameCluster(input: NamingInput): Promise<Naming> {
-  const from = clusterLanguage(input.members.map((m) => m.lang), input.vaultLang)
+  const from = clusterLanguage(
+    input.members.map((m) => m.lang),
+    input.vaultLang,
+  )
   const own = input.members.filter((m) => m.lang === from).map((m) => m.terms)
   const terms = candidates(own, input.members.length, input.vault)
   if (terms.length < 2) return { name: null, from, failed: 'candidates' }
@@ -275,15 +275,16 @@ export async function nameCluster(input: NamingInput): Promise<Naming> {
     const prose = input.members.filter((m) => m.lang === from).map((m) => m.prose)
     const sources = terms.filter((t) => !isProperName(t, prose))
     const options = sources.map((t) =>
-      [...new Set(input.translate(t, from, input.vaultLang))].filter((w) => nameable(w, input.vaultLang) && input.isNoun(w, input.vaultLang)),
+      [...new Set(input.translate(t, from, input.vaultLang))].filter(
+        (w) => nameable(w, input.vaultLang) && input.isNoun(w, input.vaultLang),
+      ),
     )
     const flat = [...new Set(options.flat())]
     const vectors = flat.length === 0 ? [] : await input.embed([...sources, ...flat])
     const vectorOf = new Map([...sources, ...flat].map((w, i) => [w, vectors[i]!]))
     ranked = []
     sources.forEach((source, k) => {
-      const best = options[k]!
-        .filter((w) => cosine(vectorOf.get(w)!, vectorOf.get(source)!) >= SAME_MEANING)
+      const best = options[k]!.filter((w) => cosine(vectorOf.get(w)!, vectorOf.get(source)!) >= SAME_MEANING)
         .map((w) => ({ term: w, sim: cosine(vectorOf.get(w)!, input.center) }))
         .sort((a, b) => b.sim - a.sim)[0]
       if (best !== undefined && best.sim >= TRANSLATION_FLOOR && !ranked.some((r) => r.term === best.term)) ranked.push(best)

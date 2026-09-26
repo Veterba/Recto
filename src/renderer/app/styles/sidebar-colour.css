@@ -1,0 +1,35 @@
+/* ---------- the sidebar's colour ---------- */
+
+/*
+ * A gradient laid OVER the frosted panel, never instead of it: the blur, the
+ * backdrop and every text colour still come from the theme, so picking a colour
+ * can make the sidebar green but cannot make it unreadable.
+ *
+ * Last in the file on purpose. `background-image` is one longhand of a property
+ * whose shorthand several of these rules set earlier - `.status` and `.sidebar`
+ * both say `background:` - and a shorthand resets the longhands it does not
+ * mention. Anywhere above their own rules, this would be silently erased in
+ * exactly the places it is for.
+ *
+ * Which element carries it depends on the mode, and it must be exactly one or
+ * two tints compose into a third colour nobody chose: translucent puts the
+ * ground on `.shell__main` with the sidebar transparent above it, opaque has
+ * the sidebar painting its own.
+ */
+:root:not([data-translucent='off']) .shell__main,
+.shell__titlebar,
+.status,
+:root[data-translucent='off'] .sidebar {
+  background-image: var(--sidebar-tint);
+  /*
+   * One gradient across the whole window, not one per element.
+   *
+   * Without this each surface sizes the gradient to its OWN box, and a 160°
+   * gradient in a wide, 30px-tall status bar runs almost left-to-right while
+   * the same gradient in the tall sidebar runs top-to-bottom - so the status
+   * bar came out as a different gradient in a different direction, which is
+   * what was reported. `fixed` sizes every one of them to the viewport, so the
+   * titlebar, sidebar and status bar are three windows onto the same wash.
+   */
+  background-attachment: fixed;
+}

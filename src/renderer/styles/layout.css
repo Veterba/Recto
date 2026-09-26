@@ -1,0 +1,322 @@
+/* ---------- shell ---------- */
+
+.shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* Translucent, so the desktop blurs through the window furniture. The editor
+     pane below paints its own denser ground: text has to stay readable over
+     whatever happens to be behind the app. */
+  /* No ground here: the titlebar, sidebar and status bar each paint their
+     own, and the content area paints --surface. A ground on the shell as
+     well would sit under all of them and double the opacity. */
+  background: transparent;
+}
+
+/* Hide the first paint until appearance.json has been applied, so the app never
+   flashes dark-then-light on a light-themed machine. */
+.shell.is-booting {
+  visibility: hidden;
+}
+
+.shell__titlebar {
+  /* Arc's is a thin strip; 36px read as a band. 30 is the floor that still
+     clears the macOS traffic lights. */
+  height: 30px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-3);
+  padding-left: 84px; /* clears the macOS traffic lights */
+  padding-right: var(--size-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--chrome);
+  -webkit-app-region: drag;
+}
+
+.shell__main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  /*
+   * The floating graph positions against THIS, not against the editor pane.
+   *
+   * It has to be free to move over the sidebar as well - that is what makes it
+   * a floating window rather than a docked panel. But it must stay below the
+   * titlebar, because on macOS that strip holds the traffic lights and is a
+   * window drag region that swallows clicks from anything drawn over it.
+   * `.shell__main` starts exactly below the titlebar, so it is the right frame.
+   */
+  position: relative;
+}
+
+.shell__content {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  background: var(--surface);
+  /* A card inset into the chrome, the way Arc insets its web view. The rounded
+     corners need something behind them, which is why the frosted ground moved
+     up to `.shell__main` - see there. */
+  border-radius: var(--radius-m) 0 0 var(--radius-m);
+  /* Views scroll their own content. */
+  overflow: hidden;
+}
+
+/*
+ * What the card's rounded corners reveal.
+ *
+ * With translucency on that is the frosted ground, which is the point of the
+ * inset. With it OFF the ground painted nothing, so the corner cut through to
+ * the window itself and each corner came out as a white wedge against grey
+ * chrome - the one place in the window where a shape was defined by an absence
+ * rather than by a surface. It wears the chrome, like the sidebar and the stub
+ * beside it, so the cut reads as a notch in the frame.
+ */
+:root[data-translucent='off'] .shell__main {
+  background: var(--chrome);
+}
+
+/*
+ * With the sidebar collapsed the card is not inset into anything.
+ *
+ * The rounding exists so the editor sits ON the sidebar's panel, and its
+ * corners reveal that panel. Against the narrow stub that replaces the sidebar
+ * there is nothing to reveal but two notches of bare ground at the window's
+ * edge - most obvious on glass, where they show the desktop. Square there, and
+ * the seam alone divides the two.
+ */
+.shell__main:has(> .sidebar-stub) .shell__content {
+  border-radius: 0;
+}
+
+.shell__content > .split,
+.shell__content > .tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- breadcrumbs ---------- */
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+  -webkit-app-region: no-drag;
+}
+
+.crumbs__group {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.crumbs__sep {
+  padding: 0 6px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.crumbs__item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crumbs__item.is-current {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.crumbs__item--muted {
+  font-weight: 600;
+}
+
+/* ---------- splits ---------- */
+
+.split {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+.split--vertical {
+  flex-direction: row;
+}
+.split--horizontal {
+  flex-direction: column;
+}
+
+.split__pane {
+  position: relative;
+  flex-grow: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.split__pane > .split,
+.split__pane > .tabs {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The grab area is wider than the visible line, or it is unhittable. */
+.split__divider {
+  position: absolute;
+  z-index: 2;
+  background: transparent;
+  transition: background var(--anim-fast) var(--ease);
+}
+.split--vertical > .split__pane > .split__divider {
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 7px;
+  cursor: col-resize;
+}
+.split--horizontal > .split__pane > .split__divider {
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 7px;
+  cursor: row-resize;
+}
+.split__divider:hover,
+body.is-resizing .split__divider {
+  background: var(--accent-muted);
+}
+
+body.is-resizing {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* ---------- stub views ---------- */
+
+.stub {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-3);
+  padding: var(--size-8);
+  text-align: center;
+}
+.stub__title {
+  margin: 0;
+  font-size: var(--font-size-20);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.stub__blurb {
+  margin: 0;
+  max-width: 42ch;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+.stub--compact {
+  gap: var(--size-2);
+  padding: var(--size-4);
+}
+.stub--compact .stub__title {
+  font-size: var(--font-size-15);
+}
+.stub--compact .stub__blurb {
+  font-size: var(--font-size-12);
+}
+
+.stub__badge {
+  font-size: var(--font-size-11);
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+/* ---------- floating window ---------- */
+
+/*
+ * Positioned over the content area, never beside it, so it consumes no layout
+ * space and cannot reshape the splits underneath.
+ */
+.float {
+  position: absolute;
+  z-index: 40;
+  /* Anything overlapping a -webkit-app-region: drag area stops receiving mouse
+     events unless it opts out. That is what made the close button dead. */
+  -webkit-app-region: no-drag;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.float.is-maximized {
+  border-radius: var(--radius-m);
+}
+
+.float__head {
+  flex: none;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--size-1) 0 var(--size-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--chrome-strong);
+  cursor: grab;
+  user-select: none;
+}
+.float.is-maximized .float__head {
+  cursor: default;
+}
+
+.float__title {
+  margin: 0;
+  font-size: var(--font-size-11);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.float__actions {
+  display: flex;
+  gap: 2px;
+}
+
+.float__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Bottom-right grab corner. Drawn as two hairlines rather than an icon. */
+.float__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(
+    135deg,
+    transparent 50%,
+    var(--border-strong) 50%,
+    var(--border-strong) 62%,
+    transparent 62%,
+    transparent 74%,
+    var(--border-strong) 74%,
+    var(--border-strong) 86%,
+    transparent 86%
+  );
+}

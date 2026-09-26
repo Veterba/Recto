@@ -46,14 +46,20 @@ const clean = (word) => word.normalize('NFD').replace(/́|̀/g, '').normalize('N
  */
 function englishOf(sense) {
   const out = []
-  const outside = ` ${(sense.glosses ?? []).join(' ').replace(/\([^)]*\)/g, ' ').toLowerCase()} `
+  const outside = ` ${(sense.glosses ?? [])
+    .join(' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .toLowerCase()} `
   for (const [, target] of sense.links ?? []) {
     const word = String(target).split('#')[0].trim().toLowerCase()
     if (ENGLISH_WORD.test(word) && new RegExp(`[^a-z]${word}[^a-z]`).test(outside)) out.push(word)
   }
   for (const gloss of sense.glosses ?? []) {
     for (const part of gloss.replace(/\([^)]*\)/g, '').split(/[,;]/)) {
-      const word = part.trim().toLowerCase().replace(/^(a|an|the)\s+/, '')
+      const word = part
+        .trim()
+        .toLowerCase()
+        .replace(/^(a|an|the)\s+/, '')
       if (ENGLISH_WORD.test(word)) out.push(word)
     }
   }
@@ -77,7 +83,8 @@ async function glossary(file, lang) {
     lemma[word] = word
     for (const form of entry.forms ?? []) {
       const tags = form.tags ?? []
-      if (typeof form.form !== 'string' || tags.some((t) => ['romanization', 'table-tags', 'inflection-template', 'class'].includes(t))) continue
+      if (typeof form.form !== 'string' || tags.some((t) => ['romanization', 'table-tags', 'inflection-template', 'class'].includes(t)))
+        continue
       const f = clean(form.form)
       if (!f.includes(' ') && /^\p{L}[\p{L}-]*$/u.test(f)) lemma[f] ??= word
     }

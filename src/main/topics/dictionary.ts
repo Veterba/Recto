@@ -10,7 +10,7 @@ import type { Lang } from './naming'
  * what a word can mean, not what it means here.
  */
 
-export type Dictionary = { translate: (word: string, from: Lang, to: Lang) => string[] }
+type Dictionary = { translate: (word: string, from: Lang, to: Lang) => string[] }
 
 const loaded = new Map<string, Dictionary>()
 

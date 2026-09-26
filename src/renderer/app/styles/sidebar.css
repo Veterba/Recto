@@ -1,0 +1,307 @@
+/* ---------- sidebar ---------- */
+
+.sidebar {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* The stored width is a preference, not a promise: a narrow window keeps the
+     note readable and the sidebar goes back to its full width when there is
+     room again. */
+  max-width: 45vw;
+  border-right: 1px solid var(--sidebar-line);
+  /* The one translucent surface in the app. */
+  background: var(--sidebar-bg);
+}
+
+/**
+ * Grain.
+ *
+ * A blurred backdrop on its own reads as a smeared photograph of whatever
+ * happens to be behind the window - you can still make out the shapes, and the
+ * panel looks like a window rather than a surface. A fine noise breaks up those
+ * shapes and the panel starts reading as frosted material instead. It is what
+ * Arc does, and it is the difference between "see-through" and "glass".
+ *
+ * Generated rather than shipped as an asset: one SVG turbulence tile, so there
+ * is no image file to load and nothing to go missing from a packaged build.
+ */
+.shell__main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--grain-opacity, 0.5);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
+}
+
+/* No backdrop, no reason for grain. */
+:root[data-translucent='off'] .shell__main::after {
+  display: none;
+}
+
+/**
+ * A halo in the theme's own ground colour, behind every glyph in the sidebar.
+ *
+ * A translucent panel takes the colour of whatever is behind the window, so
+ * text sized for a dark ground can end up on a bright one and disappear. The
+ * halo is `--surface-rgb`, which is near-black in the dark theme and near-white
+ * in the light one - so it darkens the backdrop behind dark-theme text and
+ * lightens it behind light-theme text, automatically, without a second set of
+ * colours to maintain. It is what macOS does for vibrant labels.
+ */
+/**
+ * The frosted chrome: sidebar, titlebar, status bar.
+ *
+ * One dark panel with light text, whatever the theme. Two things this fixes,
+ * both reported:
+ *
+ * 1. Half the sidebar used to be legible and half ghosted, because muted greys
+ *    vanish against a frosted panel while anything with its own background
+ *    stayed crisp. That combination reads as failed rendering, not hierarchy.
+ *    Nothing here is dimmer than `--sidebar-dim`, and hierarchy comes from
+ *    weight and size.
+ * 2. Theme-coloured text cannot work on a panel that takes the colour of
+ *    whatever is behind the window. Light text on a dark ground can.
+ *
+ * No sheen, no inset highlight, no per-element blur. A selected row is a flat
+ * step lighter than the panel - which is all "selected" needs to mean.
+ */
+/*
+ * The ground is painted on `.shell__main`, not on `.sidebar`.
+ *
+ * The editor is a rounded card inset into the chrome, and a rounded corner has
+ * to reveal *something*. With the ground on the sidebar the corner would have
+ * cut a notch straight through to the desktop. One ground behind both, one card
+ * on top of it - and the sidebar itself paints nothing, so nothing stacks.
+ */
+:root:not([data-translucent='off']) .shell__main,
+:root:not([data-translucent='off']) .shell__titlebar,
+:root:not([data-translucent='off']) .status {
+  background-color: var(--sidebar-bg);
+}
+
+:root:not([data-translucent='off']) .sidebar {
+  /* Paints nothing: `.shell__main` behind it is the ground. Two grounds would
+     compose to nearly opaque, which is the trap this whole layer keeps falling
+     into. */
+  background: transparent;
+}
+
+:root:not([data-translucent='off']) .sidebar,
+:root:not([data-translucent='off']) .shell__titlebar,
+:root:not([data-translucent='off']) .status {
+  color: var(--sidebar-text);
+  border-color: var(--sidebar-line);
+}
+
+/*
+ * On glass the seam belongs to the CARD, not to the sidebar.
+ *
+ * The sidebar's own border ran straight past the card's rounded corner - a hard
+ * vertical ending in a curve. Moved onto the card's left edge it follows that
+ * curve, and it has to be there: over a light backdrop the frosted panel and
+ * the white pane come out nearly the same value, and without a seam there is no
+ * telling where one ends and the other starts. Same hairline as everything else
+ * on the panel. (After the rule above, which sets the shorthand.)
+ */
+:root:not([data-translucent='off']) .sidebar,
+:root:not([data-translucent='off']) .sidebar-stub {
+  border-right-color: transparent;
+}
+:root:not([data-translucent='off']) .shell__content {
+  border-left: 1px solid var(--sidebar-line);
+}
+
+/**
+ * The frosted palette, as tokens, scoped to the panel.
+ *
+ * Every component in the sidebar already reads `--bg-hover`, `--text-muted`,
+ * `--accent-muted` and friends. Overriding those tokens here means each one
+ * gets the frosted equivalent automatically, instead of each needing its own
+ * `:root:not([data-translucent]) .sidebar .thing` override - which is how a
+ * hovered "New board" ended up painting an opaque near-white `--bg-hover`
+ * rectangle onto the glass, and a selected folder painted the same one
+ * full-width. Two reported bugs, one missing line.
+ */
+:root:not([data-translucent='off']) .sidebar {
+  --text-primary: var(--sidebar-text);
+  --text-secondary: var(--sidebar-dim);
+  --text-muted: var(--sidebar-dim);
+  --bg-hover: var(--sidebar-row);
+  --bg-elevated: rgb(var(--sidebar-rgb) / 0.92);
+  --border: var(--sidebar-line);
+  --border-strong: var(--sidebar-line);
+  --accent-muted: var(--sidebar-row-active);
+}
+
+:root:not([data-translucent='off']) .sidebar *,
+:root:not([data-translucent='off']) .shell__titlebar *,
+:root:not([data-translucent='off']) .status * {
+  color: inherit;
+}
+
+/* The few things allowed to sit back - and they sit back by one step, not five. */
+:root:not([data-translucent='off']) .sidebar__vault-name,
+:root:not([data-translucent='off']) .sidebar .tree__icon,
+:root:not([data-translucent='off']) .sidebar .tree__chevron,
+:root:not([data-translucent='off']) .sidebar .sidebar__search-icon,
+:root:not([data-translucent='off']) .sidebar .sidebar__empty,
+:root:not([data-translucent='off']) .sidebar .board__count,
+:root:not([data-translucent='off']) .status .status__item--muted,
+:root:not([data-translucent='off']) .sidebar .segmented__tab:not(.is-active) {
+  color: var(--sidebar-dim);
+}
+:root:not([data-translucent='off']) .sidebar__search-input::placeholder {
+  color: var(--sidebar-dim);
+}
+
+/* Rows, fields and buttons: flat overlays on the panel. */
+:root:not([data-translucent='off']) .sidebar .tree__row:hover:not(.is-active),
+:root:not([data-translucent='off']) .sidebar .boards__row:hover:not(.is-active),
+:root:not([data-translucent='off']) .sidebar .tool-btn:hover,
+:root:not([data-translucent='off']) .sidebar .footer-btn:hover,
+:root:not([data-translucent='off']) .sidebar .icon-btn:hover,
+:root:not([data-translucent='off']) .status .status__btn:hover {
+  background: var(--sidebar-row);
+}
+
+:root:not([data-translucent='off']) .sidebar .segmented__tab.is-active {
+  background: var(--sidebar-row-active);
+  color: var(--sidebar-text);
+  box-shadow: none;
+}
+
+:root:not([data-translucent='off']) .sidebar .segmented,
+:root:not([data-translucent='off']) .sidebar .sidebar__search-input {
+  background: var(--sidebar-field);
+}
+
+/* Grain over every frosted surface, not just the sidebar. */
+:root:not([data-translucent='off']) .shell__titlebar,
+:root:not([data-translucent='off']) .status {
+  position: relative;
+}
+/* The grain sits behind the sidebar's contents and behind the editor card. */
+.shell__main {
+  position: relative;
+}
+.sidebar,
+.shell__content {
+  position: relative;
+  z-index: 1;
+}
+:root:not([data-translucent='off']) .shell__titlebar::after,
+:root:not([data-translucent='off']) .status::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--grain-opacity, 0.4);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
+}
+:root:not([data-translucent='off']) .shell__titlebar > *,
+:root:not([data-translucent='off']) .status > * {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * Heavy grain, for the top half of the grain dial.
+ *
+ * A second layer rather than a stronger first one: the theme's tile is drawn at
+ * 42% and blended as an overlay, and CSS opacity stops at 1, so that layer
+ * cannot get much louder than it already is. This tile is drawn at full
+ * strength and coarser, and fades in on `--grain-boost` - which is 0 below the
+ * middle of the dial, so nothing the theme was tuned to changes.
+ *
+ * `::before`, so it sits under the same children the `::after` layer does
+ * (sidebar and editor card are `z-index: 1` above both).
+ */
+:root:not([data-translucent='off']) .shell__main::before,
+:root:not([data-translucent='off']) .shell__titlebar::before,
+:root:not([data-translucent='off']) .status::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--grain-boost, 0);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' stitchTiles='stitch'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='1.8' intercept='-0.4'/%3E%3CfeFuncG type='linear' slope='1.8' intercept='-0.4'/%3E%3CfeFuncB type='linear' slope='1.8' intercept='-0.4'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- section tabs ---------- */
+
+.sidebar__vault {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-2) var(--size-2) var(--size-3);
+}
+.sidebar__vault-name {
+  font-size: var(--font-size-11);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.segmented {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  margin: 0 var(--size-2) var(--size-2);
+  padding: 3px;
+  border-radius: var(--radius-m);
+  background: var(--bg-hover);
+}
+
+.segmented__tab {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: var(--size-2) 2px;
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-10);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease);
+}
+.segmented__tab:hover {
+  color: var(--text-secondary);
+}
+.segmented__tab:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.segmented__tab:disabled:hover {
+  color: var(--text-muted);
+}
+.segmented__tab.is-active {
+  background: var(--bg-elevated);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.1);
+}
+.segmented__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}

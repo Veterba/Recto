@@ -1,0 +1,9 @@
+---
+tags: []
+---
+
+# {{title}}
+
+## Notes
+
+## Links

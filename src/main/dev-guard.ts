@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
+import { allowRealVault, defaultModelDir } from './config'
 import { isInside } from './paths'
 
 /**
@@ -12,7 +13,7 @@ import { isInside } from './paths'
  * state, opens a copy of any vault it is pointed at, and never lifts the
  * topics first-write gate. A packaged app is unaffected.
  */
-export const devGuarded = (): boolean => !app.isPackaged && process.env['RECTO_ALLOW_REAL_VAULT'] !== '1'
+export const devGuarded = (): boolean => !app.isPackaged && !allowRealVault()
 
 /**
  * Call before anything reads userData. A dev build gets its own ("Recto (dev)"),
@@ -22,7 +23,7 @@ export const devGuarded = (): boolean => !app.isPackaged && process.env['RECTO_A
 export function isolateDevState(): void {
   if (!devGuarded() || app.commandLine.hasSwitch('user-data-dir')) return
   const shared = app.getPath('userData')
-  process.env['RECTO_MODEL_DIR'] ??= path.join(shared, 'models')
+  defaultModelDir(path.join(shared, 'models'))
   app.setPath('userData', `${shared} (dev)`)
 }
 

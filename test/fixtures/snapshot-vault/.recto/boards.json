@@ -1,0 +1,22 @@
+{
+  "boards": [
+    {
+      "id": "launch",
+      "name": "Launch",
+      "columns": [
+        {
+          "id": "todo",
+          "name": "To do"
+        },
+        {
+          "id": "doing",
+          "name": "Doing"
+        },
+        {
+          "id": "done",
+          "name": "Done"
+        }
+      ]
+    }
+  ]
+}

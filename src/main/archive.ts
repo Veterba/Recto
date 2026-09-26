@@ -2,7 +2,8 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { shell } from 'electron'
-import { VAULT_STATE_DIR, type ArchiveEntry, type ArchiveState } from '../shared/ipc-contract'
+import { VAULT_STATE_DIR } from '../shared/vault'
+import type { ArchiveEntry, ArchiveState } from '../shared/archive'
 import { resolveInVault } from './paths'
 import { currentVault } from './vault'
 
@@ -19,7 +20,7 @@ import { currentVault } from './vault'
  * is the one piece of deletion state that must survive that.
  */
 
-export const DEFAULT_RETENTION_DAYS = 10
+const DEFAULT_RETENTION_DAYS = 10
 const DAY_MS = 86_400_000
 
 const archiveDir = (): string => {
@@ -34,14 +35,11 @@ const manifestFile = (): string => {
   return path.join(vault.path, VAULT_STATE_DIR, 'archive.json')
 }
 
-export function readManifest(): ArchiveState {
+function readManifest(): ArchiveState {
   try {
     const parsed = JSON.parse(fs.readFileSync(manifestFile(), 'utf8')) as Partial<ArchiveState>
     return {
-      retentionDays:
-        typeof parsed.retentionDays === 'number' && parsed.retentionDays >= 0
-          ? parsed.retentionDays
-          : DEFAULT_RETENTION_DAYS,
+      retentionDays: typeof parsed.retentionDays === 'number' && parsed.retentionDays >= 0 ? parsed.retentionDays : DEFAULT_RETENTION_DAYS,
       entries: Array.isArray(parsed.entries) ? parsed.entries : [],
     }
   } catch {

@@ -14,15 +14,15 @@
  *    indexer ignores them: that is code, not a reference.
  */
 
-const FENCE = /^\s*(```|~~~)/
+import { CODE_FENCE } from '../shared/parse'
+
 const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
 /** `[text](target)`, the other way to write a link. `!` in front is an embed. */
 const MARKDOWN_LINK = /(?<!!)(\[[^\]]*\])\(([^)\n]*)\)/g
 /** Schemes and shapes that are not a note in this vault. */
 const NOT_A_NOTE = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i
 
-const normalize = (value: string): string =>
-  value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
+const normalize = (value: string): string => value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
 
 /**
  * Does this link target refer to `path`? With `exact`, only a link that spells
@@ -65,9 +65,7 @@ function replacementTarget(original: string, oldPath: string, newPath: string): 
  * around it that has to come back untouched - angle brackets, a `#heading`, a
  * `"title"`. Returns null when it does not point at a note in this vault.
  */
-function splitUrl(
-  url: string,
-): { path: string; prefix: string; suffix: string; encoded: boolean } | null {
+function splitUrl(url: string): { path: string; prefix: string; suffix: string; encoded: boolean } | null {
   const angled = /^<(.*)>$/.exec(url.trim())
   const inner = angled?.[1] ?? url
   const title = /\s+"[^"]*"$/.exec(inner)
@@ -91,7 +89,7 @@ function splitUrl(
   }
 }
 
-export type RewriteResult = { text: string; count: number }
+type RewriteResult = { text: string; count: number }
 
 /**
  * Rewrite every link in `text` that points at `oldPath` so it points at
@@ -103,7 +101,7 @@ export function rewriteWikiLinks(text: string, oldPath: string, newPath: string,
   let inCode = false
 
   const out = lines.map((line) => {
-    if (FENCE.test(line)) {
+    if (CODE_FENCE.test(line)) {
       inCode = !inCode
       return line
     }
@@ -133,24 +131,4 @@ export function rewriteWikiLinks(text: string, oldPath: string, newPath: string,
   })
 
   return { text: out.join('\n'), count }
-}
-
-/** Every distinct wikilink target in a document, for resolution checks. */
-export function extractTargets(text: string): string[] {
-  const found = new Set<string>()
-  const lines = text.split(/\r?\n/)
-  let inCode = false
-
-  for (const line of lines) {
-    if (FENCE.test(line)) {
-      inCode = !inCode
-      continue
-    }
-    if (inCode) continue
-    for (const match of line.matchAll(WIKILINK)) {
-      const target = match[1]?.trim()
-      if (target !== undefined && target !== '') found.add(target)
-    }
-  }
-  return [...found]
 }

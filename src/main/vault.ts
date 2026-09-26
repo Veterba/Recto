@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog } from 'electron'
-import { VAULT_STATE_DIR, type OpenVaultResult, type StartupState, type VaultInfo } from '../shared/ipc-contract'
+import { VAULT_STATE_DIR, type OpenVaultResult, type StartupState, type VaultInfo } from '../shared/vault'
 import { devVaultPath } from './dev-guard'
 import { readState, writeState } from './store'
 

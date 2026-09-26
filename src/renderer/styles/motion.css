@@ -1,0 +1,62 @@
+/* ---------- motion ---------- */
+
+/*
+ * Movement is either meaningful or it is decoration. These are the meaningful
+ * ones: something arriving, something being picked, something being dragged.
+ * Everything is a token, so `prefers-reduced-motion` turns the lot off at once.
+ */
+.tree__row,
+.boards__row,
+.board__card,
+.tab,
+.segmented__tab,
+.footer-btn,
+.tool-btn,
+.icon-btn,
+.graph__btn,
+.menu__item,
+.formatbar__btn {
+  transition:
+    background var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease),
+    box-shadow var(--anim-fast) var(--ease),
+    transform var(--anim-fast) var(--ease);
+}
+
+/* A card lifts while you hold it, so the board reads as physical for the one
+   gesture where that helps: knowing which card you have. */
+.board__card:active {
+  transform: scale(0.995);
+}
+.board__card.is-dragging {
+  transform: rotate(-0.6deg) scale(1.02);
+  box-shadow: var(--shadow-md);
+  opacity: 0.85;
+}
+
+.cm-task-checkbox {
+  transition: transform var(--anim-fast) var(--ease-pop);
+}
+.cm-task-checkbox:active {
+  transform: scale(0.86);
+}
+
+/* Panels and pickers arrive rather than appear. */
+.palette,
+.float {
+  animation: rise var(--anim-base) var(--ease-pop);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+/* The active-tab underline slides between tabs instead of blinking. */
+.settings__tab {
+  transition:
+    color var(--anim-fast) var(--ease),
+    border-color var(--anim-base) var(--ease);
+}

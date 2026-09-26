@@ -1,0 +1,128 @@
+/* ---------- topics settings ---------- */
+
+/* Settings: the first-run line, and what Auto would write. */
+.topics__first {
+  max-width: 72ch;
+  margin: 0 auto var(--size-4);
+}
+.topics__first .setting__note {
+  max-width: none;
+  margin: 0;
+}
+.topics__first code {
+  white-space: nowrap;
+}
+.topics__preview-btn {
+  margin-left: var(--size-2);
+}
+.topics__preview {
+  max-height: 240px;
+  overflow-y: auto;
+  margin: var(--size-2) 0 0;
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  background: var(--bg-hover);
+}
+.topics__preview-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--size-3);
+  padding: 2px 0;
+  font-size: var(--font-size-12-5);
+}
+.topics__preview-names {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+.topics__arrow {
+  color: var(--text-muted);
+}
+.topics__preview-score {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* Settings → Topics: the list, one quiet row per topic. */
+.topics__list {
+  max-width: 72ch;
+  margin: 0 auto var(--size-4);
+  border-top: 1px solid var(--border);
+}
+.topics__row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-1) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-size-13);
+}
+.topics__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+.topics__badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: var(--font-size-10-5);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  vertical-align: 1px;
+  color: var(--text-muted);
+}
+.topics__count {
+  min-width: 2ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.topics__rename {
+  height: 26px;
+  font-size: var(--font-size-13);
+}
+.topics__error {
+  grid-column: 1 / -1;
+  font-size: var(--font-size-11-5);
+  color: var(--danger);
+}
+.topics__advanced {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 72ch;
+  margin: var(--size-4) auto var(--size-3);
+  font-size: var(--font-size-11);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.topics__advanced:hover {
+  color: var(--text-secondary);
+}
+
+/* Settings: the model download's progress, a hairline under its row. */
+.topics__bar {
+  height: 2px;
+  margin: -4px 0 var(--size-2);
+  border-radius: 1px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+.topics__bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 200ms var(--ease);
+}

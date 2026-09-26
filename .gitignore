@@ -47,3 +47,8 @@ Thumbs.db
 !.vscode/extensions.json
 *.log
 npm-debug.log*
+snapshots/
+
+# --- drafts ---
+# The project-log draft; moved into the vault by hand.
+docs/log-draft.md

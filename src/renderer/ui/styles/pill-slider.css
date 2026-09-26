@@ -1,0 +1,190 @@
+/* ---------- pill slider ---------- */
+
+.pill {
+  --pill-track: #ebebeb;
+  --pill-tick: rgb(0 0 0 / 0.16);
+  --pill-fill: #141414;
+  --pill-knob: #141414;
+  --pill-dot: #ffffff;
+  --pill-bubble: #141414;
+  --pill-bubble-text: #ffffff;
+  --knob: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  user-select: none;
+}
+:root[data-theme='dark'] .pill {
+  --pill-track: #2b2b2b;
+  --pill-tick: rgb(255 255 255 / 0.16);
+  --pill-fill: #f2f2f2;
+  --pill-knob: #f2f2f2;
+  --pill-dot: #141414;
+  --pill-bubble: #f2f2f2;
+  --pill-bubble-text: #141414;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .pill {
+    --pill-track: #2b2b2b;
+    --pill-tick: rgb(255 255 255 / 0.16);
+    --pill-fill: #f2f2f2;
+    --pill-knob: #f2f2f2;
+    --pill-dot: #141414;
+    --pill-bubble: #f2f2f2;
+    --pill-bubble-text: #141414;
+  }
+}
+.pill__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: var(--font-size-12);
+}
+.pill__label {
+  color: var(--text-secondary);
+}
+.pill__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: var(--font-size-11);
+}
+.pill__track {
+  position: relative;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--pill-track);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+.pill__track:focus-visible {
+  box-shadow:
+    inset 0 1px 2px rgb(0 0 0 / 0.08),
+    0 0 0 2px var(--accent);
+}
+/* Tick marks across the empty part; the fill simply covers them. */
+.pill__ticks {
+  position: absolute;
+  inset: 7px 12px;
+  background-image: repeating-linear-gradient(90deg, var(--pill-tick) 0 1px, transparent 1px 5px);
+  border-radius: 2px;
+}
+/* The knob's centre travels over (width - knob); the fill reaches its right edge. */
+.pill__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--knob) + (100% - var(--knob)) * var(--t));
+  border-radius: 999px;
+  background: var(--pill-fill);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.18);
+}
+.pill__knob {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--knob) / 2 + (100% - var(--knob)) * var(--t));
+  width: calc(var(--knob) + 4px);
+  height: calc(var(--knob) + 4px);
+  border-radius: 50%;
+  background: var(--pill-knob);
+  box-shadow:
+    0 0 0 2px var(--pill-track),
+    0 3px 10px rgb(0 0 0 / 0.28);
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  transition: transform 160ms var(--ease-pop);
+}
+.pill__knob > i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--pill-dot);
+  transition:
+    width 160ms var(--ease-pop),
+    height 160ms var(--ease-pop);
+}
+.pill__track:hover .pill__knob {
+  transform: translate(-50%, -50%) scale(1.08);
+}
+.pill.is-held .pill__knob {
+  transform: translate(-50%, -50%) scale(0.94);
+}
+.pill.is-held .pill__knob > i {
+  width: 5px;
+  height: 5px;
+}
+/* A click glides; a drag does not, or the knob lags behind the pointer. */
+.pill.is-gliding .pill__fill {
+  transition: width 220ms var(--ease-pop);
+}
+.pill.is-gliding .pill__knob {
+  transition:
+    left 220ms var(--ease-pop),
+    transform 160ms var(--ease-pop);
+}
+.pill__bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  min-width: 26px;
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: var(--pill-bubble);
+  color: var(--pill-bubble-text);
+  font-size: var(--font-size-11);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 6px) scale(0.6);
+  transform-origin: 50% 100%;
+  transition:
+    opacity 140ms var(--ease),
+    transform 200ms var(--ease-pop);
+}
+.pill__bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--pill-bubble);
+  transform: translateX(-50%);
+}
+.pill.is-held .pill__bubble {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+.pill__marks {
+  position: relative;
+  height: 22px;
+  margin: 0 calc(var(--knob) / 2);
+}
+.pill__mark {
+  position: absolute;
+  top: 0;
+  left: calc(100% * var(--at));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transform: translateX(-50%);
+  font-size: var(--font-size-10);
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color 160ms var(--ease);
+}
+.pill__mark > i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.pill__mark.is-near {
+  color: var(--text-primary);
+}

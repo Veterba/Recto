@@ -20,7 +20,7 @@ import { TOPIC_PREFIX } from '../../shared/topics'
 import { continues } from './cluster'
 import type { Lang } from './naming'
 
-export { TOPIC_PREFIX, TOPICS_PROPERTY } from '../../shared/topics'
+export { TOPICS_PROPERTY } from '../../shared/topics'
 
 export type Topic = { id: string; name: string; renamedByUser: boolean }
 
@@ -46,7 +46,7 @@ export type TopicsState = {
   /** Who a deleted topic's members were, so a rebuild can tell when a cluster is that topic again. */
   deletedMembers: Record<string, string[]>
   runs: Run[]
-  /** The one-time removal of the old `related` auto-links has happened. */
+  /** The one-time removal of the old `related` links (from before topics) has happened. */
   migratedRelated: boolean
   /** The language topic names are in. Null until the first build. */
   language: Lang | null
@@ -173,11 +173,18 @@ export const setOwned = (s: TopicsState, path: string, ids: readonly string[]): 
 export const block = (s: TopicsState, path: string, id: string): TopicsState => ({
   ...s,
   blocks: setList(s.blocks, path, [...new Set([...(s.blocks[path] ?? []), id])]),
-  assigned: setList(s.assigned, path, (s.assigned[path] ?? []).filter((x) => x !== id)),
-  owned: setList(s.owned, path, (s.owned[path] ?? []).filter((x) => x !== id)),
+  assigned: setList(
+    s.assigned,
+    path,
+    (s.assigned[path] ?? []).filter((x) => x !== id),
+  ),
+  owned: setList(
+    s.owned,
+    path,
+    (s.owned[path] ?? []).filter((x) => x !== id),
+  ),
 })
 
-/** A run that changed nothing is not kept - unless it has state to put back. */
 /** The user took topic `id` out of note `path`: blocked there for good, and counted against the topic. */
 export const reject = (s: TopicsState, path: string, id: string): TopicsState => {
   const next = block(s, path, id)
@@ -196,22 +203,31 @@ export function dissolving(s: TopicsState): string[] {
     })
 }
 
+/** `m` with `id` taken out of every list, and the lists left empty dropped. */
+export const withoutId = (m: Record<string, string[]>, id: string): Record<string, string[]> =>
+  Object.fromEntries(
+    Object.entries(m)
+      .map(([k, v]): [string, string[]] => [k, v.filter((x) => x !== id)])
+      .filter(([, v]) => v.length > 0),
+  )
+
 /** Dissolve a topic: gone, and - like a deleted one - never made again from the same notes. */
 export function dissolve(s: TopicsState, id: string): TopicsState {
-  const members = [...new Set([...(s.rejected[id] ?? []), ...Object.entries(s.owned).filter(([, ids]) => ids.includes(id)).map(([p]) => p)])]
-  const strip = (m: Record<string, string[]>): Record<string, string[]> =>
-    Object.fromEntries(
-      Object.entries(m)
-        .map(([k, v]): [string, string[]] => [k, v.filter((x) => x !== id)])
-        .filter(([, v]) => v.length > 0),
-    )
+  const members = [
+    ...new Set([
+      ...(s.rejected[id] ?? []),
+      ...Object.entries(s.owned)
+        .filter(([, ids]) => ids.includes(id))
+        .map(([p]) => p),
+    ]),
+  ]
   return {
     ...s,
     topics: s.topics.filter((t) => t.id !== id),
     deleted: [...new Set([...s.deleted, id])],
     deletedMembers: { ...s.deletedMembers, [id]: members.sort() },
-    assigned: strip(s.assigned),
-    owned: strip(s.owned),
+    assigned: withoutId(s.assigned, id),
+    owned: withoutId(s.owned, id),
   }
 }
 
@@ -223,6 +239,7 @@ export const isDeletedAgain = (s: TopicsState, members: ReadonlySet<string>): bo
     new Set(),
   ) !== null
 
+/** A run that changed nothing is not kept - unless it has state to put back. */
 export const addRun = (s: TopicsState, run: Run): TopicsState =>
   run.changes.length === 0 && run.restore === undefined ? s : { ...s, runs: [...s.runs, run].slice(-RUNS_KEPT) }
 

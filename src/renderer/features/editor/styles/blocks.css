@@ -1,0 +1,303 @@
+/* ---------- editor blocks ---------- */
+
+/* A fenced code block reads as one panel, not as three grey lines. The rounded
+   corners come from the first/last line, so it works at any length without a
+   wrapper element - which a line decoration cannot produce. */
+.cm-codeblock {
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding-left: var(--size-3) !important;
+  padding-right: var(--size-3) !important;
+}
+.cm-codeblock-first {
+  position: relative;
+  padding-top: var(--size-1) !important;
+  border-top-left-radius: var(--radius-s);
+  border-top-right-radius: var(--radius-s);
+}
+.cm-codeblock-last {
+  position: relative;
+  padding-bottom: var(--size-1) !important;
+  border-bottom-left-radius: var(--radius-s);
+  border-bottom-right-radius: var(--radius-s);
+}
+
+/* Both chips are absolutely positioned inside the first line of the block.
+   In flow they would sit before the code and push the first line right. */
+.cm-code-lang {
+  position: absolute;
+  top: 3px;
+  right: 58px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-10);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  vertical-align: middle;
+}
+
+.cm-code-copy {
+  all: unset;
+  box-sizing: border-box;
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  padding: 1px var(--size-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-10-5);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease);
+}
+.cm-codeblock-first:hover .cm-code-copy,
+.cm-code-copy:focus-visible {
+  opacity: 1;
+}
+.cm-code-copy:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.cm-code-copy.is-done {
+  opacity: 1;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* A quote gets a bar and a colour, so it cannot be mistaken for a code block —
+   which was the actual complaint: the two looked identical. */
+.cm-quoteblock {
+  position: relative;
+  padding-left: var(--size-4) !important;
+  font-style: italic;
+}
+.cm-quoteblock::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+
+.cm-highlight {
+  background: var(--highlight-bg);
+  border-radius: 3px;
+  padding: 1px 2px;
+  /* Negative margin so a highlight does not widen the line it sits on. */
+  margin: 0 -1px;
+  box-decoration-break: clone;
+}
+
+/* The drawn `---`. A real element rather than a border on the line, so it
+   centres in the line box at any font size. */
+/* The line a `---` sits on: the marks are hidden, the rule is drawn across the
+   row itself, so the row keeps its place in the document and its cursor. */
+.cm-rule-line {
+  position: relative;
+}
+.cm-rule-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--border-strong);
+  pointer-events: none;
+}
+
+/* The `-` of a bullet list, drawn as one.
+
+   A step darker and a size up from the surrounding text: at the body size in
+   the muted grey it read as a speck of dust rather than as a list marker. The
+   line-height stays at 1 so a larger glyph cannot stretch the line box - the
+   editor's own line height is well above 1.3em, so nothing moves. */
+/*
+ * The dot that stands in for `- `.
+ *
+ * Exactly two columns wide, because that is what it replaces and what the
+ * hanging indent is calculated from: a narrower glyph left every wrapped row
+ * of a bullet sitting a few pixels right of the item's own text. Drawn rather
+ * than typed, so its size does not depend on the font's bullet glyph.
+ */
+.cm-bullet {
+  display: inline-block;
+  width: 2ch;
+  text-align: center;
+  /*
+   * An inline-block is a block container, so it inherits the line's own
+   * `text-indent` - and every list line carries a big negative one, the hanging
+   * indent that pulls its first row back under the marker. The dot was being
+   * shifted left by that much INSIDE its own cell: it drew nine pixels off the
+   * column the guides are on, which is what made the guides look misaligned
+   * with the bullets. They were always on the cell's centre; the dot was not.
+   */
+  text-indent: 0;
+  color: var(--text-secondary);
+  font-size: 1em;
+  line-height: 1;
+}
+.cm-bullet::before {
+  content: '';
+  display: inline-block;
+  width: 5.5px;
+  height: 5.5px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 0.14em;
+}
+
+/* ---------- Obsidian syntax: maths, tables, callouts, embeds ---------- */
+
+/* Inline maths sits on the text baseline; KaTeX's own CSS handles the rest. */
+.cm-math {
+  padding: 0 1px;
+}
+.cm-math .katex {
+  font-size: 1.08em;
+}
+/* `$$…$$` inside a line: display style, but it must not break the line open. */
+.cm-math-display .katex-display {
+  display: inline-block;
+  margin: 0.2em 0.4em;
+}
+
+/* A `$$` block on its own lines: centred, with room to breathe, and scrolls
+   sideways rather than overflowing the column when a formula is long. */
+.cm-math-block {
+  padding: var(--size-2) 0;
+  overflow-x: auto;
+  cursor: text;
+}
+.cm-math-block .katex-display {
+  margin: 0;
+}
+.katex-error {
+  color: var(--danger) !important;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* Tables, drawn like a document table rather than a spreadsheet. */
+.cm-table-wrap {
+  margin: var(--size-2) 0;
+  overflow-x: auto;
+  cursor: text;
+}
+.cm-table {
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 0.92em;
+  line-height: 1.5;
+}
+.cm-table th,
+.cm-table td {
+  padding: 6px var(--size-3);
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.cm-table th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+}
+.cm-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--bg-secondary) 45%, transparent);
+}
+.cm-table code {
+  padding: 1px var(--size-1);
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* Footnote markers: small, raised, in the accent. */
+.cm-footnote-ref {
+  padding: 0 1px;
+  font-size: 0.72em;
+  color: var(--accent);
+}
+
+/* A note embed: a link card, since transcluding the note is its own feature. */
+.cm-embed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+}
+.cm-embed__label {
+  color: var(--text-muted);
+}
+
+/*
+ * Callouts: `> [!type] Title`. One tint per colour group, a left bar in the
+ * same colour, the header line bold - Obsidian's shape, in this app's palette.
+ */
+.cm-callout {
+  --callout: 90 110 140;
+  background: rgb(var(--callout) / 0.08);
+  border-left: 3px solid rgb(var(--callout) / 0.85);
+  padding-left: var(--size-3) !important;
+}
+.cm-callout-head {
+  padding-top: 6px !important;
+  font-weight: 600;
+  color: rgb(var(--callout));
+}
+.cm-callout-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.cm-callout-icon {
+  font-weight: 700;
+}
+.cm-callout-note {
+  --callout: 68 138 255;
+}
+.cm-callout-abstract {
+  --callout: 0 176 194;
+}
+.cm-callout-info {
+  --callout: 68 138 255;
+}
+.cm-callout-tip {
+  --callout: 0 191 165;
+}
+.cm-callout-success {
+  --callout: 34 170 90;
+}
+.cm-callout-question {
+  --callout: 236 150 0;
+}
+.cm-callout-warning {
+  --callout: 236 117 0;
+}
+.cm-callout-failure {
+  --callout: 233 49 71;
+}
+.cm-callout-danger {
+  --callout: 233 49 71;
+}
+.cm-callout-example {
+  --callout: 120 82 238;
+}
+.cm-callout-quote {
+  --callout: 140 140 140;
+}
