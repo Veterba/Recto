@@ -78,7 +78,7 @@ export type VaultUsage = {
 }
 
 /** What topics reasons over: every note's mtime, resolved links and tags. */
-export type AutolinkGraph = {
+export type TopicsGraph = {
   notes: { path: string; mtime: number }[]
   links: { source: string; target: string }[]
   tags: { path: string; tag: string }[]
@@ -103,7 +103,7 @@ export type IndexRequest =
   | { kind: 'history-prune' }
   | { kind: 'stats' }
   | { kind: 'vault-usage' }
-  | { kind: 'autolink-graph' }
+  | { kind: 'topics-graph' }
   /** Notes carrying a link written as `target`, resolved or not - a topic link never resolves. */
   | { kind: 'link-sources'; target: string }
   | { kind: 'close' }
@@ -126,7 +126,7 @@ export type IndexResponse =
   | { kind: 'history-prune-result'; removed: number }
   | { kind: 'stats-result'; notes: number; links: number; unresolved: number; tags: number }
   | { kind: 'vault-usage-result'; usage: VaultUsage }
-  | { kind: 'autolink-graph-result'; graph: AutolinkGraph }
+  | { kind: 'topics-graph-result'; graph: TopicsGraph }
   | { kind: 'link-sources-result'; paths: string[] }
   | { kind: 'closed' }
   | { kind: 'error'; message: string }

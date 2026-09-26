@@ -274,10 +274,10 @@ function handle(request: IndexRequest): IndexResponse {
             .all(request.target) as { path: string }[]
         ).map((r) => r.path),
       }
-    case 'autolink-graph': {
+    case 'topics-graph': {
       const handleDb = requireDb()
       return {
-        kind: 'autolink-graph-result',
+        kind: 'topics-graph-result',
         graph: {
           notes: handleDb.prepare('SELECT path, mtime FROM notes').all() as { path: string; mtime: number }[],
           links: handleDb

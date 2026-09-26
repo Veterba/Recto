@@ -60,7 +60,7 @@ const BATCH_CHUNKS = 16
 const HUB_LINK_SHARE = 0.5
 const HUB_MIN_OWN_WORDS = 30
 export const SAMPLE_MEMBERS = 3
-/** The property the old pairwise auto-links were written to. */
+/** The property the old pairwise links (before topics) were written to. */
 const OLD_PROPERTY = 'related'
 
 // ---- process state ------------------------------------------------------------
@@ -114,8 +114,8 @@ export async function putState(rows: (Partial<StateRow> & { path: string })[]): 
 // ---- the vault, as topics sees it ---------------------------------------------
 
 export async function context(settings: TopicsSettings): Promise<Context> {
-  const response = await send({ kind: 'autolink-graph' }, 30_000)
-  if (response.kind !== 'autolink-graph-result') throw new Error('index did not answer')
+  const response = await send({ kind: 'topics-graph' }, 30_000)
+  if (response.kind !== 'topics-graph-result') throw new Error('index did not answer')
   const graph = response.graph
   const templates = coerceTemplateSettings(readState('templates'))
   const excluded = excludedFolders(templates, settings.excluded)
@@ -331,10 +331,11 @@ async function languagePass(ctx: Context, state: TopicsState): Promise<TopicsSta
 // ---- writing ----------------------------------------------------------------------
 
 /**
- * The old pairwise auto-links, removed once: only the `related` entries the
- * app itself wrote (per `.recto/autolinks.json`), as one undoable run.
+ * The old pairwise links from before topics, removed once: only the `related`
+ * entries the app itself wrote (per its old record, `.recto/autolinks.json`),
+ * as one undoable run.
  */
-async function removeOldAutoLinks(ctx: Context, state: TopicsState): Promise<TopicsState> {
+async function removeOldRelatedLinks(ctx: Context, state: TopicsState): Promise<TopicsState> {
   if (state.migratedRelated) return state
   const old = readState('autolinks') as { written?: Record<string, unknown> } | null
   const changes: Change[] = []
@@ -382,7 +383,7 @@ async function pass(): Promise<void> {
   const settings = readSettings()
   const ctx = await context(settings)
   // Once, whatever the settings: take out the old pairwise links the app wrote.
-  let state = await removeOldAutoLinks(ctx, readTopics())
+  let state = await removeOldRelatedLinks(ctx, readTopics())
   saveTopics(state)
   if (!settings.enabled || !modelPresent(modelRoot())) return
 

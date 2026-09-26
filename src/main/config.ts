@@ -11,7 +11,7 @@
  *                                 to `<userData>/models`; a dev build sets it to
  *                                 the installed app's folder so the model is
  *                                 downloaded once.
- *   RECTO_AUTOLINKS_ANY_POWER=1   Run the topics backfill on battery and while
+ *   RECTO_TOPICS_ANY_POWER=1      Run the topics backfill on battery and while
  *                                 the user is active. A test seam.
  *   RECTO_WRITE_LOG=1             Log every note write to the console, with the
  *                                 caller's stack.
@@ -26,7 +26,7 @@
 
 export const allowRealVault = (): boolean => process.env['RECTO_ALLOW_REAL_VAULT'] === '1'
 
-export const anyPower = process.env['RECTO_AUTOLINKS_ANY_POWER'] === '1'
+export const anyPower = process.env['RECTO_TOPICS_ANY_POWER'] === '1'
 
 export const writeLog = process.env['RECTO_WRITE_LOG'] === '1'
 

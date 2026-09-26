@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 /**
  * Open a note, move the cursor, close the tab: the file must not be written.
  * Not its bytes, not its mtime - the mtime is what sync compares and what the
- * auto-links quiet period counts from.
+ * topics quiet period counts from.
  *
  * Drives the real app over the DevTools protocol, against the built output,
  * so it runs only with `npm run test:e2e` (which builds first).

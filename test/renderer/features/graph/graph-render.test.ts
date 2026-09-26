@@ -204,7 +204,7 @@ describe('the open note does not hide the rest', () => {
   })
 })
 
-describe('auto-links are drawn apart from the links you wrote', () => {
+describe('topic links are drawn apart from the links you wrote', () => {
   /** Records the dash and width of every stroke. */
   function dashContext(): { context: CanvasRenderingContext2D; strokes: { dash: number[]; width: number }[] } {
     const strokes: { dash: number[]; width: number }[] = []
@@ -251,7 +251,7 @@ describe('auto-links are drawn apart from the links you wrote', () => {
     showLabels: false,
   }
 
-  it('draws auto-links thinner and dashed, manual links solid', () => {
+  it('draws topic links thinner and dashed, manual links solid', () => {
     const { context, strokes } = dashContext()
     draw(context, base, palette, WIDTH, HEIGHT)
     const solid = strokes.filter((s) => s.dash.length === 0)

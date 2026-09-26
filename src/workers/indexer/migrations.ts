@@ -151,12 +151,13 @@ export const MIGRATIONS: readonly Migration[] = [
   },
   {
     version: 6,
-    name: 'autolinks',
+    name: 'topic-vectors',
     sql: `
-      -- Auto-links. Written by the embedder process, never by the indexer; the
-      -- migration lives here only because the indexer opens the file first.
-      -- A cache like everything else: the user's decisions (rejections) live
-      -- in .recto/autolinks.json, not here.
+      -- Topics: the note vectors. Written by the embedder process, never by the
+      -- indexer; the migration lives here only because the indexer opens the
+      -- file first. A cache like everything else: the user's decisions live in
+      -- .recto/topics.json, not here. The tables keep their first name,
+      -- autolink_*: renaming them would change the index schema.
       --
       -- idx -1 is the note's title vector (title + aliases + headings).
       CREATE TABLE autolink_chunks (
@@ -190,7 +191,7 @@ export const MIGRATIONS: readonly Migration[] = [
     name: 'link-property',
     sql: `
       -- The frontmatter key a link sits under (null in the body), so the graph
-      -- can draw links from the auto-links property apart from the user's own.
+      -- can draw links from the topics property apart from the user's own.
       -- Every note is re-parsed once to fill it, like migration 5.
       ALTER TABLE links ADD COLUMN property TEXT;
       UPDATE notes SET mtime = -1;

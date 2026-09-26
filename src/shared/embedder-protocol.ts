@@ -1,6 +1,7 @@
 /**
  * Main <-> embedder messages. The embedder owns the model and the
- * `autolink_*` tables; main owns files, settings and decisions.
+ * note-vector tables (`autolink_*`, named before topics); main owns files,
+ * settings and decisions.
  */
 
 /** One thing to embed. idx -1 is the note's title vector. */

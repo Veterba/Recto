@@ -6,7 +6,7 @@
 import { type Chunk, ownLines, ownText, countWords, linkShare, chunk, titleInput } from './text'
 import { type Lang, nameText, language } from './naming'
 import type { TopicsSettings } from '../../shared/topics'
-import type { AutolinkGraph } from '../../shared/indexer-protocol'
+import type { TopicsGraph } from '../../shared/indexer-protocol'
 import * as vaultFs from '../vault-fs'
 import { type TopicsState, TOPICS_PROPERTY, topicNameOf, byName } from './state'
 import { linksIn } from '../../shared/link-property'
@@ -29,7 +29,7 @@ export type Note = {
 
 export type Context = {
   settings: TopicsSettings
-  graph: AutolinkGraph
+  graph: TopicsGraph
   all: Set<string>
   /** Notes that may have topics, sorted - the order everything is computed in. */
   eligible: string[]

@@ -46,7 +46,7 @@ export type TopicsState = {
   /** Who a deleted topic's members were, so a rebuild can tell when a cluster is that topic again. */
   deletedMembers: Record<string, string[]>
   runs: Run[]
-  /** The one-time removal of the old `related` auto-links has happened. */
+  /** The one-time removal of the old `related` links (from before topics) has happened. */
   migratedRelated: boolean
   /** The language topic names are in. Null until the first build. */
   language: Lang | null

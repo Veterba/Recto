@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 /**
  * Writing a note's own bytes back must not touch the file. A rewrite of the
  * same content still moves the mtime - which sync reads as an edit, and which
- * restarts the auto-links quiet period on a note nobody changed.
+ * restarts the topics quiet period on a note nobody changed.
  */
 
 let root = ''

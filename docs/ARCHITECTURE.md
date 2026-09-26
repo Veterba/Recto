@@ -88,7 +88,7 @@ outside the vault, and anything that would let the renderer touch the disk direc
    is saved with `fs:write` after 500 ms of quiet, and on close. A change on disk from elsewhere is
    reloaded into the editor.
 6. **Topics.** On a timer and when the window regains focus, the topics service in main reads the
-   index's graph (`autolink-graph`), has the embedder turn changed notes into vectors, clusters them,
+   index's graph (`topics-graph`), has the embedder turn changed notes into vectors, clusters them,
    and writes `topics: [[topics/…]]` into the notes' frontmatter - through the same `vault-fs` path,
    as one undoable run.
 
