@@ -452,7 +452,10 @@ export function FileTree({
   }
 
   return (
-    <>
+    // One column: the error, the notice, then the tree in what is left. Stacked
+    // loose, the tree was the full height of the sidebar AND something above it,
+    // so the sidebar scrolled too - a second scrollbar next to the tree's.
+    <div className="tree__frame">
       {error !== null && (
         <p className="tree__error" role="alert" onClick={() => setError(null)}>
           {error}
@@ -477,8 +480,8 @@ export function FileTree({
           >
             Undo
           </button>
-          <button className="tree__undo" onClick={() => setRewrite(null)}>
-            Dismiss
+          <button className="tree__notice-close" aria-label="Dismiss" onClick={() => setRewrite(null)}>
+            <Icon name="x" size={12} />
           </button>
         </p>
       )}
@@ -634,7 +637,7 @@ export function FileTree({
           onCancel={() => setRenaming(null)}
         />
       )}
-    </>
+    </div>
   )
 }
 

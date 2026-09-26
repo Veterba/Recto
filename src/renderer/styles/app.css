@@ -1260,8 +1260,14 @@ body.is-resizing {
 
 /* ---------- file tree ---------- */
 
-.tree {
+.tree__frame {
+  display: flex;
+  flex-direction: column;
   height: 100%;
+}
+.tree {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   outline: none;
 }
@@ -2022,6 +2028,22 @@ body.is-resizing {
 }
 .tree__undo:hover {
   background: var(--bg-elevated);
+}
+/* Last in the notice, pushed to its right edge. */
+.tree__notice-close {
+  all: unset;
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.tree__notice-close:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
 }
 
 /* ---------- unresolved links ---------- */
