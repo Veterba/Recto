@@ -1311,6 +1311,20 @@ body.is-resizing {
   background: var(--bg-hover);
 }
 /*
+ * Indentation guides (Obsidian's: 1px, the text colour at 12%). One per open
+ * folder above the row; top and bottom overhang the row's transparent borders
+ * so the pieces of consecutive rows join into one line.
+ */
+.tree__guide {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  margin-left: -0.5px;
+  background: color-mix(in srgb, var(--text-primary) 12%, transparent);
+  pointer-events: none;
+}
+/*
  * The keyboard cursor, and ONLY while the tree has the keyboard.
  *
  * It is a different thing from the open note: the cursor is where the arrow

@@ -21,6 +21,8 @@ import { Tip } from './Tip'
 
 const OVERSCAN = 8
 const INDENT = 13
+/** Where a folder's guide runs, from the row's left: its chevron's centre (6px padding + half of 14px). */
+const GUIDE_X = 13
 
 type Row = { node: FileNode; depth: number }
 
@@ -704,6 +706,12 @@ function TreeRow({
       onPointerEnter={(ev) => onHover(ev.currentTarget)}
       onPointerLeave={onLeave}
     >
+      {/* Indentation guides, as in Obsidian: one line per open folder above
+          this row, under that folder's chevron. The rows are a flat virtual
+          list, so each row draws its own piece and the pieces meet. */}
+      {Array.from({ length: depth }, (_, level) => (
+        <span key={level} className="tree__guide" style={{ left: level * INDENT + GUIDE_X }} aria-hidden />
+      ))}
       <span className={`tree__chevron${isFolder ? '' : ' is-hidden'}${isOpen ? ' is-open' : ''}`}>
         {isFolder ? '›' : ''}
       </span>
