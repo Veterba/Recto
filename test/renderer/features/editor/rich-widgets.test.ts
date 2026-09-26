@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { calloutGroup, mathSource, parseTable, splitRow, stripContainers } from '../../../../src/renderer/features/editor/rich-widgets'
+import { mathSource, stripContainers } from '../../../../src/renderer/features/editor/rich-widgets'
+import { calloutGroup } from '../../../../src/renderer/features/editor/callout-widget'
+import { parseTable, splitRow } from '../../../../src/renderer/features/editor/table-widget'
 
 describe('splitRow', () => {
   it('splits on pipes and drops the outer ones', () => {

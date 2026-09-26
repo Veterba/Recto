@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FileNode } from '@shared/ipc-contract'
+import { useMemo } from 'react'
+import type { FileNode } from '@shared/vault'
 import { fuzzyFilter } from '../../../ui/fuzzy'
+import { noteEntries } from '../../file-tree'
 import { Highlight } from '../../../app/components/CommandPalette'
+import { pickerKeyDown, usePicker, useScrollSelected } from '../../../ui/picker'
 
 /**
  * Jump to any note by name (⌘O).
@@ -14,23 +16,6 @@ import { Highlight } from '../../../app/components/CommandPalette'
  * which is the point of having kept `match -> ranges -> render` separate.
  */
 
-type Entry = { path: string; name: string; folder: string }
-
-function flattenFiles(nodes: readonly FileNode[], out: Entry[] = []): Entry[] {
-  for (const node of nodes) {
-    if (node.kind === 'folder') flattenFiles(node.children ?? [], out)
-    else if (node.name.toLowerCase().endsWith('.md')) {
-      const at = node.path.lastIndexOf('/')
-      out.push({
-        path: node.path,
-        name: node.name.replace(/\.md$/i, ''),
-        folder: at === -1 ? '' : node.path.slice(0, at),
-      })
-    }
-  }
-  return out
-}
-
 type Props = {
   open: boolean
   roots: readonly FileNode[]
@@ -39,12 +24,9 @@ type Props = {
 }
 
 export function QuickSwitcher({ open, roots, onClose, onOpen }: Props): React.ReactElement | null {
-  const [query, setQuery] = useState('')
-  const [cursor, setCursor] = useState(0)
-  const inputRef = useRef<HTMLInputElement | null>(null)
-  const listRef = useRef<HTMLUListElement | null>(null)
+  const { query, setQuery, cursor, setCursor, inputRef, listRef } = usePicker(open)
 
-  const entries = useMemo(() => (open ? flattenFiles(roots) : []), [open, roots])
+  const entries = useMemo(() => (open ? noteEntries(roots) : []), [open, roots])
 
   const results = useMemo(() => {
     if (query.trim() === '') return entries.slice(0, 50).map((item) => ({ item, match: { score: 0, ranges: [] } }))
@@ -53,18 +35,7 @@ export function QuickSwitcher({ open, roots, onClose, onOpen }: Props): React.Re
     return fuzzyFilter(query, entries, (entry) => entry.name).slice(0, 50)
   }, [query, entries])
 
-  useEffect(() => {
-    if (!open) return
-    setQuery('')
-    setCursor(0)
-    inputRef.current?.focus()
-  }, [open])
-
-  useEffect(() => setCursor(0), [query])
-
-  useEffect(() => {
-    listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
-  }, [cursor, results])
+  useScrollSelected(listRef, cursor, results)
 
   if (!open) return null
 
@@ -85,19 +56,7 @@ export function QuickSwitcher({ open, roots, onClose, onOpen }: Props): React.Re
           value={query}
           spellCheck={false}
           onChange={(ev) => setQuery(ev.target.value)}
-          onKeyDown={(ev) => {
-            if (ev.key === 'Escape') return onClose()
-            if (ev.key === 'ArrowDown') {
-              ev.preventDefault()
-              setCursor((c) => Math.min(c + 1, Math.max(0, results.length - 1)))
-            } else if (ev.key === 'ArrowUp') {
-              ev.preventDefault()
-              setCursor((c) => Math.max(c - 1, 0))
-            } else if (ev.key === 'Enter') {
-              ev.preventDefault()
-              commit(cursor)
-            }
-          }}
+          onKeyDown={(ev) => pickerKeyDown(ev, { count: results.length, cursor, setCursor, pick: commit, close: onClose })}
         />
 
         {results.length === 0 ? (

@@ -29,7 +29,7 @@ function hintFor(key: string): string {
 
 let cached: string | null | undefined
 
-export function keyAvailable(): boolean {
+function keyAvailable(): boolean {
   return safeStorage.isEncryptionAvailable()
 }
 

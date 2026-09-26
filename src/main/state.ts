@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { VAULT_STATE_DIR } from '../shared/ipc-contract'
+import { VAULT_STATE_DIR } from '../shared/vault'
 import { currentVault } from './vault'
 
 /**

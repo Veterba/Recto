@@ -1,7 +1,10 @@
 import { BrowserWindow } from 'electron'
-import type { AiMessage } from '../../shared/ipc-contract'
+import type { AiMessage } from '../../shared/ai'
 import { readKey } from '../secrets'
 import { DirectProvider, type AiProvider } from './provider'
+import { IPC_EVENT } from '../../shared/ipc'
+import type { IpcEvents } from '../../shared/ipc'
+import { sendEvent } from '../events'
 
 /**
  * The AI side of the IPC boundary.
@@ -39,10 +42,13 @@ export function resetProvider(): void {
 /** In-flight streams, so a Stop button has something to stop. */
 const running = new Map<string, AbortController>()
 
-function send(channel: 'ai:delta' | 'ai:done' | 'ai:error', payload: unknown): void {
+function send<C extends typeof IPC_EVENT.aiDelta | typeof IPC_EVENT.aiDone | typeof IPC_EVENT.aiError>(
+  channel: C,
+  ...args: Parameters<IpcEvents[C]>
+): void {
   const window = BrowserWindow.getAllWindows()[0]
   if (window === undefined || window.isDestroyed()) return
-  window.webContents.send(channel, payload)
+  sendEvent(window, channel, ...args)
 }
 
 export async function test(model: string): Promise<{ ok: boolean; error?: string }> {
@@ -82,14 +88,14 @@ export function startStream(request: { id: string; model: string; system: string
     .stream(
       { model: request.model, system: request.system, messages: request.messages, maxTokens: MAX_TOKENS },
       {
-        onDelta: (text) => send('ai:delta', { id: request.id, text }),
+        onDelta: (text) => send(IPC_EVENT.aiDelta, { id: request.id, text }),
         onDone: (info) => {
           running.delete(request.id)
-          send('ai:done', { id: request.id, ...info })
+          send(IPC_EVENT.aiDone, { id: request.id, ...info })
         },
         onError: (message) => {
           running.delete(request.id)
-          send('ai:error', { id: request.id, message })
+          send(IPC_EVENT.aiError, { id: request.id, message })
         },
       },
       controller.signal,
@@ -99,7 +105,7 @@ export function startStream(request: { id: string; model: string; system: string
       // belt-and-braces case where the provider itself throws, and it must
       // still produce a terminal event or the UI waits forever.
       running.delete(request.id)
-      send('ai:error', { id: request.id, message: err instanceof Error ? err.message : String(err) })
+      send(IPC_EVENT.aiError, { id: request.id, message: err instanceof Error ? err.message : String(err) })
     })
 
   return { ok: true }

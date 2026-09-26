@@ -12,12 +12,12 @@ import path from 'node:path'
  * resumes from the `.part` file with a Range request.
  */
 
-export const MODEL_REPO = 'onnx-community/embeddinggemma-300m-ONNX'
-export const MODEL_REVISION = '5090578d9565bb06545b4552f76e6bc2c93e4a66'
+const MODEL_REPO = 'onnx-community/embeddinggemma-300m-ONNX'
+const MODEL_REVISION = '5090578d9565bb06545b4552f76e6bc2c93e4a66'
 
 type ModelFile = { name: string; size: number } & ({ sha256: string } | { gitSha1: string })
 
-export const MODEL_FILES: readonly ModelFile[] = [
+const MODEL_FILES: readonly ModelFile[] = [
   { name: 'config.json', size: 1765, gitSha1: 'edb6342fb0d447a42960920034c773ddd6ed6d55' },
   { name: 'tokenizer_config.json', size: 1156830, gitSha1: '73b499ae604d0bcbeb2889639a42f46462e9d372' },
   { name: 'tokenizer.json', size: 20323312, sha256: '4dda02faaf32bc91031dc8c88457ac272b00c1016cc679757d1c441b248b9c47' },

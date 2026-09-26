@@ -4,6 +4,7 @@ import { getActiveEditor } from './components/MarkdownView'
 import type { Command, CommandRegistry } from '../../app/commands'
 import { toggleOutline } from './outline'
 import { setFocusUnit, toggleAuthors, toggleFocus, toggleStyle, toggleSyntax, toggleTypewriter } from './writing-modes'
+import { IPC } from '@shared/ipc'
 
 /**
  * The editor shortcut set, as registry entries.
@@ -83,7 +84,7 @@ export function registerEditorCommands(registry: CommandRegistry, onToggleLivePr
       run: () => {
         const editor = getActiveEditor()
         if (editor === null) return
-        void api.invoke('fs:import-images').then((result) => {
+        void api.invoke(IPC.fsImportImages).then((result) => {
           if (!result.ok || result.paths.length === 0) return
           // One `![](...)` per file, on its own line, because two images on one
           // line render side by side in some readers and stacked in others.
@@ -184,7 +185,7 @@ export function registerEditorCommands(registry: CommandRegistry, onToggleLivePr
       ...(hotkey === undefined ? {} : { hotkey }),
       isAvailable: editorHasFocus,
       run: () => {
-        void api.invoke('app:clipboard-text').then((text) => {
+        void api.invoke(IPC.appClipboardText).then((text) => {
           if (text !== '') getActiveEditor()?.insertAs(author, text)
         })
       },

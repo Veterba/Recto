@@ -17,7 +17,7 @@ import { ALL_LINKS, coerceLinkRange, type LinkRange } from './degree-bins'
  * cannot see and cannot fix from inside the app.
  */
 
-export type GraphSettings = {
+type GraphSettings = {
   /** The forces, as the Forces sliders left them. */
   tunables: Tunables
   showLabels: boolean

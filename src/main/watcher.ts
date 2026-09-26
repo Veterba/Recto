@@ -1,10 +1,11 @@
 import chokidar, { type FSWatcher } from 'chokidar'
-import fs from 'node:fs'
 import path from 'node:path'
 import type { BrowserWindow } from 'electron'
-import { VAULT_STATE_DIR, type VaultChange } from '../shared/ipc-contract'
+import { VAULT_STATE_DIR, type VaultChange } from '../shared/vault'
 import { send } from './index-client'
 import { currentVault } from './vault'
+import { IPC_EVENT } from '../shared/ipc'
+import { sendEvent } from './events'
 
 /**
  * Watches the vault and pushes changes to the renderer.
@@ -58,7 +59,7 @@ function flush(): void {
   const batch = queue
   queue = []
 
-  if (target && !target.isDestroyed()) target.webContents.send('vault:changed', batch)
+  if (target && !target.isDestroyed()) sendEvent(target, IPC_EVENT.vaultChanged, batch)
 
   // Feed the same batch to the index. Only markdown matters to it, and only
   // content changes - a directory event carries no note to parse.
@@ -164,15 +165,4 @@ export function stopWatching(): void {
     flushTimer = null
   }
   selfWrites.clear()
-}
-
-/** True if the vault folder still exists. Used to notice an unmounted drive. */
-export function vaultStillExists(): boolean {
-  const vault = currentVault()
-  if (!vault) return false
-  try {
-    return fs.statSync(vault.path).isDirectory()
-  } catch {
-    return false
-  }
 }

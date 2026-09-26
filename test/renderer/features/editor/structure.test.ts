@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
 import { EditorState } from '@codemirror/state'
-import { foldRangeAt } from '../../../../src/renderer/features/editor/structure'
+import { foldRangeAt } from '../../../../src/renderer/features/editor/folding'
 import { obsidianSyntax } from '../../../../src/renderer/features/editor/obsidian-syntax'
 
 const state = (doc: string): EditorState => {

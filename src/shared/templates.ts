@@ -15,10 +15,10 @@
 import { parseFrontmatter, setField } from './frontmatter'
 
 /** Where templates live when the vault has not said otherwise. */
-export const TEMPLATE_FOLDER = 'templates'
+const TEMPLATE_FOLDER = 'templates'
 
 /** Where daily notes go when the vault has not said otherwise. */
-export const DAILY_FOLDER = 'Daily'
+const DAILY_FOLDER = 'Daily'
 
 /**
  * Per-vault template settings, in `.recto/templates.json`.
@@ -137,7 +137,7 @@ export function dailyNotePath(date: Date, root: string): { folder: string; name:
 /** What a daily note contains when no template has been chosen. */
 export const BUILT_IN_DAILY = '# {{date}}\n\n'
 
-export type TemplateVars = {
+type TemplateVars = {
   /** The note being written into, without its extension. */
   title: string
   /** The note's vault-relative path. */

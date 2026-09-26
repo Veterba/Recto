@@ -2,7 +2,7 @@ import { app, utilityProcess, type UtilityProcess } from 'electron'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { VAULT_STATE_DIR } from '../shared/ipc-contract'
+import { VAULT_STATE_DIR } from '../shared/vault'
 import type { IndexRequest, IndexResponse } from '../shared/indexer-protocol'
 import { currentVault } from './vault'
 
@@ -36,7 +36,7 @@ let opening: Extract<IndexRequest, { kind: 'open' }> | null = null
  * the hard way and added the same check; the point is to fail loudly and early,
  * with a message that names the fix.
  */
-export function checkNativeModule(): { ok: true } | { ok: false; message: string } {
+function checkNativeModule(): { ok: true } | { ok: false; message: string } {
   try {
     const require = createRequire(import.meta.url)
     require('better-sqlite3')

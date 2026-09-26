@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FileNode } from '@shared/ipc-contract'
+import type { FileNode } from '@shared/vault'
 import { api } from '../../../app/api'
 import { ConfirmDialog } from '../../../ui/ConfirmDialog'
 import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
 import { fuzzyMatch } from '../../../ui/fuzzy'
 import { CHAT_FOLDER, parseConversation } from '../conversation'
+import { IPC } from '@shared/ipc'
 
 /**
  * The AI sidebar: which conversations exist.
@@ -47,7 +48,7 @@ export function ChatList({ tree, activePath, query, onOpen, onChanged }: Props):
     let cancelled = false
     void Promise.all(
       paths.map(async (path) => {
-        const result = await api.invoke('fs:read', path)
+        const result = await api.invoke(IPC.fsRead, path)
         return [path, result.ok ? parseConversation(result.content).title : ''] as const
       }),
     ).then((pairs) => {
@@ -75,7 +76,7 @@ export function ChatList({ tree, activePath, query, onOpen, onChanged }: Props):
       kind: 'item',
       label: 'Reveal in Finder',
       icon: 'external-link',
-      run: () => void api.invoke('fs:reveal', entry.path),
+      run: () => void api.invoke(IPC.fsReveal, entry.path),
     },
     { kind: 'separator' },
     { kind: 'item', label: 'Move to archive', icon: 'trash', danger: true, run: () => setConfirming(entry) },
@@ -118,7 +119,7 @@ export function ChatList({ tree, activePath, query, onOpen, onChanged }: Props):
           onConfirm={() => {
             const target = confirming.path
             setConfirming(null)
-            void api.invoke('archive:add', target).then(() => onChanged())
+            void api.invoke(IPC.archiveAdd, target).then(() => onChanged())
           }}
           onCancel={() => setConfirming(null)}
         />

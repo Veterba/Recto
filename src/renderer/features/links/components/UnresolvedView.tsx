@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../../app/api'
 import { registerView } from '../../../app/view-registry'
+import { IPC } from '@shared/ipc'
 
 /**
  * Every link in the vault that points at nothing.
@@ -17,7 +18,7 @@ function Unresolved({ onOpen }: { onOpen: (path: string) => void }): React.React
   const [busy, setBusy] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    void api.invoke('index:unresolved').then(setEntries)
+    void api.invoke(IPC.indexUnresolved).then(setEntries)
   }, [])
 
   useEffect(load, [load])
@@ -26,9 +27,9 @@ function Unresolved({ onOpen }: { onOpen: (path: string) => void }): React.React
     setBusy(target)
     // Written at the vault root with the link's own text as the filename, which
     // is what makes the link resolve on the next index pass.
-    const result = await api.invoke('fs:create', '', `${target}.md`, 'file')
+    const result = await api.invoke(IPC.fsCreate, '', `${target}.md`, 'file')
     if (result.ok) {
-      await api.invoke('fs:write', result.path, `# ${target}\n\n`)
+      await api.invoke(IPC.fsWrite, result.path, `# ${target}\n\n`)
       onOpen(result.path)
     }
     setBusy(null)

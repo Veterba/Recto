@@ -2,3 +2,4 @@
 
 export * from './components/TemplatePicker'
 export * from './daily-note'
+export * from './hooks/use-template-actions'

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FileNode } from '@shared/ipc-contract'
+import type { FileNode } from '@shared/vault'
 import { api } from './api'
 import { applyChanges, indexTree, type VaultTree } from '../features/file-tree'
 import { noteIndexChanged } from './note-bus'
+import { IPC, IPC_EVENT } from '@shared/ipc'
 
 /** Subscribes React to the vault and keeps the tree in sync with disk. */
 
-export type VaultApi = {
+type VaultApi = {
   tree: VaultTree
   loading: boolean
   refresh: () => Promise<void>
@@ -18,7 +19,7 @@ export function useVault(enabled: boolean): VaultApi {
   const mounted = useRef(true)
 
   const refresh = useCallback(async () => {
-    const next = await api.invoke('fs:tree')
+    const next = await api.invoke(IPC.fsTree)
     if (mounted.current) {
       setRoots(next)
       setLoading(false)
@@ -38,7 +39,7 @@ export function useVault(enabled: boolean): VaultApi {
   useEffect(() => {
     if (!enabled) return
     void refresh()
-    return api.on('vault:changed', (changes) => {
+    return api.on(IPC_EVENT.vaultChanged, (changes) => {
       setRoots((prev) => applyChanges(prev, changes))
       noteIndexChanged()
     })

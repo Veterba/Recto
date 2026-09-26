@@ -7,7 +7,7 @@ import { isInFolder } from '../../shared/templates'
  * the app or by a template, not written as ideas - plus whatever the user
  * lists. (The archive lives under .recto/, which is never indexed at all.)
  */
-export const ALWAYS_EXCLUDED = ['chats', 'tasks', 'attachments']
+const ALWAYS_EXCLUDED = ['chats', 'tasks', 'attachments']
 
 export function excludedFolders(templates: TemplateSettings, extra: readonly string[]): string[] {
   return [templates.daily.folder, templates.folder, ...ALWAYS_EXCLUDED, ...extra]
@@ -16,14 +16,3 @@ export function excludedFolders(templates: TemplateSettings, extra: readonly str
 }
 
 export const isEligible = (path: string, excluded: readonly string[]): boolean => !excluded.some((folder) => isInFolder(path, folder))
-
-/** Two notes with one name are versions of each other, not related ideas: never linked. */
-export const sameName = (a: string, b: string): boolean => {
-  const base = (p: string): string =>
-    p
-      .slice(p.lastIndexOf('/') + 1)
-      .replace(/\.md$/i, '')
-      .normalize('NFC')
-      .toLowerCase()
-  return base(a) === base(b)
-}

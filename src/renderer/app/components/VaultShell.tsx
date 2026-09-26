@@ -1,52 +1,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ATTACHMENTS_FOLDER, type FileNode, type VaultInfo } from '@shared/ipc-contract'
-import { api } from '../api'
+import { ATTACHMENTS_FOLDER, type VaultInfo } from '@shared/vault'
 import { Breadcrumb } from './Breadcrumb'
 import { CommandPalette } from './CommandPalette'
-import { FileTree } from '../../features/file-tree'
-import { FloatingWindow } from './FloatingWindow'
-import { History } from '../../features/editor'
-import { QuickSwitcher } from '../../features/search'
-import type { LinkCandidate } from '../../features/editor'
-import { SearchPanel } from '../../features/search'
+import { ShellWindows } from './ShellWindows'
 import { Sidebar, SidebarStub } from './Sidebar'
-import { SidebarThemePicker } from '../../features/settings'
 import { StatusBar } from './StatusBar'
-import { TemplatePicker } from '../../features/templates'
-import { TidyDialog } from '../../features/tidy'
-import { planTidy, type TidyPlan } from '../../features/tidy'
-import { fillTemplate, mergeTemplateProperties, templateBody, type TemplateSettings } from '@shared/templates'
-import { dayKey, ensureDailyNote, retemplateDailyNote, useTemplateSettings } from '../../features/templates'
-import { focusEditorOnOpen, getActiveEditor } from '../../features/editor'
 import { WorkspaceView } from './WorkspaceView'
+import { registerStubViews } from './stubs'
 import { useAppearance, type Theme } from '../appearance'
 import { commands } from '../commands'
-import { allFolderPaths, filterTree } from '../../features/file-tree'
-import { fuzzyMatch } from '../../ui/fuzzy'
-import { registerEditorCommands } from '../../features/editor'
-import { registerAppCommands } from '../register-commands'
 import { getSection, type SectionId } from '../sections'
 import { setVaultFiles, setVaultPath } from '../vault-url'
-import { getWriting, loadWriting, toggleFocus, useWriting } from '../../features/editor'
 import { useVault } from '../vault-store'
+import { setActiveNote } from '../note-bus'
 import { useWorkspace } from '../hooks/use-workspace'
-import { getView } from '../view-registry'
-import { ChatList } from '../../features/ai'
-import { CHAT_FOLDER, chatFileName, serialiseConversation } from '../../features/ai'
-import { registerChatView } from '../../features/ai'
-import { BoardList } from '../../features/boards'
-import { registerBoardView } from '../../features/boards'
-import { CARD_FOLDER, createCard } from '../../features/boards'
-import { useBoards } from '../../features/boards'
-import { registerGraphView } from '../../features/graph'
-import { setActiveNote, noteIndexChanged } from '../note-bus'
+import { useWritingState } from '../hooks/use-writing-state'
+import { useSectionDefaults } from '../hooks/use-section-defaults'
+import { useShellNavigation } from '../hooks/use-shell-navigation'
+import { useRegisterViews } from '../hooks/use-register-views'
+import { useAppCommands } from '../hooks/use-app-commands'
+import { useShellKeys } from '../hooks/use-shell-keys'
+import { useShellCreate } from '../hooks/use-shell-create'
+import { fuzzyMatch } from '../../ui/fuzzy'
+import { FileTree, allFilePaths, allFolderPaths, filterTree, noteEntries, notePaths } from '../../features/file-tree'
+import type { LinkCandidate } from '../../features/editor'
+import { QuickSwitcher, SearchPanel } from '../../features/search'
+import { SettingsDialog, SidebarThemePicker } from '../../features/settings'
+import { TemplatePicker, useDailyNoteAutoCreate, useTemplateActions, useTemplateSettings } from '../../features/templates'
+import { TidyDialog, useTidy } from '../../features/tidy'
+import { CHAT_FOLDER, ChatList } from '../../features/ai'
+import { BoardList, CARD_FOLDER, useBoards } from '../../features/boards'
 import { registerArchiveView } from '../../features/archive'
-import { registerMarkdownView } from '../../features/editor'
-import { SettingsDialog } from '../../features/settings'
-import { registerStubViews } from './stubs'
-import { registerUnresolvedView } from '../../features/links'
-import { HOME_HOTKEY, HomeOverlay, typingInField } from '../../features/home'
-import { chordFromEvent, normalizeChord } from '../hotkeys'
+import { HomeOverlay } from '../../features/home'
+import type { TemplateSettings } from '@shared/templates'
 
 type Props = {
   vault: VaultInfo
@@ -93,50 +79,11 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   // Image widgets resolve `attachments/x.png` against this.
   useEffect(() => setVaultPath(vault.path), [vault.path])
 
-  // Writing tools (focus, syntax, style, authors) belong to the vault, like appearance.
-  useEffect(() => {
-    let cancelled = false
-    let timer: number | undefined
-    void api.invoke('state:read', 'writing').then((raw) => {
-      if (cancelled) return
-      loadWriting(raw, (next) => {
-        window.clearTimeout(timer)
-        timer = window.setTimeout(() => void api.invoke('state:write', 'writing', next), 300)
-      })
-    })
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [vault.path])
-
-  /**
-   * Focus mode hides everything but the text: sidebar, tabs, title and status
-   * bars, floating windows, the note's own toolbars. One attribute on the root,
-   * and the stylesheet animates each piece away - React keeps them mounted, so
-   * leaving focus mode brings back the same scroll positions and open folders.
-   */
-  const focusMode = useWriting().focus
-  useEffect(() => {
-    const root = document.documentElement
-    if (focusMode) root.setAttribute('data-focus', 'on')
-    else root.removeAttribute('data-focus')
-    return () => root.removeAttribute('data-focus')
-  }, [focusMode])
+  useWritingState(vault.path)
 
   // `![[image.png]]` embeds find a file by name anywhere in the vault, the way
   // Obsidian does, so the editor needs every file's path - not just notes.
-  useEffect(() => {
-    const paths: string[] = []
-    const walk = (nodes: readonly FileNode[]): void => {
-      for (const node of nodes) {
-        if (node.kind === 'folder') walk(node.children ?? [])
-        else paths.push(node.path)
-      }
-    }
-    walk(tree.roots)
-    setVaultFiles(paths)
-  }, [tree.roots])
+  useEffect(() => setVaultFiles(allFilePaths(tree.roots)), [tree.roots])
 
   /** Which conversation the AI workspace is showing. */
   const activeChat = useMemo(() => {
@@ -152,72 +99,20 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     return typeof id === 'string' ? id : null
   }, [sections, revision])
 
-  /**
-   * An empty AI workspace opens the most recent conversation.
-   *
-   * Same reasoning as Tasks below: arriving at a blank pane and having to work
-   * out that the thing you want is in the sidebar is a worse first second than
-   * landing in the conversation you had last.
-   */
-  useEffect(() => {
-    if (activeSection !== 'ai') return
-    const ai = sections?.ai
-    if (ai === undefined || ai.activeLeaf !== null) return
-    const folder = tree.roots.find((node) => node.kind === 'folder' && node.path === CHAT_FOLDER)
-    const newest = (folder?.children ?? [])
-      .filter((node) => node.kind === 'file' && node.name.toLowerCase().endsWith('.md'))
-      .map((node) => node.path)
-      .sort((a, b) => b.localeCompare(a))[0]
-    if (newest !== undefined) ai.openView('chat', { path: newest })
-  }, [activeSection, sections, revision, tree.roots])
+  useSectionDefaults(activeSection, sections, revision, tree.roots, boards)
 
-  /**
-   * An empty Tasks workspace opens its first board.
-   *
-   * Without this, switching to Tasks the first time shows an empty pane and
-   * leaves you to work out that a board lives in the sidebar.
-   */
-  useEffect(() => {
-    if (activeSection !== 'tasks') return
-    const tasks = sections?.tasks
-    if (tasks === undefined || tasks.activeLeaf !== null) return
-    const first = boards.boards[0]
-    if (first !== undefined) tasks.openView('board', { board: first.id })
-  }, [activeSection, sections, revision, boards])
+  // Read lazily by the chat view and new chats, which must always see the
+  // current model and be able to change it.
+  const appearanceRef = useRef(appearance)
+  appearanceRef.current = appearance
+  const updateRef = useRef(update)
+  updateRef.current = update
 
-  const openChat = useCallback(
-    (path: string) => {
-      setActiveSection('ai')
-      sections?.ai.openView('chat', { path })
-    },
-    [sections, setActiveSection],
-  )
-
-  /**
-   * A new conversation is a new note, created up front rather than on the first
-   * message. It costs one empty file and buys the invariant the whole feature
-   * rests on: the thing on screen always has somewhere on disk to be.
-   */
-  const newChat = useCallback(async () => {
-    const created = await api.invoke('fs:create', CHAT_FOLDER, chatFileName(new Date()), 'file')
-    if (!created.ok) return
-    await api.invoke(
-      'fs:write',
-      created.path,
-      // No `created:` field: the filename IS the timestamp, and two records of
-      // the same fact drift.
-      serialiseConversation({ title: 'New chat', model: appearanceRef.current.aiModel, messages: [] }),
-    )
-    await refresh()
-    openChat(created.path)
-  }, [refresh, openChat])
-
-  const openBoard = useCallback(
-    (id: string) => {
-      setActiveSection('tasks')
-      sections?.tasks.openView('board', { board: id })
-    },
-    [sections, setActiveSection],
+  const { openFile, openChat, newChat, openBoard, openBoardCard } = useShellNavigation(
+    sections,
+    setActiveSection,
+    refresh,
+    () => appearanceRef.current.aiModel,
   )
 
   // --- sidebar list -------------------------------------------------------
@@ -248,16 +143,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
 
   /** Files in the attachments folder, for Settings - it is not in the tree any more. */
   const attachmentFiles = useMemo(() => {
-    const out: string[] = []
-    const walk = (nodes: readonly (typeof tree.roots)[number][]): void => {
-      for (const node of nodes) {
-        if (node.kind === 'folder') walk(node.children ?? [])
-        else out.push(node.path)
-      }
-    }
     const folder = tree.roots.find((node) => node.kind === 'folder' && node.path === ATTACHMENTS_FOLDER)
-    if (folder?.kind === 'folder') walk(folder.children ?? [])
-    return out
+    return folder?.kind === 'folder' ? allFilePaths(folder.children ?? []) : []
   }, [tree.roots])
 
   /**
@@ -270,14 +157,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
    */
   useEffect(() => {
     if (sections === null || tree.roots.length === 0) return
-    const files = new Set<string>()
-    const walk = (nodes: readonly FileNode[]): void => {
-      for (const node of nodes) {
-        if (node.kind === 'folder') walk(node.children ?? [])
-        else files.add(node.path)
-      }
-    }
-    walk(tree.roots)
+    const files = new Set(allFilePaths(tree.roots))
     for (const workspace of Object.values(sections)) workspace.pruneMissing((path) => files.has(path))
   }, [sections, tree])
 
@@ -285,102 +165,9 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const allFolders = useMemo(() => allFolderPaths(tree.roots), [tree.roots])
 
   /** Every note path, flattened once for Tidy and the template picker. */
-  const allNotes = useMemo(() => {
-    const out: string[] = []
-    const walk = (nodes: readonly FileNode[]): void => {
-      for (const node of nodes) {
-        if (node.kind === 'folder') walk(node.children ?? [])
-        else if (node.name.toLowerCase().endsWith('.md')) out.push(node.path)
-      }
-    }
-    walk(tree.roots)
-    return out
-  }, [tree.roots])
+  const allNotes = useMemo(() => notePaths(tree.roots), [tree.roots])
 
-  /**
-   * Insert a template at the cursor.
-   *
-   * Its own frontmatter is dropped first: a template is a note, so it may have
-   * picked some up, and a second `---` block halfway down a file is a rule and
-   * a pile of stray text rather than metadata.
-   */
-  const insertTemplate = useCallback(
-    async (templatePath: string) => {
-      setTemplatesOpen(false)
-      const editor = getActiveEditor()
-      const target = activePath
-      if (editor === null || target === null) return
-
-      const read = await api.invoke('fs:read', templatePath)
-      if (!read.ok) return
-
-      const name = target.slice(target.lastIndexOf('/') + 1).replace(/\.md$/i, '')
-      const text = fillTemplate(templateBody(read.content), {
-        title: name,
-        path: target,
-        now: new Date(),
-      })
-
-      editor.run((state) => {
-        const range = state.selection.main
-        return {
-          changes: { from: range.from, to: range.to, insert: text },
-          selection: { anchor: range.from + text.length },
-          scrollIntoView: true,
-          userEvent: 'input.template',
-        }
-      })
-
-      // The template's own properties join the note's, rather than being
-      // dropped with the frontmatter block the insert strips.
-      const merged = mergeTemplateProperties(editor.getValue(), read.content)
-      if (merged !== editor.getValue()) editor.setValue(merged)
-    },
-    [activePath],
-  )
-
-  // --- tidy ---------------------------------------------------------------
-  const [tidy, setTidy] = useState<TidyPlan | null>(null)
-  const [tidyBusy, setTidyBusy] = useState(false)
-
-  /**
-   * Build the plan, then show it. Nothing moves until the dialog is confirmed -
-   * this rewrites links across the vault, and a reorganisation you did not get
-   * to read first is one you cannot trust.
-   */
-  const openTidy = useCallback(async () => {
-    const context = await api.invoke('index:context')
-    setTidy(
-      planTidy({
-        notes: allNotes,
-        folders: allFolders,
-        context: new Map(context.map((entry) => [entry.path, { tags: entry.tags, links: entry.links }])),
-        // The board owns one of these and templates are not notes you file;
-        // a stray note landing in either would turn up where nobody put it.
-        reserved: [CARD_FOLDER, CHAT_FOLDER, ATTACHMENTS_FOLDER, templates.settings.folder, templates.settings.daily.folder],
-      }),
-    )
-  }, [allNotes, allFolders, templates.settings])
-
-  const runTidy = useCallback(async () => {
-    if (tidy === null) return
-    setTidyBusy(true)
-    // Create each new folder once, even when several notes are headed for it.
-    const created = new Set<string>()
-    for (const move of tidy.moves) {
-      if (!move.creates || created.has(move.into)) continue
-      created.add(move.into)
-      await api.invoke('fs:create', '', move.into, 'folder')
-    }
-    for (const move of tidy.moves) {
-      // `fs:move` is the same path as a drag in the tree, so links follow.
-      await api.invoke('fs:move', move.path, move.into)
-    }
-    await refresh()
-    noteIndexChanged()
-    setTidyBusy(false)
-    setTidy(null)
-  }, [tidy, refresh])
+  const { tidy, setTidy, tidyBusy, openTidy, runTidy } = useTidy(allNotes, allFolders, templates.settings, refresh)
 
   // A search result is useless collapsed, so while searching every folder is
   // open; the user's own expansion state is untouched underneath.
@@ -398,59 +185,6 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     })
   }, [])
 
-  // Registered here rather than at module scope because the markdown view needs
-  // a callback into the shell to follow a wikilink.
-  const markdownRegistered = useRef(false)
-  if (!markdownRegistered.current) {
-    markdownRegistered.current = true
-    registerMarkdownView(
-      (target, heading) => {
-        void api.invoke('index:resolve-link', target).then((resolved) => {
-          if (resolved !== null) openFileRef.current(resolved, heading)
-        })
-      },
-      (p, heading) => openFileRef.current(p, heading ?? null),
-      () => linkCandidatesRef.current,
-      () => livePreviewRef.current,
-      () => vimRef.current,
-      () => showTitleRef.current,
-    )
-    registerUnresolvedView((p) => openFileRef.current(p))
-    registerGraphView((p) => openFileRef.current(p))
-    registerBoardView((p) => openBoardCardRef.current(p))
-    registerChatView(
-      () => appearanceRef.current.aiModel,
-      (aiModel) => updateRef.current({ aiModel }),
-    )
-  }
-
-  const openFile = useCallback(
-    (path: string, heading?: string | null) => {
-      // Opening a note always lands in Data, even if you clicked from elsewhere.
-      setActiveSection('data')
-      // You opened it to read or write in it, so the keyboard goes there too.
-      focusEditorOnOpen()
-      // The heading is part of the leaf state, so reopening the tab from a
-      // saved layout lands in the same place.
-      sections?.data.openView('markdown', heading ? { path, heading } : { path })
-    },
-    [sections, setActiveSection],
-  )
-
-  /**
-   * A card opens in the Tasks workspace, not in Data.
-   *
-   * Sending you to another section to read the task you just clicked would
-   * throw away the board you were looking at - and it is the same editor either
-   * way, because a card is a note.
-   */
-  const openBoardCard = useCallback(
-    (path: string) => {
-      sections?.tasks.openView('markdown', { path })
-    },
-    [sections],
-  )
-
   // --- actions ------------------------------------------------------------
 
   // The link handler is created once, so it reads the current openFile via a ref.
@@ -465,70 +199,25 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
    * Held in a ref and read lazily by the editor, so the list is current without
    * the editor being rebuilt every time a file appears in the vault.
    */
-  /**
-   * Read lazily by the markdown view, so the mode is current without the view
-   * being re-registered every time it changes.
-   */
-  // Read lazily by the chat view, which is registered once but must always see
-  // the current model and be able to change it.
-  const appearanceRef = useRef(appearance)
-  appearanceRef.current = appearance
-  const updateRef = useRef(update)
-  updateRef.current = update
+  const linkCandidatesRef = useRef<LinkCandidate[]>([])
+  linkCandidatesRef.current = useMemo(() => noteEntries(tree.roots), [tree.roots])
 
-  const livePreviewRef = useRef(appearance.livePreview)
-  livePreviewRef.current = appearance.livePreview
-  const vimRef = useRef(appearance.vimMode)
-  vimRef.current = appearance.vimMode
-  const showTitleRef = useRef(appearance.showNoteTitle)
-  showTitleRef.current = appearance.showNoteTitle
+  useRegisterViews({
+    openFile: openFileRef,
+    openBoardCard: openBoardCardRef,
+    linkCandidates: linkCandidatesRef,
+    appearance: appearanceRef,
+    update: updateRef,
+  })
 
-  /**
-   * Save template settings, creating the templates folder if it is new.
-   *
-   * Created on save rather than on first use: the whole point of choosing a
-   * folder is to go and put templates in it, and a folder that only appears
-   * after the first template is one you cannot put the first template in.
-   * Nothing is moved from the old folder - that would be a vault-wide rename
-   * with link rewrites, which is not what "change a setting" should do.
-   */
-  const updateTemplates = useCallback(
-    async (requested: TemplateSettings) => {
-      /**
-       * Match an existing folder regardless of case.
-       *
-       * The Mac disk is case-insensitive and the tree is not: typing
-       * "Templates" beside an existing "templates" found nothing in the tree,
-       * asked main to create it, and main - seeing the name taken on disk -
-       * made "Templates 2". Adopting the folder's real spelling instead means
-       * the setting points at the folder that is actually there.
-       */
-      const existing = [...tree.byPath.values()].find(
-        (node) => node.kind === 'folder' && node.path.toLowerCase() === requested.folder.toLowerCase(),
-      )
-      const next = existing === undefined ? requested : { ...requested, folder: existing.path }
-      const previous = templates.settings
-      templates.update(next)
-
-      if (existing === undefined) {
-        const at = next.folder.lastIndexOf('/')
-        await api.invoke('fs:create', at === -1 ? '' : next.folder.slice(0, at), next.folder.slice(at + 1), 'folder')
-        await refresh()
-      }
-      if (await retemplateDailyNote(previous, next)) noteIndexChanged()
-    },
-    [templates, tree.byPath, refresh],
-  )
-
-  const openDailyNote = useCallback(async () => {
-    const result = await ensureDailyNote(templates.settings)
-    if (!result.ok) return
-    if (result.created) {
-      await refresh()
-      noteIndexChanged()
-    }
-    openFileRef.current(result.path)
-  }, [templates.settings, refresh])
+  const { insertTemplate, updateTemplates, openDailyNote } = useTemplateActions({
+    activePath,
+    closePicker: () => setTemplatesOpen(false),
+    byPath: tree.byPath,
+    templates,
+    refresh,
+    openFile: openFileRef,
+  })
 
   const settingsDepsRef = useRef({
     appearance,
@@ -555,76 +244,18 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     openDailyNote: () => void openDailyNote(),
   }
 
-  const linkCandidatesRef = useRef<LinkCandidate[]>([])
-  linkCandidatesRef.current = useMemo(() => {
-    const out: LinkCandidate[] = []
-    const walk = (nodes: readonly (typeof tree.roots)[number][]): void => {
-      for (const node of nodes) {
-        if (node.kind === 'folder') walk(node.children ?? [])
-        else if (node.name.toLowerCase().endsWith('.md')) {
-          const at = node.path.lastIndexOf('/')
-          out.push({
-            path: node.path,
-            name: node.name.replace(/\.md$/i, ''),
-            folder: at === -1 ? '' : node.path.slice(0, at),
-          })
-        }
-      }
-    }
-    walk(tree.roots)
-    return out
-  }, [tree.roots])
-
-  const createAt = useCallback(
-    async (parent: string, kind: 'file' | 'folder') => {
-      const name = kind === 'file' ? 'Untitled.md' : 'New folder'
-      const result = await api.invoke('fs:create', parent, name, kind)
-      if (!result.ok) return
-      await refresh()
-      // Expand the folder it went into, or the new thing is created somewhere
-      // you cannot see.
-      if (parent !== '') setExpanded((prev) => new Set(prev).add(parent))
-      if (kind === 'file') openFile(result.path)
-      else setExpanded((prev) => new Set(prev).add(result.path))
-    },
-    [refresh, openFile],
-  )
-
-  /**
-   * New note / new folder from the sidebar button, ⌘N or the palette: always
-   * at the top of the vault.
-   *
-   * It used to go into the folder of whatever note was open - an invisible
-   * rule that dropped new notes into some folder you had last been reading in.
-   * The top level is where loose notes belong until they are filed, and Tidy
-   * files them. Creating inside a specific folder is its right-click menu.
-   */
-  const createIn = useCallback((kind: 'file' | 'folder') => createAt('', kind), [createAt])
-
-  /** The sidebar's bottom-left button means something different per section. */
-  const onNew = useCallback(() => {
-    if (activeSection === 'data') {
-      void createIn('file')
-      return
-    }
-    if (activeSection === 'ai') {
-      void newChat()
-      return
-    }
-    if (activeSection === 'tasks') {
-      // It used to open another copy of the board, which is not what a button
-      // labelled "Task" promises. Now it makes a card on the board you are
-      // looking at and opens it, so you can start typing.
-      const board = boards.boards.find((entry) => entry.id === activeBoard) ?? boards.boards[0]
-      const column = board?.columns[0]
-      if (board === undefined || column === undefined) return
-      void createCard(board.id, column.id, 'New task').then((created) => {
-        if (created.ok) openBoardCard(created.path)
-      })
-      return
-    }
-    active?.openView(section.viewType, { draft: Date.now() }, { reuse: false })
-  }, [activeSection, createIn, active, section.viewType, boards, activeBoard, openBoardCard, newChat])
+  const { createAt, createIn, onNew } = useShellCreate({
+    refresh,
+    setExpanded,
+    openFile,
+    activeSection,
+    newChat,
+    boards,
+    activeBoard,
+    openBoardCard,
+    active,
+    viewType: section.viewType,
+  })
 
   const openExtension = useCallback(
     (type: string) => {
@@ -642,102 +273,30 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     update({ theme: THEME_CYCLE[(at + 1) % THEME_CYCLE.length] ?? 'system' })
   }, [appearance.theme, update])
 
-  useEffect(() => {
-    if (!active) return
-    const offEditor = registerEditorCommands(commands, () => {
-      update({ livePreview: !appearance.livePreview })
-    })
-    const offApp = registerAppCommands(commands, {
-      workspace: active,
-      openPalette,
-      openSettings: () => setSettingsOpen(true),
-      openTemplates: () => setTemplatesOpen(true),
-      closeVault: onCloseVault,
-      toggleSidebar,
-      newNote: () => void createIn('file'),
-      newFolder: () => void createIn('folder'),
-      revealActive: () => {
-        if (activePath !== null) void api.invoke('fs:reveal', activePath)
-      },
-      setTheme: (theme) => update({ theme }),
-      cycleTheme,
-      goToSection: setActiveSection,
-      toggleGraph: () => setGraphWindow({ open: !graphWindow.open }),
-      openGraphFull: () => setGraphWindow({ open: true, maximized: true }),
-      openExtension,
-      openSearch: () => setSearchOpen(true),
-      openSwitcher: () => setSwitcherOpen(true),
-      toggleHome: () => setHomeOpen((open) => !open),
-      toggleHistory: () => setHistoryWindow({ open: !historyWindow.open }),
-      reindex: () => void api.invoke('index:reindex'),
-    })
-    return () => {
-      offApp()
-      offEditor()
-    }
-  }, [
+  useAppCommands({
     active,
     openPalette,
+    setSettingsOpen,
+    setTemplatesOpen,
     onCloseVault,
     toggleSidebar,
-    cycleTheme,
-    setActiveSection,
-    update,
     createIn,
     activePath,
-    graphWindow.open,
+    update,
+    livePreview: appearance.livePreview,
+    cycleTheme,
+    setActiveSection,
+    graphWindow,
     setGraphWindow,
-    historyWindow.open,
+    historyWindow,
     setHistoryWindow,
-    appearance.livePreview,
     openExtension,
-  ])
+    setSearchOpen,
+    setSwitcherOpen,
+    setHomeOpen,
+  })
 
-  /**
-   * The daily note, made automatically.
-   *
-   * Checked when the vault opens, when the setting changes, when the window
-   * comes back into focus, and once a minute - and acted on only when the
-   * calendar day has changed since the last check. So a laptop opened the next
-   * morning gets its note within a minute without anyone doing anything, and
-   * an app left running overnight rolls over at midnight.
-   *
-   * It creates the note; it does not open it. Taking over the editor on launch
-   * would be the app deciding what you do first - "Open today's note" is one
-   * command away for when you want it.
-   */
-  const refreshRef = useRef(refresh)
-  refreshRef.current = refresh
-  useEffect(() => {
-    if (!templates.loaded || !templates.settings.daily.enabled) return
-    let lastDay = ''
-    let running = false
-    const check = async (): Promise<void> => {
-      const today = dayKey()
-      if (today === lastDay || running) return
-      running = true
-      try {
-        const result = await ensureDailyNote(templates.settings)
-        if (result.ok) {
-          lastDay = today
-          if (result.created) {
-            await refreshRef.current()
-            noteIndexChanged()
-          }
-        }
-      } finally {
-        running = false
-      }
-    }
-    void check()
-    const timer = window.setInterval(() => void check(), 60_000)
-    const onFocus = (): void => void check()
-    window.addEventListener('focus', onFocus)
-    return () => {
-      window.clearInterval(timer)
-      window.removeEventListener('focus', onFocus)
-    }
-  }, [templates.loaded, templates.settings])
+  useDailyNoteAutoCreate(templates, refresh)
 
   useEffect(
     () =>
@@ -752,67 +311,16 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     [openDailyNote],
   )
 
-  /**
-   * A file dropped anywhere but the editor is dropped nowhere.
-   *
-   * Chromium's default for a file drop is to navigate to it, which in a
-   * single-page app means the window replaces itself with the image you were
-   * trying to file. The editor's own handler takes the drops that matter; this
-   * swallows the misses.
-   */
-  useEffect(() => {
-    const swallow = (ev: DragEvent): void => {
-      if (ev.dataTransfer?.types.includes('Files') !== true) return
-      ev.preventDefault()
-    }
-    window.addEventListener('dragover', swallow)
-    window.addEventListener('drop', swallow)
-    return () => {
-      window.removeEventListener('dragover', swallow)
-      window.removeEventListener('drop', swallow)
-    }
-  }, [])
-
-  useEffect(() => {
-    void api.invoke('state:read', 'hotkeys').then((saved) => {
-      if (saved !== null && typeof saved === 'object') {
-        commands.setOverrides(saved as Record<string, string | null>)
-      }
-    })
-  }, [])
-
-  useEffect(() => {
-    const onKeyDown = (ev: KeyboardEvent): void => {
-      if (ev.key === 'Escape' && (paletteOpen || searchOpen || switcherOpen)) {
-        setPaletteOpen(false)
-        setSearchOpen(false)
-        setSwitcherOpen(false)
-        return
-      }
-      // The home overlay's chord belongs to whatever you are typing into,
-      // while you are typing into it - the note editor excepted, which is the
-      // place you actually open it from.
-      if (normalizeChord(HOME_HOTKEY) === chordFromEvent(ev) && typingInField()) return
-      if (commands.handleKeyEvent(ev)) {
-        ev.preventDefault()
-        return
-      }
-      // Esc leaves focus mode - unless something else already used it: closing
-      // an autocomplete, the search panel or a menu comes first.
-      if (
-        ev.key === 'Escape' &&
-        !ev.defaultPrevented &&
-        getWriting().focus &&
-        document.querySelector('.wmenu, .cm-panels, .cm-tooltip-autocomplete') === null
-      ) {
-        toggleFocus()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [paletteOpen, searchOpen, switcherOpen])
-
-  const graphView = getView('graph')
+  useShellKeys({
+    paletteOpen,
+    searchOpen,
+    switcherOpen,
+    closePickers: () => {
+      setPaletteOpen(false)
+      setSearchOpen(false)
+      setSwitcherOpen(false)
+    },
+  })
 
   return (
     <div className={`shell${ready ? '' : ' is-booting'}`}>
@@ -876,38 +384,14 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
           )}
         </main>
 
-        {historyWindow.open && activePath !== null && (
-          <FloatingWindow
-            title={`History — ${activePath.slice(activePath.lastIndexOf('/') + 1).replace(/\.md$/, '')}`}
-            geometry={historyWindow}
-            onChange={setHistoryWindow}
-            onClose={() => setHistoryWindow({ open: false })}
-            closeHint="Close history"
-          >
-            <History
-              path={activePath}
-              // A restore rewrites the file; the editor picks that up through
-              // the watcher, so nothing to do here but refresh the list.
-              onRestored={() => void refresh()}
-            />
-          </FloatingWindow>
-        )}
-
-        {graphWindow.open && (
-          <FloatingWindow
-            title="Graph"
-            geometry={graphWindow}
-            onChange={setGraphWindow}
-            onClose={() => setGraphWindow({ open: false })}
-            closeHint="Close graph (⌘G)"
-          >
-            {graphView?.render({
-              state: { floating: true, maximized: graphWindow.maximized },
-              setState: () => {},
-              leafId: 'graph-window',
-            })}
-          </FloatingWindow>
-        )}
+        <ShellWindows
+          graphWindow={graphWindow}
+          setGraphWindow={setGraphWindow}
+          historyWindow={historyWindow}
+          setHistoryWindow={setHistoryWindow}
+          activePath={activePath}
+          onRestored={() => void refresh()}
+        />
       </div>
 
       <StatusBar

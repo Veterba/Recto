@@ -10,7 +10,7 @@
 /** Inclusive-start, exclusive-end offsets into the haystack. */
 export type MatchRange = readonly [start: number, end: number]
 
-export type FuzzyMatch = {
+type FuzzyMatch = {
   score: number
   ranges: MatchRange[]
 }
@@ -106,7 +106,7 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch | null {
   return { score, ranges: toRanges(indices) }
 }
 
-export type Scored<T> = { item: T; match: FuzzyMatch }
+type Scored<T> = { item: T; match: FuzzyMatch }
 
 /** Filter + rank a list by a query, using `key` as the haystack. */
 export function fuzzyFilter<T>(query: string, items: readonly T[], key: (item: T) => string): Scored<T>[] {

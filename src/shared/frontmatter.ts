@@ -36,7 +36,7 @@ export type Field = {
   block?: { indent: string }
 }
 
-export type Frontmatter = {
+type Frontmatter = {
   /** True when the file opens with a `---` block. */
   present: boolean
   fields: Field[]
@@ -135,20 +135,19 @@ function classify(raw: string): { value: Field['value']; type: FieldType } {
   return { value: trimmed, type: 'text' }
 }
 
+/**
+ * The line index of the `---` that closes the frontmatter at the top of
+ * `lines`, or -1 when there is none: no opening fence, or one that never closes.
+ */
+export function frontmatterClose(lines: readonly string[]): number {
+  if (lines.length === 0 || !FENCE.test(lines[0] ?? '')) return -1
+  for (let i = 1; i < lines.length; i++) if (FENCE.test(lines[i] ?? '')) return i
+  return -1
+}
+
 export function parseFrontmatter(text: string): Frontmatter {
   const lines = text.split(/\r?\n/)
-
-  if (lines.length === 0 || !FENCE.test(lines[0] ?? '')) {
-    return { present: false, fields: [], opaque: [], bodyStart: 0 }
-  }
-
-  let close = -1
-  for (let i = 1; i < lines.length; i++) {
-    if (FENCE.test(lines[i] ?? '')) {
-      close = i
-      break
-    }
-  }
+  const close = frontmatterClose(lines)
   // An unterminated fence is a broken file, not frontmatter. Treating it as
   // frontmatter would mean "editing a property" rewrote the whole note.
   if (close === -1) return { present: false, fields: [], opaque: [], bodyStart: 0 }

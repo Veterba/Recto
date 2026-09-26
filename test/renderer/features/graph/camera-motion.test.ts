@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { step, still, zoomAt, MAX_ZOOM, MIN_ZOOM } from '../../../../src/renderer/features/graph/camera-motion'
-import { screenToWorld } from '../../../../src/renderer/features/graph/renderer'
+import { screenToWorld } from '../../../../src/renderer/features/graph/geometry'
 
 const W = 800
 const H = 600

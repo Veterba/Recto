@@ -22,7 +22,7 @@ type Mark = { value: number; label: string }
  * - `ruler`: tick marks along the empty part, the fill covers them as it grows.
  * - `inset`: the ticks live inside the fill, like a measured tape.
  */
-export type PillVariant = 'classic' | 'ruler' | 'inset'
+type PillVariant = 'classic' | 'ruler' | 'inset'
 
 type Props = {
   variant?: PillVariant

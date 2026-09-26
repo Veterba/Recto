@@ -13,8 +13,8 @@ import { Tip } from '../../ui/Tip'
  * belongs at the top of the thing whose contents it changes.
  */
 
-export const SIDEBAR_MIN = 200
-export const SIDEBAR_MAX = 520
+const SIDEBAR_MIN = 200
+const SIDEBAR_MAX = 520
 
 type Props = {
   vaultName: string

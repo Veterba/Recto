@@ -17,9 +17,9 @@
 export const MIN_GAP = 1e-6
 
 /** The step used when appending past the end, and when renumbering. */
-export const STEP = 1
+const STEP = 1
 
-export type Placement =
+type Placement =
   | { kind: 'order'; order: number }
   /** The gap is exhausted; write these orders across the whole column. */
   | { kind: 'renumber'; orders: number[] }

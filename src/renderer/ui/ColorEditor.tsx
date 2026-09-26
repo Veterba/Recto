@@ -32,7 +32,7 @@ const NOISE =
  * each other. The dots light up along the sweep up to the current amount, so
  * the value reads at a glance without a number.
  */
-export function GrainDial({ grain, onChange }: { grain: number; onChange: (grain: number) => void }): React.ReactElement {
+function GrainDial({ grain, onChange }: { grain: number; onChange: (grain: number) => void }): React.ReactElement {
   const ref = useRef<HTMLDivElement | null>(null)
 
   const fromPointer = useCallback(
@@ -104,7 +104,7 @@ export function GrainDial({ grain, onChange }: { grain: number; onChange: (grain
   )
 }
 
-export type ColorPreset = { id: string; label: string; colors: string[] }
+type ColorPreset = { id: string; label: string; colors: string[] }
 
 export type ColorValue = { colors: string[]; strength: number; grain?: number }
 

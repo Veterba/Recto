@@ -2,6 +2,7 @@ import { api } from '../../app/api'
 import { setField } from '@shared/frontmatter'
 import { noteIndexChanged } from '../../app/note-bus'
 import { placeAt } from './ordering'
+import { IPC } from '@shared/ipc'
 
 /**
  * Create a card, which means: create a note and put three keys in its
@@ -24,10 +25,10 @@ export async function createCard(
   const name = title.trim()
   if (name === '') return { ok: false, error: 'A card needs a name.' }
 
-  const created = await api.invoke('fs:create', CARD_FOLDER, `${name}.md`, 'file')
+  const created = await api.invoke(IPC.fsCreate, CARD_FOLDER, `${name}.md`, 'file')
   if (!created.ok) return created
 
-  const cards = await api.invoke('index:board', board)
+  const cards = await api.invoke(IPC.indexBoard, board)
   const orders = cards
     .filter((card) => card.status === column)
     .map((card) => card.order)
@@ -40,7 +41,7 @@ export async function createCard(
   text = setField(text, 'status', column)
   text = setField(text, 'order', order)
 
-  const written = await api.invoke('fs:write', created.path, `${text}# ${name}\n`)
+  const written = await api.invoke(IPC.fsWrite, created.path, `${text}# ${name}\n`)
   if (!written.ok) return { ok: false, error: written.error ?? 'Could not write the card.' }
 
   noteIndexChanged()

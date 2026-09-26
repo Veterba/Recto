@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { FileNode } from '../../../../src/shared/ipc-contract'
+import type { FileNode } from '../../../../src/shared/vault'
 import { coerceOrder, moveWithin, orderChildren, placeInto, pruneOrder } from '../../../../src/renderer/features/file-tree/tree-order'
+import { allFilePaths, noteEntries, notePaths } from '../../../../src/renderer/features/file-tree/tree-lists'
 
 const folder = (name: string, parent = ''): FileNode => ({
   name,
@@ -91,5 +92,35 @@ describe('pruneOrder', () => {
   it('forgets folders that are gone, and keeps the root', () => {
     const order = { '': ['a'], Daily: ['x'], Gone: ['y'] }
     expect(pruneOrder(order, (p) => p === 'Daily')).toEqual({ '': ['a'], Daily: ['x'] })
+  })
+})
+
+describe('flat lists of the tree', () => {
+  const tree: FileNode[] = [
+    {
+      path: 'a',
+      name: 'a',
+      kind: 'folder',
+      children: [
+        { path: 'a/One.md', name: 'One.md', kind: 'file' },
+        { path: 'a/pic.png', name: 'pic.png', kind: 'file' },
+      ],
+    },
+    { path: 'Two.MD', name: 'Two.MD', kind: 'file' },
+  ]
+
+  it('lists every file, depth first', () => {
+    expect(allFilePaths(tree)).toEqual(['a/One.md', 'a/pic.png', 'Two.MD'])
+  })
+
+  it('lists notes only, whatever the case of the extension', () => {
+    expect(notePaths(tree)).toEqual(['a/One.md', 'Two.MD'])
+  })
+
+  it('gives each note its name and folder', () => {
+    expect(noteEntries(tree)).toEqual([
+      { path: 'a/One.md', name: 'One', folder: 'a' },
+      { path: 'Two.MD', name: 'Two', folder: '' },
+    ])
   })
 })

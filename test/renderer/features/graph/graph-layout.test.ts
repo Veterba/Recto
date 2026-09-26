@@ -3,10 +3,10 @@ import {
   coerceLayout,
   DEFAULT_LAYOUT,
   layoutTargets,
-  spanningForest,
   treeEdgeIndices,
   type GraphLayout,
 } from '../../../../src/renderer/features/graph/layout'
+import { spanningForest } from '../../../../src/renderer/features/graph/layout-tree'
 
 /** A hub (0) with three children, one of which (1) has two children; plus two unlinked notes. */
 const COUNT = 8

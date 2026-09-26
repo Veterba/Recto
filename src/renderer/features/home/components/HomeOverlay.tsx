@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { FileNode } from '@shared/ipc-contract'
+import type { FileNode } from '@shared/vault'
 import { version } from '../../../../../package.json'
 import { api } from '../../../app/api'
-import { createScene, readFlags, type HeroLine, type Rule, type Scene } from '../scene'
+import { type Scene } from '../scene'
 import { getHomeStats, type HomeStats } from '../home-stats'
+import { IPC_EVENT } from '@shared/ipc'
+import { useHomeScene } from '../hooks/use-home-scene'
+import { Statistics } from './HomeStatistics'
+import { lastEdited, clockText, tildePath, pad2 } from '../hero-text'
 // Bundled, offline, OFL: only the three faces this screen uses.
 import '@fontsource/bodoni-moda/400-italic.css'
 import '@fontsource/geist-sans/500.css'
@@ -23,9 +27,6 @@ import '@fontsource/geist-mono/500.css'
  * list to keep in step.
  */
 
-/** The one place the binding lives. */
-export const HOME_HOTKEY = 'Mod+Shift+H'
-
 /**
  * Whether the overlay covers the sidebar.
  *
@@ -34,52 +35,7 @@ export const HOME_HOTKEY = 'Mod+Shift+H'
  * sharp and clickable beside it. Both work; true is the default because the
  * point of the surface is to be a room of its own.
  */
-export const COVER_SIDEBAR = true
-
-/** How long the pages take to change places, and the curve they do it on. */
-const SLIDE_MS = 520
-
-/**
- * `cubic-bezier(0.16, 1, 0.3, 1)`, solved.
- *
- * The DOM slide and the shader slide have to be the same number on the same
- * frame, which rules out letting CSS animate one of them: a transition runs on
- * the compositor's clock and lands wherever it likes relative to a rAF tick.
- * So the curve is evaluated here and written to both.
- */
-function ease(t: number): number {
-  const x1 = 0.16
-  const x2 = 0.3
-  const y1 = 1
-  const y2 = 1
-  const cx = (u: number): number => ((1 - 3 * x2 + 3 * x1) * u + (3 * x2 - 6 * x1)) * u * u + 3 * x1 * u
-  const dx = (u: number): number => 3 * (1 - 3 * x2 + 3 * x1) * u * u + 2 * (3 * x2 - 6 * x1) * u + 3 * x1
-  let u = t
-  for (let i = 0; i < 6; i++) {
-    const slope = dx(u)
-    if (Math.abs(slope) < 1e-6) break
-    u -= (cx(u) - t) / slope
-  }
-  u = Math.max(0, Math.min(1, u))
-  return ((1 - 3 * y2 + 3 * y1) * u + (3 * y2 - 6 * y1)) * u * u + 3 * y1 * u
-}
-
-/**
- * Is the keyboard busy typing into something?
- *
- * The overlay's chord must not be stolen from a search box, a rename field or
- * the chat composer. The note editor is the deliberate exception: it is
- * contenteditable, and it is also where you are standing when you reach for
- * this - a rule that excluded it would make the surface unreachable from the
- * only screen anyone is ever on.
- */
-export function typingInField(): boolean {
-  const el = document.activeElement as HTMLElement | null
-  if (el === null) return false
-  if (el.closest('.cm-editor') !== null) return false
-  const tag = el.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable
-}
+const COVER_SIDEBAR = true
 
 const PANES = ['Recto', 'Statistics'] as const
 
@@ -93,64 +49,6 @@ type Props = {
   /** The vault tree, for the last note written to. */
   roots: readonly FileNode[]
 }
-
-/**
- * Every face the page draws with, loaded explicitly.
- *
- * `document.fonts.ready` only waits for faces something has already asked
- * for; a face first used by the canvas rasteriser would still be missing on
- * the first draw, and the fallback would be frozen into the texture.
- */
-const FACES = ['italic 400 100px "Bodoni Moda"', '500 30px "Geist Sans"', '500 11px "Geist Mono"'] as const
-const loadFaces = (): Promise<unknown> => Promise.all(FACES.map((face) => document.fonts.load(face)))
-
-/**
- * The page's grid, in CSS px: margins, the column line at a third of the
- * width, the row line at 78% of the height. Ink at 38%, a gap either side of
- * each crossing, a full-ink crosshair where they meet and two ticks on the
- * row. Drawn into the text texture with everything else, so the river moves
- * them too.
- */
-function layoutRules(w: number, h: number): Rule[] {
-  const M = 40
-  const col = Math.round(w / 3)
-  const row = Math.round(h * 0.78)
-  const faint = 0.38
-  const gap = 18
-  const arm = 17
-  return [
-    { x: col, y: M, width: 1, height: row - gap - M, alpha: faint },
-    { x: col, y: row + gap, width: 1, height: h - M - row - gap, alpha: faint },
-    { x: M, y: row, width: col - gap - M, height: 1, alpha: faint },
-    { x: col + gap, y: row, width: w - M - col - gap, height: 1, alpha: faint },
-    { x: col - arm, y: row, width: 2 * arm + 1, height: 1, alpha: 1 },
-    { x: col, y: row - arm, width: 1, height: 2 * arm + 1, alpha: 1 },
-    { x: Math.round(w / 2), y: row - 4, width: 1, height: 9, alpha: faint },
-    { x: Math.round((w * 3) / 4), y: row - 4, width: 1, height: 9, alpha: faint },
-  ]
-}
-
-const pad2 = (n: number): string => String(n).padStart(2, '0')
-const clockText = (d: Date): string =>
-  `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} · ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
-
-/** The newest file in the tree, by modification time. */
-function lastEdited(roots: readonly FileNode[]): { name: string; at: Date } | null {
-  let best: FileNode | null = null
-  const walk = (nodes: readonly FileNode[]): void => {
-    for (const n of nodes) {
-      if (n.kind === 'folder') walk(n.children ?? [])
-      else if (n.name.endsWith('.md') && (best === null || (n.mtime ?? 0) > (best.mtime ?? 0))) best = n
-    }
-  }
-  walk(roots)
-  const found = best as FileNode | null
-  if (found === null || found.mtime === undefined) return null
-  return { name: found.name.replace(/\.md$/, ''), at: new Date(found.mtime) }
-}
-
-/** A home folder written the way a shell would: ~ for /Users/you. */
-const tildePath = (path: string): string => path.replace(/^\/(Users|home)\/[^/]+/, '~')
 
 export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: Props): React.ReactElement | null {
   const [mounted, setMounted] = useState(false)
@@ -237,208 +135,6 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
     restoreFocus.current = null
     previous?.focus?.()
   }, [mounted])
-
-  // --- the one frame loop -------------------------------------------------
-
-  useEffect(() => {
-    if (!mounted) return
-    const canvas = canvasRef.current
-    const host = windowRef.current
-    const hero = heroRef.current
-    if (canvas === null || host === null) return
-
-    const flags = readFlags()
-    let scene = createScene(canvas, flags, reduced)
-    sceneRef.current = scene
-    /* A handle for measuring this screen: the acceptance criteria it was built
-       against are all readings off the canvas, and nothing can take them from
-       outside without a way in. The renderer runs no code but ours. */
-    ;(window as unknown as { __home?: unknown }).__home = { scene: () => sceneRef.current }
-
-    /**
-     * What the hero lines are, exactly as the DOM has them.
-     *
-     * Canvas has no `text-transform`, so uppercase is applied here; it does
-     * have `letterSpacing`, and without it the texture comes out narrower than
-     * the type it has to sit precisely on top of. Read once per resize, never
-     * in the frame loop.
-     */
-    const measureText = (): HeroLine[] => {
-      if (hero === null) return []
-      /*
-       * Against page one's own pane, not the window. The texture is drawn
-       * again whenever something on the page changes - the clock, the counts,
-       * the call to action's hover - and that can happen mid-slide or with
-       * page two on screen, when every rect in the window's frame is shifted
-       * by the slide. Measured that way, the words came back somewhere else.
-       */
-      const box = (hero.closest('.home__pane') ?? host).getBoundingClientRect()
-      const out: HeroLine[] = []
-      for (const el of Array.from(hero.querySelectorAll<HTMLElement>('[data-hero-line]'))) {
-        const style = getComputedStyle(el)
-        const rect = el.getBoundingClientRect()
-        const text = style.textTransform === 'uppercase' ? (el.textContent ?? '').toUpperCase() : (el.textContent ?? '')
-        const vertical = style.writingMode.startsWith('vertical')
-        // Truncated in the DOM by CSS; the canvas has to cut at the same place.
-        const clipped = vertical ? el.scrollHeight > el.clientHeight + 1 : el.scrollWidth > el.clientWidth + 1
-        out.push({
-          text,
-          x: rect.left - box.left,
-          y: rect.top - box.top,
-          width: rect.width,
-          height: rect.height,
-          font: `${style.fontStyle} ${style.fontWeight} ${style.fontSize}/${style.lineHeight} ${style.fontFamily}`,
-          fontSize: parseFloat(style.fontSize),
-          letterSpacing: style.letterSpacing === 'normal' ? '0px' : style.letterSpacing,
-          alpha: Number(el.dataset.ink ?? '1'),
-          rotate: vertical ? 90 : 0,
-          maxWidth: clipped ? (vertical ? el.clientHeight : el.clientWidth) : null,
-          underline: el.dataset.underline === 'true',
-        })
-      }
-      return out
-    }
-
-    let box = host.getBoundingClientRect()
-    let dpr = window.devicePixelRatio || 1
-    const raster = (): void => scene.setText(measureText(), layoutRules(box.width, box.height))
-    rasterRef.current = raster
-    const measure = (): void => {
-      box = host.getBoundingClientRect()
-      dpr = window.devicePixelRatio || 1
-      scene.resize(box.width, box.height, dpr)
-      raster()
-      measureBlocks()
-    }
-    measure()
-    // Every face, explicitly, then again: a texture rasterised before they
-    // arrive is the fallback face frozen into a picture.
-    void loadFaces().then(() => {
-      if (sceneRef.current === scene) raster()
-    })
-    const observer = new ResizeObserver(measure)
-    observer.observe(host)
-
-    // A monitor change moves the device pixel ratio without resizing anything.
-    let dprQuery: MediaQueryList | null = null
-    const watchDpr = (): void => {
-      dprQuery?.removeEventListener('change', onDpr)
-      dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
-      dprQuery.addEventListener('change', onDpr)
-    }
-    const onDpr = (): void => {
-      measure()
-      watchDpr()
-    }
-    watchDpr()
-
-    let lastU: number | null = null
-    let lastV: number | null = null
-    let movedAt = -Infinity
-    measureBlocks()
-    const onPointerMove = (event: PointerEvent): void => {
-      const u = (event.clientX - box.left) / Math.max(1, box.width)
-      const v = (event.clientY - box.top) / Math.max(1, box.height)
-      if (lastU !== null && lastV !== null) {
-        // uv per event, which is what the impulse is specified in.
-        scene.push(u, 1 - v, u - lastU, lastV - v)
-        movedAt = performance.now()
-      }
-      lastU = u
-      lastV = v
-    }
-    window.addEventListener('pointermove', onPointerMove)
-
-    /*
-     * Context loss is not hypothetical on a laptop that sleeps.
-     *
-     * Everything here is derived - targets, textures, the text raster - so the
-     * answer is to build a second scene rather than to try to restore the
-     * first. The overlay must never be left as a blank rectangle.
-     */
-    const onLost = (event: Event): void => {
-      event.preventDefault()
-      scene.dispose()
-    }
-    const onRestored = (): void => {
-      scene = createScene(canvas, flags, reduced)
-      sceneRef.current = scene
-      measure()
-    }
-    canvas.addEventListener('webglcontextlost', onLost)
-    canvas.addEventListener('webglcontextrestored', onRestored)
-
-    let running = true
-    let raf = 0
-    let last = performance.now()
-    let paused = document.hidden
-    let nextFrame = 0
-
-    const loop = (now: number): void => {
-      if (!running) return
-      raf = requestAnimationFrame(loop)
-      if (paused) {
-        last = now
-        return
-      }
-      /*
-       * Full rate while anything is happening, thirty otherwise.
-       *
-       * The ambient animation is shapes drifting at two percent of the height
-       * a second; nobody can see the difference between sixty frames of that
-       * and thirty, and the overlay can be left open on a desk.
-       */
-      const busy = now - movedAt < 1000 || scene.disturbed() || tweenRef.current !== null
-      if (!busy && now < nextFrame) return
-      nextFrame = now + (busy ? 0 : 33)
-
-      // rAF does not fire in a hidden window, so the first frame back can
-      // carry a minute of elapsed time with it.
-      const dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000))
-      last = now
-
-      // One value drives the DOM slide and the shader slide, set in the same
-      // tick, so they cannot disagree about where the pages are.
-      const tween = tweenRef.current
-      if (tween !== null) {
-        const k = reduced ? 1 : Math.min(1, (now - tween.at) / SLIDE_MS)
-        reveal.current = tween.from + (tween.to - tween.from) * ease(k)
-        if (k >= 1) {
-          reveal.current = tween.to
-          tweenRef.current = null
-        }
-      }
-      const track = trackRef.current
-      if (track !== null && dragOffsetRef.current === null) {
-        track.style.transform = `translate3d(${-reveal.current * 100}%, 0, 0)`
-      }
-      scene.setProgress(reveal.current)
-      scene.frame(dt)
-    }
-    raf = requestAnimationFrame(loop)
-
-    const onVisibility = (): void => {
-      paused = document.hidden
-      last = performance.now()
-    }
-    document.addEventListener('visibilitychange', onVisibility)
-
-    return () => {
-      running = false
-      cancelAnimationFrame(raf)
-      observer.disconnect()
-      dprQuery?.removeEventListener('change', onDpr)
-      window.removeEventListener('pointermove', onPointerMove)
-      document.removeEventListener('visibilitychange', onVisibility)
-      canvas.removeEventListener('webglcontextlost', onLost)
-      canvas.removeEventListener('webglcontextrestored', onRestored)
-      scene.dispose()
-      sceneRef.current = null
-      rasterRef.current = null
-      delete (window as unknown as { __home?: unknown }).__home
-    }
-  }, [mounted, reduced])
-
   /**
    * Where page two's content sits, in that page's own frame.
    *
@@ -458,6 +154,22 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
     })
     scene.setBlocks(rects)
   }, [])
+
+  // --- the one frame loop -------------------------------------------------
+  useHomeScene({
+    canvasRef,
+    dragOffsetRef,
+    heroRef,
+    measureBlocks,
+    mounted,
+    rasterRef,
+    reduced,
+    reveal,
+    sceneRef,
+    trackRef,
+    tweenRef,
+    windowRef,
+  })
 
   // The figures arrive after the first paint; measure once they are laid out.
   useEffect(() => {
@@ -483,7 +195,7 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
   useEffect(() => {
     if (!mounted) return
     let timer = 0
-    const off = api.on('vault:changed', () => {
+    const off = api.on(IPC_EVENT.vaultChanged, () => {
       window.clearTimeout(timer)
       timer = window.setTimeout(() => void getHomeStats().then(setStats), 1000)
     })
@@ -696,81 +408,5 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
       </div>
     </div>,
     document.body,
-  )
-}
-
-/**
- * The figures.
- *
- * Sparse on purpose: a number, a label under it, nothing drawn around it.
- * Monochrome, like the field behind it: no accent colour anywhere.
- */
-function Statistics({ stats, onBack }: { stats: HomeStats | null; onBack: () => void }): React.ReactElement {
-  if (stats === null) return <div className="home__stats home__stats--waiting">Reading the vault…</div>
-
-  return (
-    <div className="home__stats">
-      <div className="home__figures">
-        <Figure value={String(stats.notes)} label="notes" />
-        <Figure value={String(stats.touchedThisWeek)} label="touched this week" trend={stats.weekTrend} />
-        <Figure value={String(stats.links)} label="links" />
-        <Figure value={String(stats.tags)} label="tags" />
-        <Figure value={stats.streakDays === null ? '—' : String(stats.streakDays)} label="day streak" />
-        <Figure value={stats.minutesToday === null ? '—' : `${stats.minutesToday}m`} label="in the app today" />
-      </div>
-
-      <div className="home__lists">
-        {stats.topFolders.length > 0 && (
-          <div className="home__list">
-            <p className="home__label">most written in</p>
-            {stats.topFolders.map((folder) => (
-              <p className="home__row" key={folder.name}>
-                <span>{folder.name}</span>
-                <span className="home__count">{folder.count}</span>
-              </p>
-            ))}
-          </div>
-        )}
-        {stats.hubs.length > 0 && (
-          <div className="home__list">
-            <p className="home__label">most linked</p>
-            {stats.hubs.map((hub) => (
-              <p className="home__row" key={hub.name}>
-                <span>{hub.name}</span>
-                <span className="home__count">{hub.links}</span>
-              </p>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <button className="home__back" type="button" onClick={onBack}>
-        <span className="home__arrow" aria-hidden="true">
-          ←
-        </span>{' '}
-        back
-      </button>
-    </div>
-  )
-}
-
-function Figure({ value, label, trend }: { value: string; label: string; trend?: number[] }): React.ReactElement {
-  return (
-    <div className="home__figure">
-      <p className="home__number">{value}</p>
-      <p className="home__label">{label}</p>
-      {trend !== undefined && trend.some((n) => n > 0) && <Sparkline values={trend} />}
-    </div>
-  )
-}
-
-/** A week of writing, as one line. No axes, no grid, no library. */
-function Sparkline({ values }: { values: number[] }): React.ReactElement {
-  const top = Math.max(1, ...values)
-  const points = values.map((value, i) => `${(i / Math.max(1, values.length - 1)) * 100},${18 - (value / top) * 16}`).join(' ')
-  return (
-    <svg className="home__spark" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true">
-      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
-    </svg>
   )
 }

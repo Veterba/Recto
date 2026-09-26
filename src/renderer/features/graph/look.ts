@@ -137,7 +137,7 @@ export function degreeT(degree: number, maxDegree: number, scale: GradientScale)
 
 // --- colour -------------------------------------------------------------------
 
-export type Rgb = [number, number, number]
+type Rgb = [number, number, number]
 
 export function parseHex(value: string): Rgb | null {
   const match = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value.trim())

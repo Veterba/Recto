@@ -1,16 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import {
-  anyVisible,
-  draw,
-  fit,
-  pick,
-  radiusOf,
-  screenToWorld,
-  worldToScreen,
-  type Camera,
-  type Palette,
-  type RenderState,
-} from '../../../../src/renderer/features/graph/renderer'
+import { draw } from '../../../../src/renderer/features/graph/renderer'
+import { anyVisible, fit, pick, radiusOf, screenToWorld, worldToScreen } from '../../../../src/renderer/features/graph/geometry'
+import { type Palette } from '../../../../src/renderer/features/graph/palette'
+import { type Camera, type RenderState } from '../../../../src/renderer/features/graph/render-state'
 
 /**
  * The graph's maths, not its pixels.

@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import type { ModelStatus, TopicInfo, TopicsPreview, TopicsSettings, TopicsStatus } from '@shared/topics'
 import { api } from '../../../app/api'
 import { Icon } from '../../../ui/Icon'
+import { IPC, IPC_EVENT } from '@shared/ipc'
+import { Toggle } from '../../../ui/Toggle'
+import { SettingRow } from '../../../ui/SettingRow'
 
 /**
  * Settings → Topics.
@@ -97,7 +100,7 @@ function TopicRow({ topic, onChanged }: { topic: TopicInfo; onChanged: () => voi
             if (event.key === 'Escape') setEditing(false)
             if (event.key !== 'Enter') return
             const next = event.currentTarget.value
-            void api.invoke('topics:rename', topic.id, next).then((result) => {
+            void api.invoke(IPC.topicsRename, topic.id, next).then((result) => {
               if (!result.ok) return setError(result.error ?? 'Could not rename.')
               setError(null)
               setEditing(false)
@@ -113,7 +116,7 @@ function TopicRow({ topic, onChanged }: { topic: TopicInfo; onChanged: () => voi
       <button className="btn btn--ghost btn--sm" onClick={() => setEditing(true)}>
         Rename
       </button>
-      <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke('topics:delete', topic.id).then(onChanged)}>
+      <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke(IPC.topicsDelete, topic.id).then(onChanged)}>
         Delete
       </button>
       {error !== null && <span className="topics__error">{error}</span>}
@@ -130,20 +133,20 @@ export function TopicsSettingsTab(): React.ReactElement {
   const [preview, setPreview] = useState<TopicsPreview | 'loading' | null>(null)
   const [advanced, setAdvanced] = useState(false)
 
-  const refresh = (): void => void api.invoke('topics:list').then(setTopics)
+  const refresh = (): void => void api.invoke(IPC.topicsList).then(setTopics)
 
   useEffect(() => {
-    void api.invoke('topics:settings').then(setSettings)
-    void api.invoke('topics:status').then((next) => {
+    void api.invoke(IPC.topicsSettings).then(setSettings)
+    void api.invoke(IPC.topicsStatus).then((next) => {
       setStatus(next)
       // Seen: nothing is written until the next scheduled run after this.
       if (next.review.pending) {
         setFirstLook(next.review.notes)
-        void api.invoke('topics:seen')
+        void api.invoke(IPC.topicsSeen)
       }
     })
     refresh()
-    return api.on('topics:status', (next) => {
+    return api.on(IPC_EVENT.topicsStatus, (next) => {
       setStatus(next)
       refresh()
     })
@@ -152,7 +155,7 @@ export function TopicsSettingsTab(): React.ReactElement {
   if (settings === null || status === null) return <p className="setting__hint">Reading…</p>
 
   const update = (patch: Partial<TopicsSettings>): void => {
-    void api.invoke('topics:set-settings', patch).then(setSettings)
+    void api.invoke(IPC.topicsSetSettings, patch).then(setSettings)
   }
 
   return (
@@ -170,7 +173,7 @@ export function TopicsSettingsTab(): React.ReactElement {
               disabled={preview === 'loading'}
               onClick={() => {
                 setPreview('loading')
-                void api.invoke('topics:preview').then(setPreview)
+                void api.invoke(IPC.topicsPreview).then(setPreview)
               }}
             >
               {preview === 'loading' ? 'Working it out…' : 'Preview'}
@@ -194,7 +197,7 @@ export function TopicsSettingsTab(): React.ReactElement {
         </div>
       )}
 
-      <Row
+      <SettingRow
         label={
           <>
             Topics <span className="topics__badge">Experimental</span>
@@ -202,16 +205,8 @@ export function TopicsSettingsTab(): React.ReactElement {
         }
         hint="Groups similar notes under a topic in their topics property."
       >
-        <button
-          className={`toggle${settings.enabled ? ' is-on' : ''}`}
-          role="switch"
-          aria-checked={settings.enabled}
-          aria-label="Topics"
-          onClick={() => update({ enabled: !settings.enabled })}
-        >
-          <span className="toggle__knob" />
-        </button>
-      </Row>
+        <Toggle on={settings.enabled} onChange={() => update({ enabled: !settings.enabled })} label="Topics" />
+      </SettingRow>
       {status.eligible < WORKS_BEST_FROM && (
         <div className="setting">
           <span className="setting__hint">
@@ -220,13 +215,13 @@ export function TopicsSettingsTab(): React.ReactElement {
         </div>
       )}
 
-      <Row label="Status" hint={statusLine(status)}>
+      <SettingRow label="Status" hint={statusLine(status)}>
         {(status.model.state === 'missing' || status.model.state === 'error') && (
-          <button className="btn btn--sm" onClick={() => void api.invoke('topics:download')}>
+          <button className="btn btn--sm" onClick={() => void api.invoke(IPC.topicsDownload)}>
             Download
           </button>
         )}
-      </Row>
+      </SettingRow>
       {status.model.state === 'downloading' && (
         <div className="autolinks__bar" aria-hidden>
           <span style={{ width: `${(status.model.received / status.model.bytes) * 100}%` }} />
@@ -241,18 +236,18 @@ export function TopicsSettingsTab(): React.ReactElement {
         </div>
       )}
 
-      <Row
+      <SettingRow
         label="Undo last run"
         hint={status.lastRun === null ? 'Nothing to undo.' : `Last run: ${status.lastRun.notes} notes, ${when(status.lastRun.at)}`}
       >
         <button
           className="btn btn--ghost btn--sm"
           disabled={status.lastRun === null}
-          onClick={() => void api.invoke('topics:undo-last-run').then(refresh)}
+          onClick={() => void api.invoke(IPC.topicsUndoLastRun).then(refresh)}
         >
           Undo
         </button>
-      </Row>
+      </SettingRow>
 
       <button className="topics__advanced" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}>
         <span className={`backlinks__chevron${advanced ? ' is-open' : ''}`}>{'›'}</span>
@@ -260,7 +255,7 @@ export function TopicsSettingsTab(): React.ReactElement {
       </button>
       {advanced && (
         <>
-          <Row label="Quiet period" hint={`A note is looked at ${settings.quietMinutes} min after its last edit.`}>
+          <SettingRow label="Quiet period" hint={`A note is looked at ${settings.quietMinutes} min after its last edit.`}>
             <input
               className="slider"
               type="range"
@@ -270,8 +265,8 @@ export function TopicsSettingsTab(): React.ReactElement {
               value={settings.quietMinutes}
               onChange={(event) => update({ quietMinutes: Number(event.target.value) })}
             />
-          </Row>
-          <Row label="Minimum words" hint={`Notes under ${settings.minWords} words of their own get no topic.`}>
+          </SettingRow>
+          <SettingRow label="Minimum words" hint={`Notes under ${settings.minWords} words of their own get no topic.`}>
             <input
               className="slider"
               type="range"
@@ -281,8 +276,8 @@ export function TopicsSettingsTab(): React.ReactElement {
               value={settings.minWords}
               onChange={(event) => update({ minWords: Number(event.target.value) })}
             />
-          </Row>
-          <Row label="Excluded folders" hint="Comma separated. Daily notes and templates are always out.">
+          </SettingRow>
+          <SettingRow label="Excluded folders" hint="Comma separated. Daily notes and templates are always out.">
             <CommitField
               value={settings.excluded.join(', ')}
               label="Excluded folders"
@@ -296,26 +291,14 @@ export function TopicsSettingsTab(): React.ReactElement {
                 })
               }
             />
-          </Row>
-          <Row label="Rebuild topics" hint="Groups every note again; topics that continue keep their names.">
-            <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke('topics:rebuild').then(refresh)}>
+          </SettingRow>
+          <SettingRow label="Rebuild topics" hint="Groups every note again; topics that continue keep their names.">
+            <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke(IPC.topicsRebuild).then(refresh)}>
               Rebuild
             </button>
-          </Row>
+          </SettingRow>
         </>
       )}
     </>
-  )
-}
-
-function Row({ label, hint, children }: { label: React.ReactNode; hint?: string; children: React.ReactNode }): React.ReactElement {
-  return (
-    <div className="setting">
-      <div className="setting__text">
-        <span className="setting__label">{label}</span>
-        {hint !== undefined && <span className="setting__hint">{hint}</span>}
-      </div>
-      <div className="setting__control">{children}</div>
-    </div>
   )
 }

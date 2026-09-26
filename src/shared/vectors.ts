@@ -10,7 +10,7 @@
 /** A note contributes at most this many chunks, evenly spaced: a 500-chunk log is one note, not 500 votes. */
 export const MAX_CHUNKS = 48
 
-export function normalise(v: Float32Array): Float32Array {
+function normalise(v: Float32Array): Float32Array {
   let n = 0
   for (let i = 0; i < v.length; i++) n += v[i]! * v[i]!
   n = Math.sqrt(n) || 1

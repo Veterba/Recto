@@ -243,7 +243,7 @@
   height: 28px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   cursor: pointer;
   transition:
     background var(--anim-fast) var(--ease),

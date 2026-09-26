@@ -1,4 +1,5 @@
-import { screenToWorld, type Camera } from './renderer'
+import { screenToWorld } from './geometry'
+import { type Camera } from './render-state'
 
 /**
  * Smooth camera movement for the graph: eased zoom, eased jumps, and a pan

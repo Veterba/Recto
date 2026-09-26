@@ -49,7 +49,7 @@ export function mathSource(raw: string): string {
 const cache = new Map<string, string>()
 const CACHE_LIMIT = 500
 
-export function renderTex(tex: string, display: boolean): string {
+function renderTex(tex: string, display: boolean): string {
   const key = `${display ? 'D' : 'I'}${tex}`
   const hit = cache.get(key)
   if (hit !== undefined) return hit
@@ -66,7 +66,7 @@ export function renderTex(tex: string, display: boolean): string {
 }
 
 /** Put the caret at the start of whatever this widget replaced, revealing its source. */
-function revealOnPress(dom: HTMLElement, view: EditorView): void {
+export function revealOnPress(dom: HTMLElement, view: EditorView): void {
   dom.addEventListener('mousedown', (event) => {
     // Links and inputs inside the widget keep their own behaviour.
     if ((event.target as HTMLElement).closest('a, button, input') !== null) return
@@ -166,114 +166,6 @@ export function renderInline(text: string, into: HTMLElement): void {
   if (last < text.length) into.append(document.createTextNode(text.slice(last)))
 }
 
-// --- tables -------------------------------------------------------------------
-
-/**
- * Split one table row into cells.
- *
- * A pipe inside `$…$` or backticks is part of the cell - `$|x|$` is an
- * absolute value, not two columns - and `\|` is an escaped pipe. Outer pipes
- * are optional in GFM and dropped.
- */
-export function splitRow(line: string): string[] {
-  const cells: string[] = []
-  let current = ''
-  let inMath = false
-  let inCode = false
-  const text = line.trim()
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]!
-    if (char === '\\' && text[i + 1] === '|') {
-      current += '|'
-      i++
-      continue
-    }
-    if (char === '`' && !inMath) inCode = !inCode
-    if (char === '$' && !inCode) inMath = !inMath
-    if (char === '|' && !inMath && !inCode) {
-      cells.push(current)
-      current = ''
-      continue
-    }
-    current += char
-  }
-  cells.push(current)
-  if (text.startsWith('|')) cells.shift()
-  if (text.endsWith('|') && !text.endsWith('\\|')) cells.pop()
-  return cells.map((cell) => cell.trim())
-}
-
-export type ParsedTable = {
-  head: string[]
-  align: ('left' | 'center' | 'right' | null)[]
-  rows: string[][]
-}
-
-export function parseTable(text: string): ParsedTable | null {
-  const lines = text.split('\n').filter((line) => line.trim() !== '')
-  if (lines.length < 2) return null
-  const head = splitRow(lines[0]!)
-  const align = splitRow(lines[1]!).map((cell) => {
-    const left = cell.startsWith(':')
-    const right = cell.endsWith(':')
-    return left && right ? 'center' : right ? 'right' : left ? 'left' : null
-  })
-  const rows = lines.slice(2).map(splitRow)
-  return { head, align, rows }
-}
-
-export class TableWidget extends WidgetType {
-  constructor(private readonly source: string) {
-    super()
-  }
-
-  override eq(other: TableWidget): boolean {
-    return other.source === this.source
-  }
-
-  override toDOM(view: EditorView): HTMLElement {
-    const wrap = document.createElement('div')
-    wrap.className = 'cm-table-wrap'
-    const parsed = parseTable(this.source)
-    if (parsed === null) {
-      wrap.textContent = this.source
-      return wrap
-    }
-    const table = document.createElement('table')
-    table.className = 'cm-table'
-    const width = Math.max(parsed.head.length, ...parsed.rows.map((row) => row.length))
-
-    const cell = (tag: 'th' | 'td', text: string, column: number): HTMLElement => {
-      const el = document.createElement(tag)
-      const alignment = parsed.align[column]
-      if (alignment !== null && alignment !== undefined) el.style.textAlign = alignment
-      renderInline(text, el)
-      return el
-    }
-
-    const thead = document.createElement('thead')
-    const headRow = document.createElement('tr')
-    for (let c = 0; c < width; c++) headRow.append(cell('th', parsed.head[c] ?? '', c))
-    thead.append(headRow)
-    table.append(thead)
-
-    const tbody = document.createElement('tbody')
-    for (const row of parsed.rows) {
-      const tr = document.createElement('tr')
-      for (let c = 0; c < width; c++) tr.append(cell('td', row[c] ?? '', c))
-      tbody.append(tr)
-    }
-    table.append(tbody)
-    wrap.append(table)
-    revealOnPress(wrap, view)
-    return wrap
-  }
-
-  override ignoreEvent(): boolean {
-    return true
-  }
-}
-
 // --- footnotes ----------------------------------------------------------------
 
 export class FootnoteWidget extends WidgetType {
@@ -367,75 +259,5 @@ export class EmbedWidget extends WidgetType {
     // The note card lets the editor see its clicks, so the link handler runs;
     // the image handles its own press.
     return IMAGE_EXT.test(this.target.replace(/#.*$/, '').trim())
-  }
-}
-
-// --- callouts -------------------------------------------------------------------
-
-/** Obsidian's callout types and their aliases, grouped by the colour they share. */
-const CALLOUT_GROUPS: Record<string, string[]> = {
-  note: ['note'],
-  abstract: ['abstract', 'summary', 'tldr'],
-  info: ['info', 'todo'],
-  tip: ['tip', 'hint', 'important'],
-  success: ['success', 'check', 'done'],
-  question: ['question', 'help', 'faq'],
-  warning: ['warning', 'caution', 'attention'],
-  failure: ['failure', 'fail', 'missing'],
-  danger: ['danger', 'error', 'bug'],
-  example: ['example'],
-  quote: ['quote', 'cite'],
-}
-
-const ICONS: Record<string, string> = {
-  note: '✎',
-  abstract: '☰',
-  info: 'ℹ',
-  tip: '✦',
-  success: '✓',
-  question: '?',
-  warning: '⚠',
-  failure: '✕',
-  danger: '⚡',
-  example: '≡',
-  quote: '❝',
-}
-
-/** The colour group for a callout type; unknown types look like `note`, as in Obsidian. */
-export function calloutGroup(type: string): string {
-  const lower = type.toLowerCase()
-  for (const [group, names] of Object.entries(CALLOUT_GROUPS)) if (names.includes(lower)) return group
-  return 'note'
-}
-
-export class CalloutHeader extends WidgetType {
-  constructor(
-    private readonly type: string,
-    private readonly title: string,
-  ) {
-    super()
-  }
-
-  override eq(other: CalloutHeader): boolean {
-    return other.type === this.type && other.title === this.title
-  }
-
-  override toDOM(): HTMLElement {
-    const group = calloutGroup(this.type)
-    const head = document.createElement('span')
-    head.className = 'cm-callout-title'
-    const icon = document.createElement('span')
-    icon.className = 'cm-callout-icon'
-    icon.textContent = ICONS[group] ?? '✎'
-    const text = document.createElement('span')
-    // No title given: Obsidian uses the type, capitalised.
-    const title = this.title !== '' ? this.title : this.type.charAt(0).toUpperCase() + this.type.slice(1).toLowerCase()
-    renderInline(title, text)
-    head.append(icon, text)
-    return head
-  }
-
-  override ignoreEvent(): boolean {
-    return false
   }
 }

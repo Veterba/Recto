@@ -246,7 +246,7 @@ export function RangeSlider({
 
 // --- histogram range -----------------------------------------------------------------
 
-export type HistogramBin = { label: string; count: number }
+type HistogramBin = { label: string; count: number }
 
 /**
  * A range over bins, drawn as a histogram: the bars inside the range are dark,

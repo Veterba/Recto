@@ -7,14 +7,14 @@ import type { Component } from './component'
  * placeholder instead of throwing away the user's layout.
  */
 
-export type ViewProps = {
+type ViewProps = {
   /** Opaque per-leaf state, persisted verbatim into workspace.json. */
   state: Record<string, unknown>
   setState: (next: Record<string, unknown>) => void
   leafId: string
 }
 
-export type ViewDefinition = {
+type ViewDefinition = {
   type: string
   /** Fallback tab title when the view does not derive one from its state. */
   title: string

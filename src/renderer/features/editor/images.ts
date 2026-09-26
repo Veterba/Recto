@@ -1,6 +1,7 @@
 import { EditorView } from '@codemirror/view'
 import type { Extension } from '@codemirror/state'
 import { api } from '../../app/api'
+import { IPC } from '@shared/ipc'
 
 /**
  * Drop or paste a picture into a note.
@@ -41,7 +42,7 @@ async function importAt(view: EditorView, files: readonly File[], at: number): P
   const markdown: string[] = []
   for (const file of files) {
     const bytes = new Uint8Array(await file.arrayBuffer())
-    const result = await api.invoke('fs:import-data', nameFor(file), bytes)
+    const result = await api.invoke(IPC.fsImportData, nameFor(file), bytes)
     if (!result.ok) continue
     const label = result.path.slice(result.path.lastIndexOf('/') + 1)
     markdown.push(`![${label}](${encodeURI(result.path)})`)

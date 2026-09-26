@@ -224,7 +224,7 @@
   width: 3.5px;
   height: 7px;
   margin: 0.5px auto 0;
-  border: solid #fff;
+  border: solid var(--on-accent);
   border-width: 0 1.75px 1.75px 0;
   transform: rotate(45deg);
 }

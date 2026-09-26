@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { BoardCardInfo } from '@shared/ipc-contract'
+import type { BoardCardInfo } from '@shared/index-results'
 import { api } from '../../../app/api'
 import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { setField } from '@shared/frontmatter'
 import { noteIndexChanged, useNoteBus } from '../../../app/note-bus'
-import { registerView } from '../../../app/view-registry'
 import { columnId, columnOf, type Board, type Column } from '../boards'
 import { CARD_FOLDER, createCard } from '../create-card'
 import { placeAt, sortColumn } from '../ordering'
-import { currentBoards, updateBoards, useBoards } from '../hooks/use-boards'
+import { IPC } from '@shared/ipc'
 
 /**
  * The kanban board.
@@ -62,7 +61,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
   const overrides = useRef(new Map<string, { status: string | null; order: number; at: number }>())
 
   const load = useCallback(() => {
-    void api.invoke('index:board', board.id).then((rows) => {
+    void api.invoke(IPC.indexBoard, board.id).then((rows) => {
       const now = Date.now()
       const next = rows.map((row) => {
         const pending = overrides.current.get(row.path)
@@ -106,14 +105,14 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
 
   /** Apply frontmatter edits to a note, leaving everything else untouched. */
   const writeFields = useCallback(async (path: string, fields: Record<string, string | number>): Promise<boolean> => {
-    const read = await api.invoke('fs:read', path)
+    const read = await api.invoke(IPC.fsRead, path)
     if (!read.ok) {
       setError(read.error)
       return false
     }
     let text = read.content
     for (const [key, value] of Object.entries(fields)) text = setField(text, key, value)
-    const written = await api.invoke('fs:write', path, text)
+    const written = await api.invoke(IPC.fsWrite, path, text)
     if (!written.ok) setError(written.error ?? 'Could not save the card.')
     return written.ok
   }, [])
@@ -210,7 +209,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
       kind: 'item',
       label: 'Reveal in Finder',
       icon: 'external-link',
-      run: () => void api.invoke('fs:reveal', card.path),
+      run: () => void api.invoke(IPC.fsReveal, card.path),
     },
     { kind: 'separator' },
     { kind: 'heading', label: 'Move to' },
@@ -229,7 +228,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
       icon: 'trash',
       danger: true,
       run: () => {
-        void api.invoke('archive:add', card.path).then(() => {
+        void api.invoke(IPC.archiveAdd, card.path).then(() => {
           noteIndexChanged()
           load()
         })
@@ -394,42 +393,5 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
         </p>
       )}
     </div>
-  )
-}
-
-/**
- * Registered as a view type, so a board opens in a tab like anything else and
- * survives in `workspace.json`. The leaf state holds the board id, so reopening
- * the app lands on the board you left.
- */
-export function registerBoardView(onOpenNote: (path: string) => void): () => void {
-  return registerView({
-    type: 'board',
-    title: 'Board',
-    icon: 'square-kanban',
-    getTitle: (state) => {
-      const id = state['board']
-      const found = currentBoards().boards.find((entry) => entry.id === id)
-      return found?.name ?? 'Board'
-    },
-    render: ({ state }) => <BoardHost boardId={state['board']} onOpenNote={onOpenNote} />,
-  })
-}
-
-function BoardHost({ boardId, onOpenNote }: { boardId: unknown; onOpenNote: (path: string) => void }): React.ReactElement {
-  const file = useBoards()
-  const id = typeof boardId === 'string' ? boardId : file.boards[0]?.id
-  // A leaf that names a board which has since been deleted falls back rather
-  // than rendering nothing - the same rule the workspace uses for view types.
-  const board = file.boards.find((entry) => entry.id === id) ?? file.boards[0]
-
-  if (board === undefined) return <p className="board__empty">No boards yet.</p>
-
-  return (
-    <BoardView
-      board={board}
-      onOpenNote={onOpenNote}
-      onEditBoard={(next) => updateBoards({ boards: file.boards.map((entry) => (entry.id === next.id ? next : entry)) })}
-    />
   )
 }

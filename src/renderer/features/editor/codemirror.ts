@@ -1,24 +1,26 @@
 import { defaultKeymap, history, historyKeymap, redo, undo } from '@codemirror/commands'
-import * as md from './markdown-actions'
+import { indentListItems, newlineFromIndent } from './list-indent'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { foldedRanges, indentOnInput, syntaxTree } from '@codemirror/language'
 import { search, searchKeymap } from '@codemirror/search'
-import { Compartment, EditorState, type TransactionSpec } from '@codemirror/state'
+import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView, drawSelection, dropCursor, highlightActiveLine, keymap, rectangularSelection } from '@codemirror/view'
 import { vim } from '@replit/codemirror-vim'
-import { activeFormats, type Format } from './markdown-actions'
+import { activeFormats } from './active-formats'
 import { blockDecorations } from './blocks'
 import { imageDrop } from './images'
 import { noSetextHeadings, obsidianSyntax } from './obsidian-syntax'
-import { foldAll, foldedLines, noteStructure, restoreFolds, toggleFoldAt, unfoldAll } from './structure'
-import { authorAnnotation, authorField, fromStored, setAuthorRanges, toStored, type Author, type StoredRange } from './authorship'
+import { noteStructure } from './structure'
+import { foldAll, foldedLines, restoreFolds, toggleFoldAt, unfoldAll } from './folding'
+import { authorAnnotation, authorField, fromStored, setAuthorRanges, toStored } from './authorship'
 import { setWritingConfig, writingTools } from './writing'
-import type { WritingSettings } from './writing-modes'
 import { markdownDecorations, setUnresolvedTargets, unresolvedField } from './decorations'
-import { livePreview, livePreviewCompartment, setLivePreview } from './live-preview'
+import { livePreview, livePreviewCompartment } from './live-preview'
+import { setLivePreview } from './live-preview-state'
 import { linkCompletion, type LinkCandidate } from './link-complete'
 import { editorTheme, markdownHighlighting } from './theme'
+import type { EditorHandle } from './editor-handle'
 
 /**
  * The CodeMirror wrapper.
@@ -32,62 +34,7 @@ import { editorTheme, markdownHighlighting } from './theme'
  * DOM entirely.
  */
 
-export type EditorHandle = {
-  /** Current document text. */
-  getValue: () => string
-  /**
-   * Replace the document without destroying history or losing the cursor.
-   * Used when a note is changed by another app.
-   */
-  setValue: (next: string) => void
-  /** Run one of the markdown actions against the live state. */
-  run: (action: (state: EditorState) => TransactionSpec | null) => boolean
-  /** Mark these link targets as pointing at nothing, so they render as broken. */
-  setUnresolved: (targets: readonly string[]) => void
-  /** Scroll to a heading by its text. False if the note has no such heading. */
-  revealHeading: (heading: string) => boolean
-  /** Live Preview hides markdown markers away from the cursor. */
-  setLivePreview: (on: boolean) => void
-  /** Modal editing, toggled without rebuilding the editor. */
-  setVim: (on: boolean) => void
-  /**
-   * Write now, rather than waiting for the debounce.
-   *
-   * Saving is automatic, so this exists for the habit: ⌘S is what people press
-   * when they want to be sure, and a text editor where it does nothing feels
-   * like one that is not saving.
-   */
-  save: () => void
-  /** Focus mode, syntax, style and authorship settings, pushed live. */
-  setWriting: (settings: WritingSettings) => void
-  /** Load a note's saved authorship. */
-  setAuthors: (stored: readonly StoredRange[]) => void
-  getAuthors: () => StoredRange[]
-  /** Insert text at the selection, marked as written by this author. */
-  insertAs: (author: Author | 'human', text: string) => void
-  /** Re-mark the selected text as this author's. */
-  markSelection: (author: Author | 'human') => boolean
-  /** Put the caret at the start of a line and centre it, opening any fold over it. */
-  revealLine: (line: number) => void
-  /** The caret's line, 1-based. */
-  getCursorLine: () => number
-  /** Fold or unfold the heading or list item under the caret. */
-  toggleFold: () => boolean
-  foldAll: () => void
-  unfoldAll: () => void
-  /** Folded lines by number, to remember a note's folds between visits. */
-  getFolds: () => number[]
-  setFolds: (lines: readonly number[]) => void
-  /** Formats applying at the cursor, for the toolbar's pressed state. */
-  getActiveFormats: () => ReadonlySet<Format>
-  focus: () => void
-  undo: () => void
-  redo: () => void
-  openSearch: () => void
-  destroy: () => void
-}
-
-export type EditorOptions = {
+type EditorOptions = {
   doc: string
   onChange: (value: string) => void
   /** Cmd+S. Autosave already runs, so this is a "flush now" affordance. */
@@ -271,13 +218,13 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
           {
             key: 'Tab',
             run: (view) => {
-              const spec = md.indentListItems(view.state, 1)
+              const spec = indentListItems(view.state, 1)
               if (spec === null) return false
               view.dispatch(spec)
               return true
             },
             shift: (view) => {
-              const spec = md.indentListItems(view.state, -1)
+              const spec = indentListItems(view.state, -1)
               if (spec === null) return false
               view.dispatch(spec)
               return true
@@ -293,7 +240,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
           ].map(({ key, carry }) => ({
             key,
             run: (view: EditorView) => {
-              const spec = md.newlineFromIndent(view.state, carry)
+              const spec = newlineFromIndent(view.state, carry)
               if (spec === null) return false
               view.dispatch(spec)
               return true

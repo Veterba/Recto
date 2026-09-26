@@ -12,7 +12,7 @@ import { HOME_HOTKEY } from '../features/home'
  * showing the same truth.
  */
 
-export type CommandContext = {
+type CommandContext = {
   workspace: Workspace
   openPalette: () => void
   closeVault: () => void

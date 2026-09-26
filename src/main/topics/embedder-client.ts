@@ -64,7 +64,7 @@ function post(proc: UtilityProcess, request: EmbedRequest, timeoutMs: number): P
   })
 }
 
-export function embedder(request: EmbedRequest, timeoutMs = 120_000): Promise<EmbedResponse> {
+function embedder(request: EmbedRequest, timeoutMs = 120_000): Promise<EmbedResponse> {
   if (request.kind === 'open') opening = request
   if (!child) {
     child = spawn()
@@ -89,5 +89,3 @@ export function stopEmbedder(): void {
   child?.kill()
   child = null
 }
-
-export const embedderRunning = (): boolean => child !== null

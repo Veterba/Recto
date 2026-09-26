@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AI_MODELS, type AiMessage, type AiModelId } from '@shared/ipc-contract'
+import { AI_MODELS, type AiMessage, type AiModelId } from '@shared/ai'
 import { api } from '../../../app/api'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
@@ -7,6 +7,7 @@ import { registerView } from '../../../app/view-registry'
 import { noteIndexChanged } from '../../../app/note-bus'
 import { Markdownish } from './Markdownish'
 import { parseConversation, serialiseConversation, titleFrom } from '../conversation'
+import { IPC, IPC_EVENT } from '@shared/ipc'
 
 /**
  * The chat.
@@ -29,7 +30,7 @@ const SYSTEM = [
 function useKeyPresent(): boolean | null {
   const [present, setPresent] = useState<boolean | null>(null)
   useEffect(() => {
-    void api.invoke('ai:key-status').then((status) => setPresent(status.present))
+    void api.invoke(IPC.aiKeyStatus).then((status) => setPresent(status.present))
   }, [])
   return present
 }
@@ -64,7 +65,7 @@ function Chat({
   useEffect(() => {
     let cancelled = false
     setLoaded(false)
-    void api.invoke('fs:read', path).then((result) => {
+    void api.invoke(IPC.fsRead, path).then((result) => {
       if (cancelled || !result.ok) return
       const parsed = parseConversation(result.content)
       setMessages(parsed.messages)
@@ -85,7 +86,7 @@ function Chat({
 
   const save = useCallback(
     async (next: readonly AiMessage[], nextTitle: string) => {
-      await api.invoke('fs:write', path, serialiseConversation({ title: nextTitle, model, messages: [...next] }))
+      await api.invoke(IPC.fsWrite, path, serialiseConversation({ title: nextTitle, model, messages: [...next] }))
       noteIndexChanged()
     },
     [path, model],
@@ -93,11 +94,11 @@ function Chat({
 
   // --- streaming ----------------------------------------------------------
   useEffect(() => {
-    const offDelta = api.on('ai:delta', (delta) => {
+    const offDelta = api.on(IPC_EVENT.aiDelta, (delta) => {
       if (delta.id !== streamId) return
       setPending((current) => (current ?? '') + delta.text)
     })
-    const offDone = api.on('ai:done', (done) => {
+    const offDone = api.on(IPC_EVENT.aiDone, (done) => {
       if (done.id !== streamId) return
       setPending((current) => {
         const text = (current ?? '').trim()
@@ -111,7 +112,7 @@ function Chat({
         return null
       })
     })
-    const offError = api.on('ai:error', (failure) => {
+    const offError = api.on(IPC_EVENT.aiError, (failure) => {
       if (failure.id !== streamId) return
       // A cancelled stream still has whatever arrived before the stop, and
       // throwing that away would be the rudest possible response to "stop".
@@ -157,7 +158,7 @@ function Chat({
     await save(next, nextTitle)
 
     setPending('')
-    const started = await api.invoke('ai:send', { id: streamId, model, system: SYSTEM, messages: next })
+    const started = await api.invoke(IPC.aiSend, { id: streamId, model, system: SYSTEM, messages: next })
     if (!started.ok) {
       setPending(null)
       setError(started.error ?? 'Could not start.')
@@ -168,7 +169,7 @@ function Chat({
   }, [draft, messages, pending, model, save, streamId])
 
   const stop = useCallback(() => {
-    void api.invoke('ai:cancel', streamId)
+    void api.invoke(IPC.aiCancel, streamId)
   }, [streamId])
 
   const empty = messages.length === 0 && pending === null

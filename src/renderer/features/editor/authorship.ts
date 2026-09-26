@@ -27,7 +27,7 @@ export const authorAnnotation = Annotation.define<Author | 'human'>()
 export const setAuthorRanges = StateEffect.define<AuthorRange[]>()
 
 /** Merge touching ranges by the same author and drop empty ones. */
-export function normalise(ranges: readonly AuthorRange[]): AuthorRange[] {
+function normalise(ranges: readonly AuthorRange[]): AuthorRange[] {
   const sorted = ranges.filter((r) => r.to > r.from).sort((a, b) => a.from - b.from || a.to - b.to)
   const out: AuthorRange[] = []
   for (const range of sorted) {
@@ -46,7 +46,7 @@ export function normalise(ranges: readonly AuthorRange[]): AuthorRange[] {
 }
 
 /** Remove a span from every range, splitting where it falls inside one. */
-export function subtract(ranges: readonly AuthorRange[], from: number, to: number): AuthorRange[] {
+function subtract(ranges: readonly AuthorRange[], from: number, to: number): AuthorRange[] {
   const out: AuthorRange[] = []
   for (const range of ranges) {
     if (to <= range.from || from >= range.to) {

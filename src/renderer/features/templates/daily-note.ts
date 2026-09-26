@@ -9,6 +9,7 @@ import {
   templateBody,
   type TemplateSettings,
 } from '@shared/templates'
+import { IPC } from '@shared/ipc'
 
 /**
  * Template settings for the open vault, from `.recto/templates.json`.
@@ -28,7 +29,7 @@ export function useTemplateSettings(vaultPath: string): {
   useEffect(() => {
     let cancelled = false
     setLoaded(false)
-    void api.invoke('state:read', 'templates').then((raw) => {
+    void api.invoke(IPC.stateRead, 'templates').then((raw) => {
       if (cancelled) return
       setSettings(coerceTemplateSettings(raw))
       setLoaded(true)
@@ -40,7 +41,7 @@ export function useTemplateSettings(vaultPath: string): {
 
   const update = useCallback((next: TemplateSettings) => {
     setSettings(next)
-    void api.invoke('state:write', 'templates', next)
+    void api.invoke(IPC.stateWrite, 'templates', next)
   }, [])
 
   return { settings, loaded, update }
@@ -62,7 +63,7 @@ export async function ensureDailyNote(
 ): Promise<{ ok: true; path: string; created: boolean } | { ok: false; error: string }> {
   const target = dailyNotePath(now, settings.daily.folder)
 
-  const existing = await api.invoke('fs:read', target.path)
+  const existing = await api.invoke(IPC.fsRead, target.path)
   if (existing.ok) return { ok: true, path: target.path, created: false }
 
   // A chosen template that has since been deleted falls back to the built-in
@@ -72,14 +73,14 @@ export async function ensureDailyNote(
 
   // `fs:create` makes every missing folder on the way down, so Daily/, the
   // year, the month and the week all appear from this one call.
-  const created = await api.invoke('fs:create', target.folder, target.name, 'file')
+  const created = await api.invoke(IPC.fsCreate, target.folder, target.name, 'file')
   if (!created.ok) return { ok: false, error: created.error }
 
   // If something else created the same file between the read and the create,
   // `fs:create` picks a free name ("2026-09-14 2.md") rather than overwriting.
   // A visible duplicate is the right failure: it can be deleted, and a
   // clobbered note cannot be brought back.
-  await api.invoke('fs:write', created.path, text)
+  await api.invoke(IPC.fsWrite, created.path, text)
   return { ok: true, path: created.path, created: true }
 }
 
@@ -91,7 +92,7 @@ async function generatedText(settings: TemplateSettings, now: Date): Promise<str
   const target = dailyNotePath(now, settings.daily.folder)
   let body = BUILT_IN_DAILY
   if (settings.daily.template !== null) {
-    const template = await api.invoke('fs:read', settings.daily.template)
+    const template = await api.invoke(IPC.fsRead, settings.daily.template)
     // An EMPTY template counts as no template. That is not hypothetical: a
     // template file created and never written in produced a blank, 0-byte
     // daily note with nothing to say why - which looks exactly like the
@@ -124,9 +125,9 @@ export async function retemplateDailyNote(previous: TemplateSettings, next: Temp
   if (!next.daily.enabled || previous.daily.template === next.daily.template) return false
   if (previous.daily.folder !== next.daily.folder) return false
   const target = dailyNotePath(now, next.daily.folder)
-  const current = await api.invoke('fs:read', target.path)
+  const current = await api.invoke(IPC.fsRead, target.path)
   if (!current.ok) return false
   if (current.content !== (await generatedText(previous, now))) return false
-  await api.invoke('fs:write', target.path, await generatedText(next, now))
+  await api.invoke(IPC.fsWrite, target.path, await generatedText(next, now))
   return true
 }

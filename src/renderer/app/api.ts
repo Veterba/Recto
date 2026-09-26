@@ -1,4 +1,4 @@
-import type { ExposedApi } from '@shared/ipc-contract'
+import type { ExposedApi } from '@shared/ipc'
 
 declare global {
   interface Window {

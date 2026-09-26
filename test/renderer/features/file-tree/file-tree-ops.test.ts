@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { allFolderPaths, applyChanges, filterTree } from '../../../../src/renderer/features/file-tree/file-tree-ops'
-import type { FileNode, VaultChange } from '../../../../src/shared/ipc-contract'
+import type { FileNode, VaultChange } from '../../../../src/shared/vault'
 
 const file = (p: string): FileNode => ({ path: p, name: p.slice(p.lastIndexOf('/') + 1), kind: 'file', mtime: 1, size: 0 })
 const folder = (p: string, children: FileNode[] = []): FileNode => ({

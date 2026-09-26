@@ -1,4 +1,4 @@
-import type { FileNode } from '@shared/ipc-contract'
+import type { FileNode } from '@shared/vault'
 
 /**
  * The order the file tree is shown in, when it is not the alphabet.

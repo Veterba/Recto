@@ -118,7 +118,7 @@ let save: ((next: WritingSettings) => void) | null = null
 
 export const getWriting = (): WritingSettings => current
 
-export function subscribeWriting(listener: () => void): () => void {
+function subscribeWriting(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }

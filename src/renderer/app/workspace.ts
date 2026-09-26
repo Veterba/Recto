@@ -58,7 +58,7 @@ export function makeTabs(children: LeafNode[] = [], active = 0): TabsNode {
   return { kind: 'tabs', id: nextId('tabs'), children, active }
 }
 
-export function makeSplit(direction: SplitNode['direction'], children: WorkspaceNode[]): SplitNode {
+function makeSplit(direction: SplitNode['direction'], children: WorkspaceNode[]): SplitNode {
   return { kind: 'split', id: nextId('split'), direction, children, sizes: evenSizes(children.length) }
 }
 

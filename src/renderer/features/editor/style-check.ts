@@ -11,7 +11,7 @@
 
 export type StyleKind = 'filler' | 'cliche' | 'redundancy' | 'custom'
 
-export type StyleIssue = { from: number; to: number; kind: StyleKind; text: string }
+type StyleIssue = { from: number; to: number; kind: StyleKind; text: string }
 
 export type StyleOptions = {
   fillers: boolean

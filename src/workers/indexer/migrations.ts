@@ -13,7 +13,7 @@ import type { Database } from 'better-sqlite3'
  * the file and reindexing is always a legitimate answer.
  */
 
-export type Migration = { version: number; name: string; sql: string }
+type Migration = { version: number; name: string; sql: string }
 
 export const MIGRATIONS: readonly Migration[] = [
   {

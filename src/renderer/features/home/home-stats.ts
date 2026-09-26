@@ -1,5 +1,6 @@
-import type { VaultUsage } from '@shared/ipc-contract'
+import type { VaultUsage } from '@shared/index-results'
 import { api } from '../../app/api'
+import { IPC } from '@shared/ipc'
 
 /**
  * What the home overlay's second pane shows.
@@ -68,7 +69,7 @@ const EMPTY: HomeStats = {
  */
 export async function getHomeStats(): Promise<HomeStats> {
   try {
-    const usage: VaultUsage = await api.invoke('index:home-stats')
+    const usage: VaultUsage = await api.invoke(IPC.indexHomeStats)
     return {
       ...usage,
       // TODO: real data. These three need the `events` table populated.

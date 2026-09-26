@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api'
-import { isAiModel, type AiModelId, type VibrancyMaterial } from '@shared/ipc-contract'
+import { isAiModel, type AiModelId } from '@shared/ai'
+import { IPC, IPC_EVENT, type VibrancyMaterial } from '@shared/ipc'
 import { coerceSidebarTheme, grainLevels, NO_THEME, tintCss, type SidebarTheme } from './sidebar-theme'
 
 /**
@@ -89,7 +90,7 @@ export type Appearance = {
 export const PREVIEW_DELAY_MIN = 0.5
 export const PREVIEW_DELAY_MAX = 5
 
-export const DEFAULT_APPEARANCE: Appearance = {
+const DEFAULT_APPEARANCE: Appearance = {
   theme: 'system',
   sidebarWidth: 260,
   sidebarOpen: true,
@@ -149,7 +150,7 @@ const MATERIAL: Record<'light' | 'dark', VibrancyMaterial> = {
 const darkQuery = (): MediaQueryList => window.matchMedia('(prefers-color-scheme: dark)')
 
 /** What `system` actually resolves to right now. */
-export function resolvedTheme(theme: Theme): 'light' | 'dark' {
+function resolvedTheme(theme: Theme): 'light' | 'dark' {
   if (theme === 'light' || theme === 'dark') return theme
   return darkQuery().matches ? 'dark' : 'light'
 }
@@ -184,13 +185,13 @@ export const treeRowHeight = (): number => rowHeightPx
 let fullScreen = false
 let applied: Appearance | null = null
 
-export function setFullScreen(on: boolean): void {
+function setFullScreen(on: boolean): void {
   if (fullScreen === on) return
   fullScreen = on
   if (applied !== null) applyAppearance(applied)
 }
 
-export function applyAppearance(appearance: Appearance): void {
+function applyAppearance(appearance: Appearance): void {
   applied = appearance
   const root = document.documentElement
   if (appearance.theme === 'system') root.removeAttribute('data-theme')
@@ -236,13 +237,13 @@ export function applyAppearance(appearance: Appearance): void {
    */
   if (themeSource !== appearance.theme) {
     themeSource = appearance.theme
-    void api.invoke('app:set-theme-source', appearance.theme)
+    void api.invoke(IPC.appSetThemeSource, appearance.theme)
   }
 
   const wanted = appearance.translucent && SUPPORTS_VIBRANCY && !fullScreen ? MATERIAL[resolvedTheme(appearance.theme)] : null
   if (material !== wanted) {
     material = wanted
-    void api.invoke('app:set-vibrancy', wanted)
+    void api.invoke(IPC.appSetVibrancy, wanted)
   }
 
   if (appearance.translucent && SUPPORTS_VIBRANCY && !fullScreen) {
@@ -307,7 +308,7 @@ export function useAppearance(): {
 
   useEffect(() => {
     let cancelled = false
-    void api.invoke('state:read', 'appearance').then((saved) => {
+    void api.invoke(IPC.stateRead, 'appearance').then((saved) => {
       if (cancelled) return
       const next = coerce(saved)
       applyAppearance(next)
@@ -316,10 +317,10 @@ export function useAppearance(): {
     })
     // Full screen is pushed from main, and asked for once in case the window
     // was already full screen when the renderer loaded.
-    void api.invoke('app:is-fullscreen').then((on) => {
+    void api.invoke(IPC.appIsFullscreen).then((on) => {
       if (!cancelled) setFullScreen(on)
     })
-    const off = api.on('app:fullscreen', (on) => setFullScreen(on))
+    const off = api.on(IPC_EVENT.appFullscreen, (on) => setFullScreen(on))
 
     // On `system`, the OS switching theme changes which vibrancy material the
     // window should wear. CSS handles its own side through
@@ -348,7 +349,7 @@ export function useAppearance(): {
       window.clearTimeout(saveTimer.current)
       // Dragging the sidebar fires this every frame; only the last one matters.
       saveTimer.current = window.setTimeout(() => {
-        void api.invoke('state:write', 'appearance', next)
+        void api.invoke(IPC.stateWrite, 'appearance', next)
       }, 300)
       return next
     })

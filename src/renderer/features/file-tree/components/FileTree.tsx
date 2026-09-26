@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { FileNode } from '@shared/ipc-contract'
+import type { FileNode } from '@shared/vault'
 import { api } from '../../../app/api'
 import { treeRowHeight } from '../../../app/appearance'
 import type { VaultTree } from '../file-tree-ops'
-import { coerceOrder, moveWithin, orderChildren, placeInto, type TreeOrder } from '../tree-order'
+import { moveWithin, placeInto } from '../tree-order'
+import { useTreeOrder } from '../hooks/use-tree-order'
+import { treeMenu } from '../tree-menu'
+import { useNotePeek } from '../hooks/use-note-peek'
 import { ConfirmDialog } from '../../../ui/ConfirmDialog'
 import { NotePreviewCard } from './NotePreviewCard'
 import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
 import { RenameDialog } from './RenameDialog'
-import { Tip } from '../../../ui/Tip'
+import { IPC } from '@shared/ipc'
+import { nameOf, parentOf } from '@shared/vault'
+import { type DropHint, flatten, type Row, placeFor } from '../tree-rows'
+import { TreeRow } from './TreeRow'
 
 /**
  * The file explorer.
@@ -20,52 +26,6 @@ import { Tip } from '../../../ui/Tip'
  */
 
 const OVERSCAN = 8
-const INDENT = 13
-/** Where a folder's guide runs, from the row's left: its chevron's centre (6px padding + half of 14px). */
-const GUIDE_X = 13
-
-type Row = { node: FileNode; depth: number }
-
-function flatten(
-  nodes: readonly FileNode[],
-  expanded: ReadonlySet<string>,
-  order: TreeOrder,
-  parent = '',
-  depth = 0,
-  out: Row[] = [],
-): Row[] {
-  for (const node of orderChildren(nodes, order, parent)) {
-    out.push({ node, depth })
-    if (node.kind === 'folder' && expanded.has(node.path) && node.children) {
-      flatten(node.children, expanded, order, node.path, depth + 1, out)
-    }
-  }
-  return out
-}
-
-/** Where a dragged row would land: inside a folder, or between two rows. */
-type DropHint = { path: string; place: 'before' | 'after' | 'into' }
-
-/**
- * Which third of the row the pointer is in.
- *
- * A row is three targets, not one: its edges put the dragged thing above or
- * below, its middle puts it inside. A folder gets a generous middle, because
- * that is the older gesture and the one people arrive with; a file has no
- * inside, so it splits down the level into before and after.
- *
- * Read from the event rather than from what the last `dragover` decided - a
- * drop that trusts state can act on a stale answer, and the stale answer here
- * is "inside", which swallows the folder instead of moving it.
- */
-function placeFor(node: FileNode, clientY: number, box: DOMRect): DropHint['place'] {
-  const at = (clientY - box.top) / Math.max(1, box.height)
-  if (node.kind !== 'folder') return at < 0.5 ? 'before' : 'after'
-  return at < 0.25 ? 'before' : at > 0.75 ? 'after' : 'into'
-}
-
-const parentOf = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/')))
-const nameOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 
 type Props = {
   tree: VaultTree
@@ -93,14 +53,6 @@ type Props = {
  * the pointer passes through on its way to something else, and a short delay
  * turns every trip across it into a flicker of cards nobody asked for.
  */
-/**
- * Once one preview is open, the next row's opens quickly - you are browsing
- * previews now, and waiting two seconds per row would make that unbearable.
- * The same rule macOS uses for tooltips.
- */
-const PREVIEW_WARM_MS = 250
-/** Grace for the trip from the row to the card, so crossing the gap does not close it. */
-const PREVIEW_CLOSE_MS = 180
 
 export function FileTree({
   tree,
@@ -127,140 +79,19 @@ export function FileTree({
   const [error, setError] = useState<string | null>(null)
   /** Where the drag would land - a folder to go inside, or a row to sit above or below. */
   const [hint, setHint] = useState<DropHint | null>(null)
-  /**
-   * The order folders were arranged in by hand, per vault.
-   *
-   * The filesystem has none, so without this a dragged folder would spring back
-   * to its alphabetical place the moment the tree refreshed.
-   */
-  const [order, setOrder] = useState<TreeOrder>({})
-  useEffect(() => {
-    void api.invoke('state:read', 'tree-order').then((raw) => setOrder(coerceOrder(raw)))
-  }, [])
-  const saveOrder = useCallback((next: TreeOrder) => {
-    setOrder(next)
-    void api.invoke('state:write', 'tree-order', next)
-  }, [])
+  const { order, saveOrder } = useTreeOrder()
   /** "Renamed, and N links in M notes were updated" - with an undo. */
   const [rewrite, setRewrite] = useState<{ files: number; links: number; undoId: string } | null>(null)
   /** The node a delete is waiting on confirmation for. */
   const [confirming, setConfirming] = useState<FileNode | null>(null)
-  /** The open preview card, and the row it is anchored to. */
-  const [peek, setPeek] = useState<{ node: FileNode; anchor: { top: number; right: number; bottom: number } } | null>(null)
-  const peekTimer = useRef<number | undefined>(undefined)
-  const peekOpen = useRef(false)
-  peekOpen.current = peek !== null
-
-  const cancelPeek = useCallback(() => {
-    window.clearTimeout(peekTimer.current)
-    setPeek(null)
-  }, [])
-
-  const delayRef = useRef(previewDelayMs)
-  delayRef.current = previewDelayMs
-  const hoverRow = useCallback((node: FileNode, element: HTMLElement) => {
-    window.clearTimeout(peekTimer.current)
-    // Notes only: a folder has no gist, and an image previews itself.
-    if (node.kind !== 'file' || !node.name.toLowerCase().endsWith('.md')) {
-      if (peekOpen.current) peekTimer.current = window.setTimeout(() => setPeek(null), PREVIEW_CLOSE_MS)
-      return
-    }
-    const box = element.getBoundingClientRect()
-    peekTimer.current = window.setTimeout(
-      () => setPeek({ node, anchor: { top: box.top, right: box.right, bottom: box.bottom } }),
-      peekOpen.current ? PREVIEW_WARM_MS : delayRef.current,
-    )
-  }, [])
-
-  const leaveRow = useCallback(() => {
-    window.clearTimeout(peekTimer.current)
-    if (peekOpen.current) peekTimer.current = window.setTimeout(() => setPeek(null), PREVIEW_CLOSE_MS)
-  }, [])
-
-  // Anything that means "I am doing something now" puts the preview away:
-  // a click, a key, the window losing focus. Scroll is handled on the tree.
-  useEffect(() => {
-    if (peek === null) return
-    const close = (): void => cancelPeek()
-    window.addEventListener('keydown', close)
-    window.addEventListener('blur', close)
-    return () => {
-      window.removeEventListener('keydown', close)
-      window.removeEventListener('blur', close)
-    }
-  }, [peek, cancelPeek])
-
-  useEffect(() => () => window.clearTimeout(peekTimer.current), [])
+  const { peek, peekTimer, cancelPeek, hoverRow, leaveRow } = useNotePeek(previewDelayMs)
 
   const rows = useMemo(() => flatten(tree.roots, expanded, order), [tree.roots, expanded, order])
   const contextMenu = useContextMenu<FileNode>()
 
-  const copy = useCallback((text: string) => {
-    void navigator.clipboard.writeText(text).catch(() => {
-      // Clipboard permission can be refused; a failed copy is not worth a
-      // dialog, and the path is visible on the row anyway.
-    })
-  }, [])
-
-  /**
-   * The right-click menu for one node.
-   *
-   * Only actions that actually work appear here. A menu is a promise about
-   * what the app can do, and an entry that opens nothing is worse than no
-   * entry at all.
-   */
   const menuFor = useCallback(
-    (node: FileNode): MenuItem[] => {
-      const isFolder = node.kind === 'folder'
-      const parent = isFolder ? node.path : node.path.slice(0, Math.max(0, node.path.lastIndexOf('/')))
-      const full = vaultPath === '' ? node.path : `${vaultPath}/${node.path}`
-
-      return [
-        { kind: 'heading', label: isFolder ? 'Inside this folder' : 'Alongside this note' },
-        {
-          kind: 'item',
-          label: 'New note',
-          icon: 'file-plus',
-          run: () => onCreateIn(parent, 'file'),
-        },
-        {
-          kind: 'item',
-          label: 'New folder',
-          icon: 'folder-plus',
-          run: () => onCreateIn(parent, 'folder'),
-        },
-        { kind: 'separator' },
-        { kind: 'heading', label: isFolder ? 'This folder' : 'This note' },
-        { kind: 'item', label: 'Rename', icon: 'pencil', shortcut: 'F2', run: () => setRenaming(node.path) },
-        {
-          kind: 'item',
-          label: 'Copy relative path',
-          icon: 'copy',
-          run: () => copy(node.path),
-        },
-        {
-          kind: 'item',
-          label: 'Copy full path',
-          icon: 'clipboard-copy',
-          run: () => copy(full),
-        },
-        {
-          kind: 'item',
-          label: 'Reveal in Finder',
-          icon: 'external-link',
-          run: () => void api.invoke('fs:reveal', node.path),
-        },
-        { kind: 'separator' },
-        {
-          kind: 'item',
-          label: 'Move to archive',
-          icon: 'trash',
-          danger: true,
-          run: () => setConfirming(node),
-        },
-      ]
-    },
-    [vaultPath, onCreateIn, copy],
+    (node: FileNode): MenuItem[] => treeMenu(node, { vaultPath, onCreateIn, rename: setRenaming, archive: setConfirming }),
+    [vaultPath, onCreateIn],
   )
 
   useLayoutEffect(() => {
@@ -293,7 +124,7 @@ export function FileTree({
       setRenaming(null)
       const current = path.slice(path.lastIndexOf('/') + 1)
       if (name.trim() === '' || name === current) return
-      const result = await api.invoke('fs:rename', path, name)
+      const result = await api.invoke(IPC.fsRename, path, name)
       if (!result.ok) {
         setError(result.error)
         return
@@ -312,7 +143,7 @@ export function FileTree({
   // retention window, then it goes to the OS trash.
   const remove = useCallback(
     async (path: string) => {
-      const result = await api.invoke('archive:add', path)
+      const result = await api.invoke(IPC.archiveAdd, path)
       if (!result.ok) setError(result.error)
       else onChanged()
     },
@@ -336,7 +167,7 @@ export function FileTree({
         saveOrder(moveWithin(siblings, order, toParent, nameOf(from), target.name, place))
         return
       }
-      const result = await api.invoke('fs:move', from, toParent)
+      const result = await api.invoke(IPC.fsMove, from, toParent)
       if (!result.ok) {
         setError(result.error)
         return
@@ -358,7 +189,7 @@ export function FileTree({
       // Dropping into the folder it already lives in is a no-op, not an error.
       const currentParent = from.slice(0, Math.max(0, from.lastIndexOf('/')))
       if (currentParent === toParent) return
-      const result = await api.invoke('fs:move', from, toParent)
+      const result = await api.invoke(IPC.fsMove, from, toParent)
       if (!result.ok) {
         setError(result.error)
         return
@@ -469,7 +300,7 @@ export function FileTree({
             onClick={() => {
               const id = rewrite.undoId
               setRewrite(null)
-              void api.invoke('links:undo-rename', id).then((res) => {
+              void api.invoke(IPC.linksUndoRename, id).then((res) => {
                 if (!res.ok) setError(res.error ?? 'Could not undo.')
                 onChanged()
               })
@@ -632,124 +463,4 @@ export function FileTree({
       )}
     </div>
   )
-}
-
-type RowProps = {
-  row: Row
-  isTemplateFolder: boolean
-  onHover: (element: HTMLElement) => void
-  onLeave: () => void
-  isOpen: boolean
-  onContextMenu: (ev: React.MouseEvent) => void
-  isActive: boolean
-  isCursor: boolean
-  onActivate: () => void
-  onStartRename: () => void
-  isDropTarget: boolean
-  /** A line above or below the row, where the dragged thing would land. */
-  dropLine: 'before' | 'after' | null
-  onDelete: () => void
-  onDragStart: (ev: React.DragEvent) => void
-  onDragOverRow: (ev: React.DragEvent) => void
-  onDropRow: (ev: React.DragEvent) => void
-}
-
-function TreeRow({
-  row,
-  isTemplateFolder,
-  onHover,
-  onLeave,
-  isOpen,
-  onContextMenu,
-  isActive,
-  isCursor,
-  onActivate,
-  onStartRename,
-  isDropTarget,
-  dropLine,
-  onDelete,
-  onDragStart,
-  onDragOverRow,
-  onDropRow,
-}: RowProps): React.ReactElement {
-  const { node, depth } = row
-  const isFolder = node.kind === 'folder'
-  const label = isFolder ? node.name : node.name.replace(/\.md$/, '')
-
-  return (
-    <div
-      className={[
-        'tree__row',
-        isActive ? 'is-active' : '',
-        isCursor && !isActive ? 'is-cursor' : '',
-        isDropTarget ? 'is-drop' : '',
-        dropLine === 'before' ? 'is-drop-above' : '',
-        dropLine === 'after' ? 'is-drop-below' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      style={{ paddingLeft: depth * INDENT + 6 }}
-      role="treeitem"
-      aria-expanded={isFolder ? isOpen : undefined}
-      aria-selected={isActive}
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOverRow}
-      onDrop={onDropRow}
-      onClick={onActivate}
-      onDoubleClick={onStartRename}
-      onContextMenu={onContextMenu}
-      onPointerEnter={(ev) => onHover(ev.currentTarget)}
-      onPointerLeave={onLeave}
-    >
-      {/* Indentation guides, as in Obsidian: one line per open folder above
-          this row, under that folder's chevron. The rows are a flat virtual
-          list, so each row draws its own piece and the pieces meet. */}
-      {Array.from({ length: depth }, (_, level) => (
-        <span key={level} className="tree__guide" style={{ left: level * INDENT + GUIDE_X }} aria-hidden />
-      ))}
-      <span className={`tree__chevron${isFolder ? '' : ' is-hidden'}${isOpen ? ' is-open' : ''}`}>{isFolder ? '›' : ''}</span>
-      {/* An icon per kind, so a folder and a note are distinguishable without
-          reading the chevron - which is invisible on a file. */}
-      <span className="tree__icon">
-        <Icon name={isTemplateFolder ? 'layout-template' : iconFor(node)} size={14} />
-      </span>
-
-      <>
-        {/* No `title` here. The browser's own tooltip showed the path after a
-              second and sat on top of the preview card - two things answering
-              one hover. The preview carries the folder; long names are
-              truncated with an ellipsis, and the full name is in the card. */}
-        <span className="tree__name">{label}</span>
-        <Tip label="Move to archive" hint="Recoverable for 10 days">
-          <button
-            className="tree__delete"
-            aria-label={`Delete ${node.name}`}
-            onMouseDown={(ev) => ev.stopPropagation()}
-            onClick={(ev) => {
-              ev.stopPropagation()
-              onDelete()
-            }}
-          >
-            <Icon name="x" size={13} />
-          </button>
-        </Tip>
-      </>
-    </div>
-  )
-}
-
-/**
- * The icon for a node.
- *
- * Attachments get their own so an image does not read as a note - the tree is
- * the one place you see both kinds side by side.
- */
-function iconFor(node: FileNode): string {
-  if (node.kind === 'folder') return 'folder'
-  const lower = node.name.toLowerCase()
-  if (lower.endsWith('.md')) return 'file-text'
-  if (/\.(png|jpe?g|gif|webp|svg|avif)$/.test(lower)) return 'image'
-  if (/\.(json|ya?ml|toml|css|js|ts|tsx|py|sh)$/.test(lower)) return 'file-code'
-  return 'file'
 }

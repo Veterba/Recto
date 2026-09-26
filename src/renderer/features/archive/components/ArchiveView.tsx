@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ArchiveState } from '@shared/ipc-contract'
+import type { ArchiveState } from '@shared/archive'
 import { api } from '../../../app/api'
 import { Icon } from '../../../ui/Icon'
 import { registerView } from '../../../app/view-registry'
+import { IPC } from '@shared/ipc'
 
 /**
  * The archive: everything you have deleted that has not expired yet.
@@ -43,14 +44,14 @@ function Archive(): React.ReactElement {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    void api.invoke('archive:list').then(setState)
+    void api.invoke(IPC.archiveList).then(setState)
   }, [])
 
   useEffect(load, [load])
 
   const restore = async (id: string): Promise<void> => {
     setBusy(id)
-    const result = await api.invoke('archive:restore', id)
+    const result = await api.invoke(IPC.archiveRestore, id)
     setBusy(null)
     if (!result.ok) setError(result.error)
     else load()
@@ -58,7 +59,7 @@ function Archive(): React.ReactElement {
 
   const purge = async (id: string): Promise<void> => {
     setBusy(id)
-    const result = await api.invoke('archive:purge', id)
+    const result = await api.invoke(IPC.archivePurge, id)
     setBusy(null)
     if (!result.ok) setError(result.error ?? 'Could not delete.')
     else load()
@@ -81,7 +82,7 @@ function Archive(): React.ReactElement {
             <button
               key={preset.days}
               className={`chip${state.retentionDays === preset.days ? ' is-active' : ''}`}
-              onClick={() => void api.invoke('archive:set-retention', preset.days).then(setState)}
+              onClick={() => void api.invoke(IPC.archiveSetRetention, preset.days).then(setState)}
             >
               {preset.label}
             </button>

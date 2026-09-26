@@ -9,7 +9,9 @@
  * Pure and synchronous, so it is tested in plain Node with no Electron.
  */
 
-export type WikiLink = {
+import { frontmatterClose } from './frontmatter'
+
+type WikiLink = {
   /** The raw target as written, before resolution. */
   target: string
   heading: string | null
@@ -22,10 +24,10 @@ export type WikiLink = {
   property?: string | null
 }
 
-export type Heading = { text: string; level: number; line: number }
-export type Tag = { tag: string; line: number }
+type Heading = { text: string; level: number; line: number }
+type Tag = { tag: string; line: number }
 
-export type ParsedNote = {
+type ParsedNote = {
   title: string | null
   frontmatter: Record<string, string | number | boolean | null>
   headings: Heading[]
@@ -35,9 +37,9 @@ export type ParsedNote = {
   body: string
 }
 
-const FRONTMATTER_FENCE = /^---\s*$/
 const HEADING = /^(#{1,6})\s+(.*)$/
-const CODE_FENCE = /^\s*(```|~~~)/
+/** The opening or closing line of a fenced code block. */
+export const CODE_FENCE = /^\s*(```|~~~)/
 /** `[[target#heading|alias]]`, all parts optional but the target. */
 const WIKILINK = /\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g
 /**
@@ -94,13 +96,10 @@ const PURELY_NUMERIC = /^[\p{N}]+$/u
 
 /** Split frontmatter from body without pulling in a YAML parser. */
 function splitFrontmatter(lines: readonly string[]): { yaml: string[]; bodyStart: number } {
-  if (lines.length === 0 || !FRONTMATTER_FENCE.test(lines[0] ?? '')) return { yaml: [], bodyStart: 0 }
-  for (let i = 1; i < lines.length; i++) {
-    if (FRONTMATTER_FENCE.test(lines[i] ?? '')) return { yaml: lines.slice(1, i), bodyStart: i + 1 }
-  }
+  const close = frontmatterClose(lines)
   // An unterminated fence is a broken file, not frontmatter. Treat it as body
   // so the note still indexes instead of silently disappearing from search.
-  return { yaml: [], bodyStart: 0 }
+  return close === -1 ? { yaml: [], bodyStart: 0 } : { yaml: lines.slice(1, close), bodyStart: close + 1 }
 }
 
 /**
@@ -218,6 +217,18 @@ export function parseNote(content: string): ParsedNote {
   return { title, frontmatter, headings, links, tags, body: bodyLines.join('\n') }
 }
 
+/** Note paths keyed by their normalised file name: the lookup `resolveLink` takes. */
+export function pathsByName(paths: Iterable<string>): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  for (const p of paths) {
+    const key = normalizeName(p.slice(p.lastIndexOf('/') + 1))
+    const list = out.get(key)
+    if (list) list.push(p)
+    else out.set(key, [p])
+  }
+  return out
+}
+
 /**
  * Resolve a wikilink target against known note paths, Obsidian-style: prefer an
  * exact path, then the shortest unique path whose filename matches.
@@ -251,3 +262,25 @@ export function resolveLink(target: string, pathsByName: ReadonlyMap<string, str
 }
 
 export const normalizeName = (value: string): string => value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
+
+/**
+ * Every wikilink target in a document, once each, in order of first use.
+ * Links inside fenced code are code, not references, and are skipped.
+ */
+export function extractTargets(text: string): string[] {
+  const found = new Set<string>()
+  let inCode = false
+
+  for (const line of text.split(/\r?\n/)) {
+    if (CODE_FENCE.test(line)) {
+      inCode = !inCode
+      continue
+    }
+    if (inCode) continue
+    for (const match of line.matchAll(WIKILINK)) {
+      const target = match[1]?.trim()
+      if (target !== undefined && target !== '') found.add(target)
+    }
+  }
+  return [...found]
+}

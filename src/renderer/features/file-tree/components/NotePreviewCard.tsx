@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { api } from '../../../app/api'
 import { edited, readingTime, summariseNote, type NotePreview } from '../note-preview'
 import { Icon } from '../../../ui/Icon'
+import { IPC, IPC_EVENT } from '@shared/ipc'
 
 /**
  * A note's gist, shown when the pointer rests on it in the sidebar.
@@ -52,7 +53,7 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
     setBacklinks(null)
     setSummary(null)
     const name = path.slice(path.lastIndexOf('/') + 1)
-    void api.invoke('fs:read', path).then((result) => {
+    void api.invoke(IPC.fsRead, path).then((result) => {
       if (cancelled) return
       if (!result.ok) {
         setError(result.error)
@@ -61,10 +62,10 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
       setText(result.content)
       setPreview(summariseNote(result.content, name))
     })
-    void api.invoke('index:backlinks', path).then((links) => {
+    void api.invoke(IPC.indexBacklinks, path).then((links) => {
       if (!cancelled) setBacklinks(new Set(links.map((link) => link.path)).size)
     })
-    void api.invoke('ai:key-status').then((status) => {
+    void api.invoke(IPC.aiKeyStatus).then((status) => {
       if (!cancelled) setHasKey(status.present)
     })
     return () => {
@@ -75,20 +76,20 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
   // A summary still streaming when the card closes is stopped, not left to
   // finish into nothing - that would be paying for words nobody sees.
   useEffect(() => {
-    const offDelta = api.on('ai:delta', (delta) => {
+    const offDelta = api.on(IPC_EVENT.aiDelta, (delta) => {
       if (delta.id === streamId) setSummary((s) => ({ text: (s?.text ?? '') + delta.text, state: 'streaming' }))
     })
-    const offDone = api.on('ai:done', (done) => {
+    const offDone = api.on(IPC_EVENT.aiDone, (done) => {
       if (done.id === streamId) setSummary((s) => ({ text: s?.text ?? '', state: 'done' }))
     })
-    const offError = api.on('ai:error', (failure) => {
+    const offError = api.on(IPC_EVENT.aiError, (failure) => {
       if (failure.id === streamId) setSummary({ text: failure.message, state: 'error' })
     })
     return () => {
       offDelta()
       offDone()
       offError()
-      void api.invoke('ai:cancel', streamId)
+      void api.invoke(IPC.aiCancel, streamId)
     }
   }, [streamId])
 
@@ -107,7 +108,7 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
     if (text === null) return
     setSummary({ text: '', state: 'streaming' })
     void api
-      .invoke('ai:send', {
+      .invoke(IPC.aiSend, {
         id: streamId,
         model,
         system:

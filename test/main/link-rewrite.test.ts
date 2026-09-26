@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractTargets, rewriteWikiLinks } from '../../src/main/link-rewrite'
+import { rewriteWikiLinks } from '../../src/main/link-rewrite'
 
 const rewrite = (text: string, from: string, to: string): string => rewriteWikiLinks(text, from, to).text
 
@@ -82,20 +82,6 @@ describe('rewriting links on rename', () => {
   it('preserves CRLF-free line structure exactly', () => {
     const text = 'a\n\n[[old]]\n\nb'
     expect(rewrite(text, 'old.md', 'new.md')).toBe('a\n\n[[new]]\n\nb')
-  })
-})
-
-describe('extracting link targets', () => {
-  it('collects distinct targets, stripping heading and alias', () => {
-    expect(extractTargets('[[a]] [[b#h]] [[c|x]] [[a]]').sort()).toEqual(['a', 'b', 'c'])
-  })
-
-  it('ignores fenced code', () => {
-    expect(extractTargets('[[a]]\n```\n[[b]]\n```')).toEqual(['a'])
-  })
-
-  it('returns nothing for a document without links', () => {
-    expect(extractTargets('# just text')).toEqual([])
   })
 })
 

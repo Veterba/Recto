@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import type { StartupState } from '@shared/ipc-contract'
+import type { StartupState } from '@shared/vault'
 import { api } from '../api'
+import { IPC } from '@shared/ipc'
 
 const EXPLAIN: Record<Exclude<StartupState, { kind: 'ready' }>['reason'], string | null> = {
   'first-run': null,
@@ -20,7 +21,7 @@ export function FirstRun({ state, onOpened }: Props): React.ReactElement {
   async function pick(): Promise<void> {
     setBusy(true)
     setError(null)
-    const res = await api.invoke('vault:pick')
+    const res = await api.invoke(IPC.vaultPick)
     setBusy(false)
     if (res.ok) {
       onOpened({ kind: 'ready', vault: res.vault })

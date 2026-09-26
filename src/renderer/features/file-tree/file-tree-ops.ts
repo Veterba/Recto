@@ -1,4 +1,5 @@
-import type { FileNode, VaultChange } from '@shared/ipc-contract'
+import type { FileNode, VaultChange } from '@shared/vault'
+import { nameOf, parentOf, sortNodes } from '@shared/vault'
 
 /**
  * Pure tree manipulation. No React, no IPC - so it can be tested in plain Node.
@@ -14,15 +15,6 @@ export type VaultTree = {
   byPath: Map<string, FileNode>
 }
 
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-
-function sortNodes(nodes: FileNode[]): FileNode[] {
-  return [...nodes].sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1
-    return collator.compare(a.name, b.name)
-  })
-}
-
 function index(roots: FileNode[]): Map<string, FileNode> {
   const map = new Map<string, FileNode>()
   const walk = (nodes: FileNode[]): void => {
@@ -34,12 +26,6 @@ function index(roots: FileNode[]): Map<string, FileNode> {
   walk(roots)
   return map
 }
-
-const parentOf = (p: string): string => {
-  const at = p.lastIndexOf('/')
-  return at === -1 ? '' : p.slice(0, at)
-}
-const nameOf = (p: string): string => p.slice(p.lastIndexOf('/') + 1)
 
 /**
  * Insert a node, creating any missing ancestor folders on the way down.

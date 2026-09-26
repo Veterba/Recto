@@ -3,6 +3,7 @@ import { api } from '../api'
 import { DEFAULT_SECTION, isSectionId, SECTIONS, type SectionId } from '../sections'
 import { clampGeometry, type WindowGeometry } from '../components/FloatingWindow'
 import { Workspace, type WorkspaceLayout } from '../workspace'
+import { IPC } from '@shared/ipc'
 
 /**
  * One workspace per section, all persisted to workspace.json.
@@ -13,7 +14,7 @@ import { Workspace, type WorkspaceLayout } from '../workspace'
  * mixing boards and notes in one tab bar; both are worse.
  */
 
-export type Sections = Record<SectionId, Workspace>
+type Sections = Record<SectionId, Workspace>
 
 type SavedFile = {
   version: 2
@@ -25,9 +26,9 @@ type SavedFile = {
   historyWindow?: { open: boolean } & Partial<WindowGeometry>
 }
 
-export type GraphWindowState = { open: boolean } & WindowGeometry
+type GraphWindowState = { open: boolean } & WindowGeometry
 
-export const GRAPH_WINDOW_DEFAULT: GraphWindowState = {
+const GRAPH_WINDOW_DEFAULT: GraphWindowState = {
   open: false,
   x: 420,
   y: 60,
@@ -36,7 +37,7 @@ export const GRAPH_WINDOW_DEFAULT: GraphWindowState = {
   maximized: false,
 }
 
-export const HISTORY_WINDOW_DEFAULT: GraphWindowState = {
+const HISTORY_WINDOW_DEFAULT: GraphWindowState = {
   open: false,
   x: 180,
   y: 80,
@@ -99,7 +100,7 @@ export function useWorkspace(): WorkspaceApi {
 
   useEffect(() => {
     let cancelled = false
-    void api.invoke('state:read', 'workspace').then((saved) => {
+    void api.invoke(IPC.stateRead, 'workspace').then((saved) => {
       if (cancelled) return
       const { layouts, active, graphWindow: win, historyWindow: hist } = parse(saved)
       const built = Object.fromEntries(SECTIONS.map((section) => [section.id, new Workspace(layouts[section.id])])) as Sections
@@ -128,7 +129,7 @@ export function useWorkspace(): WorkspaceApi {
     (current: Sections, active: SectionId, windows: { graph: GraphWindowState; history: GraphWindowState }) => {
       window.clearTimeout(saveTimer.current)
       saveTimer.current = window.setTimeout(() => {
-        void api.invoke('state:write', 'workspace', serialize(current, active, windows))
+        void api.invoke(IPC.stateWrite, 'workspace', serialize(current, active, windows))
       }, 400)
     },
     [serialize],
@@ -170,7 +171,7 @@ export function useWorkspace(): WorkspaceApi {
       // so it is the newest state and not whatever this closure captured.
       const now = latest.current
       if (now.sections) {
-        void api.invoke('state:write', 'workspace', serialize(now.sections, now.activeSection, windowsOf(now)))
+        void api.invoke(IPC.stateWrite, 'workspace', serialize(now.sections, now.activeSection, windowsOf(now)))
       }
     }
   }, [sections, save, serialize])

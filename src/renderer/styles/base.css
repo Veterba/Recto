@@ -119,7 +119,7 @@ body {
 
 .btn--primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   padding: 10px var(--size-6);
 }
 .btn--primary:hover:not(:disabled) {

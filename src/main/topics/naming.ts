@@ -79,18 +79,18 @@ const CYRILLIC = /\p{Script=Cyrillic}/u
  * Low, because a word in another language than the notes sits ~0.1 lower
  * against them than the word it translates.
  */
-export const TRANSLATION_FLOOR = 0.05
+const TRANSLATION_FLOOR = 0.05
 /** And this close to the word it translates: the same meaning, not another sense of it. */
-export const SAME_MEANING = 0.8
+const SAME_MEANING = 0.8
 
 /** A vault's language changes only when another leads it by this many notes. */
 export const LANGUAGE_MARGIN = 5
 
 /** A noun in more than this share of the vault's eligible notes names nothing in particular. */
-export const VAULT_SHARE_CAP = 0.5
+const VAULT_SHARE_CAP = 0.5
 
 /** How many c-TF-IDF candidates the embedding reranks. */
-export const CANDIDATES = 15
+const CANDIDATES = 15
 
 const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n(---|\.\.\.)[ \t]*(\r?\n|$)/
 const FENCED = /^[ \t]*(```|~~~)[^\n]*\n[\s\S]*?(^[ \t]*\1[ \t]*$|(?![\s\S]))/gm
@@ -149,7 +149,7 @@ export function vaultLanguage(counts: Partial<Record<Lang, number>>, current: La
 }
 
 /** A word written in the language's own script, and nothing else: no Latin in a Russian name, no Cyrillic in an English one. */
-export function inScript(word: string, lang: Lang): boolean {
+function inScript(word: string, lang: Lang): boolean {
   if (lang === 'ru') return /^\p{Script=Cyrillic}+(-\p{Script=Cyrillic}+)*$/u.test(word)
   if (lang === 'no') return /^[a-zæøå]+(-[a-zæøå]+)*$/.test(word)
   return /^[a-z]+(-[a-z]+)*$/.test(word)
@@ -218,7 +218,7 @@ const sameStem = (a: string, b: string): boolean => {
 }
 
 /** The language most of a cluster's notes are in; a tie goes to the vault's. */
-export function clusterLanguage(langs: readonly Lang[], vault: Lang): Lang {
+function clusterLanguage(langs: readonly Lang[], vault: Lang): Lang {
   const counts = new Map<Lang, number>()
   for (const l of langs) counts.set(l, (counts.get(l) ?? 0) + 1)
   return (
@@ -241,7 +241,7 @@ export function isProperName(word: string, texts: readonly string[]): boolean {
   return all > 0 && upper * 2 > all
 }
 
-export type NamingInput = {
+type NamingInput = {
   /** The cluster's notes: their language, nameable lemmas and prose. */
   members: readonly { lang: Lang; terms: readonly string[]; prose: string }[]
   /** Every eligible note's nameable lemmas, for rarity. */
@@ -256,7 +256,7 @@ export type NamingInput = {
   isNoun: (word: string, lang: Lang) => boolean
 }
 
-export type Naming = { name: string | null; from: Lang; failed?: 'candidates' | 'translation' }
+type Naming = { name: string | null; from: Lang; failed?: 'candidates' | 'translation' }
 
 /** A cluster's name in the vault's language, or null - then it is not a topic. */
 export async function nameCluster(input: NamingInput): Promise<Naming> {

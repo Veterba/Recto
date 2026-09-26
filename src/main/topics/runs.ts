@@ -1,7 +1,7 @@
 import { linksIn, writeLinks } from '../../shared/link-property'
 import { rewriteWikiLinks } from '../link-rewrite'
 import type { Lang } from './naming'
-import { addRun, allowed, block, topicLink, TOPICS_PROPERTY, type Change, type Run, type TopicsState } from './state'
+import { addRun, allowed, block, topicLink, TOPICS_PROPERTY, type Change, type Run, type TopicsState, withoutId } from './state'
 
 /**
  * The two runs that change many notes at once, as pure functions of the state
@@ -10,18 +10,11 @@ import { addRun, allowed, block, topicLink, TOPICS_PROPERTY, type Change, type R
  */
 
 /** A note's current text, or null if it is gone. */
-export type Read = (path: string) => string | null
+type Read = (path: string) => string | null
 
 export const sameLink = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 const LANGUAGE_NAME: Record<Lang, string> = { en: 'English', ru: 'Russian', no: 'Norwegian' }
-
-const strip = (m: Record<string, string[]>, id: string): Record<string, string[]> =>
-  Object.fromEntries(
-    Object.entries(m)
-      .map(([k, v]): [string, string[]] => [k, v.filter((x) => x !== id)])
-      .filter(([, v]) => v.length > 0),
-  )
 
 /**
  * Switch topic names to `to`, all in one run. `names` has, per machine-named
@@ -62,8 +55,8 @@ export function switchLanguage(
       next = {
         ...next,
         topics: next.topics.filter((t) => t.id !== topic.id),
-        assigned: strip(next.assigned, topic.id),
-        owned: strip(next.owned, topic.id),
+        assigned: withoutId(next.assigned, topic.id),
+        owned: withoutId(next.owned, topic.id),
       }
       continue
     }

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { ObsidianSyncStatus, ObsidianVaultInfo, SyncCounts, SyncProblem } from '@shared/ipc-contract'
+import type { ObsidianSyncStatus, ObsidianVaultInfo, SyncCounts, SyncProblem } from '@shared/obsidian-sync'
 import { api } from '../../../app/api'
 import { edited } from '../../file-tree'
 import { Icon } from '../../../ui/Icon'
+import { IPC, IPC_EVENT } from '@shared/ipc'
 
 /**
  * Settings → Obsidian: keep this vault and an Obsidian vault in sync, both ways.
@@ -66,9 +67,9 @@ export function ObsidianSync(): React.ReactElement {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    void api.invoke('obsidian:status').then(setStatus)
-    void api.invoke('obsidian:vaults').then(setVaults)
-    return api.on('obsidian:status', setStatus)
+    void api.invoke(IPC.obsidianStatus).then(setStatus)
+    void api.invoke(IPC.obsidianVaults).then(setVaults)
+    return api.on(IPC_EVENT.obsidianStatus, setStatus)
   }, [])
 
   // Re-offer the folder this vault was paired with before.
@@ -84,7 +85,7 @@ export function ObsidianSync(): React.ReactElement {
   const runPreview = async (): Promise<void> => {
     if (chosen === null) return
     setBusy(true)
-    const result = await api.invoke('obsidian:preview', chosen)
+    const result = await api.invoke(IPC.obsidianPreview, chosen)
     setPreview(result.ok ? { counts: result.counts } : { problem: result.problem })
     setBusy(false)
   }
@@ -119,7 +120,7 @@ export function ObsidianSync(): React.ReactElement {
               <button
                 className="btn btn--ghost btn--sm"
                 disabled={status.running}
-                onClick={() => void api.invoke('obsidian:sync-now', true)}
+                onClick={() => void api.invoke(IPC.obsidianSyncNow, true)}
               >
                 Sync anyway
               </button>
@@ -156,10 +157,10 @@ export function ObsidianSync(): React.ReactElement {
         )}
 
         <div className="setting__buttons osync__actions">
-          <button className="btn btn--ghost btn--sm" disabled={status.running} onClick={() => void api.invoke('obsidian:sync-now')}>
+          <button className="btn btn--ghost btn--sm" disabled={status.running} onClick={() => void api.invoke(IPC.obsidianSyncNow)}>
             Sync now
           </button>
-          <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke('obsidian:disable').then(setStatus)}>
+          <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke(IPC.obsidianDisable).then(setStatus)}>
             Stop syncing
           </button>
         </div>
@@ -208,7 +209,7 @@ export function ObsidianSync(): React.ReactElement {
         <button
           className="btn btn--ghost btn--sm"
           onClick={() =>
-            void api.invoke('obsidian:pick').then((path) => {
+            void api.invoke(IPC.obsidianPick).then((path) => {
               if (path !== null) choose(path)
             })
           }
@@ -241,7 +242,7 @@ export function ObsidianSync(): React.ReactElement {
             <button className="btn btn--ghost btn--sm" onClick={() => setPreview(null)}>
               Back
             </button>
-            <button className="btn btn--primary btn--sm" onClick={() => void api.invoke('obsidian:enable', chosen).then(setStatus)}>
+            <button className="btn btn--primary btn--sm" onClick={() => void api.invoke(IPC.obsidianEnable, chosen).then(setStatus)}>
               Start syncing
             </button>
           </div>

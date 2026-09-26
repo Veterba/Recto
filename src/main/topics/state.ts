@@ -20,7 +20,7 @@ import { TOPIC_PREFIX } from '../../shared/topics'
 import { continues } from './cluster'
 import type { Lang } from './naming'
 
-export { TOPIC_PREFIX, TOPICS_PROPERTY } from '../../shared/topics'
+export { TOPICS_PROPERTY } from '../../shared/topics'
 
 export type Topic = { id: string; name: string; renamedByUser: boolean }
 
@@ -204,6 +204,14 @@ export function dissolving(s: TopicsState): string[] {
     })
 }
 
+/** `m` with `id` taken out of every list, and the lists left empty dropped. */
+export const withoutId = (m: Record<string, string[]>, id: string): Record<string, string[]> =>
+  Object.fromEntries(
+    Object.entries(m)
+      .map(([k, v]): [string, string[]] => [k, v.filter((x) => x !== id)])
+      .filter(([, v]) => v.length > 0),
+  )
+
 /** Dissolve a topic: gone, and - like a deleted one - never made again from the same notes. */
 export function dissolve(s: TopicsState, id: string): TopicsState {
   const members = [
@@ -214,19 +222,13 @@ export function dissolve(s: TopicsState, id: string): TopicsState {
         .map(([p]) => p),
     ]),
   ]
-  const strip = (m: Record<string, string[]>): Record<string, string[]> =>
-    Object.fromEntries(
-      Object.entries(m)
-        .map(([k, v]): [string, string[]] => [k, v.filter((x) => x !== id)])
-        .filter(([, v]) => v.length > 0),
-    )
   return {
     ...s,
     topics: s.topics.filter((t) => t.id !== id),
     deleted: [...new Set([...s.deleted, id])],
     deletedMembers: { ...s.deletedMembers, [id]: members.sort() },
-    assigned: strip(s.assigned),
-    owned: strip(s.owned),
+    assigned: withoutId(s.assigned, id),
+    owned: withoutId(s.owned, id),
   }
 }
 

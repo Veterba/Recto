@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { SearchResult } from '@shared/ipc-contract'
+import type { SearchResult } from '@shared/index-results'
 import { api } from '../../../app/api'
 import { plainSnippet } from '../snippet'
+import { pickerKeyDown } from '../../../ui/picker'
+import { IPC } from '@shared/ipc'
 
 /**
  * Full-text search over the whole vault.
@@ -39,7 +41,7 @@ export function SearchPanel({ open, onClose, onOpenFile }: Props): React.ReactEl
     setSearching(true)
     // Debounced: typing "nordicsync" should be one query, not ten.
     const timer = window.setTimeout(() => {
-      void api.invoke('index:search', query, 60).then((hits) => {
+      void api.invoke(IPC.indexSearch, query, 60).then((hits) => {
         setResults(hits)
         setCursor(0)
         setSearching(false)
@@ -73,19 +75,7 @@ export function SearchPanel({ open, onClose, onOpenFile }: Props): React.ReactEl
           value={query}
           spellCheck={false}
           onChange={(ev) => setQuery(ev.target.value)}
-          onKeyDown={(ev) => {
-            if (ev.key === 'Escape') return onClose()
-            if (ev.key === 'ArrowDown') {
-              ev.preventDefault()
-              setCursor((c) => Math.min(c + 1, Math.max(0, results.length - 1)))
-            } else if (ev.key === 'ArrowUp') {
-              ev.preventDefault()
-              setCursor((c) => Math.max(c - 1, 0))
-            } else if (ev.key === 'Enter') {
-              ev.preventDefault()
-              commit(cursor)
-            }
-          }}
+          onKeyDown={(ev) => pickerKeyDown(ev, { count: results.length, cursor, setCursor, pick: commit, close: onClose })}
         />
 
         {query.trim() === '' ? (

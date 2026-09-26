@@ -4,3 +4,4 @@ import './styles/home.css'
 import './styles/statistics.css'
 
 export * from './components/HomeOverlay'
+export { HOME_HOTKEY, typingInField } from './home-hotkey'

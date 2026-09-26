@@ -8,16 +8,16 @@
 import { centroid, cosine } from '../../shared/vectors'
 
 /** A cluster needs this many notes to become a topic. */
-export const MIN_TOPIC_SIZE = 3
+const MIN_TOPIC_SIZE = 3
 /** A note's best topic must beat its second by this much. */
-export const ASSIGN_MARGIN = 0.03
-export const MAX_TOPICS_PER_NOTE = 2
+const ASSIGN_MARGIN = 0.03
+const MAX_TOPICS_PER_NOTE = 2
 /** Rebuild keeps a topic's id and name when its members overlap this much. */
-export const KEEP_OVERLAP = 0.5
+const KEEP_OVERLAP = 0.5
 /** A cluster must hold together over at least this much similarity before it merges into a bigger one. */
-export const MIN_LIFETIME = 0.05
+const MIN_LIFETIME = 0.05
 /** And its notes must be clearly closer to each other than to anything else: mean silhouette. */
-export const MIN_SILHOUETTE = 0.25
+const MIN_SILHOUETTE = 0.25
 
 /** Every pair's cosine similarity, n x n. */
 export function similarities(vectors: readonly ArrayLike<number>[]): Float64Array {
@@ -187,7 +187,7 @@ export function assign(
   return second !== undefined && second.sim >= tAssign && MAX_TOPICS_PER_NOTE > 1 ? [first.id, second.id] : [first.id]
 }
 
-export const jaccard = (a: ReadonlySet<string>, b: ReadonlySet<string>): number => {
+const jaccard = (a: ReadonlySet<string>, b: ReadonlySet<string>): number => {
   let common = 0
   for (const x of a) if (b.has(x)) common++
   const union = a.size + b.size - common

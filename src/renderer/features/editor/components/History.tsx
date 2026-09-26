@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { SnapshotInfo } from '@shared/ipc-contract'
+import type { SnapshotInfo } from '@shared/index-results'
 import { api } from '../../../app/api'
+import { IPC } from '@shared/ipc'
 
 /**
  * Version history for one note.
@@ -35,7 +36,7 @@ export function History({ path, onRestored }: Props): React.ReactElement {
   const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    void api.invoke('history:list', path).then((list) => {
+    void api.invoke(IPC.historyList, path).then((list) => {
       setVersions(list)
       setSelected(list[0]?.id ?? null)
     })
@@ -49,7 +50,7 @@ export function History({ path, onRestored }: Props): React.ReactElement {
       return
     }
     let cancelled = false
-    void api.invoke('history:get', selected).then((snapshot) => {
+    void api.invoke(IPC.historyGet, selected).then((snapshot) => {
       if (!cancelled) setPreview(snapshot?.content ?? '')
     })
     return () => {
@@ -59,7 +60,7 @@ export function History({ path, onRestored }: Props): React.ReactElement {
 
   const restore = async (): Promise<void> => {
     if (selected === null) return
-    const result = await api.invoke('history:restore', selected)
+    const result = await api.invoke(IPC.historyRestore, selected)
     if (!result.ok) {
       setNotice(result.error ?? 'Could not restore.')
       return

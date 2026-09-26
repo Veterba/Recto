@@ -1,5 +1,5 @@
 import { bodyOf, parseFrontmatter } from '@shared/frontmatter'
-import { extractTargets } from '../editor'
+import { extractTargets } from '@shared/parse'
 
 /**
  * The gist of a note, compiled from the note itself.

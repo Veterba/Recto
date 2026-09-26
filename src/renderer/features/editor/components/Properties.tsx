@@ -7,6 +7,8 @@ import { Icon } from '../../../ui/Icon'
 import { LinkInput } from './LinkInput'
 import { Tip } from '../../../ui/Tip'
 import { parseFrontmatter, removeField, renameField, setField, splitItems, type Field, type FieldType } from '@shared/frontmatter'
+import { IPC } from '@shared/ipc'
+import { Toggle } from '../../../ui/Toggle'
 
 /**
  * Typed frontmatter, above the editor.
@@ -83,7 +85,7 @@ function LinkValue({
   useEffect(() => {
     if (targets.length === 0) return
     let cancelled = false
-    void api.invoke('index:resolve-links', targets).then((resolved) => {
+    void api.invoke(IPC.indexResolveLinks, targets).then((resolved) => {
       if (!cancelled) setUnresolved(new Set(targets.filter((target) => resolved[target] == null)))
     })
     return () => {
@@ -201,16 +203,7 @@ function ValueEditor({
   if (linked) return <LinkValue field={field} onChange={onChange} onOpenLink={onOpenLink} getCandidates={getCandidates} />
 
   if (field.type === 'boolean') {
-    return (
-      <button
-        className={`toggle toggle--sm${field.value === true ? ' is-on' : ''}`}
-        role="switch"
-        aria-checked={field.value === true}
-        onClick={() => onChange(field.value !== true)}
-      >
-        <span className="toggle__knob" />
-      </button>
-    )
+    return <Toggle on={field.value === true} onChange={() => onChange(field.value !== true)} small />
   }
 
   if (field.type === 'number') {

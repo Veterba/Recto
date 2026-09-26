@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { TopicsRunNotice } from '@shared/topics'
 import { api } from '../../../app/api'
 import { Icon } from '../../../ui/Icon'
+import { IPC, IPC_EVENT } from '@shared/ipc'
 
 /** How long a notice stays, and how long the keyboard must be still before one appears. */
 const SHOW_MS = 6_000
@@ -40,7 +41,7 @@ export function TopicsNotice(): React.ReactElement | null {
       if (item !== null) timer.current = window.setTimeout(next, SHOW_MS)
     }
 
-    const off = api.on('topics:run', (run) => {
+    const off = api.on(IPC_EVENT.topicsRun, (run) => {
       queue.current.push(run)
       if (!showing.current) next()
     })
@@ -60,7 +61,7 @@ export function TopicsNotice(): React.ReactElement | null {
       <button
         className="status__notice-undo"
         onClick={() => {
-          void api.invoke('topics:undo-last-run')
+          void api.invoke(IPC.topicsUndoLastRun)
           showing.current = false
           setShown(null)
         }}

@@ -7,7 +7,7 @@ import { runInNewContext } from 'node:vm'
  * the embedder process and the integration test run the same code.
  */
 
-export const MODEL_ID = 'onnx-community/embeddinggemma-300m-ONNX'
+const MODEL_ID = 'onnx-community/embeddinggemma-300m-ONNX'
 /** Matryoshka: the first 256 of 768 dims, re-normalised. */
 export const DIMS = 256
 
@@ -20,7 +20,7 @@ export const DIMS = 256
  * The same prompt on both sides, because a note is both a source and a
  * target: the retrieval pair (query / document) is for asymmetric search.
  */
-export const PROMPT = 'task: sentence similarity | query: '
+const PROMPT = 'task: sentence similarity | query: '
 
 export type Encoder = (texts: string[]) => Promise<Float32Array[]>
 

@@ -459,7 +459,7 @@ House rules, worth knowing before sending a patch:
 
 - **The renderer has no Node access.** `contextIsolation: true`,
   `nodeIntegration: false`; everything crosses through the typed contract in
-  `src/shared/ipc-contract.ts`.
+  `src/shared/ipc.ts`.
 - **Every path is contained** with `path.relative`, never `startsWith`.
 - **The index is a cache.** Nothing may live only in SQLite — the files are the
   truth.

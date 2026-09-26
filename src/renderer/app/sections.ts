@@ -13,7 +13,7 @@
  */
 export type SectionId = 'data' | 'ai' | 'tasks'
 
-export type Section = {
+type Section = {
   id: SectionId
   label: string
   /** Lucide icon name, resolved in the sidebar tabs. */

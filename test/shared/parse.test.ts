@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeName, parseNote, resolveLink } from '../../src/shared/parse'
+import { extractTargets, normalizeName, parseNote, pathsByName, resolveLink } from '../../src/shared/parse'
 
 describe('parsing a note', () => {
   it('splits frontmatter from body and types the values', () => {
@@ -167,5 +167,33 @@ describe('markdown links', () => {
   it('ignores links inside a fenced block, like wikilinks', () => {
     const { links } = parseNote('```\n[code](Atomic Habits.md)\n```\n[real](Atomic Habits.md)')
     expect(links.map((l) => l.alias)).toEqual(['real'])
+  })
+})
+
+describe('extracting link targets', () => {
+  it('collects distinct targets, stripping heading and alias', () => {
+    expect(extractTargets('[[a]] [[b#h]] [[c|x]] [[a]]').sort()).toEqual(['a', 'b', 'c'])
+  })
+
+  it('ignores fenced code', () => {
+    expect(extractTargets('[[a]]\n```\n[[b]]\n```')).toEqual(['a'])
+  })
+
+  it('returns nothing for a document without links', () => {
+    expect(extractTargets('# just text')).toEqual([])
+  })
+})
+
+describe('the name lookup', () => {
+  it('keys paths by normalised file name, keeping every path that shares one', () => {
+    const byName = pathsByName(['a/Note.md', 'b/note.md', 'c/Other.md'])
+    expect(byName.get(normalizeName('Note.md'))).toEqual(['a/Note.md', 'b/note.md'])
+    expect(byName.get(normalizeName('Other.md'))).toEqual(['c/Other.md'])
+    expect(byName.size).toBe(2)
+  })
+
+  it('is what resolveLink resolves against', () => {
+    const paths = ['a/Note.md', 'c/Other.md']
+    expect(resolveLink('other', pathsByName(paths), new Set(paths))).toBe('c/Other.md')
   })
 })

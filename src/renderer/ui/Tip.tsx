@@ -18,7 +18,7 @@ import { createPortal } from 'react-dom'
 const GAP = 6
 const MARGIN = 6
 
-export type TipPlacement = 'top' | 'bottom' | 'left' | 'right'
+type TipPlacement = 'top' | 'bottom' | 'left' | 'right'
 
 type Props = {
   /** The tooltip text. An empty string renders the child with no tooltip. */

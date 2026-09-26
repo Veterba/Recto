@@ -8,7 +8,7 @@
  * callback around, so `Component.registerEvent(ref)` can unsubscribe on unload.
  */
 
-export type EventMap = Record<string, readonly unknown[]>
+type EventMap = Record<string, readonly unknown[]>
 
 export type EventRef = {
   readonly __brand: 'EventRef'

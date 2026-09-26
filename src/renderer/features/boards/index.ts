@@ -5,5 +5,6 @@ import './styles/board-list.css'
 
 export * from './components/BoardList'
 export * from './components/BoardView'
+export { registerBoardView } from './components/BoardHost'
 export * from './create-card'
 export * from './hooks/use-boards'

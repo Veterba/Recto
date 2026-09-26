@@ -1,4 +1,6 @@
-import type { AiMessage } from '@shared/ipc-contract'
+import type { AiMessage } from '@shared/ai'
+import { frontmatterClose } from '@shared/frontmatter'
+import { CODE_FENCE } from '@shared/parse'
 
 /**
  * A conversation IS a note.
@@ -20,25 +22,17 @@ export const CHAT_FOLDER = 'chats'
 const USER_HEADING = '## You'
 const ASSISTANT_HEADING = '## Claude'
 
-export type Conversation = {
+type Conversation = {
   title: string
   model: string | null
   messages: AiMessage[]
 }
 
-const FENCE = /^\s*(```|~~~)/
-const FRONTMATTER = /^---\s*$/
-
 /** Strip a leading `---` block and return the rest, plus its raw lines. */
 function splitFrontmatter(lines: readonly string[]): { head: string[]; body: string[] } {
-  if (!FRONTMATTER.test(lines[0] ?? '')) return { head: [], body: [...lines] }
-  for (let i = 1; i < lines.length; i++) {
-    if (FRONTMATTER.test(lines[i] ?? '')) {
-      return { head: lines.slice(1, i), body: lines.slice(i + 1) }
-    }
-  }
+  const close = frontmatterClose(lines)
   // An unterminated block is not frontmatter; treat the whole thing as body.
-  return { head: [], body: [...lines] }
+  return close === -1 ? { head: [], body: [...lines] } : { head: lines.slice(1, close), body: lines.slice(close + 1) }
 }
 
 /**
@@ -71,7 +65,7 @@ export function parseConversation(text: string): Conversation {
   }
 
   for (const line of body) {
-    if (FENCE.test(line)) inFence = !inFence
+    if (CODE_FENCE.test(line)) inFence = !inFence
 
     if (!inFence && (line.trim() === USER_HEADING || line.trim() === ASSISTANT_HEADING)) {
       flush()

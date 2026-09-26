@@ -27,7 +27,7 @@ export const SNAPSHOT_KEEP_PER_NOTE = 30
 export const SNAPSHOT_MAX_AGE_MS = 30 * 86_400_000
 
 /** Injectable clock, so the tests do not have to sleep for a minute. */
-export type Now = () => number
+type Now = () => number
 
 export function takeSnapshot(db: Database, path: string, content: string, now: Now = Date.now): void {
   const latest = db.prepare('SELECT content, ts FROM snapshots WHERE path = ? ORDER BY ts DESC LIMIT 1').get(path) as

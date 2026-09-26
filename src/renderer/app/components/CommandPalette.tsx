@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import type { CommandRegistry } from '../commands'
 import { fuzzyFilter, toSegments, type MatchRange } from '../../ui/fuzzy'
 import { formatChord } from '../hotkeys'
 import { Icon } from '../../ui/Icon'
+import { pickerKeyDown, usePicker, useScrollSelected } from '../../ui/picker'
 
 /**
  * The command palette. Reads the registry and nothing else - so every command
@@ -16,27 +17,13 @@ type Props = {
 }
 
 export function CommandPalette({ registry, open, onClose }: Props): React.ReactElement | null {
-  const [query, setQuery] = useState('')
-  const [cursor, setCursor] = useState(0)
-  const inputRef = useRef<HTMLInputElement | null>(null)
-  const listRef = useRef<HTMLUListElement | null>(null)
+  const { query, setQuery, cursor, setCursor, inputRef, listRef } = usePicker(open)
 
   // `available()` is called per open, not per keystroke, so isAvailable() stays cheap.
   const commands = useMemo(() => (open ? registry.available() : []), [registry, open])
   const results = useMemo(() => fuzzyFilter(query, commands, (c) => c.name).slice(0, 50), [query, commands])
 
-  useEffect(() => {
-    if (!open) return
-    setQuery('')
-    setCursor(0)
-    inputRef.current?.focus()
-  }, [open])
-
-  useEffect(() => setCursor(0), [query])
-
-  useEffect(() => {
-    listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
-  }, [cursor, results])
+  useScrollSelected(listRef, cursor, results)
 
   if (!open) return null
 
@@ -57,19 +44,7 @@ export function CommandPalette({ registry, open, onClose }: Props): React.ReactE
           value={query}
           spellCheck={false}
           onChange={(ev) => setQuery(ev.target.value)}
-          onKeyDown={(ev) => {
-            if (ev.key === 'Escape') return onClose()
-            if (ev.key === 'ArrowDown' || (ev.key === 'n' && ev.ctrlKey)) {
-              ev.preventDefault()
-              setCursor((c) => Math.min(c + 1, Math.max(0, results.length - 1)))
-            } else if (ev.key === 'ArrowUp' || (ev.key === 'p' && ev.ctrlKey)) {
-              ev.preventDefault()
-              setCursor((c) => Math.max(c - 1, 0))
-            } else if (ev.key === 'Enter') {
-              ev.preventDefault()
-              commit(cursor)
-            }
-          }}
+          onKeyDown={(ev) => pickerKeyDown(ev, { count: results.length, cursor, setCursor, pick: commit, close: onClose, emacs: true })}
         />
 
         {results.length === 0 ? (

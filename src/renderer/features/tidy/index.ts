@@ -4,3 +4,4 @@ import './styles/tidy.css'
 
 export * from './components/TidyDialog'
 export * from './tidy'
+export * from './hooks/use-tidy'

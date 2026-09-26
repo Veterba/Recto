@@ -29,7 +29,7 @@ export function countWords(text: string): number {
 }
 
 /** `[[a|b]]` -> `b`, `[[a]]` -> `a`, `[t](u)` -> `t`; embeds vanish. */
-export function unlink(line: string): string {
+function unlink(line: string): string {
   return line
     .replace(WIKILINK, (_m, bang: string, target: string, alias?: string) => (bang === '!' ? '' : (alias ?? target).trim()))
     .replace(MD_LINK, (_m, bang: string, text: string) => (bang === '!' ? '' : text))
@@ -59,12 +59,8 @@ export function templateLines(templates: readonly string[]): Set<string> {
   return lines
 }
 
-/**
- * One line of own text. `text` has links turned into their words, for the
- * model; `plain` has them removed, for the title bonus - a name inside a
- * link is the link, not a mention.
- */
-export type OwnLine = { text: string; plain: string; heading: string | null; blank: boolean }
+/** One line of own text. `text` has links turned into their words, for the model. */
+type OwnLine = { text: string; heading: string | null; blank: boolean }
 
 /** Links removed entirely, embeds too. */
 const stripLinks = (line: string): string => line.replace(WIKILINK, ' ').replace(MD_LINK, ' ')
@@ -90,14 +86,14 @@ export function ownLines(text: string, template: ReadonlySet<string>): OwnLine[]
     if (match !== null) {
       // A template's own heading ("## Tasks") is not the user's structure.
       heading = template.has(trimmed) ? null : unlink(match[2] ?? '').trim() || null
-      out.push({ text: '', plain: '', heading, blank: true })
+      out.push({ text: '', heading, blank: true })
       continue
     }
     if (trimmed === '' || template.has(trimmed) || isOnlyLinks(trimmed)) {
-      out.push({ text: '', plain: '', heading, blank: true })
+      out.push({ text: '', heading, blank: true })
       continue
     }
-    out.push({ text: unlink(trimmed).trim(), plain: stripLinks(trimmed).trim(), heading, blank: false })
+    out.push({ text: unlink(trimmed).trim(), heading, blank: false })
   }
   return out
 }
@@ -107,13 +103,6 @@ export const ownText = (lines: readonly OwnLine[]): string =>
   lines
     .filter((line) => !line.blank)
     .map((line) => line.text)
-    .join('\n')
-
-/** The own text with links taken out, for matching a target's name. Code is already gone. */
-export const plainText = (lines: readonly OwnLine[]): string =>
-  lines
-    .filter((line) => !line.blank)
-    .map((line) => line.plain)
     .join('\n')
 
 /**
@@ -245,10 +234,10 @@ export function snippet(text: string, max: number): string {
 export const chunkInput = (c: Chunk): string => (c.heading === null ? c.text : `${c.heading}\n${c.text}`)
 
 /** The note's name: the file name, which is what the app calls it everywhere. */
-export const noteTitle = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
+const noteTitle = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
 
 /** `aliases:` / `alias:` from frontmatter, as a list. */
-export function aliasesOf(text: string): string[] {
+function aliasesOf(text: string): string[] {
   const field = parseFrontmatter(text).fields.find((f) => /^alias(es)?$/i.test(f.key))
   if (field === undefined || field.value === null) return []
   const values = Array.isArray(field.value) ? field.value : [String(field.value)]
@@ -266,15 +255,6 @@ export function titleInput(path: string, text: string): string {
     .filter((h) => h !== '')
   const parts = [noteTitle(path), ...aliasesOf(text)]
   return headings.length === 0 ? parts.join(', ') : `${parts.join(', ')}\n${[...new Set(headings)].join('; ')}`
-}
-
-/** Does `name` appear in `text` as a whole phrase, ignoring case? */
-export function mentions(text: string, name: string): boolean {
-  const needle = name.trim()
-  if (needle === '') return false
-  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  // \b is ASCII-only in JS; lookarounds on letters/digits work for any script.
-  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu').test(text)
 }
 
 /** A stable content hash, so an unchanged chunk is never embedded twice. */

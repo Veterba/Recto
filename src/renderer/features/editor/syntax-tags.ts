@@ -18,7 +18,7 @@ import nlp from 'compromise'
 
 export type PartOfSpeech = 'adjective' | 'noun' | 'adverb' | 'verb' | 'conjunction'
 
-export type Tag = { from: number; to: number; pos: PartOfSpeech }
+type Tag = { from: number; to: number; pos: PartOfSpeech }
 
 const CACHE_LIMIT = 800
 const cache = new Map<string, Tag[]>()

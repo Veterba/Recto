@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { api } from '../../../app/api'
 import { DEFAULT_BOARDS, parseBoards, type BoardsFile } from '../boards'
+import { IPC } from '@shared/ipc'
 
 /**
  * Board and column definitions, from `.recto/boards.json`.
@@ -26,7 +27,7 @@ const subscribe = (listener: () => void): (() => void) => {
   // renders them.
   if (!loaded) {
     loaded = true
-    void api.invoke('state:read', 'boards').then((raw) => emit(parseBoards(raw)))
+    void api.invoke(IPC.stateRead, 'boards').then((raw) => emit(parseBoards(raw)))
   }
   return () => listeners.delete(listener)
 }
@@ -34,7 +35,7 @@ const subscribe = (listener: () => void): (() => void) => {
 /** Structural edits - adding a column, renaming a board - so no debounce. */
 export function updateBoards(next: BoardsFile): void {
   emit(next)
-  void api.invoke('state:write', 'boards', next)
+  void api.invoke(IPC.stateWrite, 'boards', next)
 }
 
 export function useBoards(): BoardsFile {
@@ -47,10 +48,3 @@ export function useBoards(): BoardsFile {
 
 /** Read without subscribing, for code that runs outside a render. */
 export const currentBoards = (): BoardsFile => file
-
-/** Test seam - the module is a singleton. */
-export function resetBoards(): void {
-  file = DEFAULT_BOARDS
-  loaded = false
-  listeners.clear()
-}

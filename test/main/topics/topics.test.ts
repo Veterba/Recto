@@ -11,6 +11,7 @@ import {
   setOwned,
   topicLink,
   topicNameOf,
+  withoutId,
 } from '../../../src/main/topics/state'
 import { centroid, cosine, evenly, noteVector, vaultMean } from '../../../src/shared/vectors'
 import { linksIn, writeLinks } from '../../../src/shared/link-property'
@@ -190,5 +191,17 @@ describe('topics in a note', () => {
     const { text: out, count } = rewriteWikiLinks(text, 'topics/Old name.md', 'topics/New name.md', true)
     expect(count).toBe(2)
     expect(out).toBe('---\ntopics: ["[[topics/New name]]", "[[topics/Other]]"]\n---\nSee [[topics/New name|the topic]] and [[Old name]].')
+  })
+})
+
+describe('taking a topic id out of a map', () => {
+  it('removes the id from every list and drops lists left empty', () => {
+    expect(withoutId({ 'a.md': ['t1', 't2'], 'b.md': ['t1'], 'c.md': ['t3'] }, 't1')).toEqual({ 'a.md': ['t2'], 'c.md': ['t3'] })
+  })
+
+  it('leaves the input alone', () => {
+    const m = { 'a.md': ['t1'] }
+    withoutId(m, 't1')
+    expect(m).toEqual({ 'a.md': ['t1'] })
   })
 })

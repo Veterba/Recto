@@ -1,6 +1,6 @@
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
-import type { Format } from '../markdown-actions'
+import type { Format } from '../active-formats'
 
 /**
  * The formatting toolbar.

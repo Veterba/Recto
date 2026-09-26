@@ -24,6 +24,8 @@
  *   otherwise                                     → left alone, and said so
  */
 
+import { parentOf } from '@shared/vault'
+
 export type TidyMove = {
   path: string
   /** Destination folder, vault-relative. */
@@ -102,11 +104,6 @@ export function nameTokens(path: string): string[] {
 /** Title Case for a folder name we are inventing. */
 const folderName = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1)
 
-const folderOf = (path: string): string => {
-  const cut = path.lastIndexOf('/')
-  return cut === -1 ? '' : path.slice(0, cut)
-}
-
 export function planTidy(input: TidyInput): TidyPlan {
   const reserved = new Set(input.reserved ?? [])
   const isReserved = (folder: string): boolean =>
@@ -122,7 +119,7 @@ export function planTidy(input: TidyInput): TidyPlan {
     if (key !== '' && !byNormalisedName.has(key)) byNormalisedName.set(key, folder)
   }
 
-  const loose = input.notes.filter((path) => folderOf(path) === '' && !isReserved(path))
+  const loose = input.notes.filter((path) => parentOf(path) === '' && !isReserved(path))
   const moves: TidyMove[] = []
   const skipped: { path: string; reason: string }[] = []
   const undecided: string[] = []
@@ -147,7 +144,7 @@ export function planTidy(input: TidyInput): TidyPlan {
     // --- 2. where its links live -----------------------------------------
     const counts = new Map<string, number>()
     for (const target of links) {
-      const folder = folderOf(target)
+      const folder = parentOf(target)
       if (folder === '' || isReserved(folder)) continue
       counts.set(folder, (counts.get(folder) ?? 0) + 1)
     }

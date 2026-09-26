@@ -54,9 +54,3 @@ export function useNoteBus(): Snapshot {
     () => snapshot,
   )
 }
-
-/** Test seam - the module is a singleton, so tests need a way back to zero. */
-export function resetNoteBus(): void {
-  snapshot = { activePath: null, revision: 0 }
-  listeners.clear()
-}

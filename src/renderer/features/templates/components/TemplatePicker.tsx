@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { api } from '../../../app/api'
 import { fuzzyFilter } from '../../../ui/fuzzy'
-import { isInFolder, TEMPLATE_FOLDER, templateName } from '@shared/templates'
+import { isInFolder, templateName } from '@shared/templates'
 import { Highlight } from '../../../app/components/CommandPalette'
 import { Icon } from '../../../ui/Icon'
 
@@ -112,16 +111,4 @@ export function TemplatePicker({ notes, folder, onPick, onClose }: Props): React
     </div>,
     document.body,
   )
-}
-
-/** Create a starter template, so the folder is never an empty room. */
-export async function seedTemplate(): Promise<string | null> {
-  const created = await api.invoke('fs:create', TEMPLATE_FOLDER, 'meeting.md', 'file')
-  if (!created.ok) return null
-  await api.invoke(
-    'fs:write',
-    created.path,
-    ['# {{title}}', '', 'Date: {{date}} {{time}}', '', '## Attendees', '', '## Notes', '', '## Follow-up by {{date:+7}}', ''].join('\n'),
-  )
-  return created.path
 }

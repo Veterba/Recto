@@ -14,7 +14,7 @@
  */
 const SNIFF = 8192
 
-export type NotText = 'binary' | 'encoding'
+type NotText = 'binary' | 'encoding'
 
 /**
  * @param partial `data` is only the beginning of the file, so the last

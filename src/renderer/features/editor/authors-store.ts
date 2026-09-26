@@ -1,5 +1,6 @@
 import { api } from '../../app/api'
 import type { StoredRange } from './authorship'
+import { IPC } from '@shared/ipc'
 
 /**
  * Authorship on disk: `.recto/authors.json`, `{ notes: { [path]: ranges } }`.
@@ -14,7 +15,7 @@ type File = { version: 1; notes: Record<string, StoredRange[]> }
 const FEATURE = 'authors'
 
 async function read(): Promise<File> {
-  const raw = (await api.invoke('state:read', FEATURE)) as Partial<File> | null
+  const raw = (await api.invoke(IPC.stateRead, FEATURE)) as Partial<File> | null
   const notes = raw !== null && typeof raw === 'object' && raw.notes !== null && typeof raw.notes === 'object' ? raw.notes : {}
   return { version: 1, notes: notes as Record<string, StoredRange[]> }
 }
@@ -48,7 +49,7 @@ export function saveAuthors(path: string, ranges: StoredRange[]): void {
         } else {
           file.notes[path] = value
         }
-        await api.invoke('state:write', FEATURE, file)
+        await api.invoke(IPC.stateWrite, FEATURE, file)
       })
     }, 700),
   )
@@ -66,6 +67,6 @@ export function flushAuthors(path: string): void {
     const file = await read()
     if (value.length === 0) delete file.notes[path]
     else file.notes[path] = value
-    await api.invoke('state:write', FEATURE, file)
+    await api.invoke(IPC.stateWrite, FEATURE, file)
   })
 }

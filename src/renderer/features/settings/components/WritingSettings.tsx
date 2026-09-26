@@ -4,31 +4,13 @@ import { commands } from '../../../app/commands'
 import { formatChord } from '../../../app/hotkeys'
 import { updateWriting, useWriting, type WritingSettings } from '../../editor'
 import type { FocusUnit } from '../../editor'
+import { Toggle } from '../../../ui/Toggle'
+import { SettingRow } from '../../../ui/SettingRow'
 
 /**
  * Settings → Writing: iA Writer's tools in full, with the parts a menu has no
  * room for - how faint the unfocused text is, and your own style-check words.
  */
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }): React.ReactElement {
-  return (
-    <div className="setting">
-      <div className="setting__text">
-        <span className="setting__label">{label}</span>
-        {hint !== undefined && <span className="setting__hint">{hint}</span>}
-      </div>
-      <div className="setting__control">{children}</div>
-    </div>
-  )
-}
-
-function Switch({ on, onChange, label }: { on: boolean; onChange: () => void; label: string }): React.ReactElement {
-  return (
-    <button className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-checked={on} aria-label={label} onClick={onChange}>
-      <span className="toggle__knob" />
-    </button>
-  )
-}
 
 function Chips<K extends string>({
   items,
@@ -73,10 +55,13 @@ export function WritingSettingsTab(): React.ReactElement {
   return (
     <>
       <h3 className="settings__grouphead">Focus</h3>
-      <Row label="Focus mode" hint={`Everything but the text you are writing fades away${key('writing:toggle-focus')} · Esc to leave`}>
-        <Switch label="Focus mode" on={writing.focus} onChange={() => updateWriting((s) => ({ ...s, focus: !s.focus }))} />
-      </Row>
-      <Row label="Keep lit" hint="What stays bright around the cursor.">
+      <SettingRow
+        label="Focus mode"
+        hint={`Everything but the text you are writing fades away${key('writing:toggle-focus')} · Esc to leave`}
+      >
+        <Toggle label="Focus mode" on={writing.focus} onChange={() => updateWriting((s) => ({ ...s, focus: !s.focus }))} />
+      </SettingRow>
+      <SettingRow label="Keep lit" hint="What stays bright around the cursor.">
         <div className="segmented segmented--inline">
           {(['line', 'sentence', 'paragraph'] as FocusUnit[]).map((unit) => (
             <button
@@ -88,18 +73,18 @@ export function WritingSettingsTab(): React.ReactElement {
             </button>
           ))}
         </div>
-      </Row>
-      <Row
+      </SettingRow>
+      <SettingRow
         label="Typewriter scrolling"
         hint={`Keep the line you write in the middle of the window, even outside focus mode${key('writing:toggle-typewriter')}`}
       >
-        <Switch
+        <Toggle
           label="Typewriter scrolling"
           on={writing.typewriter}
           onChange={() => updateWriting((s) => ({ ...s, typewriter: !s.typewriter }))}
         />
-      </Row>
-      <Row label="Text size" hint={`${writing.fontSize}px in focus mode — the editor keeps its own size`}>
+      </SettingRow>
+      <SettingRow label="Text size" hint={`${writing.fontSize}px in focus mode — the editor keeps its own size`}>
         <input
           className="slider"
           type="range"
@@ -109,8 +94,8 @@ export function WritingSettingsTab(): React.ReactElement {
           value={writing.fontSize}
           onChange={(event) => updateWriting((s) => ({ ...s, fontSize: Number(event.target.value) }))}
         />
-      </Row>
-      <Row label="Faded text" hint={`${Math.round(writing.dim * 100)}% — how visible the rest of the note stays`}>
+      </SettingRow>
+      <SettingRow label="Faded text" hint={`${Math.round(writing.dim * 100)}% — how visible the rest of the note stays`}>
         <input
           className="slider"
           type="range"
@@ -120,16 +105,16 @@ export function WritingSettingsTab(): React.ReactElement {
           value={writing.dim}
           onChange={(event) => updateWriting((s) => ({ ...s, dim: Number(event.target.value) }))}
         />
-      </Row>
+      </SettingRow>
 
       <h3 className="settings__grouphead">Syntax highlight</h3>
-      <Row
+      <SettingRow
         label="Colour parts of speech"
         hint={`See how you write: too many adjectives, weak verbs, a run of “and”s${key('writing:toggle-syntax')}`}
       >
-        <Switch label="Syntax highlight" on={writing.syntax.on} onChange={() => set('syntax', { on: !writing.syntax.on })} />
-      </Row>
-      <Row label="Highlight">
+        <Toggle label="Syntax highlight" on={writing.syntax.on} onChange={() => set('syntax', { on: !writing.syntax.on })} />
+      </SettingRow>
+      <SettingRow label="Highlight">
         <Chips
           items={[
             { key: 'adjectives', label: 'Adjectives', colour: 'var(--pos-adjective)' },
@@ -141,7 +126,7 @@ export function WritingSettingsTab(): React.ReactElement {
           isOn={(k) => writing.syntax[k]}
           onToggle={(k) => set('syntax', { [k]: !writing.syntax[k] })}
         />
-      </Row>
+      </SettingRow>
       <p className="setting__note">
         <Icon name="highlighter" size={13} />
         English is tagged by a real part-of-speech tagger that runs on this computer. Russian is tagged by word endings and is approximate —
@@ -149,10 +134,10 @@ export function WritingSettingsTab(): React.ReactElement {
       </p>
 
       <h3 className="settings__grouphead">Style check</h3>
-      <Row label="Strike through weak words" hint={`Nothing is changed — the words are only marked${key('writing:toggle-style')}`}>
-        <Switch label="Style check" on={writing.style.on} onChange={() => set('style', { on: !writing.style.on })} />
-      </Row>
-      <Row label="Check for">
+      <SettingRow label="Strike through weak words" hint={`Nothing is changed — the words are only marked${key('writing:toggle-style')}`}>
+        <Toggle label="Style check" on={writing.style.on} onChange={() => set('style', { on: !writing.style.on })} />
+      </SettingRow>
+      <SettingRow label="Check for">
         <Chips
           items={[
             { key: 'fillers', label: 'Fillers' },
@@ -163,7 +148,7 @@ export function WritingSettingsTab(): React.ReactElement {
           isOn={(k) => writing.style[k]}
           onToggle={(k) => set('style', { [k]: !writing.style[k] })}
         />
-      </Row>
+      </SettingRow>
       <div className="setting setting--stack">
         <div className="setting__text">
           <span className="setting__label">Your words</span>
@@ -192,10 +177,10 @@ export function WritingSettingsTab(): React.ReactElement {
       </div>
 
       <h3 className="settings__grouphead">Authors</h3>
-      <Row label="Show authors" hint={`Colour text by who wrote it — you, an AI, or a reference${key('writing:toggle-authors')}`}>
-        <Switch label="Show authors" on={writing.authors.on} onChange={() => set('authors', { on: !writing.authors.on })} />
-      </Row>
-      <Row label="Show">
+      <SettingRow label="Show authors" hint={`Colour text by who wrote it — you, an AI, or a reference${key('writing:toggle-authors')}`}>
+        <Toggle label="Show authors" on={writing.authors.on} onChange={() => set('authors', { on: !writing.authors.on })} />
+      </SettingRow>
+      <SettingRow label="Show">
         <Chips
           items={[
             { key: 'human', label: 'Human' },
@@ -205,7 +190,7 @@ export function WritingSettingsTab(): React.ReactElement {
           isOn={(k) => writing.authors[k]}
           onToggle={(k) => set('authors', { [k]: !writing.authors[k] })}
         />
-      </Row>
+      </SettingRow>
       <p className="setting__note">
         <Icon name="bot" size={13} />
         Text is yours unless marked. Paste as AI{key('writing:paste-ai')}, or select text and choose Mark selection as… from the writing
@@ -214,13 +199,13 @@ export function WritingSettingsTab(): React.ReactElement {
       </p>
 
       <h3 className="settings__grouphead">Spelling</h3>
-      <Row label="Check spelling" hint="Underline misspelt words; right-click one for suggestions.">
-        <Switch
+      <SettingRow label="Check spelling" hint="Underline misspelt words; right-click one for suggestions.">
+        <Toggle
           label="Check spelling"
           on={writing.spellcheck}
           onChange={() => updateWriting((s) => ({ ...s, spellcheck: !s.spellcheck }))}
         />
-      </Row>
+      </SettingRow>
     </>
   )
 }

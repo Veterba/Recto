@@ -10,7 +10,7 @@ import { useSyncExternalStore } from 'react'
  * or the frontmatter - a `# comment` in a bash snippet is not a section.
  */
 
-export type OutlineItem = {
+type OutlineItem = {
   level: number
   text: string
   /** 1-based, as the editor counts lines. */

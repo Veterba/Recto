@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bodyOf, parseFrontmatter, removeField, renameField, serialize, setField } from '../../src/shared/frontmatter'
+import { bodyOf, frontmatterClose, parseFrontmatter, removeField, renameField, serialize, setField } from '../../src/shared/frontmatter'
 
 const doc = (...lines: string[]): string => lines.join('\n')
 
@@ -280,5 +280,22 @@ describe('block lists, as Obsidian writes them', () => {
     const fm = parseFrontmatter(['---', 'author:', '  name: Ada', '  born: 1815', 'status: done', '---'].join('\n'))
     expect(fm.fields.map((f) => f.key)).toEqual(['status'])
     expect(fm.opaque).toEqual(['author:', '  name: Ada', '  born: 1815'])
+  })
+})
+
+describe('finding the closing fence', () => {
+  it('returns the index of the closing ---', () => {
+    expect(frontmatterClose(['---', 'a: 1', '---', 'body'])).toBe(2)
+    expect(frontmatterClose(['---', '---'])).toBe(1)
+  })
+
+  it('allows trailing spaces on the fences', () => {
+    expect(frontmatterClose(['---  ', 'a: 1', '--- '])).toBe(2)
+  })
+
+  it('is -1 without an opening fence, or when it never closes', () => {
+    expect(frontmatterClose([])).toBe(-1)
+    expect(frontmatterClose(['body', '---', 'x', '---'])).toBe(-1)
+    expect(frontmatterClose(['---', 'a: 1', 'body'])).toBe(-1)
   })
 })

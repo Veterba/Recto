@@ -3,10 +3,10 @@
  * needs. Pure, so each rule is tested on its own.
  */
 
-export const DRIFT_COSINE = 0.92
-export const GROWTH = 0.3
+const DRIFT_COSINE = 0.92
+const GROWTH = 0.3
 
-export const dot = (a: ArrayLike<number>, b: ArrayLike<number>): number => {
+const dot = (a: ArrayLike<number>, b: ArrayLike<number>): number => {
   let sum = 0
   for (let i = 0; i < a.length; i++) sum += (a[i] ?? 0) * (b[i] ?? 0)
   return sum
@@ -22,7 +22,7 @@ export function meanVector(vectors: readonly ArrayLike<number>[]): Float32Array 
   return out
 }
 
-export type EvalState = { evaluatedAt: number | null; meanVec: ArrayLike<number> | null; ownWords: number }
+type EvalState = { evaluatedAt: number | null; meanVec: ArrayLike<number> | null; ownWords: number }
 
 /**
  * Is this note ready to be looked at? Quiet for long enough (by mtime, so an

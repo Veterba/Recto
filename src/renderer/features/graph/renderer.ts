@@ -20,303 +20,13 @@
  * stroke and fill calls, not one per node.
  */
 
-import {
-  averageColor,
-  COLOR_STEPS,
-  DEFAULT_LOOK,
-  degreeT,
-  groupColor,
-  nodeRadius,
-  paintSteps,
-  parseHex,
-  withAlpha,
-  type GraphLook,
-} from './look'
-
-export type GraphNodeView = {
-  path: string
-  label: string
-  degree: number
-  /** Top-level folder, as an index - for colouring by folder. */
-  group?: number
-  /** A topic: drawn as a hollow circle, never filled. */
-  topic?: boolean
-}
-
-export type Camera = { x: number; y: number; zoom: number }
-
-export type RenderState = {
-  nodes: readonly GraphNodeView[]
-  /** Index pairs into `nodes`. */
-  edges: readonly [number, number][]
-  positions: Float32Array
-  /** Index of the note currently open, or -1. */
-  active: number
-  /** Indices one hop from the active note. */
-  neighbours: ReadonlySet<number>
-  hovered: number
-  /**
-   * The note under the pointer and everything it links to, or null.
-   *
-   * While it is set, the rest of the graph is veiled: the one question a graph
-   * is asked - what is this connected to - is answered by taking everything
-   * else away, which is what Obsidian does on hover and while dragging.
-   */
-  focus?: ReadonlySet<number> | null
-  /**
-   * How far the veil has come up, 0 to 1.
-   *
-   * The highlight used to arrive and leave in one frame, which reads as the
-   * picture being replaced rather than a layer coming over it. The caller eases
-   * this; everything the focus draws is scaled by it, so the veil, the lit
-   * edges and their names all arrive together.
-   */
-  focusFade?: number
-  camera: Camera
-  showLabels: boolean
-  look?: GraphLook
-  /** Milliseconds, for anything that moves on its own (pulses). */
-  time?: number
-  /**
-   * In a tree layout: which links are the tree's own, by edge index, and which
-   * way it grows. Tree links are drawn as smooth branches; the rest - links
-   * that close loops - faintly, or they cross the whole picture and hide it.
-   */
-  treeEdges?: ReadonlySet<number> | null
-  /**
-   * Links only the auto-links property makes, by edge index. Drawn thinner and
-   * dashed, so the links the user wrote stay the visible structure.
-   */
-  autoEdges?: ReadonlySet<number>
-  treeDirection?: 'down' | 'up' | 'left' | 'right' | 'out' | null
-  /** In the circle layout: bow every link toward the centre, like a chord diagram. */
-  bundle?: boolean
-}
-
-/** Above this many nodes, only the better-connected ones get a label. */
-const LABEL_CROWD_LIMIT = 120
-/** Signals drawn at most per frame, however many links there are. */
-const MAX_PULSES = 420
-
-const css = (name: string, fallback: string): string => {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-  return value === '' ? fallback : value
-}
-
-export type Palette = {
-  edge: string
-  edgeActive: string
-  node: string
-  nodeActive: string
-  nodeOrphan: string
-  label: string
-  labelActive: string
-  /** Whether the app's own background is dark. */
-  dark?: boolean
-  /** The app's background, for working out what a tinted background comes to. */
-  background?: string
-}
-
-/** Rough luminance of a CSS colour string, 0-1; unknown formats count as dark. */
-function luminance(colour: string): number {
-  const hex = /^#([0-9a-f]{6})$/i.exec(colour)
-  let rgb: number[] | null = null
-  if (hex?.[1] !== undefined) rgb = [0, 2, 4].map((i) => parseInt(hex[1]!.slice(i, i + 2), 16))
-  const fn = /rgba?\(([^)]+)\)/.exec(colour)
-  if (fn?.[1] !== undefined)
-    rgb = fn[1]
-      .split(/[ ,/]+/)
-      .slice(0, 3)
-      .map(Number)
-  if (rgb === null || rgb.some((v) => !Number.isFinite(v))) return 0
-  return (0.2126 * rgb[0]! + 0.7152 * rgb[1]! + 0.0722 * rgb[2]!) / 255
-}
-
-export function readPalette(): Palette {
-  const accent = css('--accent', '#8b7cf8')
-  return {
-    edge: css('--border-strong', '#3d3d48'),
-    edgeActive: accent,
-    node: css('--text-muted', '#6f6f7d'),
-    nodeActive: accent,
-    // A step quieter than a linked note, not invisible: `--border` all but
-    // vanished against the dark page, and a note you cannot see in the graph
-    // reads as one the graph has lost.
-    nodeOrphan: css('--border-strong', '#3d3d48'),
-    label: css('--text-secondary', '#a6a6b2'),
-    labelActive: accent,
-    dark: luminance(css('--bg-primary', '#171717')) < 0.5,
-    background: css('--bg-primary', '#171717'),
-  }
-}
-
-/** Node radius with the default look. Kept for callers that have no look. */
-export const radiusOf = (degree: number): number => nodeRadius(degree)
-
-const radiusIn = (look: GraphLook, degree: number): number => nodeRadius(degree, look.node.size, look.node.growth)
-
-export function worldToScreen(camera: Camera, x: number, y: number, width: number, height: number): [number, number] {
-  return [(x - camera.x) * camera.zoom + width / 2, (y - camera.y) * camera.zoom + height / 2]
-}
-
-export function screenToWorld(camera: Camera, x: number, y: number, width: number, height: number): [number, number] {
-  return [(x - width / 2) / camera.zoom + camera.x, (y - height / 2) / camera.zoom + camera.y]
-}
-
-/** Nearest node within `slack` screen pixels, or -1. */
-export function pick(state: RenderState, screenX: number, screenY: number, width: number, height: number, slack = 6): number {
-  const { positions, camera } = state
-  const look = state.look ?? DEFAULT_LOOK
-  let best = -1
-  let bestDistance = Infinity
-
-  for (let i = 0; i < state.nodes.length; i++) {
-    const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
-    const r = radiusIn(look, state.nodes[i]?.degree ?? 0) * camera.zoom + slack
-    const dx = sx - screenX
-    const dy = sy - screenY
-    const distance = dx * dx + dy * dy
-    if (distance <= r * r && distance < bestDistance) {
-      best = i
-      bestDistance = distance
-    }
-  }
-  return best
-}
-
-/**
- * Is any node inside the viewport?
- *
- * Used after a resize. Shrinking the panel - maximise then restore, say - keeps
- * the camera it had at the larger size, which can leave every node outside the
- * frame and the graph looking empty and broken. Re-fitting only when *nothing*
- * is visible fixes that case without ever yanking the view away from someone
- * who has deliberately zoomed in on a cluster.
- */
-export function anyVisible(state: RenderState, width: number, height: number): boolean {
-  const { positions, camera, nodes } = state
-  for (let i = 0; i < nodes.length; i++) {
-    const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
-    if (sx >= 0 && sy >= 0 && sx <= width && sy <= height) return true
-  }
-  return false
-}
-
-/** A camera that fits every node with a margin. */
-export function fit(positions: Float32Array, count: number, width: number, height: number): Camera {
-  if (count === 0) return { x: 0, y: 0, zoom: 1 }
-
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (let i = 0; i < count; i++) {
-    const x = positions[i * 2] ?? 0
-    const y = positions[i * 2 + 1] ?? 0
-    if (x < minX) minX = x
-    if (x > maxX) maxX = x
-    if (y < minY) minY = y
-    if (y > maxY) maxY = y
-  }
-
-  const spanX = Math.max(1, maxX - minX)
-  const spanY = Math.max(1, maxY - minY)
-  // A small panel gets a small margin: 80px of a 300px floating graph was a
-  // quarter of it spent on nothing.
-  const margin = Math.min(80, Math.max(24, Math.min(width, height) * 0.08))
-  const zoom = Math.min(2, Math.min((width - margin) / spanX, (height - margin) / spanY))
-
-  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom: Math.max(0.08, zoom) }
-}
-
-/** What the background implies for the colours drawn on it. */
-type Surface = { dark: boolean; edge: string; node: string; orphan: string; label: string }
-
-/**
- * The theme's colours - unless a tinted background has flipped how dark the
- * ground is. A deep navy wash over a light theme leaves the theme's dark grey
- * dots and labels unreadable, so the defaults follow the ground they sit on.
- */
-export function surfaceFor(look: GraphLook, palette: Palette): Surface {
-  const themeDark = palette.dark ?? true
-  const tint = averageColor(look.background.colors)
-  const base = parseHex(palette.background ?? '') ?? (themeDark ? [23, 23, 23] : [250, 250, 250])
-  let dark = themeDark
-  if (tint !== null) {
-    const k = Math.min(100, Math.max(0, look.background.strength)) / 100
-    const mixed = [0, 1, 2].map((i) => base[i]! * (1 - k) + tint[i]! * k)
-    dark = (0.2126 * mixed[0]! + 0.7152 * mixed[1]! + 0.0722 * mixed[2]!) / 255 < 0.5
-  }
-  if (dark === themeDark) {
-    return { dark, edge: palette.edge, node: palette.node, orphan: palette.nodeOrphan, label: palette.label }
-  }
-  // A tinted ground sits mid-way far more often than a theme does, so these
-  // lean to contrast: a grey link that works on near-black vanishes on slate.
-  return dark
-    ? { dark, edge: '#cbd5e1', node: '#e2e8f0', orphan: '#94a3b8', label: 'rgba(241, 245, 249, 0.92)' }
-    : { dark, edge: '#3f3f46', node: '#27272a', orphan: '#71717a', label: 'rgba(24, 24, 27, 0.9)' }
-}
-
-/** Soft round light, one per colour, drawn scaled - far cheaper than shadowBlur. */
-const glowSprites = new Map<string, HTMLCanvasElement>()
-function glowSprite(colour: string): HTMLCanvasElement | null {
-  if (typeof document === 'undefined') return null
-  // Theme colours arrive as whatever CSS the token holds - `hsl(...)`, a name.
-  // The gradient's alpha stops need a hex, and without one every stop came out
-  // opaque and the "glow" was a solid square.
-  const hex = toHex(colour)
-  if (hex === null) return null
-  colour = hex
-  let sprite = glowSprites.get(colour)
-  if (sprite === undefined) {
-    sprite = document.createElement('canvas')
-    sprite.width = 64
-    sprite.height = 64
-    const g = sprite.getContext('2d')
-    if (g === null) return null
-    const gradient = g.createRadialGradient(32, 32, 0, 32, 32, 32)
-    gradient.addColorStop(0, withAlpha(colour, 0.9))
-    gradient.addColorStop(0.25, withAlpha(colour, 0.45))
-    gradient.addColorStop(1, withAlpha(colour, 0))
-    g.fillStyle = gradient
-    g.fillRect(0, 0, 64, 64)
-    if (glowSprites.size > 256) glowSprites.clear()
-    glowSprites.set(colour, sprite)
-  }
-  return sprite
-}
-
-let probe: CanvasRenderingContext2D | null = null
-const hexCache = new Map<string, string | null>()
-
-/** Any CSS colour as `#rrggbb`, via the canvas's own colour parser. Null if it cannot be read. */
-function toHex(colour: string): string | null {
-  if (parseHex(colour) !== null) return colour
-  const cached = hexCache.get(colour)
-  if (cached !== undefined) return cached
-  probe ??= document.createElement('canvas').getContext('2d')
-  let out: string | null = null
-  if (probe !== null) {
-    probe.fillStyle = '#000000'
-    probe.fillStyle = colour
-    const value = String(probe.fillStyle)
-    if (value.startsWith('#')) out = value
-    else {
-      const parts = /rgba?\(([^)]+)\)/
-        .exec(value)?.[1]
-        ?.split(',')
-        .map((v) => Number.parseFloat(v))
-      if (parts !== undefined && parts.length >= 3) {
-        out = `#${parts
-          .slice(0, 3)
-          .map((v) => Math.round(v).toString(16).padStart(2, '0'))
-          .join('')}`
-      }
-    }
-  }
-  hexCache.set(colour, out)
-  return out
-}
+import { COLOR_STEPS, DEFAULT_LOOK, degreeT, groupColor, paintSteps, type GraphLook } from './look'
+import type { RenderState } from './render-state'
+import type { Palette } from './palette'
+import { worldToScreen, radiusIn } from './geometry'
+import { surfaceFor } from './sprites'
+import { drawArrows, drawGlow, drawPulses, drawVeil } from './draw-layers'
+import { drawLabels } from './draw-labels'
 
 /** Colours cached per look, so a frame does not rebuild the gradient. */
 let stepsFor: GraphLook['dots'] | null = null
@@ -325,44 +35,6 @@ let steps: string[] = []
 let linkStepsFor: GraphLook['links'] | null = null
 let linkStepsBase = ''
 let linkSteps: string[] = []
-
-/** Where along a link a point at `t` is, on the same curve the link is drawn with. */
-function along(x1: number, y1: number, x2: number, y2: number, bend: number, t: number): [number, number] {
-  const mx = (x1 + x2) / 2 - (y2 - y1) * bend
-  const my = (y1 + y2) / 2 + (x2 - x1) * bend
-  const u = 1 - t
-  return [u * u * x1 + 2 * u * t * mx + t * t * x2, u * u * y1 + 2 * u * t * my + t * t * y2]
-}
-
-const labelCache = new Map<string, string>()
-
-/**
- * A label that fits `max` pixels, shortened with an ellipsis.
- *
- * `fillText`'s own max-width argument squeezes the glyphs horizontally to fit,
- * which at a large text size turned every long note name into condensed type.
- * Cut, never squeezed. Cached per font, since measuring text is the expensive
- * part of labels.
- */
-function fitLabel(context: CanvasRenderingContext2D, text: string, max: number): string {
-  const key = `${context.font}|${max}|${text}`
-  const cached = labelCache.get(key)
-  if (cached !== undefined) return cached
-  let out = text
-  if (typeof context.measureText === 'function' && context.measureText(text).width > max) {
-    let low = 0
-    let high = text.length
-    while (low < high) {
-      const mid = Math.ceil((low + high) / 2)
-      if (context.measureText(`${text.slice(0, mid).trimEnd()}…`).width <= max) low = mid
-      else high = mid - 1
-    }
-    out = `${text.slice(0, low).trimEnd()}…`
-  }
-  if (labelCache.size > 4000) labelCache.clear()
-  labelCache.set(key, out)
-  return out
-}
 
 /**
  * Draw one frame. Returns the time it took, so the UI can show it and so the
@@ -541,110 +213,42 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
   strokeBatch(lit, palette.edgeActive, Math.max(0.9, look.edge.opacity), edgeWidth + 0.5, flow !== null)
   strokeBatch(litDashed, palette.edgeActive, Math.max(0.9, look.edge.opacity), autoWidth + 0.5, flow !== null, autoDash)
   context.setLineDash?.([])
-
-  // --- arrows, pointing at the note a link goes to ---------------------------
-  if (look.edge.arrows && camera.zoom > 0.35 && visibleEdges.length < 4000) {
-    const heads = new Map<string, number[]>()
-    for (const index of visibleEdges) {
-      const [a, b] = edges[index]!
-      const [x1, y1] = worldToScreen(camera, positions[a * 2] ?? 0, positions[a * 2 + 1] ?? 0, width, height)
-      const [x2, y2] = worldToScreen(camera, positions[b * 2] ?? 0, positions[b * 2 + 1] ?? 0, width, height)
-      // Direction at the end of the curve: from the control point to the tip.
-      const cx = bend === 0 ? x1 : (x1 + x2) / 2 - (y2 - y1) * bend
-      const cy = bend === 0 ? y1 : (y1 + y2) / 2 + (x2 - x1) * bend
-      const length = Math.hypot(x2 - cx, y2 - cy)
-      if (length < 1) continue
-      const ux = (x2 - cx) / length
-      const uy = (y2 - cy) / length
-      const back = radiusIn(look, nodes[b]?.degree ?? 0) * zoomScale + 1.5
-      const tipX = x2 - ux * back
-      const tipY = y2 - uy * back
-      const size = 3 + edgeWidth * 1.5
-      const colour = highlighting && (a === active || b === active) ? palette.edgeActive : edgeColour(a, b)
-      let batch = heads.get(colour)
-      if (batch === undefined) {
-        batch = []
-        heads.set(colour, batch)
-      }
-      batch.push(
-        tipX,
-        tipY,
-        tipX - ux * size * 2 - uy * size,
-        tipY - uy * size * 2 + ux * size,
-        tipX - ux * size * 2 + uy * size,
-        tipY - uy * size * 2 - ux * size,
-      )
-    }
-    for (const [colour, coords] of heads) {
-      context.globalAlpha = Math.min(1, look.edge.opacity + 0.25)
-      context.fillStyle = colour
-      context.beginPath()
-      for (let i = 0; i < coords.length; i += 6) {
-        context.moveTo(coords[i]!, coords[i + 1]!)
-        context.lineTo(coords[i + 2]!, coords[i + 3]!)
-        context.lineTo(coords[i + 4]!, coords[i + 5]!)
-      }
-      context.fill()
-    }
-  }
-
-  // --- glow, under the nodes ---------------------------------------------------
-  if (look.node.glow > 0 && typeof context.drawImage === 'function') {
-    const previous = context.globalCompositeOperation
-    // Light adds up on a dark ground, which is what makes a dense hub bloom;
-    // on a light ground adding light would bleach it, so it is laid on instead.
-    context.globalCompositeOperation = surface.dark ? 'lighter' : 'source-over'
-    // Fainter when zoomed out, where hundreds of halos stack into one white glare.
-    context.globalAlpha = look.node.glow * (surface.dark ? 0.55 : 0.35) * Math.min(1, 0.3 + zoomScale * 0.7)
-    for (let i = 0; i < nodes.length; i++) {
-      const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
-      const r = radiusIn(look, nodes[i]?.degree ?? 0) * zoomScale * (2.2 + look.node.glow * 3)
-      if (sx < -r || sy < -r || sx > width + r || sy > height + r) continue
-      // The open note and the hovered one have their own emphasis; a halo on
-      // top of it read as a smudge around the ring.
-      if (i === active || i === hovered) continue
-      const sprite = glowSprite(nodeColours[i] ?? surface.node)
-      if (sprite !== null) context.drawImage(sprite, sx - r, sy - r, r * 2, r * 2)
-    }
-    context.globalCompositeOperation = previous
-  }
-
-  // --- pulses: signals travelling along the links ------------------------------
-  if (look.edge.pulses && state.time !== undefined && visibleEdges.length > 0) {
-    const stride = Math.max(1, Math.ceil(visibleEdges.length / MAX_PULSES))
-    const dots = new Map<string, number[]>()
-    const clock = (state.time / 1000) * look.edge.pulseSpeed * 0.45
-    for (let k = 0; k < visibleEdges.length; k += stride) {
-      const index = visibleEdges[k]!
-      const [a, b] = edges[index]!
-      const [x1, y1] = worldToScreen(camera, positions[a * 2] ?? 0, positions[a * 2 + 1] ?? 0, width, height)
-      const [x2, y2] = worldToScreen(camera, positions[b * 2] ?? 0, positions[b * 2 + 1] ?? 0, width, height)
-      // Each link fires on its own rhythm, so the graph flickers like activity
-      // rather than marching in step.
-      const phase = ((index * 0.618034) % 1) + clock * (0.6 + ((index * 0.37) % 0.8))
-      const t = phase % 1
-      const [px, py] = along(x1, y1, x2, y2, bend, t)
-      const colour =
-        look.links.colors.length > 0 && !look.links.matchDots ? edgeColour(a, b) : (nodeColours[t < 0.5 ? a : b] ?? surface.node)
-      let batch = dots.get(colour)
-      if (batch === undefined) {
-        batch = []
-        dots.set(colour, batch)
-      }
-      // Brightest mid-flight, so a signal appears and fades instead of popping.
-      batch.push(px, py, Math.sin(Math.PI * t))
-    }
-    const size = Math.max(1.2, 1.8 * zoomScale) * Math.max(0.8, edgeWidth)
-    for (const [colour, coords] of dots) {
-      context.fillStyle = colour
-      for (let i = 0; i < coords.length; i += 3) {
-        context.globalAlpha = 0.25 + 0.75 * coords[i + 2]!
-        context.beginPath()
-        context.arc(coords[i]!, coords[i + 1]!, size, 0, Math.PI * 2)
-        context.fill()
-      }
-    }
-  }
+  drawArrows({
+    active,
+    bend,
+    camera,
+    context,
+    edgeColour,
+    edgeWidth,
+    edges,
+    height,
+    highlighting,
+    look,
+    nodes,
+    palette,
+    positions,
+    visibleEdges,
+    width,
+    zoomScale,
+  })
+  drawGlow({ active, camera, context, height, hovered, look, nodeColours, nodes, positions, surface, width, zoomScale })
+  drawPulses({
+    bend,
+    camera,
+    context,
+    edgeColour,
+    edgeWidth,
+    edges,
+    height,
+    look,
+    nodeColours,
+    positions,
+    state,
+    surface,
+    visibleEdges,
+    width,
+    zoomScale,
+  })
 
   // --- nodes, batched by colour -----------------------------------------------
   const batches = new Map<string, number[]>()
@@ -719,112 +323,44 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
    */
   const focus = state.focus ?? null
   const focusFade = Math.max(0, Math.min(1, state.focusFade ?? 1))
-  if (focus !== null && focus.size > 0 && focusFade > 0.002) {
-    context.globalAlpha = 0.62 * focusFade
-    // The ground the graph is drawn on, so the veil hides rather than tints.
-    context.fillStyle = surface.dark ? '#171717' : '#fafafa'
-    context.fillRect(0, 0, width, height)
-    context.globalAlpha = 1
-
-    const lit: number[] = []
-    for (const i of focus) {
-      const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
-      const r = radiusIn(look, nodes[i]?.degree ?? 0) * zoomScale
-      if (sx < -r || sy < -r || sx > width + r || sy > height + r) continue
-      lit.push(i, sx, sy, r)
-    }
-    context.globalAlpha = 0.9 * focusFade
-    context.strokeStyle = surface.edge
-    // Manual links solid, auto-links thin and dashed - the same distinction
-    // the veil is lifted off, or hovering would make every link look manual.
-    for (const autoPass of [false, true]) {
-      const focusWidth = Math.max(1, edgeWidth * zoomScale)
-      context.lineWidth = autoPass ? Math.max(0.5, focusWidth * 0.6) : focusWidth
-      context.setLineDash?.(autoPass ? [Math.max(2, 3 * focusWidth * 0.6), Math.max(2, 3 * focusWidth * 0.6)] : [])
-      context.beginPath()
-      edges.forEach(([a, b], index) => {
-        if (!focus.has(a) || !focus.has(b) || (autoEdges?.has(index) === true) !== autoPass) return
-        const [x1, y1] = worldToScreen(camera, positions[a * 2] ?? 0, positions[a * 2 + 1] ?? 0, width, height)
-        const [x2, y2] = worldToScreen(camera, positions[b * 2] ?? 0, positions[b * 2 + 1] ?? 0, width, height)
-        context.moveTo(x1, y1)
-        context.lineTo(x2, y2)
-      })
-      context.stroke()
-    }
-    context.setLineDash?.([])
-    for (let k = 0; k < lit.length; k += 4) {
-      const i = lit[k]!
-      paint(
-        i === active ? palette.nodeActive : (nodeColours[i] ?? surface.node),
-        [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!],
-        focusFade,
-        nodes[i]?.topic === true,
-      )
-    }
-    /*
-     * Their names too: the neighbourhood is worth reading, not just seeing.
-     *
-     * A shade smaller than the labels elsewhere, and less eager to grow with
-     * the zoom: nothing else is drawn while the veil is up, so these are the
-     * only text on screen and at full size they read as shouting.
-     */
-    const focusSize = look.label.size * 0.85 * Math.max(0.82, Math.min(1.1, camera.zoom))
-    context.font = `${focusSize}px -apple-system, system-ui, sans-serif`
-    context.textAlign = 'center'
-    context.textBaseline = 'top'
-    context.globalAlpha = focusFade
-    context.fillStyle = surface.label
-    for (let k = 0; k < lit.length; k += 4) {
-      const i = lit[k]!
-      const label = nodes[i]?.label
-      if (label === undefined) continue
-      context.fillText(fitLabel(context, label, focusSize * 16), lit[k + 1]!, lit[k + 2]! + lit[k + 3]! + 4)
-    }
-  }
-
-  // --- labels, culled by zoom and crowding --------------------------------
-  //
-  // Text rendering is what actually kills naive graph views, not the physics.
-  //
-  // While the veil is up its own labels are the only text: these fade out as
-  // it fades in, or every lit note would be named twice, a size apart.
-  const veiled = focus !== null && focus.size > 0 ? focusFade : 0
-  if (state.showLabels && veiled < 0.998) {
-    const fontSize = look.label.size * Math.max(0.82, Math.min(1.2, camera.zoom))
-    context.font = `${fontSize}px -apple-system, system-ui, sans-serif`
-    context.textAlign = 'center'
-    context.textBaseline = 'top'
-
-    const crowded = nodes.length > LABEL_CROWD_LIMIT
-    const scale = Math.max(1, Math.floor(Math.log2(Math.max(2, nodes.length))))
-    const minDegree = [scale * 2, crowded ? scale : 0, crowded ? 1 : 0, 0][look.label.density] ?? 0
-    // Labels fade in over a range of zoom instead of popping on at one value.
-    const fade = Math.min(1, Math.max(0, (camera.zoom - look.label.fadeZoom) / (look.label.fadeZoom * 0.35)))
-
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
-      if (node === undefined) continue
-
-      const isActive = i === active
-      const isHovered = i === hovered
-      const isNeighbour = neighbours.has(i)
-
-      // The open note and whatever is under the cursor are always labelled,
-      // whatever the zoom - that is the point of the highlight.
-      if (!isActive && !isHovered) {
-        if (fade <= 0) continue
-        if (node.degree < minDegree && !isNeighbour) continue
-      }
-
-      const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
-      if (sx < 0 || sy < 0 || sx > width || sy > height) continue
-
-      const r = radiusIn(look, node.degree) * zoomScale
-      context.globalAlpha = (isActive || isHovered ? 1 : 0.8 * fade) * (1 - veiled)
-      context.fillStyle = isActive ? palette.labelActive : surface.label
-      context.fillText(fitLabel(context, node.label, fontSize * 16), sx, sy + (isActive ? r * 1.6 : r) + 4)
-    }
-  }
+  drawVeil({
+    active,
+    autoEdges,
+    camera,
+    context,
+    edgeWidth,
+    edges,
+    focus,
+    focusFade,
+    height,
+    look,
+    nodeColours,
+    nodes,
+    paint,
+    palette,
+    positions,
+    surface,
+    width,
+    zoomScale,
+  })
+  drawLabels({
+    active,
+    camera,
+    context,
+    focus,
+    focusFade,
+    height,
+    hovered,
+    look,
+    neighbours,
+    nodes,
+    palette,
+    positions,
+    state,
+    surface,
+    width,
+    zoomScale,
+  })
 
   context.globalAlpha = 1
   return performance.now() - started

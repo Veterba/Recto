@@ -29,7 +29,7 @@ export type MenuItem =
       run: () => void
     }
 
-export type MenuPosition = { x: number; y: number }
+type MenuPosition = { x: number; y: number }
 
 /**
  * Should this mousedown dismiss an open menu?

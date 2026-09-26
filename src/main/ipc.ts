@@ -1,7 +1,10 @@
 import { BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron'
-import { ATTACHMENTS_FOLDER as ATTACHMENTS, type IpcApi, type RenameOutcome } from '../shared/ipc-contract'
+import { ATTACHMENTS_FOLDER as ATTACHMENTS, type RenameOutcome } from '../shared/vault'
+import { IPC, type IpcApi } from '../shared/ipc'
 import * as ai from './ai'
 import * as topics from './topics/service'
+import * as topicCommands from './topics/commands'
+import * as topicStorage from './topics/storage'
 import * as archive from './archive'
 import * as obsidianSync from './sync'
 import { openIndexForVault, send, stopIndexer } from './index-client'
@@ -71,27 +74,27 @@ function moveAuthorship(from: string, to: string): void {
 }
 
 export function registerIpc(): void {
-  handle('app:startup-state', () => {
+  handle(IPC.appStartupState, () => {
     const state = startupState()
     if (state.kind === 'ready') rewatch()
     return state
   })
-  handle('app:platform', () => ({ platform: process.platform, version: process.versions.electron }))
-  handle('vault:pick', async () => {
+  handle(IPC.appPlatform, () => ({ platform: process.platform, version: process.versions.electron }))
+  handle(IPC.vaultPick, async () => {
     const result = await pickVault()
     if (result.ok) rewatch()
     return result
   })
-  handle('vault:open', (dir) => {
+  handle(IPC.vaultOpen, (dir) => {
     const result = openVault(dir)
     if (result.ok) rewatch()
     return result
   })
-  handle('vault:recent', () => recentVaults())
-  handle('vault:forget-recent', (p) => forgetRecentVault(p))
-  handle('app:clipboard-text', () => clipboard.readText())
-  handle('vault:choose-folder', () => chooseVaultFolder())
-  handle('vault:switch', (dir) => {
+  handle(IPC.vaultRecent, () => recentVaults())
+  handle(IPC.vaultForgetRecent, (p) => forgetRecentVault(p))
+  handle(IPC.appClipboardText, () => clipboard.readText())
+  handle(IPC.vaultChooseFolder, () => chooseVaultFolder())
+  handle(IPC.vaultSwitch, (dir) => {
     // Wind the open vault down first: its watcher, index and sync must not keep
     // running against a vault that is no longer on screen.
     const previous = currentVault()
@@ -105,7 +108,7 @@ export function registerIpc(): void {
     if (result.ok || previous !== null) rewatch()
     return result
   })
-  handle('vault:close', () => {
+  handle(IPC.vaultClose, () => {
     stopWatching()
     topics.stop()
     stopIndexer()
@@ -114,15 +117,15 @@ export function registerIpc(): void {
     return closeVault()
   })
 
-  handle('fs:tree', () => vaultFs.listTree())
-  handle('fs:read', (p) => vaultFs.readFile(p))
-  handle('fs:write', (p, content) => {
+  handle(IPC.fsTree, () => vaultFs.listTree())
+  handle(IPC.fsRead, (p) => vaultFs.readFile(p))
+  handle(IPC.fsWrite, (p, content) => {
     // Declared BEFORE the write, or the watcher event can arrive first and be
     // mistaken for an external edit.
     markSelfWrite(p)
     return vaultFs.writeFile(p, content)
   })
-  handle('fs:create', (parent, name, kind) => {
+  handle(IPC.fsCreate, (parent, name, kind) => {
     markSelfWrite(parent === '' ? name : `${parent}/${name}`)
     return vaultFs.create(parent, name, kind)
   })
@@ -164,7 +167,7 @@ export function registerIpc(): void {
      */
     void send({ kind: 'note-renamed', from, to: moved.path }, 15_000).catch(() => undefined)
     moveAuthorship(from, moved.path)
-    void topics.moved(from, moved.path).catch((err: unknown) => console.error('[topics]', err))
+    void topicCommands.moved(from, moved.path).catch((err: unknown) => console.error('[topics]', err))
 
     const rewrite = await vaultFs.rewriteLinksTo(sources, from, moved.path)
     let undoId: string | undefined
@@ -186,10 +189,10 @@ export function registerIpc(): void {
     return outcome
   }
 
-  handle('fs:rename', (p, newName) => relocate(p, () => vaultFs.rename(p, newName)))
-  handle('fs:move', (p, newParent) => relocate(p, () => vaultFs.move(p, newParent)))
+  handle(IPC.fsRename, (p, newName) => relocate(p, () => vaultFs.rename(p, newName)))
+  handle(IPC.fsMove, (p, newParent) => relocate(p, () => vaultFs.move(p, newParent)))
 
-  handle('links:undo-rename', async (undoId) => {
+  handle(IPC.linksUndoRename, async (undoId) => {
     const entry = renameUndo.get(undoId)
     if (!entry) return { ok: false, restored: 0, error: 'That undo is no longer available.' }
     renameUndo.delete(undoId)
@@ -208,16 +211,16 @@ export function registerIpc(): void {
     return { ok: back.ok, restored }
   })
   // Deleting from the UI archives; `fs:trash` remains for a real, immediate delete.
-  handle('fs:trash', (p) => vaultFs.trash(p))
-  handle('history:list', async (p) => {
+  handle(IPC.fsTrash, (p) => vaultFs.trash(p))
+  handle(IPC.historyList, async (p) => {
     const response = await send({ kind: 'history', path: p }, 15_000)
     return response.kind === 'history-result' ? response.snapshots : []
   })
-  handle('history:get', async (id) => {
+  handle(IPC.historyGet, async (id) => {
     const response = await send({ kind: 'history-get', id }, 15_000)
     return response.kind === 'history-get-result' ? response.snapshot : null
   })
-  handle('history:restore', async (id) => {
+  handle(IPC.historyRestore, async (id) => {
     const response = await send({ kind: 'history-get', id }, 15_000)
     if (response.kind !== 'history-get-result' || response.snapshot?.content === undefined) {
       return { ok: false, error: 'That version is no longer stored.' }
@@ -231,25 +234,25 @@ export function registerIpc(): void {
     if (!written.ok) return { ok: false, error: written.error ?? 'Could not restore.' }
     return { ok: true, path: notePath }
   })
-  handle('archive:add', (p) => archive.archive(p))
-  handle('archive:list', () => archive.list())
-  handle('archive:restore', (id) => archive.restore(id))
-  handle('archive:purge', (id) => archive.purge(id))
-  handle('archive:set-retention', (days) => archive.setRetention(days))
-  handle('app:set-vibrancy', (material) => {
+  handle(IPC.archiveAdd, (p) => archive.archive(p))
+  handle(IPC.archiveList, () => archive.list())
+  handle(IPC.archiveRestore, (id) => archive.restore(id))
+  handle(IPC.archivePurge, (id) => archive.purge(id))
+  handle(IPC.archiveSetRetention, (days) => archive.setRetention(days))
+  handle(IPC.appSetVibrancy, (material) => {
     const win = BrowserWindow.getAllWindows()[0]
     if (win === undefined || process.platform !== 'darwin') return { ok: false }
     win.setVibrancy(material)
     return { ok: true }
   })
-  handle('app:set-theme-source', (source) => {
+  handle(IPC.appSetThemeSource, (source) => {
     // Drives the NSVisualEffectView variant behind the whole window, so the
     // app's theme and the blur's own appearance cannot disagree.
     nativeTheme.themeSource = source
     return { ok: true }
   })
-  handle('fs:reveal', (p) => vaultFs.reveal(p))
-  handle('fs:import-images', async () => {
+  handle(IPC.fsReveal, (p) => vaultFs.reveal(p))
+  handle(IPC.fsImportImages, async () => {
     const picked = await dialog.showOpenDialog({
       title: 'Add images',
       properties: ['openFile', 'multiSelections'],
@@ -266,54 +269,54 @@ export function registerIpc(): void {
     return { ok: true as const, paths }
   })
 
-  handle('fs:import-data', async (name, data) => {
+  handle(IPC.fsImportData, async (name, data) => {
     // The renderer sends a Uint8Array; structured clone can hand it over as a
     // plain object shape depending on the bridge, so normalise before writing.
     const bytes = data instanceof Uint8Array ? data : new Uint8Array(Object.values(data as object) as number[])
     return vaultFs.importData(name, bytes, ATTACHMENTS)
   })
 
-  handle('app:is-fullscreen', () => BrowserWindow.getAllWindows()[0]?.isFullScreen() ?? false)
+  handle(IPC.appIsFullscreen, () => BrowserWindow.getAllWindows()[0]?.isFullScreen() ?? false)
 
-  handle('obsidian:vaults', () => obsidianSync.detectVaults())
-  handle('obsidian:pick', () => obsidianSync.pickFolder())
-  handle('obsidian:status', () => obsidianSync.status())
-  handle('obsidian:preview', (p) => obsidianSync.preview(p))
-  handle('obsidian:enable', (p) => obsidianSync.enable(p))
-  handle('obsidian:disable', () => obsidianSync.disable())
-  handle('obsidian:sync-now', (force) => obsidianSync.syncNow(force === true))
+  handle(IPC.obsidianVaults, () => obsidianSync.detectVaults())
+  handle(IPC.obsidianPick, () => obsidianSync.pickFolder())
+  handle(IPC.obsidianStatus, () => obsidianSync.status())
+  handle(IPC.obsidianPreview, (p) => obsidianSync.preview(p))
+  handle(IPC.obsidianEnable, (p) => obsidianSync.enable(p))
+  handle(IPC.obsidianDisable, () => obsidianSync.disable())
+  handle(IPC.obsidianSyncNow, (force) => obsidianSync.syncNow(force === true))
 
-  handle('ai:key-status', () => keyStatus())
-  handle('ai:set-key', (key) => {
+  handle(IPC.aiKeyStatus, () => keyStatus())
+  handle(IPC.aiSetKey, (key) => {
     const result = writeKey(key)
     // The client caches the key it was built with, so a new key needs a new one.
     if (result.ok) ai.resetProvider()
     return result
   })
-  handle('ai:clear-key', () => {
+  handle(IPC.aiClearKey, () => {
     clearKey()
     ai.resetProvider()
     return { ok: true }
   })
-  handle('ai:test', (model) => ai.test(model))
-  handle('ai:send', (request) => ai.startStream(request))
-  handle('ai:cancel', (id) => ai.cancel(id))
+  handle(IPC.aiTest, (model) => ai.test(model))
+  handle(IPC.aiSend, (request) => ai.startStream(request))
+  handle(IPC.aiCancel, (id) => ai.cancel(id))
 
-  handle('index:search', async (query, limit) => {
+  handle(IPC.indexSearch, async (query, limit) => {
     const response = await send({ kind: 'search', query, ...(limit === undefined ? {} : { limit }) }, 15_000)
     return response.kind === 'search-result' ? response.hits : []
   })
-  handle('index:backlinks', async (p) => {
+  handle(IPC.indexBacklinks, async (p) => {
     const response = await send({ kind: 'backlinks', path: p }, 15_000)
     return response.kind === 'backlinks-result' ? response.links : []
   })
-  handle('index:stats', async () => {
+  handle(IPC.indexStats, async () => {
     const response = await send({ kind: 'stats' }, 15_000)
     return response.kind === 'stats-result'
       ? { notes: response.notes, links: response.links, unresolved: response.unresolved, tags: response.tags }
       : { notes: 0, links: 0, unresolved: 0, tags: 0 }
   })
-  handle('index:home-stats', async () => {
+  handle(IPC.indexHomeStats, async () => {
     const response = await send({ kind: 'home-stats' }, 15_000)
     return response.kind === 'home-stats-result'
       ? response.stats
@@ -329,65 +332,65 @@ export function registerIpc(): void {
           hubs: [],
         }
   })
-  handle('index:resolve-link', async (target) => {
+  handle(IPC.indexResolveLink, async (target) => {
     const response = await send({ kind: 'resolve-link', target }, 15_000)
     return response.kind === 'resolve-link-result' ? response.path : null
   })
-  handle('index:resolve-links', async (targets) => {
+  handle(IPC.indexResolveLinks, async (targets) => {
     if (targets.length === 0) return {}
     const response = await send({ kind: 'resolve-links', targets }, 15_000)
     return response.kind === 'resolve-links-result' ? response.resolved : {}
   })
-  handle('index:unresolved', async () => {
+  handle(IPC.indexUnresolved, async () => {
     const response = await send({ kind: 'unresolved' }, 15_000)
     return response.kind === 'unresolved-result' ? response.entries : []
   })
-  handle('index:graph', async () => {
+  handle(IPC.indexGraph, async () => {
     const response = await send({ kind: 'graph', autoProperty: 'topics' }, 30_000)
     return response.kind === 'graph-result' ? response.graph : { nodes: [], edges: [] }
   })
-  handle('index:board', async (board) => {
+  handle(IPC.indexBoard, async (board) => {
     const response = await send({ kind: 'board', board }, 30_000)
     return response.kind === 'board-result' ? response.cards : []
   })
-  handle('index:boards', async () => {
+  handle(IPC.indexBoards, async () => {
     const response = await send({ kind: 'boards' }, 30_000)
     return response.kind === 'boards-result' ? response.boards : []
   })
-  handle('index:context', async () => {
+  handle(IPC.indexContext, async () => {
     const response = await send({ kind: 'context' }, 30_000)
     return response.kind === 'context-result' ? response.notes : []
   })
-  handle('index:reindex', async () => {
+  handle(IPC.indexReindex, async () => {
     await send({ kind: 'reindex', force: true })
     return { ok: true }
   })
-  handle('topics:settings', () => topics.readSettings())
-  handle('topics:set-settings', (patch) => topics.updateSettings(patch))
-  handle('topics:status', () => topics.status())
-  handle('topics:download', () => {
+  handle(IPC.topicsSettings, () => topicStorage.readSettings())
+  handle(IPC.topicsSetSettings, (patch) => topics.updateSettings(patch))
+  handle(IPC.topicsStatus, () => topics.status())
+  handle(IPC.topicsDownload, () => {
     void topics.download()
     return { ok: true }
   })
-  handle('topics:list', () => topics.list())
-  handle('topics:rename', (id, name) => topics.rename(id, name))
-  handle('topics:delete', async (id) => {
-    await topics.remove(id)
+  handle(IPC.topicsList, () => topicCommands.list())
+  handle(IPC.topicsRename, (id, name) => topicCommands.rename(id, name))
+  handle(IPC.topicsDelete, async (id) => {
+    await topicCommands.remove(id)
     return { ok: true }
   })
-  handle('topics:rebuild', async () => {
-    await topics.rebuild()
+  handle(IPC.topicsRebuild, async () => {
+    await topicCommands.rebuild()
     return { ok: true }
   })
-  handle('topics:preview', () => topics.preview())
-  handle('topics:seen', () => {
-    topics.seen()
+  handle(IPC.topicsPreview, () => topicCommands.preview())
+  handle(IPC.topicsSeen, () => {
+    topicCommands.seen()
     return { ok: true }
   })
-  handle('topics:undo-last-run', async () => ({ ok: true, changes: await topics.undoLastRun() }))
-  handle('state:read', (feature) => readState(feature))
-  handle('state:write', (feature, data) => writeState(feature, data))
-  handle('shell:open-external', async (url) => {
+  handle(IPC.topicsUndoLastRun, async () => ({ ok: true, changes: await topicCommands.undoLastRun() }))
+  handle(IPC.stateRead, (feature) => readState(feature))
+  handle(IPC.stateWrite, (feature, data) => writeState(feature, data))
+  handle(IPC.shellOpenExternal, async (url) => {
     if (!/^https?:\/\//.test(url)) return { ok: false }
     await shell.openExternal(url)
     return { ok: true }

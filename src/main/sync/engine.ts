@@ -80,7 +80,7 @@ async function writeAtomically(file: string, data: string | Buffer): Promise<voi
 const hashOf = (data: Buffer): string => createHash('sha1').update(data).digest('hex')
 
 /** Every syncable file under a root, keyed by lower-cased relative path. */
-export async function scan(root: string, cached: (key: string) => Stat | undefined): Promise<Map<string, SideFile>> {
+async function scan(root: string, cached: (key: string) => Stat | undefined): Promise<Map<string, SideFile>> {
   const out = new Map<string, SideFile>()
 
   const walk = async (dir: string): Promise<void> => {

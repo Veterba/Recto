@@ -11,15 +11,17 @@ import { flushAuthors, loadAuthors, saveAuthors } from '../authors-store'
 import { Properties } from './Properties'
 import { commands } from '../../../app/commands'
 import { formatChord } from '../../../app/hotkeys'
-import { extractTargets } from '../link-targets'
+import { extractTargets } from '@shared/parse'
 import { readFolds, setOutlineOpen, toggleOutline, useOutlineOpen, writeFolds } from '../outline'
 import { Editor } from './Editor'
-import type { EditorHandle } from '../codemirror'
+import type { EditorHandle } from '../editor-handle'
 import type { LinkCandidate } from '../link-complete'
-import type { Format } from '../markdown-actions'
+import type { Format } from '../active-formats'
 import { noteIndexChanged } from '../../../app/note-bus'
 import { registerView } from '../../../app/view-registry'
-import { vaultFileUrl } from '../../../app/vault-url'
+import { IPC, IPC_EVENT } from '@shared/ipc'
+import { NoteTitle } from './NoteTitle'
+import { isTextFile, FileView } from './FileView'
 
 /**
  * One note, in CodeMirror.
@@ -68,83 +70,6 @@ export function focusEditorOnOpen(): void {
     focusOnOpen = false
     activeHandle?.focus()
   }, 120)
-}
-
-/**
- * The note's name, as an editable heading above the text.
- *
- * It IS the file name - not the first `# heading`, and not a `title:`
- * property. The file name is what the sidebar shows, what the graph labels,
- * and what every `[[link]]` points at; a second, separate "title" would be a
- * third name for the same note that could disagree with the other two.
- *
- * So editing it renames the file, through the same path as renaming in the
- * sidebar, which rewrites every link pointing at it. Committed on Enter or
- * when focus leaves - never per keystroke, since each commit is a rename and
- * a vault-wide link rewrite.
- */
-function NoteTitle({ path, onRename }: { path: string; onRename: (name: string) => Promise<string | null> }): React.ReactElement {
-  const file = path.slice(path.lastIndexOf('/') + 1)
-  const dot = file.toLowerCase().endsWith('.md') ? file.length - 3 : file.length
-  const current = file.slice(0, dot)
-  const [draft, setDraft] = useState(current)
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  useEffect(() => setDraft(current), [current])
-
-  const commit = async (): Promise<void> => {
-    const name = draft.trim()
-    if (name === '' || name === current) {
-      setDraft(current)
-      setError(null)
-      return
-    }
-    // Slashes would make a rename a move into another folder. That is what
-    // dragging in the sidebar is for; here it is refused out loud.
-    if (/[/\\:]/.test(name)) {
-      setError('A name cannot contain / \\ or :')
-      return
-    }
-    setBusy(true)
-    const failure = await onRename(name)
-    setBusy(false)
-    if (failure !== null) {
-      setError(failure)
-      setDraft(current)
-    } else setError(null)
-  }
-
-  return (
-    <div className="note-title">
-      <input
-        className={`note-title__input${error !== null ? ' is-invalid' : ''}`}
-        value={draft}
-        disabled={busy}
-        spellCheck={false}
-        aria-label="Note name"
-        placeholder="Untitled"
-        onChange={(event) => {
-          setDraft(event.target.value)
-          if (error !== null) setError(null)
-        }}
-        onBlur={() => void commit()}
-        onKeyDown={(event) => {
-          event.stopPropagation()
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            event.currentTarget.blur()
-          }
-          if (event.key === 'Escape') {
-            setDraft(current)
-            setError(null)
-            event.currentTarget.blur()
-          }
-        }}
-      />
-      {error !== null && <p className="note-title__error">{error}</p>}
-    </div>
-  )
 }
 
 function MarkdownEditor({
@@ -202,7 +127,7 @@ function MarkdownEditor({
      * tab showing "Could not open" until it was closed and reopened.
      */
     const load = (again: boolean): void => {
-      void api.invoke('fs:read', path).then((result) => {
+      void api.invoke(IPC.fsRead, path).then((result) => {
         if (cancelled) return
         if (result.ok) {
           setInitial(result.content)
@@ -229,7 +154,7 @@ function MarkdownEditor({
     async (next: string) => {
       setStatus('saving')
       lastWritten.current = next
-      const result = await api.invoke('fs:write', path, next)
+      const result = await api.invoke(IPC.fsWrite, path, next)
       if (result.ok) {
         setStatus('saved')
         setSavedAt(Date.now())
@@ -255,7 +180,7 @@ function MarkdownEditor({
       handle.current?.setUnresolved([])
       return
     }
-    void api.invoke('index:resolve-links', targets).then((resolved) => {
+    void api.invoke(IPC.indexResolveLinks, targets).then((resolved) => {
       handle.current?.setUnresolved(targets.filter((target) => resolved[target] == null))
     })
   }, [])
@@ -334,7 +259,7 @@ function MarkdownEditor({
       if (value !== undefined && value !== lastWritten.current) await save(value)
 
       const extension = path.toLowerCase().endsWith('.md') ? '.md' : ''
-      const result = await api.invoke('fs:rename', path, `${name}${extension}`)
+      const result = await api.invoke(IPC.fsRename, path, `${name}${extension}`)
       if (!result.ok) return result.error
       noteIndexChanged()
       if (result.rewrittenLinks > 0) {
@@ -365,7 +290,7 @@ function MarkdownEditor({
   // watcher too, so compare against what we last wrote before replacing it.
   useEffect(
     () =>
-      api.on('vault:changed', (changes) => {
+      api.on(IPC_EVENT.vaultChanged, (changes) => {
         const touched = changes.some((c) => 'path' in c && c.path === path && c.type === 'change')
         // A note that failed to open is retried when anything happens to it -
         // an atomic save elsewhere arrives as add, not change.
@@ -373,7 +298,7 @@ function MarkdownEditor({
           if (error !== null && changes.some((c) => 'path' in c && c.path === path)) setAttempt((n) => n + 1)
           return
         }
-        void api.invoke('fs:read', path).then((result) => {
+        void api.invoke(IPC.fsRead, path).then((result) => {
           if (!result.ok || result.content === lastWritten.current) return
           lastWritten.current = result.content
           setText(result.content)
@@ -396,7 +321,7 @@ function MarkdownEditor({
             <button className="btn btn--sm" onClick={() => setAttempt((n) => n + 1)}>
               Try again
             </button>
-            <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke('fs:reveal', path)}>
+            <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke(IPC.fsReveal, path)}>
               Show in Finder
             </button>
           </div>
@@ -496,49 +421,6 @@ function MarkdownEditor({
           onClose={() => setOutlineOpen(false)}
         />
       )}
-    </div>
-  )
-}
-
-const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i
-/** Files opened in the editor. Anything else is shown, not edited. */
-const TEXT_FILE = /\.(md|markdown|txt|text|mdx|canvas|json|ya?ml|csv|tsv|log|css|js|ts|tsx|jsx|py|sh|html?|xml|toml|ini)$/i
-
-/** A path with no extension counts as text: that is how plain notes are named elsewhere. */
-const isTextFile = (path: string): boolean => {
-  const name = path.slice(path.lastIndexOf('/') + 1)
-  return !name.includes('.') || TEXT_FILE.test(name)
-}
-
-/**
- * A tab for a file that is not a note.
- *
- * Clicking a screenshot in the sidebar used to open its bytes in the markdown
- * editor - unreadable at best, and one such PNG crashed the editor outright.
- * Images are shown as images; anything else says what it is.
- */
-function FileView({ path }: { path: string }): React.ReactElement {
-  const name = path.slice(path.lastIndexOf('/') + 1)
-  const [failed, setFailed] = useState(false)
-  if (IMAGE_FILE.test(name) && !failed) {
-    return (
-      <div className="file-view">
-        <div className="md__bar">
-          <span className="md__path">{path}</span>
-        </div>
-        <div className="file-view__stage">
-          <img src={vaultFileUrl(path)} alt={name} onError={() => setFailed(true)} />
-        </div>
-      </div>
-    )
-  }
-  return (
-    <div className="pane-empty">
-      <p>
-        <code>{name}</code>
-        <br />
-        {failed ? 'This image could not be loaded.' : 'This file is not a note, so Recto does not open it as text.'}
-      </p>
     </div>
   )
 }

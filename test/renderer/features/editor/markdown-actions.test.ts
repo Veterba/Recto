@@ -1,6 +1,8 @@
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { describe, expect, it } from 'vitest'
 import * as md from '../../../../src/renderer/features/editor/markdown-actions'
+import { indentListItems, newlineFromIndent } from '../../../../src/renderer/features/editor/list-indent'
+import { activeFormats } from '../../../../src/renderer/features/editor/active-formats'
 
 /** Build a state from text, using | for a cursor and |...| for a selection. */
 function make(input: string): EditorState {
@@ -204,7 +206,7 @@ describe('moving lines', () => {
 })
 
 describe('active formats at the cursor', () => {
-  const formats = (input: string): string[] => [...md.activeFormats(make(input))].sort()
+  const formats = (input: string): string[] => [...activeFormats(make(input))].sort()
 
   it('reports the heading level of the cursor line', () => {
     expect(formats('## he|ading')).toEqual(['heading-2'])
@@ -255,9 +257,9 @@ describe('active formats at the cursor', () => {
 
   it('agrees with the toggles: toggling off clears the active format', () => {
     const state = make('say |**hi**| there')
-    expect(md.activeFormats(state).has('bold')).toBe(true)
+    expect(activeFormats(state).has('bold')).toBe(true)
     const next = state.update(md.toggleBold(state)).state
-    expect(md.activeFormats(next).has('bold')).toBe(false)
+    expect(activeFormats(next).has('bold')).toBe(false)
   })
 })
 
@@ -283,94 +285,94 @@ describe('horizontal rule', () => {
 describe('Tab inside a list', () => {
   it('nests an item under the item above it', () => {
     const s = make('- alpha\n- bet|a\n- gamma')
-    expect(plain(s, md.indentListItems(s, 1))).toBe('- alpha\n  - beta\n- gamma')
+    expect(plain(s, indentListItems(s, 1))).toBe('- alpha\n  - beta\n- gamma')
   })
 
   it("indents by the sibling's content column, not a fixed unit", () => {
     // "1. " is three columns, so its child needs three - two would not nest.
     const s = make('1. alpha\n1. bet|a')
-    expect(plain(s, md.indentListItems(s, 1))).toBe('1. alpha\n   1. beta')
+    expect(plain(s, indentListItems(s, 1))).toBe('1. alpha\n   1. beta')
   })
 
   it('still indents the first item, which has nothing to nest under', () => {
     const s = make('- alp|ha\n- beta')
-    expect(plain(s, md.indentListItems(s, 1))).toBe('  - alpha\n- beta')
+    expect(plain(s, indentListItems(s, 1))).toBe('  - alpha\n- beta')
   })
 
   it("carries the item's own children with it", () => {
     const s = make('- alpha\n- bet|a\n  - child\n    text')
-    expect(plain(s, md.indentListItems(s, 1))).toBe('- alpha\n  - beta\n    - child\n      text')
+    expect(plain(s, indentListItems(s, 1))).toBe('- alpha\n  - beta\n    - child\n      text')
   })
 
   it('outdents back out of its parent', () => {
     const s = make('- alpha\n  - bet|a')
-    expect(plain(s, md.indentListItems(s, -1))).toBe('- alpha\n- beta')
+    expect(plain(s, indentListItems(s, -1))).toBe('- alpha\n- beta')
   })
 
   it('does not outdent an item that is already at the margin', () => {
     const s = make('- alp|ha')
-    expect(md.indentListItems(s, -1)).toBeNull()
+    expect(indentListItems(s, -1)).toBeNull()
   })
 
   it("gives a plain line one unit, not the language's six spaces", () => {
     const s = make('just a para|graph')
-    expect(plain(s, md.indentListItems(s, 1))).toBe('  just a paragraph')
+    expect(plain(s, indentListItems(s, 1))).toBe('  just a paragraph')
   })
 
   it('takes a unit back off a plain line', () => {
     const s = make('    inden|ted')
-    expect(plain(s, md.indentListItems(s, -1))).toBe('  indented')
+    expect(plain(s, indentListItems(s, -1))).toBe('  indented')
   })
 
   it('has nothing to take off a line at the margin', () => {
     const s = make('at the mar|gin')
-    expect(md.indentListItems(s, -1)).toBeNull()
+    expect(indentListItems(s, -1)).toBeNull()
   })
 
   it('moves every selected item once', () => {
     const s = make('- alpha\n- |beta\n- gamma|')
-    expect(plain(s, md.indentListItems(s, 1))).toBe('- alpha\n  - beta\n  - gamma')
+    expect(plain(s, indentListItems(s, 1))).toBe('- alpha\n  - beta\n  - gamma')
   })
 })
 
 describe('A newline from an indented blank line', () => {
   it('repeats the indent on ⇧Enter', () => {
     const s = make('- alpha\n    |')
-    expect(plain(s, md.newlineFromIndent(s, true))).toBe('- alpha\n    \n    ')
+    expect(plain(s, newlineFromIndent(s, true))).toBe('- alpha\n    \n    ')
   })
 
   it('takes one level back on Enter, staying on the line', () => {
     const s = make('- alpha\n    |')
-    expect(apply(s, md.newlineFromIndent(s, false))).toBe('- alpha\n  |')
+    expect(apply(s, newlineFromIndent(s, false))).toBe('- alpha\n  |')
   })
 
   it('takes the last level back too', () => {
     const s = make('  |')
-    expect(apply(s, md.newlineFromIndent(s, false))).toBe('|')
+    expect(apply(s, newlineFromIndent(s, false))).toBe('|')
   })
 
   it('leaves Enter alone once there is no indent left', () => {
     const s = make('|')
-    expect(md.newlineFromIndent(s, false)).toBeNull()
+    expect(newlineFromIndent(s, false)).toBeNull()
   })
 
   it('puts the cursor at the end of the new indent', () => {
     const s = make('  |')
-    expect(apply(s, md.newlineFromIndent(s, true))).toBe('  \n  |')
+    expect(apply(s, newlineFromIndent(s, true))).toBe('  \n  |')
   })
 
   it('leaves a line with words on it to the markdown keymap', () => {
     const s = make('  some words|')
-    expect(md.newlineFromIndent(s, true)).toBeNull()
+    expect(newlineFromIndent(s, true)).toBeNull()
   })
 
   it('leaves an empty list item alone, so bullets still continue', () => {
     const s = make('- |')
-    expect(md.newlineFromIndent(s, true)).toBeNull()
+    expect(newlineFromIndent(s, true)).toBeNull()
   })
 
   it('does nothing on a line with no indent at all', () => {
     const s = make('|')
-    expect(md.newlineFromIndent(s, false)).toBeNull()
+    expect(newlineFromIndent(s, false)).toBeNull()
   })
 })

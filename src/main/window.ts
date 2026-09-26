@@ -2,6 +2,8 @@ import { BrowserWindow, Menu, shell } from 'electron'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isAppUrl } from './navigation'
+import { IPC_EVENT } from '../shared/ipc'
+import { sendEvent } from './events'
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -93,7 +95,7 @@ export function createWindow(): BrowserWindow {
    */
   const pushFullScreen = (): void => {
     if (win.isDestroyed()) return
-    win.webContents.send('app:fullscreen', win.isFullScreen())
+    sendEvent(win, IPC_EVENT.appFullscreen, win.isFullScreen())
   }
   win.on('enter-full-screen', pushFullScreen)
   win.on('leave-full-screen', pushFullScreen)

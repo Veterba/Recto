@@ -5,6 +5,7 @@ import { chordFromEvent, formatChord, normalizeChord } from '../../../app/hotkey
 import { fuzzyFilter, type MatchRange } from '../../../ui/fuzzy'
 import { Highlight } from '../../../app/components/CommandPalette'
 import { Tip } from '../../../ui/Tip'
+import { IPC } from '@shared/ipc'
 
 /**
  * Rebind any command.
@@ -33,7 +34,7 @@ export function HotkeyEditor(): React.ReactElement {
   const captureRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    void api.invoke('state:read', 'hotkeys').then((saved) => {
+    void api.invoke(IPC.stateRead, 'hotkeys').then((saved) => {
       if (saved !== null && typeof saved === 'object') setOverrides(saved as Overrides)
     })
   }, [])
@@ -43,7 +44,7 @@ export function HotkeyEditor(): React.ReactElement {
     setOverrides(next)
     commands.setOverrides(next)
     setRevision((n) => n + 1)
-    void api.invoke('state:write', 'hotkeys', next)
+    void api.invoke(IPC.stateWrite, 'hotkeys', next)
   }, [])
 
   // While recording, the window-level shortcut handler must not also fire -

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { BacklinkResult } from '@shared/ipc-contract'
+import type { BacklinkResult } from '@shared/index-results'
 import { api } from '../../../app/api'
 import { Icon } from '../../../ui/Icon'
 import { plainSnippet } from '../../search'
+import { IPC } from '@shared/ipc'
 
 /**
  * Notes that link to the one you are reading.
@@ -44,7 +45,7 @@ export function Backlinks({ path, revision, onOpen }: Props): React.ReactElement
   const [collapsed, setCollapsed] = useState(readCollapsed)
 
   const load = useCallback(() => {
-    void api.invoke('index:backlinks', path).then(setLinks)
+    void api.invoke(IPC.indexBacklinks, path).then(setLinks)
   }, [path])
 
   useEffect(load, [load, revision])

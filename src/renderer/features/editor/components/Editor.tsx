@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { createEditor, type EditorHandle } from '../codemirror'
+import { createEditor } from '../codemirror'
+import { type EditorHandle } from '../editor-handle'
 import type { LinkCandidate } from '../link-complete'
 
 /**
@@ -10,7 +11,7 @@ import type { LinkCandidate } from '../link-complete'
  * and rebuilds the editor, which would throw away undo history and the cursor.
  */
 
-export type EditorProps = {
+type EditorProps = {
   /** Changing this remounts the editor - it identifies the document. */
   docKey: string
   initialValue: string

@@ -11,7 +11,7 @@ export type FocusUnit = 'line' | 'sentence' | 'paragraph'
 const blank = (text: string): boolean => text.trim() === ''
 
 /** The block of non-blank lines around a position; a blank line is its own paragraph. */
-export function paragraphAt(doc: Text, pos: number): { from: number; to: number } {
+function paragraphAt(doc: Text, pos: number): { from: number; to: number } {
   const here = doc.lineAt(pos)
   if (blank(here.text)) return { from: here.from, to: here.to }
   let first = here.number
@@ -31,7 +31,7 @@ export function paragraphAt(doc: Text, pos: number): { from: number; to: number 
 const END = /[.!?…]+["'”’»)\]]*(?=\s|$)/g
 const STANDALONE = /^\s*(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>)/
 
-export function sentenceAt(doc: Text, pos: number): { from: number; to: number } {
+function sentenceAt(doc: Text, pos: number): { from: number; to: number } {
   const line = doc.lineAt(pos)
   const block = STANDALONE.test(line.text) ? { from: line.from, to: line.to } : paragraphAt(doc, pos)
   const text = doc.sliceString(block.from, block.to)

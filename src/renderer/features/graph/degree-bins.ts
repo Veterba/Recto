@@ -6,7 +6,7 @@
  * bar for nearly everything and forty empty ones.
  */
 
-export type DegreeBin = { label: string; min: number; max: number }
+type DegreeBin = { label: string; min: number; max: number }
 
 export const DEGREE_BINS: readonly DegreeBin[] = [
   { label: '0', min: 0, max: 0 },
