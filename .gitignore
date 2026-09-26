@@ -47,3 +47,4 @@ Thumbs.db
 !.vscode/extensions.json
 *.log
 npm-debug.log*
+snapshots/

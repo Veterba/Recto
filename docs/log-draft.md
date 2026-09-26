@@ -120,3 +120,14 @@ The fixture's quality test now runs in plain `npm test`: EmbeddingGemma's vector
 candidate words are recorded in `test/fixtures/topics-vault-vectors.json` (synthetic text) and
 replayed through the whole pipeline: 6 subjects → 6 pure topics, 5 named, Money unnamed. The
 live-model version still runs with `RECTO_MODEL_DIR` set; `RECTO_RECORD_FIXTURE=1` re-records.
+
+## Refactor, phase 0 — the baseline
+
+Nothing in the app changed. Before restructuring a 44k-line codebase, a way to prove it still does the
+same thing: `npm run snapshots` shoots 18 screens in light and dark on a synthetic vault and compares them
+pixel by pixel with a baseline, then checks that an edit is saved and search works. Getting two runs to
+agree took pinning more than expected - the vault path is on screen, CodeMirror guesses unmeasured line
+heights, macOS scrollbars fade on their own clock, the home scene's noise is random - and what remains is
+the GPU anti-aliasing a few edge pixels differently per launch, which the comparison tolerates below 100.
+Baseline: 165 source files, 43.6k lines, `app.css` 7,621 lines, 24 files over 400 lines, a 3.9 MB main
+renderer chunk, a 506 MB app, 694 tests.
