@@ -440,17 +440,17 @@ A vault is safe to put in git: no keys, no absolute paths. `.recto/` carries a
 ## Development
 
 ```
-src/main/        Electron main: window, vault, files, watcher, sync, AI, secrets
+src/main/        Electron main: window, vault, files, watcher, sync, AI, secrets, topics
 src/preload/     one allowlisted `invoke`, nothing else
-src/shared/      the typed IPC contract, imported by both sides
-src/indexer/     SQLite + FTS5 in a utility process, numbered migrations
+src/workers/     utility processes: indexer (SQLite + FTS5, migrations), embedder (the model)
+src/shared/      what more than one process uses: the IPC contract, worker protocols, parsers
 src/renderer/    the React app
-  core/          workspace, commands, hotkeys, appearance, templates, writing
-  editor/        CodeMirror: live preview, folding, writing tools, authorship
-  components/    sidebar, tabs, dialogs, colour editor, sliders
-  graph/         layouts, canvas renderer, physics worker, settings wheel
-  views/         note, settings, first run, the shell
-test/            556 tests, vitest
+  app/           the shell: workspace, views, commands, hotkeys, stores, sidebar, status bar
+  features/      one folder per feature: editor, file-tree, search, graph, boards, topics,
+                 tidy, home, settings, ai, templates, archive, links
+  ui/            shared primitives: icons, tooltips, dialogs, menus, sliders
+  styles/        the stylesheets
+test/            tests, vitest - the same folders as src/
 build/           app icon, and the two hooks electron-builder calls
 electron-builder.yml   how the .app and .dmg are assembled
 ```

@@ -11,32 +11,21 @@ import {
   type TopicsStatus,
 } from '../../shared/topics'
 import { VAULT_STATE_DIR } from '../../shared/ipc-contract'
-import type { StateRow } from '../../embedder/protocol'
-import type { AutolinkGraph } from '../../indexer/protocol'
-import { normalizeName, resolveLink } from '../../indexer/parse'
-import { linksIn, writeLinks } from '../../renderer/core/link-property'
-import { coerceTemplateSettings, isInFolder } from '../../renderer/core/templates'
+import type { StateRow } from '../../shared/embedder-protocol'
+import type { AutolinkGraph } from '../../shared/indexer-protocol'
+import { normalizeName, resolveLink } from '../../shared/parse'
+import { linksIn, writeLinks } from '../../shared/link-property'
+import { coerceTemplateSettings, isInFolder } from '../../shared/templates'
 import { send } from '../index-client'
 import { readState, writeState } from '../state'
 import { devGuarded } from '../dev-guard'
 import { currentVault } from '../vault'
 import * as vaultFs from '../vault-fs'
-import { excludedFolders, isEligible } from '../autolinks/eligible'
-import { ask, stopEmbedder } from '../autolinks/embedder-client'
-import { downloadModel, MODEL_BYTES, modelPresent, OfflineError, receivedBytes } from '../autolinks/model'
-import { isSettled } from '../autolinks/score'
-import {
-  chunk,
-  chunkInput,
-  countWords,
-  hashText,
-  linkShare,
-  ownLines,
-  ownText,
-  templateLines,
-  titleInput,
-  type Chunk,
-} from '../autolinks/text'
+import { excludedFolders, isEligible } from './eligible'
+import { ask, stopEmbedder } from './embedder-client'
+import { downloadModel, MODEL_BYTES, modelPresent, OfflineError, receivedBytes } from './model'
+import { isSettled } from '../../shared/score'
+import { chunk, chunkInput, countWords, hashText, linkShare, ownLines, ownText, templateLines, titleInput, type Chunk } from './text'
 import { assign, assignThreshold, continues, selectTopics, similarities } from './cluster'
 import { dictionary } from './dictionary'
 import { isEnglishNoun, lemmatizer } from './lemma'
@@ -62,7 +51,7 @@ import {
   type Topic,
   type TopicsState,
 } from './state'
-import { centroid } from './vectors'
+import { centroid } from '../../shared/vectors'
 
 /**
  * Topics: the machine groups notes; linking one note to another is left to

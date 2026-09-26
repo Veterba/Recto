@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { VAULT_STATE_DIR } from '../shared/ipc-contract'
-import type { IndexRequest, IndexResponse } from '../indexer/protocol'
+import type { IndexRequest, IndexResponse } from '../shared/indexer-protocol'
 import { currentVault } from './vault'
 
 /**

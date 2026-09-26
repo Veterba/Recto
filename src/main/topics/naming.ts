@@ -22,7 +22,7 @@
  * A cluster that leaves fewer than two words is not a topic.
  */
 
-import { cosine } from './vectors'
+import { cosine } from '../../shared/vectors'
 
 export type Lang = 'en' | 'ru' | 'no'
 

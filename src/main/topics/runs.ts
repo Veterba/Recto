@@ -1,4 +1,4 @@
-import { linksIn, writeLinks } from '../../renderer/core/link-property'
+import { linksIn, writeLinks } from '../../shared/link-property'
 import { rewriteWikiLinks } from '../link-rewrite'
 import type { Lang } from './naming'
 import { addRun, allowed, block, topicLink, TOPICS_PROPERTY, type Change, type Run, type TopicsState } from './state'

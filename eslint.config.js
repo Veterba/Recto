@@ -21,17 +21,7 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
   },
   {
-    files: [
-      'src/main/**',
-      'src/indexer/**',
-      'src/embedder/**',
-      'src/preload/**',
-      'src/shared/**',
-      'scripts/**',
-      'test/**',
-      'build/**',
-      '*.config.*',
-    ],
+    files: ['src/main/**', 'src/workers/**', 'src/preload/**', 'src/shared/**', 'scripts/**', 'test/**', 'build/**', '*.config.*'],
     languageOptions: { globals: { ...globals.node } },
   },
   // The snapshot script's page.evaluate() callbacks run in the app's renderer.

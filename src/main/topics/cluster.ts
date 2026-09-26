@@ -5,7 +5,7 @@
  * rule here is tested without a model.
  */
 
-import { centroid, cosine } from './vectors'
+import { centroid, cosine } from '../../shared/vectors'
 
 /** A cluster needs this many notes to become a topic. */
 export const MIN_TOPIC_SIZE = 3
