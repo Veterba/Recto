@@ -7,7 +7,7 @@ import * as obsidianSync from './sync'
 import { openIndexForVault, send, stopIndexer } from './index-client'
 import { readState, writeState } from './state'
 import * as vaultFs from './vault-fs'
-import { chooseVaultFolder, closeVault, currentVault, openVault, pickVault, recentVaults, startupState } from './vault'
+import { chooseVaultFolder, closeVault, currentVault, forgetRecentVault, openVault, pickVault, recentVaults, startupState } from './vault'
 import { clearKey, keyStatus, writeKey } from './secrets'
 import { markSelfWrite, startWatching, stopWatching } from './watcher'
 
@@ -88,6 +88,7 @@ export function registerIpc(): void {
     return result
   })
   handle('vault:recent', () => recentVaults())
+  handle('vault:forget-recent', (p) => forgetRecentVault(p))
   handle('app:clipboard-text', () => clipboard.readText())
   handle('vault:choose-folder', () => chooseVaultFolder())
   handle('vault:switch', (dir) => {

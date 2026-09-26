@@ -646,21 +646,38 @@ function VaultSettings({ vault, onCloseVault, onSwitchVault, attachments }: Deps
       </Row>
       {recent.length > 0 && (
         <div className="vault-recent" role="list" aria-label="Recent vaults">
-          {recent.map((item) => (
-            <button
-              key={item.path}
-              role="listitem"
-              className="vault-recent__item"
-              disabled={!item.available || switching}
-              onClick={() => switchTo(item.path)}
-              title={item.available ? `Switch to ${item.path}` : `${item.path} — not found`}
-            >
-              <Icon name="folder" size={15} />
-              <span className="vault-recent__name">{item.name}</span>
-              <span className="vault-recent__path">{item.available ? item.path : 'Not found'}</span>
-              <Icon name="arrow-right" size={13} className="vault-recent__go" />
-            </button>
-          ))}
+          {recent.map((item) =>
+            item.available ? (
+              <button
+                key={item.path}
+                role="listitem"
+                className="vault-recent__item"
+                disabled={switching}
+                onClick={() => switchTo(item.path)}
+                title={`Switch to ${item.path}`}
+              >
+                <Icon name="folder" size={15} />
+                <span className="vault-recent__name">{item.name}</span>
+                <span className="vault-recent__path">{item.path}</span>
+                <Icon name="arrow-right" size={13} className="vault-recent__go" />
+              </button>
+            ) : (
+              // Gone from disk: nothing to open, only to take off the list.
+              <div key={item.path} role="listitem" className="vault-recent__item is-missing" title={`${item.path} — not found`}>
+                <Icon name="folder" size={15} />
+                <span className="vault-recent__name">{item.name}</span>
+                <span className="vault-recent__path">Not found</span>
+                <button
+                  className="vault-recent__forget"
+                  aria-label={`Remove ${item.name} from recent vaults`}
+                  title="Remove from the list"
+                  onClick={() => void api.invoke('vault:forget-recent', item.path).then(setRecent)}
+                >
+                  <Icon name="x" size={13} />
+                </button>
+              </div>
+            ),
+          )}
         </div>
       )}
       {switchError !== null && (

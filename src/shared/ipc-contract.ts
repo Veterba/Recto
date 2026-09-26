@@ -194,6 +194,8 @@ export type IpcApi = {
   'vault:close': () => StartupState
   /** Vaults opened before, most recent first, excluding the open one. */
   'vault:recent': () => RecentVault[]
+  /** Take a vault off the recent list (it is not deleted); returns the list as it is now. */
+  'vault:forget-recent': (path: string) => RecentVault[]
   /** Plain text on the system clipboard, read in main - the web clipboard API refuses an unfocused page. */
   'app:clipboard-text': () => string
   /** The folder dialog alone. Null when cancelled. */
@@ -412,6 +414,7 @@ export const IPC_CHANNELS: readonly IpcChannel[] = [
   'vault:open',
   'vault:close',
   'vault:recent',
+  'vault:forget-recent',
   'app:clipboard-text',
   'vault:choose-folder',
   'vault:switch',

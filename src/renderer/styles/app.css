@@ -6247,6 +6247,31 @@ body.is-resizing {
   opacity: 0.45;
   cursor: default;
 }
+/* Faded like a disabled row, except the button that takes it off the list. */
+.vault-recent__item.is-missing {
+  cursor: default;
+}
+.vault-recent__item.is-missing > :not(.vault-recent__forget) {
+  opacity: 0.45;
+}
+.vault-recent__forget {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.vault-recent__forget:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.vault-recent__forget:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 .vault-recent__item:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;

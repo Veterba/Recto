@@ -91,6 +91,12 @@ export function recentVaults(): { path: string; name: string; available: boolean
     .map((p) => ({ path: p, name: path.basename(p), available: check(p) === 'ok' }))
 }
 
+/** Take a vault off the recent list. Only the list: the folder, if it is anywhere, is untouched. */
+export function forgetRecentVault(p: string): ReturnType<typeof recentVaults> {
+  writeState({ recentVaults: (readState().recentVaults ?? []).filter((r) => r !== p) })
+  return recentVaults()
+}
+
 /** Just the folder dialog - opening is a separate step, so the caller can wind down first. */
 export async function chooseVaultFolder(): Promise<string | null> {
   const res = await dialog.showOpenDialog({
