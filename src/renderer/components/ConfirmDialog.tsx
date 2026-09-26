@@ -26,14 +26,7 @@ type Props = {
   onCancel: () => void
 }
 
-export function ConfirmDialog({
-  title,
-  body,
-  confirmLabel,
-  danger = true,
-  onConfirm,
-  onCancel,
-}: Props): React.ReactElement {
+export function ConfirmDialog({ title, body, confirmLabel, danger = true, onConfirm, onCancel }: Props): React.ReactElement {
   const confirm = useRef<HTMLButtonElement | null>(null)
   useEffect(() => confirm.current?.focus(), [])
 
@@ -69,11 +62,7 @@ export function ConfirmDialog({
           <button className="dialog__ghost" onClick={onCancel}>
             Cancel
           </button>
-          <button
-            ref={confirm}
-            className={`dialog__submit${danger ? ' dialog__submit--danger' : ''}`}
-            onClick={onConfirm}
-          >
+          <button ref={confirm} className={`dialog__submit${danger ? ' dialog__submit--danger' : ''}`} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </footer>

@@ -8,7 +8,7 @@ describe('rewriting links on rename', () => {
     expect(rewrite('see [[old]]', 'old.md', 'new.md')).toBe('see [[new]]')
   })
 
-  it('keeps an alias untouched - it is the user\'s words, not a path', () => {
+  it("keeps an alias untouched - it is the user's words, not a path", () => {
     expect(rewrite('see [[old|the old one]]', 'old.md', 'new.md')).toBe('see [[new|the old one]]')
   })
 
@@ -100,8 +100,7 @@ describe('extracting link targets', () => {
 })
 
 describe('markdown links', () => {
-  const run = (text: string, from = 'Books/Atomic Habits.md', to = 'Books/Atomic Habits Renamed.md') =>
-    rewriteWikiLinks(text, from, to)
+  const run = (text: string, from = 'Books/Atomic Habits.md', to = 'Books/Atomic Habits Renamed.md') => rewriteWikiLinks(text, from, to)
 
   it('follows the note through a [text](path) link', () => {
     expect(run('see [the book](Books/Atomic Habits.md)').text).toBe('see [the book](Books/Atomic Habits Renamed.md)')

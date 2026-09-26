@@ -126,8 +126,7 @@ const sizeT = (degree: number): number => (obsidianSize(degree) - 8) / (30 - 8)
  * The worker uses the same function for collisions, so what is drawn and what
  * is kept apart agree.
  */
-export const nodeRadius = (degree: number, size = 1, growth = 1): number =>
-  size * (3 + growth * 7 * sizeT(degree))
+export const nodeRadius = (degree: number, size = 1, growth = 1): number => size * (3 + growth * 7 * sizeT(degree))
 
 /** Where a node sits between "few links" (0) and "most links" (1). */
 export function degreeT(degree: number, maxDegree: number, scale: GradientScale): number {
@@ -148,7 +147,13 @@ export function parseHex(value: string): Rgb | null {
 }
 
 const toHex = ([r, g, b]: Rgb): string =>
-  `#${[r, g, b].map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')).join('')}`
+  `#${[r, g, b]
+    .map((v) =>
+      Math.round(Math.min(255, Math.max(0, v)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`
 
 function rgbToHsl([r, g, b]: Rgb): [number, number, number] {
   const rn = r / 255
@@ -243,9 +248,6 @@ export function withAlpha(hex: string, alpha: number): string {
 
 const num = (value: unknown, fallback: number, min: number, max: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
-
-const hex = (value: unknown, fallback: string): string =>
-  typeof value === 'string' && parseHex(value) !== null ? value : fallback
 
 const oneOf = <T extends string>(value: unknown, options: readonly T[], fallback: T): T =>
   typeof value === 'string' && (options as readonly string[]).includes(value) ? (value as T) : fallback

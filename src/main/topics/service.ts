@@ -62,7 +62,7 @@ import {
   type Topic,
   type TopicsState,
 } from './state'
-import { centroid, cosine } from './vectors'
+import { centroid } from './vectors'
 
 /**
  * Topics: the machine groups notes; linking one note to another is left to
@@ -369,10 +369,13 @@ async function embedPass(ctx: Context, rebuilding: boolean): Promise<boolean> {
     return true
   }
   if (retryTimer === null) {
-    retryTimer = setTimeout(() => {
-      retryTimer = null
-      void tick()
-    }, backfill === 'waiting-idle' ? 15_000 : 60_000)
+    retryTimer = setTimeout(
+      () => {
+        retryTimer = null
+        void tick()
+      },
+      backfill === 'waiting-idle' ? 15_000 : 60_000,
+    )
   }
   return false
 }
@@ -478,8 +481,7 @@ async function build(ctx: Context, state: TopicsState, paths: string[]): Promise
     let topic = continued === null ? undefined : state.topics.find((t) => t.id === continued)
     if (topic !== undefined) taken.add(topic.id)
     if (topic === undefined || !topics.includes(topic)) {
-      const name =
-        topic?.name ?? (lang === null ? null : await nameFor(ctx, members, lang, centroid(cluster.map((i) => vecs[i]!)), names))
+      const name = topic?.name ?? (lang === null ? null : await nameFor(ctx, members, lang, centroid(cluster.map((i) => vecs[i]!)), names))
       // Nothing its notes share to be named by: not a topic.
       if (name === null) continue
       topic = topic ?? { id: newId(), name, renamedByUser: false }
@@ -541,7 +543,11 @@ async function place(ctx: Context, state: TopicsState, settledPaths: string[]): 
     for (const p of settledPaths) {
       const v = vectors[p]
       if (v === undefined) continue
-      const picks = assign(v, cs.filter((c) => allowed(next, p, c.id)), next.tAssign!)
+      const picks = assign(
+        v,
+        cs.filter((c) => allowed(next, p, c.id)),
+        next.tAssign!,
+      )
       next = setAssigned(next, p, picks)
     }
   }
@@ -649,7 +655,9 @@ async function writePending(ctx: Context, state: TopicsState): Promise<{ state: 
     const name = (id: string): string | undefined => next.topics.find((t) => t.id === id)?.name
     const drop = owned.filter((id) => !want.includes(id)).flatMap((id) => (name(id) === undefined ? [] : [topicLink(name(id)!)]))
     let entries = linksIn(read.content, TOPICS_PROPERTY).filter((e) => !drop.some((d) => sameLink(d, e)))
-    const add = want.flatMap((id) => (name(id) === undefined ? [] : [topicLink(name(id)!)])).filter((l) => !entries.some((e) => sameLink(e, l)))
+    const add = want
+      .flatMap((id) => (name(id) === undefined ? [] : [topicLink(name(id)!)]))
+      .filter((l) => !entries.some((e) => sameLink(e, l)))
     entries = [...entries, ...add]
     if (await writeNote(p, read.content, TOPICS_PROPERTY, entries)) {
       written++
@@ -697,7 +705,13 @@ async function dissolvePass(state: TopicsState): Promise<TopicsState> {
     for (const [p, ids] of Object.entries(next.owned)) {
       if (!ids.includes(id)) continue
       const read = await vaultFs.readFile(p)
-      if (read.ok) await writeNote(p, read.content, TOPICS_PROPERTY, linksIn(read.content, TOPICS_PROPERTY).filter((e) => !sameLink(e, link)))
+      if (read.ok)
+        await writeNote(
+          p,
+          read.content,
+          TOPICS_PROPERTY,
+          linksIn(read.content, TOPICS_PROPERTY).filter((e) => !sameLink(e, link)),
+        )
     }
     next = dissolve(next, id)
     console.log(`[topics] dissolved "${topic.name}": removed by hand from most of its notes`)
@@ -724,7 +738,14 @@ async function removeOldAutoLinks(ctx: Context, state: TopicsState): Promise<Top
       return resolved !== null && ours.has(resolved)
     })
     if (drop.length === 0) continue
-    if (await writeNote(p, read.content, OLD_PROPERTY, entries.filter((e) => !drop.includes(e)))) {
+    if (
+      await writeNote(
+        p,
+        read.content,
+        OLD_PROPERTY,
+        entries.filter((e) => !drop.includes(e)),
+      )
+    ) {
       for (const link of drop) changes.push({ path: p, property: OLD_PROPERTY, link, op: 'remove' })
     }
   }
@@ -1009,7 +1030,9 @@ export async function rename(id: string, name: string): Promise<{ ok: boolean; e
       ),
       ...(r.restore === undefined
         ? {}
-        : { restore: { ...r.restore, topics: r.restore.topics.map((t) => (t.id === id ? { ...t, name: clean, renamedByUser: true } : t)) } }),
+        : {
+            restore: { ...r.restore, topics: r.restore.topics.map((t) => (t.id === id ? { ...t, name: clean, renamedByUser: true } : t)) },
+          }),
     })),
   })
   return { ok: true }
@@ -1026,7 +1049,12 @@ export async function remove(id: string): Promise<void> {
     const read = await vaultFs.readFile(p)
     if (!read.ok) continue
     const entries = linksIn(read.content, TOPICS_PROPERTY)
-    await writeNote(p, read.content, TOPICS_PROPERTY, entries.filter((e) => !sameLink(e, link)))
+    await writeNote(
+      p,
+      read.content,
+      TOPICS_PROPERTY,
+      entries.filter((e) => !sameLink(e, link)),
+    )
   }
   const strip = (m: Record<string, string[]>): Record<string, string[]> =>
     Object.fromEntries(
@@ -1077,7 +1105,10 @@ export async function preview(): Promise<TopicsPreview> {
       .filter(([id, m]) => m.size > 0 && !state.deleted.includes(id))
       .map(([id, m]) => ({ name: name(id), size: m.size, sample: [...m].slice(0, SAMPLE_MEMBERS) }))
       .sort((a, b) => b.size - a.size),
-    assignments: pending(state).map((p) => ({ path: p, topics: (state.assigned[p] ?? []).filter((id) => allowed(state, p, id)).map(name) })),
+    assignments: pending(state).map((p) => ({
+      path: p,
+      topics: (state.assigned[p] ?? []).filter((id) => allowed(state, p, id)).map(name),
+    })),
   }
 }
 

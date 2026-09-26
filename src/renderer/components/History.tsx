@@ -21,8 +21,7 @@ function when(ts: number): string {
   return days === 1 ? 'yesterday' : `${days} days ago`
 }
 
-const exact = (ts: number): string =>
-  new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const exact = (ts: number): string => new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
 type Props = {
   path: string
@@ -77,9 +76,7 @@ export function History({ path, onRestored }: Props): React.ReactElement {
   return (
     <div className="history">
       {versions.length === 0 ? (
-        <p className="history__empty">
-          No versions stored yet. One is kept each time the note changes, at most one a minute.
-        </p>
+        <p className="history__empty">No versions stored yet. One is kept each time the note changes, at most one a minute.</p>
       ) : (
         <>
           <ul className="history__list">

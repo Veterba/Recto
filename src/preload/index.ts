@@ -1,11 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import {
-  IPC_CHANNELS,
-  IPC_EVENT_CHANNELS,
-  type ExposedApi,
-  type IpcChannel,
-  type IpcEventChannel,
-} from '../shared/ipc-contract'
+import { IPC_CHANNELS, IPC_EVENT_CHANNELS, type ExposedApi, type IpcChannel, type IpcEventChannel } from '../shared/ipc-contract'
 
 const invokable = new Set<string>(IPC_CHANNELS)
 const subscribable = new Set<string>(IPC_EVENT_CHANNELS)

@@ -2,23 +2,8 @@ import { syntaxTree } from '@codemirror/language'
 import { writingConfig } from './writing'
 import { Compartment, RangeSetBuilder, StateEffect, StateField, type Extension } from '@codemirror/state'
 import { vaultFileUrl } from '../core/vault-url'
-import {
-  CalloutHeader,
-  EmbedWidget,
-  FootnoteWidget,
-  MathWidget,
-  mathSource,
-  stripContainers,
-  TableWidget,
-} from './rich-widgets'
-import {
-  Decoration,
-  EditorView,
-  ViewPlugin,
-  WidgetType,
-  type DecorationSet,
-  type ViewUpdate,
-} from '@codemirror/view'
+import { CalloutHeader, EmbedWidget, FootnoteWidget, MathWidget, mathSource, stripContainers, TableWidget } from './rich-widgets'
+import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 
 /**
  * Live Preview: the markdown markers are hidden until the cursor reaches them.
@@ -57,8 +42,7 @@ const hidden = Decoration.replace({})
  * along as an attribute, so the click handler does not have to re-parse the
  * line to find out where it goes.
  */
-const mdLink = (href: string): Decoration =>
-  Decoration.mark({ class: 'cm-mdlink', attributes: { 'data-href': href } })
+const mdLink = (href: string): Decoration => Decoration.mark({ class: 'cm-mdlink', attributes: { 'data-href': href } })
 
 /** A real checkbox in place of `[ ]` / `[x]`. */
 class TaskBox extends WidgetType {
@@ -350,7 +334,10 @@ const blockHiding = StateField.define<DecorationSet>({
       },
     })
 
-    return Decoration.set(ranges.map((range) => range.deco.range(range.from, range.to)), true)
+    return Decoration.set(
+      ranges.map((range) => range.deco.range(range.from, range.to)),
+      true,
+    )
   },
   provide: (field) => [
     EditorView.decorations.from(field),
@@ -369,8 +356,7 @@ const blockHiding = StateField.define<DecorationSet>({
 
 export const setLivePreview = StateEffect.define<boolean>()
 
-export const isLivePreviewOn = (view: EditorView): boolean =>
-  view.state.field(livePreviewEnabled, false) ?? false
+export const isLivePreviewOn = (view: EditorView): boolean => view.state.field(livePreviewEnabled, false) ?? false
 
 /** Line numbers the selection touches. Those lines are left raw. */
 function activeLines(view: EditorView): Set<number> {
@@ -413,9 +399,7 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
            * the one written in LaTeX. Standing in the formula is still how you
            * edit it.
            */
-          const reveal = focus
-            ? head >= node.from && head <= node.to
-            : active.has(view.state.doc.lineAt(node.from).number)
+          const reveal = focus ? head >= node.from && head <= node.to : active.has(view.state.doc.lineAt(node.from).number)
           if (reveal) return false
           const text = view.state.doc.sliceString(node.from, node.to)
           if (node.name === 'InlineMath') {
@@ -623,9 +607,7 @@ export function livePreview(getUnresolved: (view: EditorView) => ReadonlySet<str
         update(update: ViewUpdate): void {
           // Selection changes matter as much as document changes: moving the
           // cursor onto a line is what reveals its syntax.
-          const toggled = update.transactions.some((tr) =>
-            tr.effects.some((effect) => effect.is(setLivePreview)),
-          )
+          const toggled = update.transactions.some((tr) => tr.effects.some((effect) => effect.is(setLivePreview)))
           if (update.docChanged || update.viewportChanged || update.selectionSet || toggled) {
             this.decorations = build(update.view, getUnresolved(update.view))
           }
@@ -635,8 +617,7 @@ export function livePreview(getUnresolved: (view: EditorView) => ReadonlySet<str
         decorations: (plugin) => plugin.decorations,
         // Hidden markers behave as one unit for cursor movement, so arrowing
         // through a heading does not stop inside invisible '##' characters.
-        provide: (plugin) =>
-          EditorView.atomicRanges.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
+        provide: (plugin) => EditorView.atomicRanges.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
       },
     ),
   ]

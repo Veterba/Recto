@@ -60,11 +60,9 @@ export const SECTIONS: readonly Section[] = [
 
 export const DEFAULT_SECTION: SectionId = 'data'
 
-export const getSection = (id: SectionId): Section =>
-  SECTIONS.find((s) => s.id === id) ?? SECTIONS[0]!
+export const getSection = (id: SectionId): Section => SECTIONS.find((s) => s.id === id) ?? SECTIONS[0]!
 
-export const isSectionId = (value: unknown): value is SectionId =>
-  typeof value === 'string' && SECTIONS.some((s) => s.id === value)
+export const isSectionId = (value: unknown): value is SectionId => typeof value === 'string' && SECTIONS.some((s) => s.id === value)
 
 /** Views that are not a section: they open inside whichever section you are in. */
 /** Settings is not here: it is a dialog, not something that takes a tab. */

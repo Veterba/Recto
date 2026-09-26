@@ -13,12 +13,7 @@ import {
 } from 'd3-force'
 import { nodeRadius } from './look'
 import { layoutTargets, type GraphLayout, type Targets } from './layout'
-import {
-  type Sizing,
-  type Tunables,
-  type WorkerRequest,
-  type WorkerResponse,
-} from './protocol'
+import { type Sizing, type Tunables, type WorkerRequest, type WorkerResponse } from './protocol'
 
 /**
  * Force layout, in a Worker.
@@ -91,7 +86,6 @@ function post(): void {
   const response: WorkerResponse = { kind: 'positions', positions: outgoing, alpha: simulation.alpha() }
   ctx.postMessage(response, [outgoing.buffer])
 }
-
 
 /** The golden angle: successive points never line up, so no rings or spokes form. */
 const GOLDEN = Math.PI * (3 - Math.sqrt(5))
@@ -379,10 +373,7 @@ function configure(): void {
     ),
   )
   const radius = targets.radius
-  simulation.force(
-    'radial',
-    radius === null ? null : forceRadial<Node>((node) => radius[node.index] ?? 0, 0, 0).strength(targets.pull),
-  )
+  simulation.force('radial', radius === null ? null : forceRadial<Node>((node) => radius[node.index] ?? 0, 0, 0).strength(targets.pull))
 }
 
 ctx.onmessage = (event): void => {
@@ -391,7 +382,10 @@ ctx.onmessage = (event): void => {
   } catch (error) {
     // A layout that throws must say so. Swallowed, it left the graph silently
     // in its previous shape, which looks exactly like the button doing nothing.
-    const response: WorkerResponse = { kind: 'error', message: error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error) }
+    const response: WorkerResponse = {
+      kind: 'error',
+      message: error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error),
+    }
     ctx.postMessage(response)
   }
 }

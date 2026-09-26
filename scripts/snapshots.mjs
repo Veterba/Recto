@@ -148,7 +148,9 @@ async function screens(page, dir) {
 
   await key(page, 'Mod+G')
   // The layout settles on its own; wait until the graph says so.
-  await page.waitForFunction(() => !document.querySelector('.graph__stat')?.textContent?.includes('settling'), null, { timeout: 30_000 }).catch(() => {})
+  await page
+    .waitForFunction(() => !document.querySelector('.graph__stat')?.textContent?.includes('settling'), null, { timeout: 30_000 })
+    .catch(() => {})
   await shoot(page, dir, '06-graph', 1500)
   await key(page, 'Mod+G')
 
@@ -201,7 +203,8 @@ async function compare(page, a, b, diffPath) {
       // Not fetch(data:...): the app's content security policy refuses it.
       const load = (b64) => createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: 'image/png' }))
       const [ia, ib] = await Promise.all([load(pa), load(pb)])
-      if (ia.width !== ib.width || ia.height !== ib.height) return { size: `${ia.width}x${ia.height} vs ${ib.width}x${ib.height}`, diff: -1 }
+      if (ia.width !== ib.width || ia.height !== ib.height)
+        return { size: `${ia.width}x${ia.height} vs ${ib.width}x${ib.height}`, diff: -1 }
       const read = (img) => {
         const c = new OffscreenCanvas(img.width, img.height)
         const g = c.getContext('2d')
@@ -212,7 +215,11 @@ async function compare(page, a, b, diffPath) {
       const out = new ImageData(ia.width, ia.height)
       let diff = 0
       for (let i = 0; i < da.data.length; i += 4) {
-        const same = da.data[i] === db.data[i] && da.data[i + 1] === db.data[i + 1] && da.data[i + 2] === db.data[i + 2] && da.data[i + 3] === db.data[i + 3]
+        const same =
+          da.data[i] === db.data[i] &&
+          da.data[i + 1] === db.data[i + 1] &&
+          da.data[i + 2] === db.data[i + 2] &&
+          da.data[i + 3] === db.data[i + 3]
         if (!same) diff++
         out.data[i] = same ? da.data[i] * 0.3 + 178 : 255
         out.data[i + 1] = same ? da.data[i + 1] * 0.3 + 178 : 0
@@ -256,7 +263,9 @@ for (const theme of ['light', 'dark']) {
         const r = await compare(page, old, path.join(dir, name), path.join(dir, name.replace('.png', '.diff.png')))
         if (r.diff === -1 || r.diff >= NOISE_PIXELS) {
           failures++
-          console.log(`  ${name}: ${r.diff === -1 ? `size ${r.size}` : `${r.diff} of ${r.total} pixels differ`} - see ${name.replace('.png', '.diff.png')}`)
+          console.log(
+            `  ${name}: ${r.diff === -1 ? `size ${r.size}` : `${r.diff} of ${r.total} pixels differ`} - see ${name.replace('.png', '.diff.png')}`,
+          )
         } else if (r.diff > 0) {
           console.log(`  ${name}: ${r.diff} pixels differ (rasteriser noise, under ${NOISE_PIXELS})`)
         }

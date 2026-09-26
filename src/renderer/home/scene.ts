@@ -1460,8 +1460,7 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
      * rate rather than fifteen a second.
      */
     const onPage2 = progress > 0.0005
-    const groundDue =
-      now - groundAt > (onPage2 ? 0 : GROUND_FRAME_MS) || progress !== lastProgress
+    const groundDue = now - groundAt > (onPage2 ? 0 : GROUND_FRAME_MS) || progress !== lastProgress
     if (shapes.length === 0) seedShapes()
     if (!flags.freeze && !reduced) {
       time += dt
@@ -1622,12 +1621,15 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
       next.slice(0, MAX_TEXT_BOXES).forEach((l, i) => {
         const margin = Math.max(8, 0.6 * l.fontSize)
         const width = l.maxWidth === null ? l.width : Math.min(l.width, l.maxWidth)
-        textBoxes.set([
-          (l.x + width / 2) / H,
-          (l.y + l.height / 2) / H,
-          ((width / 2 + margin) / H) * Math.SQRT2,
-          ((l.height / 2 + margin) / H) * Math.SQRT2,
-        ], i * 4)
+        textBoxes.set(
+          [
+            (l.x + width / 2) / H,
+            (l.y + l.height / 2) / H,
+            ((width / 2 + margin) / H) * Math.SQRT2,
+            ((l.height / 2 + margin) / H) * Math.SQRT2,
+          ],
+          i * 4,
+        )
       })
     },
     push: (u, v, du, dv) => {

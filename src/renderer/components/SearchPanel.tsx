@@ -89,9 +89,7 @@ export function SearchPanel({ open, onClose, onOpenFile }: Props): React.ReactEl
         />
 
         {query.trim() === '' ? (
-          <p className="palette__empty">
-            Type to search every note. Whole phrases work — the index does the ranking.
-          </p>
+          <p className="palette__empty">Type to search every note. Whole phrases work — the index does the ranking.</p>
         ) : results.length === 0 ? (
           <p className="palette__empty">{searching ? 'Searching…' : 'No matches.'}</p>
         ) : (

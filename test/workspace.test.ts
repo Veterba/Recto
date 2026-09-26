@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  Workspace,
-  makeLeaf,
-  makeTabs,
-  type SplitNode,
-  type WorkspaceLayout,
-} from '../src/renderer/core/workspace'
+import { Workspace, makeLeaf, makeTabs, type SplitNode, type WorkspaceLayout } from '../src/renderer/core/workspace'
 import { DEFAULT_SECTION, SECTIONS, getSection, isSectionId } from '../src/renderer/core/sections'
 
 /** Narrow the root to a split, failing the test if it is not one. */

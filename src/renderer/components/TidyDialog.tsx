@@ -98,9 +98,7 @@ export function TidyDialog({ plan, busy, onConfirm, onCancel }: Props): React.Re
           <>
             <button className="tidy__toggle" onClick={() => setShowSkipped(!showSkipped)}>
               <span className={`backlinks__chevron${showSkipped ? ' is-open' : ''}`}>{'›'}</span>
-              {plan.skipped.length === 1
-                ? 'Leaving 1 note where it is'
-                : `Leaving ${plan.skipped.length} notes where they are`}
+              {plan.skipped.length === 1 ? 'Leaving 1 note where it is' : `Leaving ${plan.skipped.length} notes where they are`}
             </button>
             {showSkipped && (
               <ul className="tidy__notes tidy__notes--skipped">

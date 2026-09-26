@@ -196,7 +196,8 @@ export function StrengthSlider({ value, onChange, label }: Props): React.ReactEl
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
       onKeyDown={(event) => {
-        const delta = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 10 : event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -10 : 0
+        const delta =
+          event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 10 : event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -10 : 0
         if (delta === 0) return
         event.preventDefault()
         glideTo(Math.min(100, Math.max(0, value + delta)), true)
@@ -209,12 +210,7 @@ export function StrengthSlider({ value, onChange, label }: Props): React.ReactEl
       }
     >
       <div className="strength__track" ref={track}>
-        <svg
-          className="strength__wave"
-          viewBox={`0 0 ${WAVE_W} ${WAVE_H}`}
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
+        <svg className="strength__wave" viewBox={`0 0 ${WAVE_W} ${WAVE_H}`} preserveAspectRatio="none" aria-hidden="true">
           <path d={wavePath(pct, phase)} vectorEffect="non-scaling-stroke" />
         </svg>
         <div className="strength__thumb" />

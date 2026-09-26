@@ -38,7 +38,11 @@ export function updateBoards(next: BoardsFile): void {
 }
 
 export function useBoards(): BoardsFile {
-  return useSyncExternalStore(subscribe, () => file, () => file)
+  return useSyncExternalStore(
+    subscribe,
+    () => file,
+    () => file,
+  )
 }
 
 /** Read without subscribing, for code that runs outside a render. */

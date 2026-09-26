@@ -25,8 +25,7 @@ beforeEach(() => {
   clock = 1_700_000_000_000
 })
 
-const contents = (path: string): (string | undefined)[] =>
-  listSnapshots(db, path).map((s) => getSnapshot(db, s.id)?.content)
+const contents = (path: string): (string | undefined)[] => listSnapshots(db, path).map((s) => getSnapshot(db, s.id)?.content)
 
 describe('migrations', () => {
   it('applies every migration and records the version', () => {

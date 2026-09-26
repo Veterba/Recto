@@ -83,13 +83,7 @@ export function focusEditorOnOpen(): void {
  * when focus leaves - never per keystroke, since each commit is a rename and
  * a vault-wide link rewrite.
  */
-function NoteTitle({
-  path,
-  onRename,
-}: {
-  path: string
-  onRename: (name: string) => Promise<string | null>
-}): React.ReactElement {
+function NoteTitle({ path, onRename }: { path: string; onRename: (name: string) => Promise<string | null> }): React.ReactElement {
   const file = path.slice(path.lastIndexOf('/') + 1)
   const dot = file.toLowerCase().endsWith('.md') ? file.length - 3 : file.length
   const current = file.slice(0, dot)
@@ -344,7 +338,8 @@ function MarkdownEditor({
       if (!result.ok) return result.error
       noteIndexChanged()
       if (result.rewrittenLinks > 0) {
-        pendingRenameNotice.set(result.path, 
+        pendingRenameNotice.set(
+          result.path,
           `Updated ${result.rewrittenLinks} ${result.rewrittenLinks === 1 ? 'link' : 'links'} in ${result.rewrittenFiles} ${
             result.rewrittenFiles === 1 ? 'note' : 'notes'
           }`,

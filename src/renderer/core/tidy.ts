@@ -62,12 +62,32 @@ const MIN_FOR_NAME_FOLDER = 3
  * and a wrong grouping is visible in the preview while a missing one is not.
  */
 const STOPWORDS = new Set([
-  'a', 'an', 'and', 'the', 'of', 'for', 'to', 'in', 'on', 'my', 'new',
-  'untitled', 'note', 'notes', 'draft', 'copy', 'final', 'misc', 'temp',
+  'a',
+  'an',
+  'and',
+  'the',
+  'of',
+  'for',
+  'to',
+  'in',
+  'on',
+  'my',
+  'new',
+  'untitled',
+  'note',
+  'notes',
+  'draft',
+  'copy',
+  'final',
+  'misc',
+  'temp',
 ])
 
 const normalise = (value: string): string =>
-  value.normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+  value
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '')
 
 /** Significant words in a file name. */
 export function nameTokens(path: string): string[] {
@@ -113,9 +133,7 @@ export function planTidy(input: TidyInput): TidyPlan {
     const links = signals?.links ?? []
 
     // --- 1. a tag naming an existing folder ------------------------------
-    const taggedFolder = tags
-      .map((tag) => byNormalisedName.get(normalise(tag)))
-      .find((folder): folder is string => folder !== undefined)
+    const taggedFolder = tags.map((tag) => byNormalisedName.get(normalise(tag))).find((folder): folder is string => folder !== undefined)
     if (taggedFolder !== undefined) {
       moves.push({
         path,
@@ -152,9 +170,7 @@ export function planTidy(input: TidyInput): TidyPlan {
 
     // --- 3. a word in its name naming an existing folder -------------------
     const tokens = nameTokens(path)
-    const namedFolder = tokens
-      .map((token) => byNormalisedName.get(token))
-      .find((folder): folder is string => folder !== undefined)
+    const namedFolder = tokens.map((token) => byNormalisedName.get(token)).find((folder): folder is string => folder !== undefined)
     if (namedFolder !== undefined) {
       moves.push({ path, into: namedFolder, creates: false, reason: `name matches ${namedFolder}` })
       continue
@@ -164,11 +180,7 @@ export function planTidy(input: TidyInput): TidyPlan {
   }
 
   // --- 4 & 5. group what is left into new folders -------------------------
-  const group = (
-    keyOf: (path: string) => string[],
-    minimum: number,
-    label: (key: string) => string,
-  ): void => {
+  const group = (keyOf: (path: string) => string[], minimum: number, label: (key: string) => string): void => {
     const buckets = new Map<string, string[]>()
     for (const path of undecided) {
       for (const key of new Set(keyOf(path))) {

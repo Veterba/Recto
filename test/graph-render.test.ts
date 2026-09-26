@@ -24,9 +24,7 @@ const WIDTH = 800
 const HEIGHT = 600
 
 const stateWith = (positions: number[], camera: Camera, degrees: number[] = []): RenderState => ({
-  nodes: positions
-    .filter((_, i) => i % 2 === 0)
-    .map((_, i) => ({ path: `n${i}.md`, label: `n${i}`, degree: degrees[i] ?? 0 })),
+  nodes: positions.filter((_, i) => i % 2 === 0).map((_, i) => ({ path: `n${i}.md`, label: `n${i}`, degree: degrees[i] ?? 0 })),
   edges: [],
   positions: new Float32Array(positions),
   active: -1,
@@ -195,7 +193,10 @@ describe('the open note does not hide the rest', () => {
   it('draws every note at full opacity when one is open', () => {
     const state = {
       ...stateWith([0, 0, 40, 0, 80, 0, 120, 0], { x: 60, y: 0, zoom: 1 }, [1, 2, 1, 0]),
-      edges: [[0, 1], [1, 2]] as [number, number][],
+      edges: [
+        [0, 1],
+        [1, 2],
+      ] as [number, number][],
       active: 0,
       neighbours: new Set([1]),
       showLabels: false,
@@ -250,7 +251,10 @@ describe('auto-links are drawn apart from the links you wrote', () => {
   }
   const base = {
     ...stateWith([0, 0, 40, 0, 80, 0], { x: 40, y: 0, zoom: 1 }, [1, 2, 1]),
-    edges: [[0, 1], [1, 2]] as [number, number][],
+    edges: [
+      [0, 1],
+      [1, 2],
+    ] as [number, number][],
     autoEdges: new Set([1]),
     showLabels: false,
   }

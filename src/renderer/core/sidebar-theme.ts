@@ -161,7 +161,11 @@ function hslToHex(h: number, s: number, l: number): string {
   const a = s * Math.min(l, 1 - l)
   const f = (n: number): number => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))
   return `#${[f(0), f(8), f(4)]
-    .map((channel) => Math.round(channel * 255).toString(16).padStart(2, '0'))
+    .map((channel) =>
+      Math.round(channel * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
     .join('')}`
 }
 

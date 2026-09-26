@@ -84,10 +84,7 @@ describe('applying watcher changes', () => {
 
 describe('filtering the tree', () => {
   const tree = [
-    folder('work', [
-      folder('work/2026', [file('work/2026/2026-09-12.md'), file('work/2026/notes.md')]),
-      file('work/nordicsync.md'),
-    ]),
+    folder('work', [folder('work/2026', [file('work/2026/2026-09-12.md'), file('work/2026/notes.md')]), file('work/nordicsync.md')]),
     file('index.md'),
   ]
   const contains = (q: string) => (text: string) => text.toLowerCase().includes(q.toLowerCase())
@@ -101,11 +98,7 @@ describe('filtering the tree', () => {
   })
 
   it('keeps a deep hit with its whole ancestry', () => {
-    expect(paths(filterTree(tree, '09-12', contains('09-12')))).toEqual([
-      'work',
-      'work/2026',
-      'work/2026/2026-09-12.md',
-    ])
+    expect(paths(filterTree(tree, '09-12', contains('09-12')))).toEqual(['work', 'work/2026', 'work/2026/2026-09-12.md'])
   })
 
   it('a matching folder keeps all of its children', () => {

@@ -77,7 +77,17 @@ describe('graph settings', () => {
 
   it('ignores unknown keys instead of carrying them into state', () => {
     const parsed = parseSettings({ showLabels: true, mysteryField: { deep: true } })
-    expect(Object.keys(parsed).sort()).toEqual(['layout', 'linkRange', 'localOnly', 'look', 'showChats', 'showLabels', 'showOrphans', 'showTasks', 'tunables'])
+    expect(Object.keys(parsed).sort()).toEqual([
+      'layout',
+      'linkRange',
+      'localOnly',
+      'look',
+      'showChats',
+      'showLabels',
+      'showOrphans',
+      'showTasks',
+      'tunables',
+    ])
   })
 
   it('does not mutate the shared defaults', () => {

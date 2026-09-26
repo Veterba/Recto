@@ -1,20 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import {
-  bodyOf,
-  parseFrontmatter,
-  removeField,
-  renameField,
-  serialize,
-  setField,
-} from '../src/renderer/core/frontmatter'
+import { bodyOf, parseFrontmatter, removeField, renameField, serialize, setField } from '../src/renderer/core/frontmatter'
 
 const doc = (...lines: string[]): string => lines.join('\n')
 
 describe('parsing frontmatter', () => {
   it('reads flat keys and classifies their types', () => {
-    const fm = parseFrontmatter(
-      doc('---', 'title: NordicSync', 'order: 3', 'done: true', 'empty:', '---', '# Body'),
-    )
+    const fm = parseFrontmatter(doc('---', 'title: NordicSync', 'order: 3', 'done: true', 'empty:', '---', '# Body'))
     expect(fm.present).toBe(true)
     expect(fm.fields.map((f) => [f.key, f.value, f.type])).toEqual([
       ['title', 'NordicSync', 'text'],
@@ -56,9 +47,7 @@ describe('parsing frontmatter', () => {
   // the bug: every note synced from Obsidian showed its tags as locked text.
   // Nested maps stay opaque; block lists are now ordinary list fields.
   it('keeps nested maps opaque, and reads block lists as fields', () => {
-    const fm = parseFrontmatter(
-      doc('---', 'title: ok', 'nested:', '  a: 1', '  b: 2', 'tags:', '  - one', '  - two', '---'),
-    )
+    const fm = parseFrontmatter(doc('---', 'title: ok', 'nested:', '  a: 1', '  b: 2', 'tags:', '  - one', '  - two', '---'))
     expect(fm.fields.map((f) => f.key)).toEqual(['title', 'tags'])
     expect(fm.opaque).toEqual(['nested:', '  a: 1', '  b: 2'])
   })
@@ -78,9 +67,7 @@ describe('parsing frontmatter', () => {
 describe('setField', () => {
   it('replaces an existing value in place, leaving everything else alone', () => {
     const before = doc('---', 'title: old', 'order: 3', '---', '', '# Body', 'text')
-    expect(setField(before, 'title', 'new')).toBe(
-      doc('---', 'title: new', 'order: 3', '---', '', '# Body', 'text'),
-    )
+    expect(setField(before, 'title', 'new')).toBe(doc('---', 'title: new', 'order: 3', '---', '', '# Body', 'text'))
   })
 
   it('appends a new key inside the block', () => {

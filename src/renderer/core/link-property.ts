@@ -29,7 +29,13 @@ export function writeLinks(text: string, key: string, targets: readonly string[]
   const crlf = text.includes('\r\n') && !/(?<!\r)\n/.test(text)
   const plain = crlf ? text.replace(/\r\n/g, '\n') : text
   const next =
-    targets.length === 0 ? removeField(plain, key) : setField(plain, key, targets.map((target) => `[[${target}]]`))
+    targets.length === 0
+      ? removeField(plain, key)
+      : setField(
+          plain,
+          key,
+          targets.map((target) => `[[${target}]]`),
+        )
   // The safety net: this writes one key. If anything else in the note came
   // out different, the editor misread something - keep the note as it was.
   if (!onlyKeyChanged(plain, next, key)) {

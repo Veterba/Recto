@@ -6,15 +6,7 @@ import { linksIn, writeLinks } from '../core/link-property'
 import { Icon } from './Icon'
 import { LinkInput } from './LinkInput'
 import { Tip } from './Tip'
-import {
-  parseFrontmatter,
-  removeField,
-  renameField,
-  setField,
-  splitItems,
-  type Field,
-  type FieldType,
-} from '../core/frontmatter'
+import { parseFrontmatter, removeField, renameField, setField, splitItems, type Field, type FieldType } from '../core/frontmatter'
 
 /**
  * Typed frontmatter, above the editor.
@@ -38,9 +30,7 @@ const TYPE_ICON: Record<FieldType, string> = {
   empty: 'minus',
 }
 
-type Part =
-  | { kind: 'text'; text: string }
-  | { kind: 'link'; target: string; heading: string | null; label: string }
+type Part = { kind: 'text'; text: string } | { kind: 'link'; target: string; heading: string | null; label: string }
 
 const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
 const HAS_LINK = /\[\[[^\]]+\]\]/
@@ -353,7 +343,13 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates }: Pr
                 <TopicChips
                   links={linksIn(text, TOPICS_PROPERTY)}
                   onRemove={(link) =>
-                    onChange(writeLinks(text, TOPICS_PROPERTY, linksIn(text, TOPICS_PROPERTY).filter((l) => l !== link)))
+                    onChange(
+                      writeLinks(
+                        text,
+                        TOPICS_PROPERTY,
+                        linksIn(text, TOPICS_PROPERTY).filter((l) => l !== link),
+                      ),
+                    )
                   }
                 />
               ) : (
@@ -366,11 +362,7 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates }: Pr
               )}
 
               <Tip label={`Remove “${field.key}”`}>
-                <button
-                  className="prop__remove"
-                  aria-label={`Remove ${field.key}`}
-                  onClick={() => onChange(removeField(text, field.key))}
-                >
+                <button className="prop__remove" aria-label={`Remove ${field.key}`} onClick={() => onChange(removeField(text, field.key))}>
                   <Icon name="x" size={12} />
                 </button>
               </Tip>
@@ -380,9 +372,7 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates }: Pr
           {parsed.opaque.length > 0 && (
             <div className="prop prop--opaque">
               <pre className="prop__opaque">{parsed.opaque.join('\n')}</pre>
-              <span className="prop__opaque-note">
-                Kept exactly as written — nested YAML is not edited here, so nothing is flattened.
-              </span>
+              <span className="prop__opaque-note">Kept exactly as written — nested YAML is not edited here, so nothing is flattened.</span>
             </div>
           )}
 

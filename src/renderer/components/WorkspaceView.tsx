@@ -92,15 +92,7 @@ function Split({
   )
 }
 
-function Tabs({
-  workspace,
-  node,
-  revision,
-}: {
-  workspace: Workspace
-  node: TabsNode
-  revision?: number | undefined
-}): React.ReactElement {
+function Tabs({ workspace, node }: { workspace: Workspace; node: TabsNode; revision?: number | undefined }): React.ReactElement {
   const active = node.children[node.active]
   const activeLeafId = workspace.activeLeaf?.id
   const isFocusedGroup = active !== undefined && active.id === activeLeafId
@@ -109,35 +101,35 @@ function Tabs({
     <div className={`tabs${isFocusedGroup ? ' is-focused' : ''}`}>
       <div className="tabs__bar">
         <div className="tabs__strip" role="tablist">
-        {node.children.map((leaf, i) => (
-          <div
-            key={leaf.id}
-            role="tab"
-            aria-selected={i === node.active}
-            tabIndex={0}
-            className={`tab${i === node.active ? ' is-active' : ''}`}
-            onMouseDown={() => workspace.setActiveTab(node.id, i)}
-            onKeyDown={(ev) => {
-              if (ev.key === 'Enter' || ev.key === ' ') workspace.setActiveTab(node.id, i)
-            }}
-            onAuxClick={(ev) => {
-              if (ev.button === 1) workspace.closeLeaf(leaf.id) // middle-click closes
-            }}
-          >
-            <span className="tab__title">{viewTitle(leaf.type, leaf.state)}</span>
-            <button
-              className="tab__close"
-              aria-label={`Close ${viewTitle(leaf.type, leaf.state)}`}
-              onMouseDown={(ev) => ev.stopPropagation()}
-              onClick={(ev) => {
-                ev.stopPropagation()
-                workspace.closeLeaf(leaf.id)
+          {node.children.map((leaf, i) => (
+            <div
+              key={leaf.id}
+              role="tab"
+              aria-selected={i === node.active}
+              tabIndex={0}
+              className={`tab${i === node.active ? ' is-active' : ''}`}
+              onMouseDown={() => workspace.setActiveTab(node.id, i)}
+              onKeyDown={(ev) => {
+                if (ev.key === 'Enter' || ev.key === ' ') workspace.setActiveTab(node.id, i)
+              }}
+              onAuxClick={(ev) => {
+                if (ev.button === 1) workspace.closeLeaf(leaf.id) // middle-click closes
               }}
             >
-              ×
-            </button>
-          </div>
-        ))}
+              <span className="tab__title">{viewTitle(leaf.type, leaf.state)}</span>
+              <button
+                className="tab__close"
+                aria-label={`Close ${viewTitle(leaf.type, leaf.state)}`}
+                onMouseDown={(ev) => ev.stopPropagation()}
+                onClick={(ev) => {
+                  ev.stopPropagation()
+                  workspace.closeLeaf(leaf.id)
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
         </div>
         {node.children.length > 1 && (
           <Tip label="Close other tabs" hint="Keeps the one you are in" placement="bottom">

@@ -160,9 +160,7 @@ describe('markdown links', () => {
   })
 
   it('leaves what is not a note alone', () => {
-    const { links } = parseNote(
-      '[site](https://example.com) [mail](mailto:a@b.c) [here](#Heading) ![shot](img.png) [empty]()',
-    )
+    const { links } = parseNote('[site](https://example.com) [mail](mailto:a@b.c) [here](#Heading) ![shot](img.png) [empty]()')
     expect(links).toEqual([])
   })
 

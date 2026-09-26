@@ -85,11 +85,7 @@ function Chat({
 
   const save = useCallback(
     async (next: readonly AiMessage[], nextTitle: string) => {
-      await api.invoke(
-        'fs:write',
-        path,
-        serialiseConversation({ title: nextTitle, model, messages: [...next] }),
-      )
+      await api.invoke('fs:write', path, serialiseConversation({ title: nextTitle, model, messages: [...next] }))
       noteIndexChanged()
     },
     [path, model],
@@ -187,13 +183,13 @@ function Chat({
               <p>
                 {keyPresent === false ? (
                   <>
-                    Settings → AI. The key is encrypted into your login keychain and never leaves this
-                    machine — the renderer that draws this window cannot read it.
+                    Settings → AI. The key is encrypted into your login keychain and never leaves this machine — the renderer that draws
+                    this window cannot read it.
                   </>
                 ) : (
                   <>
-                    This conversation is a note in <code>chats/</code>. It is searchable, linkable and
-                    yours — the same markdown as everything else in the vault.
+                    This conversation is a note in <code>chats/</code>. It is searchable, linkable and yours — the same markdown as
+                    everything else in the vault.
                   </>
                 )}
               </p>
@@ -204,11 +200,7 @@ function Chat({
             <article className={`chat__turn chat__turn--${message.role}`} key={index}>
               <span className="chat__role">{message.role === 'user' ? 'You' : 'Claude'}</span>
               <div className="chat__body">
-                {message.role === 'user' ? (
-                  <p className="chat__para">{message.content}</p>
-                ) : (
-                  <Markdownish text={message.content} />
-                )}
+                {message.role === 'user' ? <p className="chat__para">{message.content}</p> : <Markdownish text={message.content} />}
               </div>
             </article>
           ))}
@@ -219,7 +211,8 @@ function Chat({
               <div className="chat__body">
                 {pending === '' ? (
                   <span className="chat__thinking" aria-live="polite">
-                    Thinking<i />
+                    Thinking
+                    <i />
                     <i />
                     <i />
                   </span>
@@ -263,12 +256,7 @@ function Chat({
           }}
         />
         <div className="chat__tools">
-          <select
-            className="chat__model"
-            value={model}
-            aria-label="Model"
-            onChange={(event) => onModel(event.target.value as AiModelId)}
-          >
+          <select className="chat__model" value={model} aria-label="Model" onChange={(event) => onModel(event.target.value as AiModelId)}>
             {AI_MODELS.map((entry) => (
               <option key={entry.id} value={entry.id}>
                 {entry.label}
@@ -302,10 +290,7 @@ function Chat({
  * Registered with a getter for the model, because the model is an app-level
  * setting and the view must not own a copy that drifts from it.
  */
-export function registerChatView(
-  getModel: () => AiModelId,
-  setModel: (model: AiModelId) => void,
-): () => void {
+export function registerChatView(getModel: () => AiModelId, setModel: (model: AiModelId) => void): () => void {
   return registerView({
     type: 'chat',
     title: 'Chat',

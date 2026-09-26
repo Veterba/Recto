@@ -173,8 +173,16 @@ export const setOwned = (s: TopicsState, path: string, ids: readonly string[]): 
 export const block = (s: TopicsState, path: string, id: string): TopicsState => ({
   ...s,
   blocks: setList(s.blocks, path, [...new Set([...(s.blocks[path] ?? []), id])]),
-  assigned: setList(s.assigned, path, (s.assigned[path] ?? []).filter((x) => x !== id)),
-  owned: setList(s.owned, path, (s.owned[path] ?? []).filter((x) => x !== id)),
+  assigned: setList(
+    s.assigned,
+    path,
+    (s.assigned[path] ?? []).filter((x) => x !== id),
+  ),
+  owned: setList(
+    s.owned,
+    path,
+    (s.owned[path] ?? []).filter((x) => x !== id),
+  ),
 })
 
 /** A run that changed nothing is not kept - unless it has state to put back. */
@@ -198,7 +206,14 @@ export function dissolving(s: TopicsState): string[] {
 
 /** Dissolve a topic: gone, and - like a deleted one - never made again from the same notes. */
 export function dissolve(s: TopicsState, id: string): TopicsState {
-  const members = [...new Set([...(s.rejected[id] ?? []), ...Object.entries(s.owned).filter(([, ids]) => ids.includes(id)).map(([p]) => p)])]
+  const members = [
+    ...new Set([
+      ...(s.rejected[id] ?? []),
+      ...Object.entries(s.owned)
+        .filter(([, ids]) => ids.includes(id))
+        .map(([p]) => p),
+    ]),
+  ]
   const strip = (m: Record<string, string[]>): Record<string, string[]> =>
     Object.fromEntries(
       Object.entries(m)

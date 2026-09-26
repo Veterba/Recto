@@ -89,8 +89,15 @@ export function WritingSettingsTab(): React.ReactElement {
           ))}
         </div>
       </Row>
-      <Row label="Typewriter scrolling" hint={`Keep the line you write in the middle of the window, even outside focus mode${key('writing:toggle-typewriter')}`}>
-        <Switch label="Typewriter scrolling" on={writing.typewriter} onChange={() => updateWriting((s) => ({ ...s, typewriter: !s.typewriter }))} />
+      <Row
+        label="Typewriter scrolling"
+        hint={`Keep the line you write in the middle of the window, even outside focus mode${key('writing:toggle-typewriter')}`}
+      >
+        <Switch
+          label="Typewriter scrolling"
+          on={writing.typewriter}
+          onChange={() => updateWriting((s) => ({ ...s, typewriter: !s.typewriter }))}
+        />
       </Row>
       <Row label="Text size" hint={`${writing.fontSize}px in focus mode — the editor keeps its own size`}>
         <input
@@ -137,8 +144,8 @@ export function WritingSettingsTab(): React.ReactElement {
       </Row>
       <p className="setting__note">
         <Icon name="highlighter" size={13} />
-        English is tagged by a real part-of-speech tagger that runs on this computer. Russian is tagged by word
-        endings and is approximate — conjunctions are exact, the rest is right most of the time.
+        English is tagged by a real part-of-speech tagger that runs on this computer. Russian is tagged by word endings and is approximate —
+        conjunctions are exact, the rest is right most of the time.
       </p>
 
       <h3 className="settings__grouphead">Style check</h3>
@@ -171,7 +178,14 @@ export function WritingSettingsTab(): React.ReactElement {
           onChange={(event) => setWords(event.target.value)}
           onBlur={() =>
             set('style', {
-              customWords: [...new Set(words.split('\n').map((w) => w.trim()).filter((w) => w !== ''))],
+              customWords: [
+                ...new Set(
+                  words
+                    .split('\n')
+                    .map((w) => w.trim())
+                    .filter((w) => w !== ''),
+                ),
+              ],
             })
           }
         />
@@ -194,14 +208,18 @@ export function WritingSettingsTab(): React.ReactElement {
       </Row>
       <p className="setting__note">
         <Icon name="bot" size={13} />
-        Text is yours unless marked. Paste as AI{key('writing:paste-ai')}, or select text and choose Mark selection
-        as… from the writing menu. Anything you type inside an AI passage becomes yours. Marks are kept in{' '}
-        <code>.recto/authors.json</code>, not in the note, so the file stays plain markdown.
+        Text is yours unless marked. Paste as AI{key('writing:paste-ai')}, or select text and choose Mark selection as… from the writing
+        menu. Anything you type inside an AI passage becomes yours. Marks are kept in <code>.recto/authors.json</code>, not in the note, so
+        the file stays plain markdown.
       </p>
 
       <h3 className="settings__grouphead">Spelling</h3>
       <Row label="Check spelling" hint="Underline misspelt words; right-click one for suggestions.">
-        <Switch label="Check spelling" on={writing.spellcheck} onChange={() => updateWriting((s) => ({ ...s, spellcheck: !s.spellcheck }))} />
+        <Switch
+          label="Check spelling"
+          on={writing.spellcheck}
+          onChange={() => updateWriting((s) => ({ ...s, spellcheck: !s.spellcheck }))}
+        />
       </Row>
     </>
   )

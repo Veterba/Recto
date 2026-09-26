@@ -105,21 +105,18 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
   // --- writing ------------------------------------------------------------
 
   /** Apply frontmatter edits to a note, leaving everything else untouched. */
-  const writeFields = useCallback(
-    async (path: string, fields: Record<string, string | number>): Promise<boolean> => {
-      const read = await api.invoke('fs:read', path)
-      if (!read.ok) {
-        setError(read.error)
-        return false
-      }
-      let text = read.content
-      for (const [key, value] of Object.entries(fields)) text = setField(text, key, value)
-      const written = await api.invoke('fs:write', path, text)
-      if (!written.ok) setError(written.error ?? 'Could not save the card.')
-      return written.ok
-    },
-    [],
-  )
+  const writeFields = useCallback(async (path: string, fields: Record<string, string | number>): Promise<boolean> => {
+    const read = await api.invoke('fs:read', path)
+    if (!read.ok) {
+      setError(read.error)
+      return false
+    }
+    let text = read.content
+    for (const [key, value] of Object.entries(fields)) text = setField(text, key, value)
+    const written = await api.invoke('fs:write', path, text)
+    if (!written.ok) setError(written.error ?? 'Could not save the card.')
+    return written.ok
+  }, [])
 
   const move = useCallback(
     async (path: string, target: Drop) => {
@@ -137,9 +134,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
       // waits for a disk write and a reindex before the card moves feels broken.
       const order = placed.kind === 'order' ? placed.order : placed.orders[index]!
       setCards((prev) =>
-        (prev ?? []).map((entry) =>
-          entry.path === path ? { ...entry, column: target.column, status: target.column, order } : entry,
-        ),
+        (prev ?? []).map((entry) => (entry.path === path ? { ...entry, column: target.column, status: target.column, order } : entry)),
       )
 
       overrides.current.set(path, { status: target.column, order, at: Date.now() })
@@ -159,10 +154,12 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
           overrides.current.set(entry.path, { status: entry.status, order: next, at: Date.now() })
           await writeFields(entry.path, { order: next })
         }
-        setCards((prev) => (prev ?? []).map((entry) => {
-          const pending = overrides.current.get(entry.path)
-          return pending === undefined ? entry : { ...entry, order: pending.order }
-        }))
+        setCards((prev) =>
+          (prev ?? []).map((entry) => {
+            const pending = overrides.current.get(entry.path)
+            return pending === undefined ? entry : { ...entry, order: pending.order }
+          }),
+        )
       }
 
       noteIndexChanged()
@@ -288,9 +285,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
                       if (name !== '' && name !== column.name) {
                         // The id is left alone on rename: it is what the notes
                         // say, and rewriting it would mean editing every card.
-                        setColumns(
-                          board.columns.map((entry) => (entry.id === column.id ? { ...entry, name } : entry)),
-                        )
+                        setColumns(board.columns.map((entry) => (entry.id === column.id ? { ...entry, name } : entry)))
                       }
                     }}
                     onKeyDown={(event) => {
@@ -306,11 +301,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
                 <span className="board__count">{list.length}</span>
                 {board.columns.length > 1 && (
                   <Tip label="Remove column" hint="Its cards move to the first column">
-                    <button
-                      className="board__colremove"
-                      aria-label={`Remove ${column.name}`}
-                      onClick={() => removeColumn(column.id)}
-                    >
+                    <button className="board__colremove" aria-label={`Remove ${column.name}`} onClick={() => removeColumn(column.id)}>
                       <Icon name="x" size={12} />
                     </button>
                   </Tip>
@@ -343,9 +334,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
                     {(card.due !== null || card.priority !== null) && (
                       <p className="board__meta">
                         {card.priority !== null && (
-                          <span className={`board__pri board__pri--${card.priority.toLowerCase()}`}>
-                            {card.priority}
-                          </span>
+                          <span className={`board__pri board__pri--${card.priority.toLowerCase()}`}>{card.priority}</span>
                         )}
                         {card.due !== null && (
                           <span className="board__due">
@@ -395,17 +384,13 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
       </div>
 
       {contextMenu.menu !== null && (
-        <ContextMenu
-          items={menuFor(contextMenu.menu.subject)}
-          at={contextMenu.menu.at}
-          onClose={contextMenu.close}
-        />
+        <ContextMenu items={menuFor(contextMenu.menu.subject)} at={contextMenu.menu.at} onClose={contextMenu.close} />
       )}
 
       {cards !== null && cards.length === 0 && (
         <p className="board__empty">
-          No cards on <strong>{board.name}</strong> yet. Every card you add is a real note in{' '}
-          <code>{CARD_FOLDER}/</code> — open it and it is an ordinary editor.
+          No cards on <strong>{board.name}</strong> yet. Every card you add is a real note in <code>{CARD_FOLDER}/</code> — open it and it
+          is an ordinary editor.
         </p>
       )}
     </div>
@@ -431,13 +416,7 @@ export function registerBoardView(onOpenNote: (path: string) => void): () => voi
   })
 }
 
-function BoardHost({
-  boardId,
-  onOpenNote,
-}: {
-  boardId: unknown
-  onOpenNote: (path: string) => void
-}): React.ReactElement {
+function BoardHost({ boardId, onOpenNote }: { boardId: unknown; onOpenNote: (path: string) => void }): React.ReactElement {
   const file = useBoards()
   const id = typeof boardId === 'string' ? boardId : file.boards[0]?.id
   // A leaf that names a board which has since been deleted falls back rather
@@ -450,9 +429,7 @@ function BoardHost({
     <BoardView
       board={board}
       onOpenNote={onOpenNote}
-      onEditBoard={(next) =>
-        updateBoards({ boards: file.boards.map((entry) => (entry.id === next.id ? next : entry)) })
-      }
+      onEditBoard={(next) => updateBoards({ boards: file.boards.map((entry) => (entry.id === next.id ? next : entry)) })}
     />
   )
 }

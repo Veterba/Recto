@@ -3,14 +3,7 @@ import type { SyntaxNode } from '@lezer/common'
 import { CALLOUT_HEAD, isLivePreviewOn } from './live-preview'
 import { calloutGroup } from './rich-widgets'
 import { RangeSetBuilder, type EditorState, type Extension } from '@codemirror/state'
-import {
-  Decoration,
-  EditorView,
-  ViewPlugin,
-  WidgetType,
-  type DecorationSet,
-  type ViewUpdate,
-} from '@codemirror/view'
+import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 
 /**
  * Block-level looks: fenced code and blockquotes.
@@ -302,7 +295,12 @@ function orphanDepth(text: string): number {
 
 /** The language written after the opening fence, if any. */
 function fenceLanguage(text: string): string {
-  return text.replace(/^\s*(`{3,}|~{3,})/, '').trim().split(/\s+/)[0] ?? ''
+  return (
+    text
+      .replace(/^\s*(`{3,}|~{3,})/, '')
+      .trim()
+      .split(/\s+/)[0] ?? ''
+  )
 }
 
 function build(view: EditorView): DecorationSet {
@@ -438,9 +436,7 @@ function build(view: EditorView): DecorationSet {
          * padding takes whichever is wider: pulling a row further left than its
          * own padding would push the bullet out of the editor.
          */
-        const pad = livePreview
-          ? columns.indent + geometry.marker
-          : Math.max(columns.indent, geometry.lead) + geometry.marker
+        const pad = livePreview ? columns.indent + geometry.marker : Math.max(columns.indent, geometry.lead) + geometry.marker
         items.set(first.number, {
           pad,
           pull: livePreview ? geometry.marker : geometry.lead + geometry.marker,

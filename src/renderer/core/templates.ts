@@ -78,9 +78,7 @@ export function coerceTemplateSettings(value: unknown): TemplateSettings {
   const folder = typeof v.folder === 'string' ? normaliseFolder(v.folder) : null
   const dailyFolder = typeof daily.folder === 'string' ? normaliseFolder(daily.folder) : null
   const template =
-    typeof daily.template === 'string' && normaliseFolder(daily.template) !== null && /\.md$/i.test(daily.template)
-      ? daily.template
-      : null
+    typeof daily.template === 'string' && normaliseFolder(daily.template) !== null && /\.md$/i.test(daily.template) ? daily.template : null
   return {
     folder: folder ?? DEFAULT_TEMPLATE_SETTINGS.folder,
     daily: {
@@ -229,5 +227,4 @@ export function mergeTemplateProperties(target: string, template: string): strin
 }
 
 /** Display name for a template file. */
-export const templateName = (path: string): string =>
-  path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
+export const templateName = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')

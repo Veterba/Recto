@@ -113,10 +113,7 @@ function TopicRow({ topic, onChanged }: { topic: TopicInfo; onChanged: () => voi
       <button className="btn btn--ghost btn--sm" onClick={() => setEditing(true)}>
         Rename
       </button>
-      <button
-        className="btn btn--ghost btn--sm"
-        onClick={() => void api.invoke('topics:delete', topic.id).then(onChanged)}
-      >
+      <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke('topics:delete', topic.id).then(onChanged)}>
         Delete
       </button>
       {error !== null && <span className="topics__error">{error}</span>}
@@ -164,7 +161,9 @@ export function TopicsSettingsTab(): React.ReactElement {
         <div className="autolinks__first">
           <p className="setting__note">
             <Icon name="tags" size={13} />
-            {firstLook > 0 ? `The next run will group ${firstLook} notes into topics.` : 'Topics are made once every note has been read.'}{' '}
+            {firstLook > 0
+              ? `The next run will group ${firstLook} notes into topics.`
+              : 'Topics are made once every note has been read.'}{' '}
             {status.review.devGuarded ? 'Dev build: nothing is written.' : 'Nothing is written yet.'}
             <button
               className="btn btn--ghost btn--sm autolinks__preview-btn"
@@ -242,7 +241,10 @@ export function TopicsSettingsTab(): React.ReactElement {
         </div>
       )}
 
-      <Row label="Undo last run" hint={status.lastRun === null ? 'Nothing to undo.' : `Last run: ${status.lastRun.notes} notes, ${when(status.lastRun.at)}`}>
+      <Row
+        label="Undo last run"
+        hint={status.lastRun === null ? 'Nothing to undo.' : `Last run: ${status.lastRun.notes} notes, ${when(status.lastRun.at)}`}
+      >
         <button
           className="btn btn--ghost btn--sm"
           disabled={status.lastRun === null}

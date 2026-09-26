@@ -37,13 +37,9 @@ export const TREE_DIRECTIONS: readonly TreeDirection[] = ['down', 'up', 'right',
 export function coerceLayout(raw: unknown): GraphLayout {
   const r = raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
   const mode = LAYOUT_MODES.includes(r['mode'] as LayoutMode) ? (r['mode'] as LayoutMode) : DEFAULT_LAYOUT.mode
-  const direction = TREE_DIRECTIONS.includes(r['direction'] as TreeDirection)
-    ? (r['direction'] as TreeDirection)
-    : DEFAULT_LAYOUT.direction
+  const direction = TREE_DIRECTIONS.includes(r['direction'] as TreeDirection) ? (r['direction'] as TreeDirection) : DEFAULT_LAYOUT.direction
   const spacing =
-    typeof r['spacing'] === 'number' && Number.isFinite(r['spacing'])
-      ? Math.min(3, Math.max(0.3, r['spacing']))
-      : DEFAULT_LAYOUT.spacing
+    typeof r['spacing'] === 'number' && Number.isFinite(r['spacing']) ? Math.min(3, Math.max(0.3, r['spacing'])) : DEFAULT_LAYOUT.spacing
   return { mode, direction, spacing }
 }
 
@@ -143,15 +139,7 @@ export function spanningForest(
 }
 
 /** Unlinked notes in a filled disc or ring band, golden-angle spaced: no rows, no rings. */
-function scatter(
-  nodes: readonly number[],
-  x: Float32Array,
-  y: Float32Array,
-  cx: number,
-  cy: number,
-  inner: number,
-  gap: number,
-): void {
+function scatter(nodes: readonly number[], x: Float32Array, y: Float32Array, cx: number, cy: number, inner: number, gap: number): void {
   nodes.forEach((node, i) => {
     const r = Math.sqrt(inner * inner + i * gap * gap)
     x[node] = cx + Math.cos(i * GOLDEN) * r
@@ -475,10 +463,7 @@ export function layoutTargets(
     // within a folder, those links become short arcs along the rim and only the
     // links between folders cross the middle.
     const rank = new Map(dfs.map((node, i) => [node, i]))
-    const ring =
-      groups === null
-        ? dfs
-        : [...dfs].sort((a, b) => (groups[a] ?? 0) - (groups[b] ?? 0) || rank.get(a)! - rank.get(b)!)
+    const ring = groups === null ? dfs : [...dfs].sort((a, b) => (groups[a] ?? 0) - (groups[b] ?? 0) || rank.get(a)! - rank.get(b)!)
     const gap = unit * 0.08
     const room = ring.map((node) => 2 * (radiusOf?.(node) ?? 4) + gap)
     const circumference = room.reduce((sum, r) => sum + r, 0)

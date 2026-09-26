@@ -19,9 +19,7 @@ export function plainSnippet(text: string): string {
   return (
     text
       // `[[note|alias]]` and `[[note#heading]]` read as their visible half.
-      .replace(/\[\[([^\]|#]*)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/g, (_, target: string, alias?: string) =>
-        (alias ?? target).trim(),
-      )
+      .replace(/\[\[([^\]|#]*)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/g, (_, target: string, alias?: string) => (alias ?? target).trim())
       // `![alt](src)` and `[text](href)` keep the part a reader would have read.
       .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
       // Line furniture: heading hashes, bullets, numbers, quote marks.

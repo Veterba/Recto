@@ -85,7 +85,14 @@ export function coerceWriting(raw: unknown): WritingSettings {
   const style = flags(r['style'], d.style)
   const words = record(r['style'])['customWords']
   style.customWords = Array.isArray(words)
-    ? [...new Set(words.filter((w): w is string => typeof w === 'string').map((w) => w.trim()).filter((w) => w !== ''))].slice(0, 500)
+    ? [
+        ...new Set(
+          words
+            .filter((w): w is string => typeof w === 'string')
+            .map((w) => w.trim())
+            .filter((w) => w !== ''),
+        ),
+      ].slice(0, 500)
     : []
   return {
     focus: typeof r['focus'] === 'boolean' ? r['focus'] : d.focus,

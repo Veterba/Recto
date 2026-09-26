@@ -4,15 +4,8 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { foldedRanges, indentOnInput, syntaxTree } from '@codemirror/language'
 import { search, searchKeymap } from '@codemirror/search'
-import { Compartment, EditorState, type Extension, type TransactionSpec } from '@codemirror/state'
-import {
-  EditorView,
-  drawSelection,
-  dropCursor,
-  highlightActiveLine,
-  keymap,
-  rectangularSelection,
-} from '@codemirror/view'
+import { Compartment, EditorState, type TransactionSpec } from '@codemirror/state'
+import { EditorView, drawSelection, dropCursor, highlightActiveLine, keymap, rectangularSelection } from '@codemirror/view'
 import { vim } from '@replit/codemirror-vim'
 import { activeFormats, type Format } from './markdown-actions'
 import { blockDecorations } from './blocks'
@@ -254,9 +247,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         blockDecorations(),
         // Live Preview sits in a compartment so the mode can be switched at
         // runtime without rebuilding the editor and losing undo history.
-        livePreviewCompartment.of(
-          livePreview((v) => v.state.field(unresolvedField, false) ?? new Set<string>()),
-        ),
+        livePreviewCompartment.of(livePreview((v) => v.state.field(unresolvedField, false) ?? new Set<string>())),
         editorTheme(),
         imageDrop(),
         linkClick,
@@ -350,10 +341,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       const limit = Math.min(current.length, next.length)
       while (start < limit && current.charCodeAt(start) === next.charCodeAt(start)) start++
       let end = 0
-      while (
-        end < limit - start &&
-        current.charCodeAt(current.length - 1 - end) === next.charCodeAt(next.length - 1 - end)
-      ) {
+      while (end < limit - start && current.charCodeAt(current.length - 1 - end) === next.charCodeAt(next.length - 1 - end)) {
         end++
       }
       const changes = view.state.changes({
@@ -376,7 +364,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       view.dispatch({ effects: setUnresolvedTargets.of(targets) })
     },
 
-      /**
+    /**
      * Put the cursor on a heading and centre it.
      *
      * Matched on text rather than a stored position because the note may have

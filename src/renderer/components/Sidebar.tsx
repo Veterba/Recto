@@ -156,10 +156,7 @@ export function Sidebar({
       {(onToggleFolders !== undefined || onTidy !== undefined) && (
         <div className="sidebar__tools">
           {onToggleFolders !== undefined && (
-            <Tip
-              label={foldersOpen ? 'Collapse all folders' : 'Expand all folders'}
-              hint="Sidebar only — opens and closes nothing"
-            >
+            <Tip label={foldersOpen ? 'Collapse all folders' : 'Expand all folders'} hint="Sidebar only — opens and closes nothing">
               <button
                 className="tool-btn"
                 onClick={onToggleFolders}
@@ -216,13 +213,7 @@ export function Sidebar({
         </Tip>
       </footer>
 
-      <div
-        className="sidebar__resize"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize sidebar"
-        onPointerDown={startDrag}
-      />
+      <div className="sidebar__resize" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" onPointerDown={startDrag} />
     </aside>
   )
 }

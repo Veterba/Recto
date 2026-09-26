@@ -10,10 +10,7 @@ function make(input: string): EditorState {
     if (char === '|') marks.push(doc.length)
     else doc += char
   }
-  const selection =
-    marks.length >= 2
-      ? EditorSelection.single(marks[0]!, marks[1]!)
-      : EditorSelection.cursor(marks[0] ?? 0)
+  const selection = marks.length >= 2 ? EditorSelection.single(marks[0]!, marks[1]!) : EditorSelection.cursor(marks[0] ?? 0)
   return EditorState.create({ doc, selection })
 }
 
@@ -289,7 +286,7 @@ describe('Tab inside a list', () => {
     expect(plain(s, md.indentListItems(s, 1))).toBe('- alpha\n  - beta\n- gamma')
   })
 
-  it('indents by the sibling\'s content column, not a fixed unit', () => {
+  it("indents by the sibling's content column, not a fixed unit", () => {
     // "1. " is three columns, so its child needs three - two would not nest.
     const s = make('1. alpha\n1. bet|a')
     expect(plain(s, md.indentListItems(s, 1))).toBe('1. alpha\n   1. beta')
@@ -300,7 +297,7 @@ describe('Tab inside a list', () => {
     expect(plain(s, md.indentListItems(s, 1))).toBe('  - alpha\n- beta')
   })
 
-  it('carries the item\'s own children with it', () => {
+  it("carries the item's own children with it", () => {
     const s = make('- alpha\n- bet|a\n  - child\n    text')
     expect(plain(s, md.indentListItems(s, 1))).toBe('- alpha\n  - beta\n    - child\n      text')
   })
@@ -315,7 +312,7 @@ describe('Tab inside a list', () => {
     expect(md.indentListItems(s, -1)).toBeNull()
   })
 
-  it('gives a plain line one unit, not the language\'s six spaces', () => {
+  it("gives a plain line one unit, not the language's six spaces", () => {
     const s = make('just a para|graph')
     expect(plain(s, md.indentListItems(s, 1))).toBe('  just a paragraph')
   })

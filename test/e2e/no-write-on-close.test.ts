@@ -20,7 +20,8 @@ const PORT = 9420 + Math.floor(Math.random() * 400)
 const OLD = new Date('2026-01-01T00:00:00Z')
 
 /** The shape of the note that was once rewritten: frontmatter, Cyrillic, a list, no newline at the end. */
-const NOTE = '---\ntags: []\nlinks:\n---\n# Слепой набор\n- https://monkeytype.com - тренажёр на скорость\n- https://rata-type.com - тренажёр для рук'
+const NOTE =
+  '---\ntags: []\nlinks:\n---\n# Слепой набор\n- https://monkeytype.com - тренажёр на скорость\n- https://rata-type.com - тренажёр для рук'
 
 type Cdp = { call: (method: string, params?: object) => Promise<{ result?: { result?: { value?: unknown } } }>; close: () => void }
 
@@ -107,11 +108,13 @@ describe.skipIf(!RUN)('closing a note it did not change', () => {
 
     // Open it with the quick switcher, as a person would.
     await cdp.call('Page.bringToFront')
-    for (const type of ['keyDown', 'keyUp']) await cdp.call('Input.dispatchKeyEvent', { type, modifiers: 4, key: 'o', code: 'KeyO', windowsVirtualKeyCode: 79 })
+    for (const type of ['keyDown', 'keyUp'])
+      await cdp.call('Input.dispatchKeyEvent', { type, modifiers: 4, key: 'o', code: 'KeyO', windowsVirtualKeyCode: 79 })
     await sleep(300)
     await cdp.call('Input.insertText', { text: 'Слепой набор' })
     await sleep(300)
-    for (const type of ['keyDown', 'keyUp']) await cdp.call('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
+    for (const type of ['keyDown', 'keyUp'])
+      await cdp.call('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
     await sleep(1000)
     expect(await evaluate("document.querySelector('.md__path')?.textContent")).toBe('Notes/Слепой набор.md')
 
@@ -119,15 +122,22 @@ describe.skipIf(!RUN)('closing a note it did not change', () => {
     const [x, y] = (await evaluate(
       "(() => { const r = document.querySelector('.cm-content').getBoundingClientRect(); return [r.x + 40, r.y + 20] })()",
     )) as [number, number]
-    for (const type of ['mousePressed', 'mouseReleased']) await cdp.call('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 })
+    for (const type of ['mousePressed', 'mouseReleased'])
+      await cdp.call('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 })
     for (let i = 0; i < 8; i++) {
-      for (const type of ['keyDown', 'keyUp']) await cdp.call('Input.dispatchKeyEvent', { type, key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 })
+      for (const type of ['keyDown', 'keyUp'])
+        await cdp.call('Input.dispatchKeyEvent', { type, key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 })
     }
-    for (const type of ['keyDown', 'keyUp']) await cdp.call('Input.dispatchKeyEvent', { type, key: 'End', code: 'End', windowsVirtualKeyCode: 35 })
+    for (const type of ['keyDown', 'keyUp'])
+      await cdp.call('Input.dispatchKeyEvent', { type, key: 'End', code: 'End', windowsVirtualKeyCode: 35 })
     await sleep(1200)
 
     // Close the tab.
-    expect(await evaluate("(() => { const b = document.querySelector('button[aria-label=\"Close Слепой набор\"]'); b?.click(); return b !== null })()")).toBe(true)
+    expect(
+      await evaluate(
+        '(() => { const b = document.querySelector(\'button[aria-label="Close Слепой набор"]\'); b?.click(); return b !== null })()',
+      ),
+    ).toBe(true)
     await sleep(1500)
 
     expect(snapshot()).toEqual(before)

@@ -18,10 +18,7 @@ const dirname = path.dirname(fileURLToPath(import.meta.url))
 
 let child: UtilityProcess | null = null
 let nextId = 1
-const pending = new Map<
-  number,
-  { proc: UtilityProcess; resolve: (r: IndexResponse) => void; reject: (e: Error) => void }
->()
+const pending = new Map<number, { proc: UtilityProcess; resolve: (r: IndexResponse) => void; reject: (e: Error) => void }>()
 
 /**
  * The vault the index should be open on. A child that dies - or is replaced -

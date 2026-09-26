@@ -19,14 +19,7 @@ type Props = {
   onOpenPalette: () => void
 }
 
-export function StatusBar({
-  workspace,
-  vaultName,
-  graphOpen,
-  onToggleGraph,
-  onOpenDaily,
-  onOpenPalette,
-}: Props): React.ReactElement {
+export function StatusBar({ workspace, vaultName, graphOpen, onToggleGraph, onOpenDaily, onOpenPalette }: Props): React.ReactElement {
   const leaf = workspace?.activeLeaf ?? null
   const openCount = workspace?.leaves().length ?? 0
 

@@ -72,8 +72,7 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
   }
 
   const trimmed = query.trim()
-  const shown =
-    trimmed === '' ? file.boards : file.boards.filter((board) => fuzzyMatch(trimmed, board.name) !== null)
+  const shown = trimmed === '' ? file.boards : file.boards.filter((board) => fuzzyMatch(trimmed, board.name) !== null)
 
   return (
     <div className="boards">
@@ -105,21 +104,13 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
             />
           ) : (
             <>
-              <button
-                className="boards__name"
-                onClick={() => onOpen(board.id)}
-                onDoubleClick={() => setRenaming(board.id)}
-              >
+              <button className="boards__name" onClick={() => onOpen(board.id)} onDoubleClick={() => setRenaming(board.id)}>
                 <Icon name="square-kanban" size={14} />
                 {board.name}
               </button>
               {file.boards.length > 1 && (
                 <Tip label="Remove this board" hint="The cards stay as notes">
-                  <button
-                    className="boards__remove"
-                    aria-label={`Remove ${board.name}`}
-                    onClick={() => setConfirming(board)}
-                  >
+                  <button className="boards__remove" aria-label={`Remove ${board.name}`} onClick={() => setConfirming(board)}>
                     <Icon name="x" size={12} />
                   </button>
                 </Tip>
@@ -154,8 +145,8 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
           title="Remove board"
           body={
             <>
-              <strong>{confirming.name}</strong> disappears from this list. Its cards are notes and
-              stay exactly where they are — recreating a board with the same name brings them back.
+              <strong>{confirming.name}</strong> disappears from this list. Its cards are notes and stay exactly where they are — recreating
+              a board with the same name brings them back.
             </>
           }
           confirmLabel="Remove board"
@@ -169,11 +160,7 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
       )}
 
       {contextMenu.menu !== null && (
-        <ContextMenu
-          items={menuFor(contextMenu.menu.subject)}
-          at={contextMenu.menu.at}
-          onClose={contextMenu.close}
-        />
+        <ContextMenu items={menuFor(contextMenu.menu.subject)} at={contextMenu.menu.at} onClose={contextMenu.close} />
       )}
     </div>
   )

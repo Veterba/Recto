@@ -39,7 +39,19 @@ const shortcut = (id: string): string => {
   return binding === null ? '' : formatChord(binding)
 }
 
-function Master({ icon, label, on, onClick, command }: { icon: string; label: string; on: boolean; onClick: () => void; command: string }): React.ReactElement {
+function Master({
+  icon,
+  label,
+  on,
+  onClick,
+  command,
+}: {
+  icon: string
+  label: string
+  on: boolean
+  onClick: () => void
+  command: string
+}): React.ReactElement {
   return (
     <button className={`wmenu__master${on ? ' is-on' : ''}`} role="menuitemcheckbox" aria-checked={on} onClick={onClick}>
       <Icon name={icon} size={15} />
@@ -50,7 +62,19 @@ function Master({ icon, label, on, onClick, command }: { icon: string; label: st
   )
 }
 
-function Check({ label, on, onClick, colour, radio = false }: { label: string; on: boolean; onClick: () => void; colour?: string; radio?: boolean }): React.ReactElement {
+function Check({
+  label,
+  on,
+  onClick,
+  colour,
+  radio = false,
+}: {
+  label: string
+  on: boolean
+  onClick: () => void
+  colour?: string
+  radio?: boolean
+}): React.ReactElement {
   return (
     <button className="wmenu__item" role={radio ? 'menuitemradio' : 'menuitemcheckbox'} aria-checked={on} onClick={onClick}>
       <span className="wmenu__tick">{on ? <Icon name="check" size={13} /> : null}</span>
@@ -61,8 +85,10 @@ function Check({ label, on, onClick, colour, radio = false }: { label: string; o
   )
 }
 
-const flip = <K extends 'syntax' | 'style' | 'authors'>(section: K, key: keyof WritingSettings[K]) => (): void =>
-  updateWriting((s) => ({ ...s, [section]: { ...s[section], [key]: !s[section][key] } }))
+const flip =
+  <K extends 'syntax' | 'style' | 'authors'>(section: K, key: keyof WritingSettings[K]) =>
+  (): void =>
+    updateWriting((s) => ({ ...s, [section]: { ...s[section], [key]: !s[section][key] } }))
 
 export function WritingMenu({ anchor, trigger, placement = 'anchor', onClose, onOpenSettings }: Props): React.ReactElement {
   const writing = useWriting()
@@ -126,7 +152,12 @@ export function WritingMenu({ anchor, trigger, placement = 'anchor', onClose, on
       <Check label="Nouns" colour="var(--pos-noun)" on={writing.syntax.nouns} onClick={flip('syntax', 'nouns')} />
       <Check label="Adverbs" colour="var(--pos-adverb)" on={writing.syntax.adverbs} onClick={flip('syntax', 'adverbs')} />
       <Check label="Verbs" colour="var(--pos-verb)" on={writing.syntax.verbs} onClick={flip('syntax', 'verbs')} />
-      <Check label="Conjunctions" colour="var(--pos-conjunction)" on={writing.syntax.conjunctions} onClick={flip('syntax', 'conjunctions')} />
+      <Check
+        label="Conjunctions"
+        colour="var(--pos-conjunction)"
+        on={writing.syntax.conjunctions}
+        onClick={flip('syntax', 'conjunctions')}
+      />
 
       <span className="wmenu__sep" />
       <Master icon="strikethrough" label="Style check" on={writing.style.on} onClick={toggleStyle} command="writing:toggle-style" />
@@ -152,11 +183,7 @@ export function WritingMenu({ anchor, trigger, placement = 'anchor', onClose, on
       </div>
 
       <span className="wmenu__sep" />
-      <Check
-        label="Check spelling"
-        on={writing.spellcheck}
-        onClick={() => updateWriting((s) => ({ ...s, spellcheck: !s.spellcheck }))}
-      />
+      <Check label="Check spelling" on={writing.spellcheck} onClick={() => updateWriting((s) => ({ ...s, spellcheck: !s.spellcheck }))} />
       {onOpenSettings !== undefined && (
         <button className="wmenu__more" onClick={onOpenSettings}>
           More in Settings…

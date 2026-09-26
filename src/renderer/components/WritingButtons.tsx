@@ -32,7 +32,10 @@ export function WritingButtons({
 
   return (
     <>
-      <Tip label={writing.focus ? 'Leave focus mode' : 'Focus mode'} hint={focusKey === null ? undefined : `${formatChord(focusKey)} · Esc to leave`}>
+      <Tip
+        label={writing.focus ? 'Leave focus mode' : 'Focus mode'}
+        hint={focusKey === null ? undefined : `${formatChord(focusKey)} · Esc to leave`}
+      >
         <button
           className={`formatbar__btn${writing.focus ? ' is-active' : ''}`}
           aria-label="Focus mode"

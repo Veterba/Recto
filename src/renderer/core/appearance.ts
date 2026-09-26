@@ -199,10 +199,7 @@ export function applyAppearance(appearance: Appearance): void {
   // without the editor being rebuilt.
   root.style.setProperty('--editor-font-size', `${appearance.fontSize}px`)
   root.style.setProperty('--font-editor', FONT_STACKS[appearance.editorFont])
-  root.style.setProperty(
-    '--font-heading',
-    appearance.headingFont === 'match' ? 'inherit' : FONT_STACKS[appearance.headingFont],
-  )
+  root.style.setProperty('--font-heading', appearance.headingFont === 'match' ? 'inherit' : FONT_STACKS[appearance.headingFont])
   // One ratio, six levels. H1 is scale^3 above the body, H3 is scale^1, and
   // H4-H6 sit at or below it - which is what those levels are for.
   root.style.setProperty('--heading-scale', String(appearance.headingScale))
@@ -242,10 +239,7 @@ export function applyAppearance(appearance: Appearance): void {
     void api.invoke('app:set-theme-source', appearance.theme)
   }
 
-  const wanted =
-    appearance.translucent && SUPPORTS_VIBRANCY && !fullScreen
-      ? MATERIAL[resolvedTheme(appearance.theme)]
-      : null
+  const wanted = appearance.translucent && SUPPORTS_VIBRANCY && !fullScreen ? MATERIAL[resolvedTheme(appearance.theme)] : null
   if (material !== wanted) {
     material = wanted
     void api.invoke('app:set-vibrancy', wanted)
@@ -270,10 +264,7 @@ function coerce(value: unknown): Appearance {
     sidebarWidth: typeof v.sidebarWidth === 'number' ? Math.min(520, Math.max(180, v.sidebarWidth)) : DEFAULT_APPEARANCE.sidebarWidth,
     sidebarOpen: typeof v.sidebarOpen === 'boolean' ? v.sidebarOpen : DEFAULT_APPEARANCE.sidebarOpen,
     livePreview: typeof v.livePreview === 'boolean' ? v.livePreview : DEFAULT_APPEARANCE.livePreview,
-    fontSize:
-      typeof v.fontSize === 'number' && v.fontSize >= 11 && v.fontSize <= 24
-        ? v.fontSize
-        : DEFAULT_APPEARANCE.fontSize,
+    fontSize: typeof v.fontSize === 'number' && v.fontSize >= 11 && v.fontSize <= 24 ? v.fontSize : DEFAULT_APPEARANCE.fontSize,
     headingFont:
       v.headingFont === 'mono' || v.headingFont === 'sans' || v.headingFont === 'serif' || v.headingFont === 'match'
         ? v.headingFont
@@ -301,9 +292,7 @@ function coerce(value: unknown): Appearance {
     aiModel: isAiModel(v.aiModel) ? v.aiModel : DEFAULT_APPEARANCE.aiModel,
     translucent: typeof v.translucent === 'boolean' ? v.translucent : DEFAULT_APPEARANCE.translucent,
     editorFont:
-      v.editorFont === 'mono' || v.editorFont === 'sans' || v.editorFont === 'serif'
-        ? v.editorFont
-        : DEFAULT_APPEARANCE.editorFont,
+      v.editorFont === 'mono' || v.editorFont === 'sans' || v.editorFont === 'serif' ? v.editorFont : DEFAULT_APPEARANCE.editorFont,
   }
 }
 

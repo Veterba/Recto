@@ -127,7 +127,11 @@ describe('fuzzy matching', () => {
   it('is case-insensitive but reports ranges into the original text', () => {
     const m = fuzzyMatch('cp', 'Command Palette')
     expect(m).not.toBeNull()
-    expect(toSegments('Command Palette', m!.ranges).filter((s) => s.hit).map((s) => s.text)).toEqual(['C', 'P'])
+    expect(
+      toSegments('Command Palette', m!.ranges)
+        .filter((s) => s.hit)
+        .map((s) => s.text),
+    ).toEqual(['C', 'P'])
   })
 
   it('collapses adjacent hits into one range so the DOM stays small', () => {
@@ -156,7 +160,11 @@ describe('fuzzy matching', () => {
   it('toSegments reconstructs the original string exactly', () => {
     const text = 'Split pane vertically'
     const m = fuzzyMatch('spv', text)!
-    expect(toSegments(text, m.ranges).map((s) => s.text).join('')).toBe(text)
+    expect(
+      toSegments(text, m.ranges)
+        .map((s) => s.text)
+        .join(''),
+    ).toBe(text)
   })
 })
 
@@ -179,14 +187,23 @@ describe('chord conflicts between scopes', () => {
   /** Two commands on one chord: editor-scoped wins when the editor has focus. */
   const build = (editorFocused: () => boolean): CommandRegistry => {
     const reg = new CommandRegistry()
-    reg.register({ id: 'app:sidebar', name: 'Toggle sidebar', hotkey: 'Mod+B', run: () => { ran.push('app') } })
+    reg.register({
+      id: 'app:sidebar',
+      name: 'Toggle sidebar',
+      hotkey: 'Mod+B',
+      run: () => {
+        ran.push('app')
+      },
+    })
     reg.register({
       id: 'editor:bold',
       name: 'Bold',
       hotkey: 'Mod+B',
       scope: 'editor',
       isAvailable: editorFocused,
-      run: () => { ran.push('editor') },
+      run: () => {
+        ran.push('editor')
+      },
     })
     return reg
   }
@@ -217,9 +234,18 @@ describe('chord conflicts between scopes', () => {
       hotkey: 'Mod+B',
       scope: 'editor',
       isAvailable: () => true,
-      run: () => { ran.push('editor') },
+      run: () => {
+        ran.push('editor')
+      },
     })
-    reg.register({ id: 'app:sidebar', name: 'Toggle sidebar', hotkey: 'Mod+B', run: () => { ran.push('app') } })
+    reg.register({
+      id: 'app:sidebar',
+      name: 'Toggle sidebar',
+      hotkey: 'Mod+B',
+      run: () => {
+        ran.push('app')
+      },
+    })
     expect(reg.handleKeyEvent(modB())).toBe(true)
     await vi.waitFor(() => expect(ran).toEqual(['editor']))
   })

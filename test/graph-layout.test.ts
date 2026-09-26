@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { coerceLayout, DEFAULT_LAYOUT, layoutTargets, spanningForest, treeEdgeIndices, type GraphLayout } from '../src/renderer/graph/layout'
+import {
+  coerceLayout,
+  DEFAULT_LAYOUT,
+  layoutTargets,
+  spanningForest,
+  treeEdgeIndices,
+  type GraphLayout,
+} from '../src/renderer/graph/layout'
 
 /** A hub (0) with three children, one of which (1) has two children; plus two unlinked notes. */
 const COUNT = 8

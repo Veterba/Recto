@@ -110,11 +110,7 @@ export function HotkeyEditor(): React.ReactElement {
           spellCheck={false}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <button
-          className="btn btn--ghost btn--sm"
-          onClick={() => commit({})}
-          disabled={Object.keys(overrides).length === 0}
-        >
+        <button className="btn btn--ghost btn--sm" onClick={() => commit({})} disabled={Object.keys(overrides).length === 0}>
           Reset all
         </button>
       </div>
@@ -146,34 +142,26 @@ export function HotkeyEditor(): React.ReactElement {
                 className={`hotkeys__chord${recording === row.id ? ' is-recording' : ''}${row.overridden ? ' is-custom' : ''}`}
                 onClick={() => setRecording(recording === row.id ? null : row.id)}
               >
-                {recording === row.id
-                  ? 'Press keys…'
-                  : row.binding === null
-                    ? 'Not bound'
-                    : formatChord(row.binding)}
+                {recording === row.id ? 'Press keys…' : row.binding === null ? 'Not bound' : formatChord(row.binding)}
               </button>
 
               {row.overridden ? (
                 <Tip label="Back to the default">
-                <button
-                  className="hotkeys__clear"
-                  aria-label="Back to the default"
-                  onClick={() => {
-                    const next = { ...overrides }
-                    delete next[row.id]
-                    commit(next)
-                  }}
-                >
-                  ↺
-                </button>
+                  <button
+                    className="hotkeys__clear"
+                    aria-label="Back to the default"
+                    onClick={() => {
+                      const next = { ...overrides }
+                      delete next[row.id]
+                      commit(next)
+                    }}
+                  >
+                    ↺
+                  </button>
                 </Tip>
               ) : (
                 <Tip label="Unbind this shortcut">
-                  <button
-                    className="hotkeys__clear"
-                    aria-label="Unbind"
-                    onClick={() => commit({ ...overrides, [row.id]: null })}
-                  >
+                  <button className="hotkeys__clear" aria-label="Unbind" onClick={() => commit({ ...overrides, [row.id]: null })}>
                     ×
                   </button>
                 </Tip>

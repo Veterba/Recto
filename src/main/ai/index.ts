@@ -62,12 +62,10 @@ export function cancel(id: string): { ok: boolean } {
 
 const MAX_TOKENS = 4096
 
-export function startStream(request: {
-  id: string
-  model: string
-  system: string
-  messages: AiMessage[]
-}): { ok: boolean; error?: string } {
+export function startStream(request: { id: string; model: string; system: string; messages: AiMessage[] }): {
+  ok: boolean
+  error?: string
+} {
   const client = current()
   if (client === null) {
     return { ok: false, error: 'Add your Anthropic API key in Settings → AI first.' }

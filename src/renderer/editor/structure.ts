@@ -1,11 +1,4 @@
-import {
-  codeFolding,
-  ensureSyntaxTree,
-  foldedRanges,
-  foldEffect,
-  syntaxTree,
-  unfoldEffect,
-} from '@codemirror/language'
+import { codeFolding, ensureSyntaxTree, foldedRanges, foldEffect, syntaxTree, unfoldEffect } from '@codemirror/language'
 import { RangeSetBuilder, type EditorState, type Extension } from '@codemirror/state'
 import {
   Decoration,
@@ -437,7 +430,10 @@ function guideMarkers(view: EditorView): readonly RectangleMarker[] {
        */
       let item: SyntaxNode | null = null
       for (let node: SyntaxNode | null = tree.resolveInner(line.from, 1); node; node = node.parent) {
-        if (node.name === 'ListItem') { item = node; break }
+        if (node.name === 'ListItem') {
+          item = node
+          break
+        }
       }
       if (line.text.trim() === '') {
         if (isListPadding(state, tree, line.number)) continue
@@ -507,9 +503,7 @@ function guideMarkers(view: EditorView): readonly RectangleMarker[] {
         }
 
         const first = view.lineBlockAt(node.from)
-        const last = view.lineBlockAt(
-          nested === null ? ownEnd(state, node.node) : trimEnd(state, body.from, body.to),
-        )
+        const last = view.lineBlockAt(nested === null ? ownEnd(state, node.node) : trimEnd(state, body.from, body.to))
         const top = view.documentTop + first.bottom - origin.top
         const bottom = view.documentTop + last.bottom - origin.top
         // Folded: the children are hidden inside the item's own line, so there

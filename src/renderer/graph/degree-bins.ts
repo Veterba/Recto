@@ -46,8 +46,7 @@ export function binsToRange(low: number, high: number): LinkRange {
   return { min: DEGREE_BINS[low]?.min ?? 0, max: high >= last ? null : (DEGREE_BINS[high]?.max ?? null) }
 }
 
-export const inRange = (degree: number, range: LinkRange): boolean =>
-  degree >= range.min && (range.max === null || degree <= range.max)
+export const inRange = (degree: number, range: LinkRange): boolean => degree >= range.min && (range.max === null || degree <= range.max)
 
 export function coerceLinkRange(raw: unknown): LinkRange {
   const r = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}

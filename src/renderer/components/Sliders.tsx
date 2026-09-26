@@ -23,7 +23,10 @@ export function StepDots<T extends string | number>({
   options: readonly StepOption<T>[]
   onChange: (value: T) => void
 }): React.ReactElement {
-  const index = Math.max(0, options.findIndex((option) => option.value === value))
+  const index = Math.max(
+    0,
+    options.findIndex((option) => option.value === value),
+  )
   const go = (next: number): void => {
     const clamped = Math.min(options.length - 1, Math.max(0, next))
     if (clamped !== index) onChange(options[clamped]!.value)
@@ -211,7 +214,12 @@ export function RangeSlider({
             aria-valuemax={max}
             aria-valuenow={v}
             onKeyDown={(event) => {
-              const delta = event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -step : event.key === 'ArrowRight' || event.key === 'ArrowUp' ? step : 0
+              const delta =
+                event.key === 'ArrowLeft' || event.key === 'ArrowDown'
+                  ? -step
+                  : event.key === 'ArrowRight' || event.key === 'ArrowUp'
+                    ? step
+                    : 0
               if (delta === 0) return
               event.preventDefault()
               if (i === 0) onChange(Math.min(high, Math.max(min, low + delta)), high)

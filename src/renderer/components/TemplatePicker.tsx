@@ -30,10 +30,7 @@ export function TemplatePicker({ notes, folder, onPick, onClose }: Props): React
 
   useEffect(() => input.current?.focus(), [])
 
-  const templates = useMemo(
-    () => notes.filter((path) => path !== folder && isInFolder(path, folder)),
-    [notes, folder],
-  )
+  const templates = useMemo(() => notes.filter((path) => path !== folder && isInFolder(path, folder)), [notes, folder])
 
   const results = useMemo(
     () =>
@@ -85,9 +82,8 @@ export function TemplatePicker({ notes, folder, onPick, onClose }: Props): React
 
         {templates.length === 0 ? (
           <p className="palette__empty">
-            A template is just a note in <code>{folder}/</code>. Create one there and it
-            appears here — <code>{'{{date}}'}</code>, <code>{'{{title}}'}</code> and{' '}
-            <code>{'{{time}}'}</code> are filled in when you insert it.
+            A template is just a note in <code>{folder}/</code>. Create one there and it appears here — <code>{'{{date}}'}</code>,{' '}
+            <code>{'{{title}}'}</code> and <code>{'{{time}}'}</code> are filled in when you insert it.
           </p>
         ) : (
           <ul className="palette__list" role="listbox">

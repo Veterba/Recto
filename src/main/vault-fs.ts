@@ -77,9 +77,7 @@ function sortNodes(nodes: FileNode[]): FileNode[] {
   })
 }
 
-export async function readFile(
-  relative: string,
-): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
+export async function readFile(relative: string): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
   try {
     const data = await fsp.readFile(resolveInVault(requireVault(), relative))
     // Never hand binary to the editor: decoding it is lossy, and whatever reads
@@ -112,7 +110,15 @@ export async function writeFile(relative: string, content: string): Promise<{ ok
     // auto-links quiet period counts from.
     if (existing !== null && existing.equals(bytes)) return { ok: true }
     // A write nobody asked for is found by its caller. Off unless asked.
-    if (WRITE_LOG) console.error('[write]', relative, existing?.length ?? 'new', '->', bytes.length, new Error().stack?.split('\n').slice(2, 6).join(' <- '))
+    if (WRITE_LOG)
+      console.error(
+        '[write]',
+        relative,
+        existing?.length ?? 'new',
+        '->',
+        bytes.length,
+        new Error().stack?.split('\n').slice(2, 6).join(' <- '),
+      )
     const tmp = `${absolute}.tmp-${process.pid}`
     await fsp.mkdir(path.dirname(absolute), { recursive: true })
     await fsp.writeFile(tmp, bytes)
@@ -144,10 +150,7 @@ function uniquePath(absolute: string): string {
  * notes are a folder you can move" is the whole promise. The cost is disk
  * space, which is the right thing to spend.
  */
-export async function importFile(
-  source: string,
-  folder: string,
-): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+export async function importFile(source: string, folder: string): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   try {
     const root = requireVault()
     const bare = sanitiseName(path.basename(source))
@@ -208,10 +211,7 @@ export async function create(
   }
 }
 
-export async function rename(
-  relative: string,
-  newName: string,
-): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+export async function rename(relative: string, newName: string): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   try {
     const root = requireVault()
     const from = resolveInVault(root, relative)
@@ -227,10 +227,7 @@ export async function rename(
   }
 }
 
-export async function move(
-  relative: string,
-  newParent: string,
-): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+export async function move(relative: string, newParent: string): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   try {
     const root = requireVault()
     const from = resolveInVault(root, relative)
@@ -337,12 +334,7 @@ const ILLEGAL_IN_NAME = new RegExp('[/\\\\:*?"<>|\\u0000-\\u001f]', 'g')
  * (finding #2), and there is no reason a note cannot be called `Заметка.md`.
  */
 export function sanitiseName(name: string): string {
-  return name
-    .normalize('NFC')
-    .replace(ILLEGAL_IN_NAME, '')
-    .replace(/^\.+/, '')
-    .trim()
-    .slice(0, 255)
+  return name.normalize('NFC').replace(ILLEGAL_IN_NAME, '').replace(/^\.+/, '').trim().slice(0, 255)
 }
 
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err))

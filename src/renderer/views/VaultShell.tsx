@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ATTACHMENTS_FOLDER, type FileNode, type VaultInfo } from '@shared/ipc-contract'
 import { api } from '../api'
 import { Breadcrumb } from '../components/Breadcrumb'
-import { Icon } from '../components/Icon'
 import { CommandPalette } from '../components/CommandPalette'
 import { FileTree } from '../components/FileTree'
 import { FloatingWindow } from '../components/FloatingWindow'
@@ -63,17 +62,8 @@ registerArchiveView()
 const THEME_CYCLE: readonly Theme[] = ['system', 'light', 'dark']
 
 export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React.ReactElement {
-  const {
-    sections,
-    active,
-    activeSection,
-    setActiveSection,
-    graphWindow,
-    setGraphWindow,
-    historyWindow,
-    setHistoryWindow,
-    revision,
-  } = useWorkspace()
+  const { sections, active, activeSection, setActiveSection, graphWindow, setGraphWindow, historyWindow, setHistoryWindow, revision } =
+    useWorkspace()
   const { appearance, ready, update } = useAppearance()
   const boards = useBoards()
   const { tree, refresh } = useVault(true)
@@ -568,7 +558,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const linkCandidatesRef = useRef<LinkCandidate[]>([])
   linkCandidatesRef.current = useMemo(() => {
     const out: LinkCandidate[] = []
-    const walk = (nodes: readonly typeof tree.roots[number][]): void => {
+    const walk = (nodes: readonly (typeof tree.roots)[number][]): void => {
       for (const node of nodes) {
         if (node.kind === 'folder') walk(node.children ?? [])
         else if (node.name.toLowerCase().endsWith('.md')) {
@@ -809,7 +799,12 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       }
       // Esc leaves focus mode - unless something else already used it: closing
       // an autocomplete, the search panel or a menu comes first.
-      if (ev.key === 'Escape' && !ev.defaultPrevented && getWriting().focus && document.querySelector('.wmenu, .cm-panels, .cm-tooltip-autocomplete') === null) {
+      if (
+        ev.key === 'Escape' &&
+        !ev.defaultPrevented &&
+        getWriting().focus &&
+        document.querySelector('.wmenu, .cm-panels, .cm-tooltip-autocomplete') === null
+      ) {
         toggleFocus()
       }
     }
@@ -838,11 +833,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
             onNew={onNew}
             onNewFolder={activeSection === 'data' ? () => void createIn('folder') : undefined}
             foldersOpen={expanded.size > 0}
-            onToggleFolders={
-              activeSection === 'data'
-                ? () => setExpanded(expanded.size > 0 ? new Set() : new Set(allFolders))
-                : undefined
-            }
+            onToggleFolders={activeSection === 'data' ? () => setExpanded(expanded.size > 0 ? new Set() : new Set(allFolders)) : undefined}
             onTidy={activeSection === 'data' ? () => void openTidy() : undefined}
             onOpenArchive={() => openExtension('archive')}
             onOpenSettings={() => setSettingsOpen(true)}
@@ -866,13 +857,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} />
             ) : (
-              <ChatList
-                tree={tree.roots}
-                activePath={activeChat}
-                query={query}
-                onOpen={openChat}
-                onChanged={() => void refresh()}
-              />
+              <ChatList tree={tree.roots} activePath={activeChat} query={query} onOpen={openChat} onChanged={() => void refresh()} />
             )}
           </Sidebar>
         ) : (
@@ -942,22 +927,10 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         />
       )}
       {themePicker !== null && (
-        <SidebarThemePicker
-          at={themePicker}
-          appearance={appearance}
-          update={update}
-          onClose={() => setThemePicker(null)}
-        />
+        <SidebarThemePicker at={themePicker} appearance={appearance} update={update} onClose={() => setThemePicker(null)} />
       )}
       {settingsOpen && <SettingsDialog {...settingsDepsRef.current} onClose={() => setSettingsOpen(false)} />}
-      {tidy !== null && (
-        <TidyDialog
-          plan={tidy}
-          busy={tidyBusy}
-          onConfirm={() => void runTidy()}
-          onCancel={() => setTidy(null)}
-        />
-      )}
+      {tidy !== null && <TidyDialog plan={tidy} busy={tidyBusy} onConfirm={() => void runTidy()} onCancel={() => setTidy(null)} />}
       <HomeOverlay
         open={homeOpen}
         onClose={() => setHomeOpen(false)}
@@ -967,12 +940,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       />
       <CommandPalette registry={commands} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={openFile} />
-      <QuickSwitcher
-        open={switcherOpen}
-        roots={tree.roots}
-        onClose={() => setSwitcherOpen(false)}
-        onOpen={openFile}
-      />
+      <QuickSwitcher open={switcherOpen} roots={tree.roots} onClose={() => setSwitcherOpen(false)} onOpen={openFile} />
     </div>
   )
 }

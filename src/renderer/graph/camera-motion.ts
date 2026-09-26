@@ -98,9 +98,7 @@ export function step(
 
   // --- arrived? ------------------------------------------------------------------
   const close =
-    Math.abs(target.zoom - zoom) / target.zoom < 1e-3 &&
-    Math.abs(target.x - x) * zoom < 0.25 &&
-    Math.abs(target.y - y) * zoom < 0.25
+    Math.abs(target.zoom - zoom) / target.zoom < 1e-3 && Math.abs(target.x - x) * zoom < 0.25 && Math.abs(target.y - y) * zoom < 0.25
   const stopped = Math.abs(velocity.x) + Math.abs(velocity.y) <= 1e-4
   if (close && stopped) {
     return { camera: { ...target }, motion: { target, anchor: null, velocity: { x: 0, y: 0 } }, moving: false }

@@ -58,17 +58,34 @@ describe('finding topics', () => {
   const topics = (vs: Float32Array[]): number[][] => selectTopics(similarities(vs), vs.length)
 
   it('finds the groups, largest first; a cluster needs three notes to be a topic', () => {
-    expect(topics(vectors)).toEqual([[0, 1, 2, 3], [4, 5, 6]])
+    expect(topics(vectors)).toEqual([
+      [0, 1, 2, 3],
+      [4, 5, 6],
+    ])
   })
 
   it('does not assume topics are rare: a vault that is all topics is all topics', () => {
     // Every note belongs to one of three subjects - a third of all pairs are same-topic.
     const dense = [0, 3, 6].flatMap((k) => [near(k, 0.1), near(k, 0.2), near(k, 0.15), near(k, 0.05)])
-    expect(topics(dense)).toEqual([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]])
+    expect(topics(dense)).toEqual([
+      [0, 1, 2, 3],
+      [4, 5, 6, 7],
+      [8, 9, 10, 11],
+    ])
   })
 
   it('leaves out a tight pair near a topic: too small to be one, too far to belong to it', () => {
-    const mixed = [near(0, 0.1), near(0, 0.15), near(0, 0.05), near(0, 0.12), near(1, 0.9), near(1, 0.95), near(4), near(5, 0.5), near(7, 0.3)]
+    const mixed = [
+      near(0, 0.1),
+      near(0, 0.15),
+      near(0, 0.05),
+      near(0, 0.12),
+      near(1, 0.9),
+      near(1, 0.95),
+      near(4),
+      near(5, 0.5),
+      near(7, 0.3),
+    ]
     expect(topics(mixed)).toEqual([[0, 1, 2, 3]])
   })
 
@@ -161,7 +178,9 @@ describe('topics in a note', () => {
   it('writes the topics property and leaves everything else alone', () => {
     const before = '---\ntags: [x]\nLinks: "[[Daily]]"\n---\nBody [[Python]]'
     const after = writeLinks(before, 'topics', ['topics/Python', 'topics/Processor · memory'])
-    expect(after).toBe('---\ntags: [x]\nLinks: "[[Daily]]"\ntopics: ["[[topics/Python]]", "[[topics/Processor · memory]]"]\n---\nBody [[Python]]')
+    expect(after).toBe(
+      '---\ntags: [x]\nLinks: "[[Daily]]"\ntopics: ["[[topics/Python]]", "[[topics/Processor · memory]]"]\n---\nBody [[Python]]',
+    )
     expect(linksIn(after, 'topics')).toEqual(['topics/Python', 'topics/Processor · memory'])
     expect(writeLinks(after, 'topics', [])).toBe(before)
   })

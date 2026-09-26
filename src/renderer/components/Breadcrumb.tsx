@@ -26,9 +26,7 @@ export function Breadcrumb({ path, fallback }: Props): React.ReactElement {
       {segments.map((segment, i) => (
         <span key={i} className="crumbs__group">
           {i > 0 && <span className="crumbs__sep">›</span>}
-          <span className={`crumbs__item${i === last ? ' is-current' : ''}`}>
-            {i === last ? segment.replace(/\.md$/, '') : segment}
-          </span>
+          <span className={`crumbs__item${i === last ? ' is-current' : ''}`}>{i === last ? segment.replace(/\.md$/, '') : segment}</span>
         </span>
       ))}
     </nav>

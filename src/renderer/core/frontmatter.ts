@@ -59,7 +59,7 @@ const FENCE = /^---\s*$/
 const KEY_VALUE = /^([\p{L}\p{N}_][\p{L}\p{N}_ .-]*):(.*)$/u
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?/
 /** A value that is nothing but one or more `[[wikilinks]]`, space or comma separated. */
-const ONLY_LINKS = /^\[\[[^\[\]]+\]\](?:\s*,?\s*\[\[[^\[\]]+\]\])*$/
+const ONLY_LINKS = /^\[\[[^[\]]+\]\](?:\s*,?\s*\[\[[^[\]]+\]\])*$/
 
 function unquote(raw: string): string {
   const value = raw.trim()
@@ -124,7 +124,13 @@ function classify(raw: string): { value: Field['value']; type: FieldType } {
   if (/^-?\d+(\.\d+)?$/.test(trimmed)) return { value: Number(trimmed), type: 'number' }
   if (ISO_DATE.test(trimmed)) return { value: trimmed, type: 'date' }
   if (trimmed.includes(',')) {
-    return { value: trimmed.split(',').map((part) => part.trim()).filter((part) => part !== ''), type: 'list' }
+    return {
+      value: trimmed
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part !== ''),
+      type: 'list',
+    }
   }
   return { value: trimmed, type: 'text' }
 }
@@ -314,5 +320,4 @@ export function renameField(text: string, from: string, to: string): string {
 }
 
 /** The document body, with the frontmatter block removed. */
-export const bodyOf = (text: string): string =>
-  text.split(/\r?\n/).slice(parseFrontmatter(text).bodyStart).join('\n')
+export const bodyOf = (text: string): string => text.split(/\r?\n/).slice(parseFrontmatter(text).bodyStart).join('\n')

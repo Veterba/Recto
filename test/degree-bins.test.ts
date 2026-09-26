@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { ALL_LINKS, binOf, binsToRange, coerceLinkRange, DEGREE_BINS, histogram, inRange, rangeToBins } from '../src/renderer/graph/degree-bins'
+import {
+  ALL_LINKS,
+  binOf,
+  binsToRange,
+  coerceLinkRange,
+  DEGREE_BINS,
+  histogram,
+  inRange,
+  rangeToBins,
+} from '../src/renderer/graph/degree-bins'
 
 describe('degree bins', () => {
   it('puts every link count in exactly one bin', () => {

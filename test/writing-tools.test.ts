@@ -9,11 +9,7 @@ const words = (text: string, options = ALL): string[] => findStyleIssues(text, o
 
 describe('style check', () => {
   it('finds fillers as whole words only', () => {
-    expect(words('It was basically fine. I actually really liked it.')).toEqual([
-      'filler:basically',
-      'filler:actually',
-      'filler:really',
-    ])
+    expect(words('It was basically fine. I actually really liked it.')).toEqual(['filler:basically', 'filler:actually', 'filler:really'])
     expect(words('Justice is reality.')).toEqual([])
   })
 
@@ -41,8 +37,7 @@ describe('style check', () => {
 })
 
 describe('syntax tags', () => {
-  const tagged = (text: string): Record<string, string> =>
-    Object.fromEntries(tagText(text).map((t) => [text.slice(t.from, t.to), t.pos]))
+  const tagged = (text: string): Record<string, string> => Object.fromEntries(tagText(text).map((t) => [text.slice(t.from, t.to), t.pos]))
 
   it('tags English parts of speech and leaves pronouns plain', () => {
     const tags = tagged('Like at last summer with Ilya (my friend). He quickly left and she stayed.')
@@ -157,7 +152,12 @@ describe('authorship', () => {
 describe('writing settings', () => {
   it('falls back field by field', () => {
     expect(coerceWriting(null)).toEqual(DEFAULT_WRITING)
-    const read = coerceWriting({ focusUnit: 'chapter', dim: 9, syntax: { nouns: false, bogus: true }, style: { customWords: [' a ', 'a', 3, ''] } })
+    const read = coerceWriting({
+      focusUnit: 'chapter',
+      dim: 9,
+      syntax: { nouns: false, bogus: true },
+      style: { customWords: [' a ', 'a', 3, ''] },
+    })
     expect(read.focusUnit).toBe('line')
     expect(read.dim).toBe(0.6)
     expect(read.syntax.nouns).toBe(false)

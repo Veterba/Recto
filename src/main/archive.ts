@@ -38,10 +38,7 @@ export function readManifest(): ArchiveState {
   try {
     const parsed = JSON.parse(fs.readFileSync(manifestFile(), 'utf8')) as Partial<ArchiveState>
     return {
-      retentionDays:
-        typeof parsed.retentionDays === 'number' && parsed.retentionDays >= 0
-          ? parsed.retentionDays
-          : DEFAULT_RETENTION_DAYS,
+      retentionDays: typeof parsed.retentionDays === 'number' && parsed.retentionDays >= 0 ? parsed.retentionDays : DEFAULT_RETENTION_DAYS,
       entries: Array.isArray(parsed.entries) ? parsed.entries : [],
     }
   } catch {

@@ -42,8 +42,7 @@ function Unresolved({ onOpen }: { onOpen: (path: string) => void }): React.React
       <header className="archive__head">
         <h2 className="archive__title">Unresolved links</h2>
         <p className="archive__lede">
-          Links pointing at notes that do not exist. Either a note you meant to write, or a typo in
-          a link you thought worked.
+          Links pointing at notes that do not exist. Either a note you meant to write, or a typo in a link you thought worked.
         </p>
       </header>
 

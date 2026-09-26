@@ -16,8 +16,7 @@ export type VaultInfo = {
 
 /** Why the app is showing the first-run screen instead of a vault. */
 export type StartupState =
-  | { kind: 'needs-vault'; reason: 'first-run' | 'missing' | 'unreadable'; lastPath?: string }
-  | { kind: 'ready'; vault: VaultInfo }
+  { kind: 'needs-vault'; reason: 'first-run' | 'missing' | 'unreadable'; lastPath?: string } | { kind: 'ready'; vault: VaultInfo }
 
 /**
  * Where pasted, dropped and inserted images go, at the vault root.
@@ -30,9 +29,7 @@ export const ATTACHMENTS_FOLDER = 'attachments'
 export type RecentVault = { path: string; name: string; available: boolean }
 
 export type OpenVaultResult =
-  | { ok: true; vault: VaultInfo; scaffolded: boolean }
-  | { ok: false; error: string }
-  | { ok: false; cancelled: true }
+  { ok: true; vault: VaultInfo; scaffolded: boolean } | { ok: false; error: string } | { ok: false; cancelled: true }
 
 /**
  * One JSON file per feature inside `.recto/`, named by feature id.
@@ -77,8 +74,7 @@ export const AI_MODELS = [
 
 export type AiModelId = (typeof AI_MODELS)[number]['id']
 
-export const isAiModel = (value: unknown): value is AiModelId =>
-  typeof value === 'string' && AI_MODELS.some((model) => model.id === value)
+export const isAiModel = (value: unknown): value is AiModelId => typeof value === 'string' && AI_MODELS.some((model) => model.id === value)
 
 /** One turn. The content is plain markdown - the same text the note holds. */
 export type AiMessage = { role: 'user' | 'assistant'; content: string }
@@ -211,11 +207,7 @@ export type IpcApi = {
   'fs:tree': () => FileNode[]
   'fs:read': (path: string) => { ok: true; content: string } | { ok: false; error: string }
   'fs:write': (path: string, content: string) => { ok: boolean; error?: string }
-  'fs:create': (
-    parentPath: string,
-    name: string,
-    kind: 'file' | 'folder',
-  ) => { ok: true; path: string } | { ok: false; error: string }
+  'fs:create': (parentPath: string, name: string, kind: 'file' | 'folder') => { ok: true; path: string } | { ok: false; error: string }
   'fs:rename': (path: string, newName: string) => RenameOutcome | { ok: false; error: string }
   'fs:trash': (path: string) => { ok: boolean; error?: string }
   'fs:move': (path: string, newParent: string) => RenameOutcome | { ok: false; error: string }
@@ -229,10 +221,7 @@ export type IpcApi = {
    * of a browser and a pasted screenshot all arrive in the renderer as a `File`
    * with no path at all, and `webUtils.getPathForFile` only covers the first.
    */
-  'fs:import-data': (
-    name: string,
-    data: Uint8Array,
-  ) => { ok: true; path: string } | { ok: false; error: string }
+  'fs:import-data': (name: string, data: Uint8Array) => { ok: true; path: string } | { ok: false; error: string }
   'index:search': (query: string, limit?: number) => SearchResult[]
   'index:backlinks': (path: string) => BacklinkResult[]
   'index:stats': () => IndexStats
@@ -271,12 +260,7 @@ export type IpcApi = {
    * Start a reply. Resolves as soon as the request is accepted; the reply
    * itself arrives on `ai:delta` and ends with `ai:done` or `ai:error`.
    */
-  'ai:send': (request: {
-    id: string
-    model: string
-    system: string
-    messages: AiMessage[]
-  }) => { ok: boolean; error?: string }
+  'ai:send': (request: { id: string; model: string; system: string; messages: AiMessage[] }) => { ok: boolean; error?: string }
   /** Stop a running stream. Unknown ids are a no-op, not an error. */
   'ai:cancel': (id: string) => { ok: boolean }
   /** Obsidian vaults registered on this machine. */

@@ -49,15 +49,7 @@ type Deps = {
   openDailyNote: () => void
 }
 
-function Row({
-  label,
-  hint,
-  children,
-}: {
-  label: string
-  hint?: string
-  children: React.ReactNode
-}): React.ReactElement {
+function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }): React.ReactElement {
   return (
     <div className="setting">
       <div className="setting__text">
@@ -118,18 +110,14 @@ function Appearance_({ appearance, update }: Deps): React.ReactElement {
       {appearance.translucent && (
         <p className="setting__note">
           <Icon name="panel-left-close" size={13} />
-          How far it goes is the theme's call, not a slider: a dark panel on a light page can be
-          almost entirely backdrop and still read, a light panel on a dark one cannot. Full screen
-          switches it off while it lasts — there is no desktop behind a full-screen window, only a
-          black space.
+          How far it goes is the theme's call, not a slider: a dark panel on a light page can be almost entirely backdrop and still read, a
+          light panel on a dark one cannot. Full screen switches it off while it lasts — there is no desktop behind a full-screen window,
+          only a black space.
         </p>
       )}
 
       <Group title="Sidebar">
-        <Row
-          label="Text size"
-          hint={`${Math.round(13 * appearance.sidebarScale)}px file names — the editor's own size is under Editor`}
-        >
+        <Row label="Text size" hint={`${Math.round(13 * appearance.sidebarScale)}px file names — the editor's own size is under Editor`}>
           <input
             className="slider"
             type="range"
@@ -141,10 +129,7 @@ function Appearance_({ appearance, update }: Deps): React.ReactElement {
           />
         </Row>
 
-        <Row
-          label="Note preview delay"
-          hint={`${appearance.previewDelay.toFixed(1)} s resting on a note before its preview opens`}
-        >
+        <Row label="Note preview delay" hint={`${appearance.previewDelay.toFixed(1)} s resting on a note before its preview opens`}>
           <input
             className="slider"
             type="range"
@@ -219,10 +204,7 @@ function EditorSettings({ appearance, update }: Deps): React.ReactElement {
         </div>
       </Row>
 
-      <Row
-        label="Heading font"
-        hint="Match uses the body font. A serif over a sans reads well."
-      >
+      <Row label="Heading font" hint="Match uses the body font. A serif over a sans reads well.">
         <div className="segmented segmented--inline">
           {(['match', 'mono', 'sans', 'serif'] as const).map((font) => (
             <button
@@ -297,15 +279,7 @@ function EditorSettings({ appearance, update }: Deps): React.ReactElement {
  * Not committed per keystroke: every change creates the folder if it is new,
  * so typing "Templates" letter by letter would leave T/, Te/, Tem/... behind.
  */
-function FolderField({
-  value,
-  onCommit,
-  label,
-}: {
-  value: string
-  onCommit: (folder: string) => void
-  label: string
-}): React.ReactElement {
+function FolderField({ value, onCommit, label }: { value: string; onCommit: (folder: string) => void; label: string }): React.ReactElement {
   const [draft, setDraft] = useState(value)
   useEffect(() => setDraft(value), [value])
   const normalised = normaliseFolder(draft)
@@ -384,18 +358,13 @@ function TemplateSettingsTab({ templates, updateTemplates, notes, openDailyNote 
             : `${inFolder.length} ${inFolder.length === 1 ? 'template' : 'templates'} here. Insert one into any note with ⌘⇧T.`
         }
       >
-        <FolderField
-          value={templates.folder}
-          label="Templates folder"
-          onCommit={(folder) => updateTemplates({ ...templates, folder })}
-        />
+        <FolderField value={templates.folder} label="Templates folder" onCommit={(folder) => updateTemplates({ ...templates, folder })} />
       </Row>
 
       <p className="setting__note">
         <Icon name="layout-template" size={13} />
-        Changing the folder points Recto at a different one; it does not move the templates you already
-        have. Placeholders filled in on insert: <code>{'{{date}}'}</code>, <code>{'{{time}}'}</code>,{' '}
-        <code>{'{{title}}'}</code>, <code>{'{{date:+7}}'}</code>.
+        Changing the folder points Recto at a different one; it does not move the templates you already have. Placeholders filled in on
+        insert: <code>{'{{date}}'}</code>, <code>{'{{time}}'}</code>, <code>{'{{title}}'}</code>, <code>{'{{date:+7}}'}</code>.
       </p>
 
       <Group title="Daily note">
@@ -445,11 +414,7 @@ function TemplateSettingsTab({ templates, updateTemplates, notes, openDailyNote 
             </Row>
 
             <Row label="Folder" hint="Year, month and week folders are made inside it as the days go by.">
-              <FolderField
-                value={templates.daily.folder}
-                label="Daily notes folder"
-                onCommit={(folder) => setDaily({ folder })}
-              />
+              <FolderField value={templates.daily.folder} label="Daily notes folder" onCommit={(folder) => setDaily({ folder })} />
             </Row>
 
             <div className="daily__preview">
@@ -501,7 +466,9 @@ function AiSettings({ appearance, update }: Deps): React.ReactElement {
     // Saving and then finding out it was wrong an hour later is the failure
     // this avoids: one token, one round trip, an answer now.
     const tested = await api.invoke('ai:test', appearance.aiModel)
-    setResult(tested.ok ? { ok: true, text: 'Saved and working.' } : { ok: false, text: tested.error ?? 'The key was saved but the test failed.' })
+    setResult(
+      tested.ok ? { ok: true, text: 'Saved and working.' } : { ok: false, text: tested.error ?? 'The key was saved but the test failed.' },
+    )
     setBusy(false)
   }
 
@@ -593,10 +560,9 @@ function AiSettings({ appearance, update }: Deps): React.ReactElement {
 
       <p className="setting__note">
         <Icon name="sparkles" size={13} />
-        Every conversation is saved as a markdown note in <code>chats/</code>, so it is searchable,
-        linkable and readable without this app. Nothing is sent anywhere until you send it: there is
-        no telemetry, and the key goes straight from this machine to Anthropic over TLS with no relay
-        of ours in between.
+        Every conversation is saved as a markdown note in <code>chats/</code>, so it is searchable, linkable and readable without this app.
+        Nothing is sent anywhere until you send it: there is no telemetry, and the key goes straight from this machine to Anthropic over TLS
+        with no relay of ours in between.
       </p>
     </>
   )
@@ -704,10 +670,7 @@ function VaultSettings({ vault, onCloseVault, onSwitchVault, attachments }: Deps
         </button>
       </Row>
 
-      <Row
-        label="Keep deleted notes for"
-        hint="Then they go to the system trash, still recoverable in Finder."
-      >
+      <Row label="Keep deleted notes for" hint="Then they go to the system trash, still recoverable in Finder.">
         <div className="setting__buttons">
           {[7, 10, 30, 90, 0].map((days) => (
             <button
@@ -724,9 +687,7 @@ function VaultSettings({ vault, onCloseVault, onSwitchVault, attachments }: Deps
       <Row
         label="Search index"
         hint={
-          stats === null
-            ? 'Reading…'
-            : `${stats.notes} notes · ${stats.links} links · ${stats.unresolved} unresolved · ${stats.tags} tags`
+          stats === null ? 'Reading…' : `${stats.notes} notes · ${stats.links} links · ${stats.unresolved} unresolved · ${stats.tags} tags`
         }
       >
         <button
@@ -746,9 +707,8 @@ function VaultSettings({ vault, onCloseVault, onSwitchVault, attachments }: Deps
 
       <p className="setting__note">
         <Icon name="history" size={13} />
-        The index and version history live in <code>.recto/index.db</code>. Deleting it
-        rebuilds the index from your notes — but loses version history, which cannot be rebuilt
-        because it is what your files <em>used</em> to be.
+        The index and version history live in <code>.recto/index.db</code>. Deleting it rebuilds the index from your notes — but loses
+        version history, which cannot be rebuilt because it is what your files <em>used</em> to be.
       </p>
     </>
   )

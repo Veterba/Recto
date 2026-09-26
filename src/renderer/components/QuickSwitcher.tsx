@@ -77,13 +77,7 @@ export function QuickSwitcher({ open, roots, onClose, onOpen }: Props): React.Re
 
   return (
     <div className="palette__backdrop" onMouseDown={onClose}>
-      <div
-        className="palette"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Go to note"
-        onMouseDown={(ev) => ev.stopPropagation()}
-      >
+      <div className="palette" role="dialog" aria-modal="true" aria-label="Go to note" onMouseDown={(ev) => ev.stopPropagation()}>
         <input
           ref={inputRef}
           className="palette__input"

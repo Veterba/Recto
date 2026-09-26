@@ -46,7 +46,9 @@ function writeConfig(config: Config): void {
 
 /** One base per pairing: the same Recto vault paired with a different folder starts fresh. */
 function manifestFor(rectoPath: string, obsidianPath: string): string {
-  const id = createHash('sha1').update(`${path.resolve(rectoPath)}\0${path.resolve(obsidianPath)}`).digest('hex')
+  const id = createHash('sha1')
+    .update(`${path.resolve(rectoPath)}\0${path.resolve(obsidianPath)}`)
+    .digest('hex')
   return path.join(app.getPath('userData'), 'obsidian-sync', `${id}.json`)
 }
 

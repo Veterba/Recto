@@ -71,8 +71,8 @@ function Archive(): React.ReactElement {
       <header className="archive__head">
         <h2 className="archive__title">Archive</h2>
         <p className="archive__lede">
-          Deleted notes wait here, then go to the system trash — recoverable in Finder even after
-          that. Nothing is permanently destroyed by this app.
+          Deleted notes wait here, then go to the system trash — recoverable in Finder even after that. Nothing is permanently destroyed by
+          this app.
         </p>
 
         <div className="archive__retention">

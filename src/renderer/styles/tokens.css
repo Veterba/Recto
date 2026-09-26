@@ -135,7 +135,6 @@
   --surface: var(--bg-primary);
   --tint: var(--bg-secondary);
 
-
   --anim-fast: 100ms;
   --anim-base: 180ms;
   --anim-slow: 320ms;
@@ -184,7 +183,7 @@
      raised button; `--sheen` is the hairline that makes glass read as a pane
      of something rather than a flat tint. */
   --chrome-rgb: 22 22 22;
-  --glass-border: rgb(255 255 255 / 0.10);
+  --glass-border: rgb(255 255 255 / 0.1);
 }
 
 @media (prefers-color-scheme: light) {
@@ -204,10 +203,10 @@
     --text-muted: #85847c;
     --danger: #c2352b;
     --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
-  --code-bg: #f3f3f1;
+    --code-bg: #f3f3f1;
     --highlight-bg: rgb(255 206 61 / 0.42);
     --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
-    --shadow-md: 0 6px 20px rgb(0 0 0 / 0.10);
+    --shadow-md: 0 6px 20px rgb(0 0 0 / 0.1);
     --chrome-rgb: 250 249 247;
     --glass-border: rgb(0 0 0 / 0.07);
   }
@@ -232,7 +231,7 @@
   --code-bg: #f3f3f1;
   --highlight-bg: rgb(255 206 61 / 0.42);
   --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
-  --shadow-md: 0 6px 20px rgb(0 0 0 / 0.10);
+  --shadow-md: 0 6px 20px rgb(0 0 0 / 0.1);
   --chrome-rgb: 250 249 247;
   --glass-border: rgb(0 0 0 / 0.07);
 }
@@ -261,7 +260,7 @@
      raised button; `--sheen` is the hairline that makes glass read as a pane
      of something rather than a flat tint. */
   --chrome-rgb: 22 22 22;
-  --glass-border: rgb(255 255 255 / 0.10);
+  --glass-border: rgb(255 255 255 / 0.1);
 }
 
 /*
@@ -296,7 +295,7 @@
     --grain-base: 0.3;
     --sidebar-ink: 24 24 27;
     --sidebar-row: rgb(0 0 0 / 0.06);
-    --sidebar-row-active: rgb(0 0 0 / 0.10);
+    --sidebar-row-active: rgb(0 0 0 / 0.1);
     --sidebar-field: rgb(0 0 0 / 0.06);
     --sidebar-line: rgb(var(--sidebar-ink) / 0.28);
   }
@@ -309,7 +308,7 @@
   --grain-base: 0.3;
   --sidebar-ink: 24 24 27;
   --sidebar-row: rgb(0 0 0 / 0.06);
-  --sidebar-row-active: rgb(0 0 0 / 0.10);
+  --sidebar-row-active: rgb(0 0 0 / 0.1);
   --sidebar-field: rgb(0 0 0 / 0.06);
   --sidebar-line: rgb(var(--sidebar-ink) / 0.28);
 }
@@ -405,7 +404,6 @@ body {
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
-
 
 /**
  * Translucency off.

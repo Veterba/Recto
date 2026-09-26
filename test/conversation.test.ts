@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  chatFileName,
-  parseConversation,
-  serialiseConversation,
-  titleFrom,
-} from '../src/renderer/ai/conversation'
+import { chatFileName, parseConversation, serialiseConversation, titleFrom } from '../src/renderer/ai/conversation'
 import { splitBlocks } from '../src/renderer/ai/Markdownish'
 
 /**
@@ -44,7 +39,13 @@ describe('conversation format', () => {
   it('does not split on a heading inside a code fence', () => {
     const reply = ['Here is the format:', '', '```markdown', '## You', 'a question', '```', '', 'That is all.'].join('\n')
     const parsed = parseConversation(
-      serialiseConversation({ ...sample, messages: [{ role: 'user', content: 'show me' }, { role: 'assistant', content: reply }] }),
+      serialiseConversation({
+        ...sample,
+        messages: [
+          { role: 'user', content: 'show me' },
+          { role: 'assistant', content: reply },
+        ],
+      }),
     )
     expect(parsed.messages).toHaveLength(2)
     expect(parsed.messages[1]?.content).toBe(reply)
@@ -72,9 +73,7 @@ describe('conversation format', () => {
 
 describe('titleFrom', () => {
   it('uses the first line of the first question', () => {
-    expect(titleFrom([{ role: 'user', content: 'Why is the sky blue?\nAsking for a friend.' }])).toBe(
-      'Why is the sky blue?',
-    )
+    expect(titleFrom([{ role: 'user', content: 'Why is the sky blue?\nAsking for a friend.' }])).toBe('Why is the sky blue?')
   })
 
   it('clips a long one', () => {

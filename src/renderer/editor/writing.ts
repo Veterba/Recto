@@ -33,8 +33,19 @@ const centring = (config: WritingSettings): boolean => config.focus || config.ty
 
 /** Syntax nodes whose text is not prose: code, maths, links' addresses, raw HTML. */
 const NOT_PROSE = new Set([
-  'FencedCode', 'CodeBlock', 'InlineCode', 'CodeText', 'URL', 'LinkLabel', 'HTMLBlock', 'HTMLTag', 'Comment',
-  'CommentBlock', 'MathBlock', 'InlineMath', 'Autolink',
+  'FencedCode',
+  'CodeBlock',
+  'InlineCode',
+  'CodeText',
+  'URL',
+  'LinkLabel',
+  'HTMLBlock',
+  'HTMLTag',
+  'Comment',
+  'CommentBlock',
+  'MathBlock',
+  'InlineMath',
+  'Autolink',
 ])
 
 /**

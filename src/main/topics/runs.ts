@@ -50,12 +50,21 @@ export function switchLanguage(
         const before = text(p)
         if (before === null) continue
         const entries = linksIn(before, TOPICS_PROPERTY)
-        const after = writeLinks(before, TOPICS_PROPERTY, entries.filter((e) => !sameLink(e, from)))
+        const after = writeLinks(
+          before,
+          TOPICS_PROPERTY,
+          entries.filter((e) => !sameLink(e, from)),
+        )
         if (after === before) continue
         writes.set(p, after)
         changes.push({ path: p, property: TOPICS_PROPERTY, link: from, op: 'remove', topic: topic.id })
       }
-      next = { ...next, topics: next.topics.filter((t) => t.id !== topic.id), assigned: strip(next.assigned, topic.id), owned: strip(next.owned, topic.id) }
+      next = {
+        ...next,
+        topics: next.topics.filter((t) => t.id !== topic.id),
+        assigned: strip(next.assigned, topic.id),
+        owned: strip(next.owned, topic.id),
+      }
       continue
     }
     if (name === topic.name) continue
@@ -103,7 +112,11 @@ export function undoLast(state: TopicsState, read: Read): { state: TopicsState; 
     } else {
       const entries = linksIn(before, c.property)
       if (c.op === 'add') {
-        after = writeLinks(before, c.property, entries.filter((e) => !sameLink(e, c.link)))
+        after = writeLinks(
+          before,
+          c.property,
+          entries.filter((e) => !sameLink(e, c.link)),
+        )
         if (c.topic !== undefined) next = block(next, c.path, c.topic)
       } else if (!entries.some((e) => sameLink(e, c.link)) && (c.topic === undefined || allowed(state, c.path, c.topic))) {
         after = writeLinks(before, c.property, [...entries, c.link])

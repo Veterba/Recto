@@ -123,7 +123,11 @@ function luminance(colour: string): number {
   let rgb: number[] | null = null
   if (hex?.[1] !== undefined) rgb = [0, 2, 4].map((i) => parseInt(hex[1]!.slice(i, i + 2), 16))
   const fn = /rgba?\(([^)]+)\)/.exec(colour)
-  if (fn?.[1] !== undefined) rgb = fn[1].split(/[ ,/]+/).slice(0, 3).map(Number)
+  if (fn?.[1] !== undefined)
+    rgb = fn[1]
+      .split(/[ ,/]+/)
+      .slice(0, 3)
+      .map(Number)
   if (rgb === null || rgb.some((v) => !Number.isFinite(v))) return 0
   return (0.2126 * rgb[0]! + 0.7152 * rgb[1]! + 0.0722 * rgb[2]!) / 255
 }
@@ -298,9 +302,15 @@ function toHex(colour: string): string | null {
     const value = String(probe.fillStyle)
     if (value.startsWith('#')) out = value
     else {
-      const parts = /rgba?\(([^)]+)\)/.exec(value)?.[1]?.split(',').map((v) => Number.parseFloat(v))
+      const parts = /rgba?\(([^)]+)\)/
+        .exec(value)?.[1]
+        ?.split(',')
+        .map((v) => Number.parseFloat(v))
       if (parts !== undefined && parts.length >= 3) {
-        out = `#${parts.slice(0, 3).map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`
+        out = `#${parts
+          .slice(0, 3)
+          .map((v) => Math.round(v).toString(16).padStart(2, '0'))
+          .join('')}`
       }
     }
   }
@@ -358,13 +368,7 @@ function fitLabel(context: CanvasRenderingContext2D, text: string, max: number):
  * Draw one frame. Returns the time it took, so the UI can show it and so the
  * Canvas-vs-WebGL decision above can be revisited with numbers.
  */
-export function draw(
-  context: CanvasRenderingContext2D,
-  state: RenderState,
-  palette: Palette,
-  width: number,
-  height: number,
-): number {
+export function draw(context: CanvasRenderingContext2D, state: RenderState, palette: Palette, width: number, height: number): number {
   const started = performance.now()
   const { camera, positions, nodes, edges, active, neighbours, hovered } = state
   const look = state.look ?? DEFAULT_LOOK
@@ -562,7 +566,14 @@ export function draw(
         batch = []
         heads.set(colour, batch)
       }
-      batch.push(tipX, tipY, tipX - ux * size * 2 - uy * size, tipY - uy * size * 2 + ux * size, tipX - ux * size * 2 + uy * size, tipY - uy * size * 2 - ux * size)
+      batch.push(
+        tipX,
+        tipY,
+        tipX - ux * size * 2 - uy * size,
+        tipY - uy * size * 2 + ux * size,
+        tipX - ux * size * 2 + uy * size,
+        tipY - uy * size * 2 - ux * size,
+      )
     }
     for (const [colour, coords] of heads) {
       context.globalAlpha = Math.min(1, look.edge.opacity + 0.25)
@@ -613,7 +624,8 @@ export function draw(
       const phase = ((index * 0.618034) % 1) + clock * (0.6 + ((index * 0.37) % 0.8))
       const t = phase % 1
       const [px, py] = along(x1, y1, x2, y2, bend, t)
-      const colour = look.links.colors.length > 0 && !look.links.matchDots ? edgeColour(a, b) : (nodeColours[t < 0.5 ? a : b] ?? surface.node)
+      const colour =
+        look.links.colors.length > 0 && !look.links.matchDots ? edgeColour(a, b) : (nodeColours[t < 0.5 ? a : b] ?? surface.node)
       let batch = dots.get(colour)
       if (batch === undefined) {
         batch = []
@@ -742,7 +754,12 @@ export function draw(
     context.setLineDash?.([])
     for (let k = 0; k < lit.length; k += 4) {
       const i = lit[k]!
-      paint(i === active ? palette.nodeActive : (nodeColours[i] ?? surface.node), [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!], focusFade, nodes[i]?.topic === true)
+      paint(
+        i === active ? palette.nodeActive : (nodeColours[i] ?? surface.node),
+        [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!],
+        focusFade,
+        nodes[i]?.topic === true,
+      )
     }
     /*
      * Their names too: the neighbourhood is worth reading, not just seeing.

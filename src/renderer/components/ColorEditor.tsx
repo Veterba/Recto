@@ -1,13 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import {
-  colorAt,
-  MAX_STOPS,
-  nextStop,
-  padPosition,
-  SIDEBAR_PAD,
-  tintCss,
-  type PadRange,
-} from '../core/sidebar-theme'
+import { colorAt, MAX_STOPS, nextStop, padPosition, SIDEBAR_PAD, tintCss, type PadRange } from '../core/sidebar-theme'
 import { Icon } from './Icon'
 import { StrengthSlider } from './StrengthSlider'
 import { Tip } from './Tip'
@@ -106,11 +98,7 @@ export function GrainDial({ grain, onChange }: { grain: number; onChange: (grain
         })}
       </svg>
       <div className="arcpick__knob" style={{ backgroundImage: NOISE }}>
-        <span
-          className="arcpick__tick"
-          style={{ transform: `rotate(${angle}deg)` }}
-          aria-hidden="true"
-        />
+        <span className="arcpick__tick" style={{ transform: `rotate(${angle}deg)` }} aria-hidden="true" />
       </div>
     </div>
   )

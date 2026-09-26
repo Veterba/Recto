@@ -116,7 +116,11 @@ export function ObsidianSync(): React.ReactElement {
             <Icon name="alert-triangle" size={14} />
             <p>{describeProblem(status.problem)}</p>
             {status.problem.reason === 'guard' && (
-              <button className="btn btn--ghost btn--sm" disabled={status.running} onClick={() => void api.invoke('obsidian:sync-now', true)}>
+              <button
+                className="btn btn--ghost btn--sm"
+                disabled={status.running}
+                onClick={() => void api.invoke('obsidian:sync-now', true)}
+              >
                 Sync anyway
               </button>
             )}
@@ -142,7 +146,10 @@ export function ObsidianSync(): React.ReactElement {
             {status.last.errors.length > 0 && (
               <div className="osync__problem">
                 <Icon name="alert-triangle" size={14} />
-                <p>{plural(status.last.errors.length, 'file', 'files')} could not be synced and will be retried: {status.last.errors.slice(0, 3).join('; ')}</p>
+                <p>
+                  {plural(status.last.errors.length, 'file', 'files')} could not be synced and will be retried:{' '}
+                  {status.last.errors.slice(0, 3).join('; ')}
+                </p>
               </div>
             )}
           </>
@@ -165,9 +172,9 @@ export function ObsidianSync(): React.ReactElement {
     <div className="osync">
       <p className="setting__note">
         <Icon name="refresh-cw" size={13} />
-        Two-way sync. Notes, folders and attachments go both ways, and a change in either app shows up in the other within a
-        few seconds. Each app keeps its own settings - <code>.obsidian</code> and <code>.recto</code> are never copied.
-        Deleted files go to Recto’s archive or Obsidian’s trash, and a note changed in both places keeps both versions.
+        Two-way sync. Notes, folders and attachments go both ways, and a change in either app shows up in the other within a few seconds.
+        Each app keeps its own settings - <code>.obsidian</code> and <code>.recto</code> are never copied. Deleted files go to Recto’s
+        archive or Obsidian’s trash, and a note changed in both places keeps both versions.
       </p>
 
       <p className="osync__label">Obsidian vault</p>

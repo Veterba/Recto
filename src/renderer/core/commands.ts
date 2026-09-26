@@ -125,9 +125,7 @@ export class CommandRegistry extends Events<RegistryEvents> {
 
   /** Every command bound to a chord, for a hotkey editor to show conflicts. */
   conflicts(): { chord: Chord; ids: string[] }[] {
-    return [...this.chords.entries()]
-      .filter(([, ids]) => ids.length > 1)
-      .map(([chord, ids]) => ({ chord, ids }))
+    return [...this.chords.entries()].filter(([, ids]) => ids.length > 1).map(([chord, ids]) => ({ chord, ids }))
   }
 
   private reindex(): void {

@@ -225,10 +225,7 @@ export function runMigrations(db: Database): { from: number; to: number } {
     // rather than half-applied.
     const apply = db.transaction(() => {
       db.exec(migration.sql)
-      db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(
-        migration.version,
-        Date.now(),
-      )
+      db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(migration.version, Date.now())
     })
     apply()
   }

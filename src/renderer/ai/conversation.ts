@@ -118,7 +118,11 @@ export function serialiseConversation(conversation: Conversation): string {
 export function titleFrom(messages: readonly AiMessage[]): string {
   const first = messages.find((message) => message.role === 'user')
   if (first === undefined) return 'New chat'
-  const line = first.content.split('\n').find((text) => text.trim() !== '')?.trim() ?? ''
+  const line =
+    first.content
+      .split('\n')
+      .find((text) => text.trim() !== '')
+      ?.trim() ?? ''
   if (line === '') return 'New chat'
   const clipped = line.length > 60 ? `${line.slice(0, 57).trimEnd()}…` : line
   // A title becomes an H1 in the note, so markdown in it would render as

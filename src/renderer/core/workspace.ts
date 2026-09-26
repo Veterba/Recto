@@ -133,15 +133,9 @@ export class Workspace extends Events<WorkspaceEvents> {
    * Open a view. Reuses an existing leaf of the same type+state when
    * `reuse` is set, which is what stops ⌘P from stacking ten Settings tabs.
    */
-  openView(
-    type: string,
-    state: Record<string, unknown> = {},
-    options: { reuse?: boolean; inTabs?: string } = {},
-  ): LeafNode {
+  openView(type: string, state: Record<string, unknown> = {}, options: { reuse?: boolean; inTabs?: string } = {}): LeafNode {
     if (options.reuse !== false) {
-      const existing = this.leaves().find(
-        (leaf) => leaf.type === type && JSON.stringify(leaf.state) === JSON.stringify(state),
-      )
+      const existing = this.leaves().find((leaf) => leaf.type === type && JSON.stringify(leaf.state) === JSON.stringify(state))
       if (existing) {
         this.setActiveLeaf(existing.id)
         return existing

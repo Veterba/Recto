@@ -135,9 +135,7 @@ export const markdownDecorations = (): Extension => [
       }
 
       update(update: ViewUpdate): void {
-        const unresolvedChanged = update.transactions.some((tr) =>
-          tr.effects.some((effect) => effect.is(setUnresolvedTargets)),
-        )
+        const unresolvedChanged = update.transactions.some((tr) => tr.effects.some((effect) => effect.is(setUnresolvedTargets)))
         if (update.docChanged || update.viewportChanged || update.selectionSet || unresolvedChanged) {
           this.decorations = build(update.view)
         }

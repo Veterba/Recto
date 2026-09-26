@@ -84,9 +84,7 @@ function insert(roots: FileNode[], node: FileNode): FileNode[] {
 
 function remove(roots: FileNode[], targetPath: string): FileNode[] {
   const strip = (nodes: FileNode[]): FileNode[] =>
-    nodes
-      .filter((n) => n.path !== targetPath)
-      .map((n) => (n.children ? { ...n, children: strip(n.children) } : n))
+    nodes.filter((n) => n.path !== targetPath).map((n) => (n.children ? { ...n, children: strip(n.children) } : n))
   return strip(roots)
 }
 
@@ -128,7 +126,6 @@ export function applyChanges(roots: FileNode[], changes: readonly VaultChange[])
   }
   return next
 }
-
 
 export { index as indexTree }
 

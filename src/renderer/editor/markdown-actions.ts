@@ -286,8 +286,7 @@ export function moveLines(state: EditorState, direction: -1 | 1): TransactionSpe
   const block = state.doc.sliceString(first.from, last.to)
   const shift = direction === -1 ? -(target.text.length + 1) : target.text.length + 1
 
-  const insert =
-    direction === -1 ? `${block}\n${target.text}` : `${target.text}\n${block}`
+  const insert = direction === -1 ? `${block}\n${target.text}` : `${target.text}\n${block}`
   const from = direction === -1 ? target.from : first.from
   const to = direction === -1 ? last.to : target.to
 
@@ -540,11 +539,7 @@ export function activeFormats(state: EditorState): Set<Format> {
     if (active.has(format)) continue
 
     // A selection that is itself wrapped.
-    if (
-      selected.length >= marker.length * 2 &&
-      selected.startsWith(marker) &&
-      selected.endsWith(marker)
-    ) {
+    if (selected.length >= marker.length * 2 && selected.startsWith(marker) && selected.endsWith(marker)) {
       active.add(format)
       continue
     }

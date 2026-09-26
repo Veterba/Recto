@@ -75,7 +75,19 @@ describe('what a name is made from', () => {
       'A [link text](https://example.com/urlword) and file.json.',
     ].join('\n')
     const prose = nameText(text)
-    for (const gone of ['secretword', 'memory-target', 'hiddenpage', 'directory', 'loadCodeword', 'inlinecode', 'pathword', 'folderword', 'homeword', 'urlword', 'file.json']) {
+    for (const gone of [
+      'secretword',
+      'memory-target',
+      'hiddenpage',
+      'directory',
+      'loadCodeword',
+      'inlinecode',
+      'pathword',
+      'folderword',
+      'homeword',
+      'urlword',
+      'file.json',
+    ]) {
       expect(prose).not.toContain(gone)
     }
     for (const kept of ['processor', 'memory', 'link text']) expect(prose).toContain(kept)
@@ -139,7 +151,10 @@ describe('what a name is made from', () => {
   })
 
   it('drops a word most of the vault uses', () => {
-    const vault = Array.from({ length: 6 }, (_, i) => `Programming note ${i}: programming with ${['rust', 'go', 'java', 'lisp', 'perl', 'ruby'][i]}.`)
+    const vault = Array.from(
+      { length: 6 },
+      (_, i) => `Programming note ${i}: programming with ${['rust', 'go', 'java', 'lisp', 'perl', 'ruby'][i]}.`,
+    )
     const members = ['Programming memory: the cache and memory.', 'Programming: memory and the cache.', 'Cache, memory, programming.']
     const docs = members.map(terms)
     expect(candidates(docs, 3, [...docs, ...vault.map(terms)])).not.toContain('programming')
@@ -220,7 +235,12 @@ describe('a language switch', () => {
     expect(linksIn(after('b.md'), 'topics')).toEqual(['topics/Процессор · память'])
     expect(switched.state.language).toBe('ru')
     expect(switched.state.runs).toHaveLength(1)
-    expect(switched.run.changes.map((c) => `${c.op} ${c.path}`).sort()).toEqual(['remove b.md', 'remove c.md', 'rename a.md', 'rename b.md'])
+    expect(switched.run.changes.map((c) => `${c.op} ${c.path}`).sort()).toEqual([
+      'remove b.md',
+      'remove c.md',
+      'rename a.md',
+      'rename b.md',
+    ])
   })
 
   it('leaves plain links to real notes alone', () => {
@@ -270,8 +290,18 @@ describe('names across languages', () => {
    * real one.
    */
   const CONCEPTS: Record<string, number> = {
-    память: 0, memory: 0, процессор: 1, processor: 1, регистр: 2, register: 2,
-    хлеб: 3, bread: 3, тесто: 4, dough: 4, закваска: 5, starter: 5,
+    память: 0,
+    memory: 0,
+    процессор: 1,
+    processor: 1,
+    регистр: 2,
+    register: 2,
+    хлеб: 3,
+    bread: 3,
+    тесто: 4,
+    dough: 4,
+    закваска: 5,
+    starter: 5,
   }
   const embed = async (words: string[]): Promise<Float32Array[]> =>
     words.map((w) => {
@@ -294,7 +324,13 @@ describe('names across languages', () => {
     isNoun: (w: string, l: Lang) => l !== 'en' || isEnglishNoun(w),
   }
   const member = (text: string) => ({ lang: language(text), terms: terms(text), prose: text })
-  const others = ['Хлеб на закваске и мука.', 'Гитара и аккорды каждый вечер.', 'План тренировок и бег.', 'Sourdough bread and flour.', 'Guitar chords.']
+  const others = [
+    'Хлеб на закваске и мука.',
+    'Гитара и аккорды каждый вечер.',
+    'План тренировок и бег.',
+    'Sourdough bread and flour.',
+    'Guitar chords.',
+  ]
 
   it('names a Russian cluster in an English vault in English', async () => {
     const members = [
@@ -302,14 +338,30 @@ describe('names across languages', () => {
       'Регистр процессора и память компьютера.',
       'Память, процессор и регистр: как работает компьютер.',
     ].map(member)
-    const named = await nameCluster({ ...base, members, vault: [...members.map((m) => m.terms), ...others.map(terms)], vaultLang: 'en', center: center([0, 1]) })
+    const named = await nameCluster({
+      ...base,
+      members,
+      vault: [...members.map((m) => m.terms), ...others.map(terms)],
+      vaultLang: 'en',
+      center: center([0, 1]),
+    })
     expect(named.from).toBe('ru')
     expect(named.name).toMatch(/^(Memory · processor|Processor · memory)$/)
   })
 
   it('names an English cluster in a Russian vault in Russian', async () => {
-    const members = ['Dough needs a starter; the bread rises.', 'Bread dough and a lively starter.', 'Starter, dough, and a good bread.'].map(member)
-    const named = await nameCluster({ ...base, members, vault: [...members.map((m) => m.terms), ...others.map(terms)], vaultLang: 'ru', center: center([3, 4]) })
+    const members = [
+      'Dough needs a starter; the bread rises.',
+      'Bread dough and a lively starter.',
+      'Starter, dough, and a good bread.',
+    ].map(member)
+    const named = await nameCluster({
+      ...base,
+      members,
+      vault: [...members.map((m) => m.terms), ...others.map(terms)],
+      vaultLang: 'ru',
+      center: center([3, 4]),
+    })
     expect(named.from).toBe('en')
     expect(named.name).toMatch(/^(Хлеб · тесто|Тесто · хлеб)$/)
   })
@@ -321,7 +373,13 @@ describe('names across languages', () => {
       'Регистр процессора и память компьютера.',
       'Память, процессор и регистр: как работает компьютер.',
     ].map(member)
-    const named = await nameCluster({ ...base, members, vault: [...members.map((m) => m.terms), ...others.map(terms)], vaultLang: 'en', center: center([6, 7]) })
+    const named = await nameCluster({
+      ...base,
+      members,
+      vault: [...members.map((m) => m.terms), ...others.map(terms)],
+      vaultLang: 'en',
+      center: center([6, 7]),
+    })
     expect(named).toMatchObject({ name: null, failed: 'translation' })
   })
 
@@ -332,8 +390,17 @@ describe('names across languages', () => {
 })
 
 describe('what the user excluded stays excluded', () => {
-  const on = (s: TopicsState, p: string, id: string): TopicsState => ({ ...s, owned: { ...s.owned, [p]: [...(s.owned[p] ?? []), id] }, assigned: { ...s.assigned, [p]: [...(s.assigned[p] ?? []), id] } })
-  let state: TopicsState = { ...emptyState(), builtAt: 1, language: 'en', topics: [{ id: 't1', name: 'Processor · memory', renamedByUser: false }] }
+  const on = (s: TopicsState, p: string, id: string): TopicsState => ({
+    ...s,
+    owned: { ...s.owned, [p]: [...(s.owned[p] ?? []), id] },
+    assigned: { ...s.assigned, [p]: [...(s.assigned[p] ?? []), id] },
+  })
+  let state: TopicsState = {
+    ...emptyState(),
+    builtAt: 1,
+    language: 'en',
+    topics: [{ id: 't1', name: 'Processor · memory', renamedByUser: false }],
+  }
   for (const p of ['a.md', 'b.md', 'c.md', 'd.md', 'e.md']) state = on(state, p, 't1')
 
   it('removing a topic from a note (×) is permanent for that note', () => {
@@ -371,7 +438,14 @@ describe('what the user excluded stays excluded', () => {
       ['b.md', 'c.md', 'd.md', 'e.md'].map((p) => [p, writeLinks('---\n---\nBody.\n', 'topics', [topicLink('Processor · memory')])]),
     )
     texts['a.md'] = '---\n---\nBody.\n'
-    const switched = switchLanguage(excluded, 'ru', { t1: 'Процессор · память' }, { t1: ['b.md', 'c.md', 'd.md', 'e.md'] }, (p) => texts[p] ?? null, 2)
+    const switched = switchLanguage(
+      excluded,
+      'ru',
+      { t1: 'Процессор · память' },
+      { t1: ['b.md', 'c.md', 'd.md', 'e.md'] },
+      (p) => texts[p] ?? null,
+      2,
+    )
     expect(switched.writes.has('a.md')).toBe(false)
     expect(switched.state.blocks).toEqual(excluded.blocks)
     expect(switched.state.rejected).toEqual(excluded.rejected)
@@ -388,7 +462,11 @@ describe('what the user excluded stays excluded', () => {
   })
 
   it('an Undo never puts back a topic the user took out of a note since', () => {
-    const run = { at: 1, label: 'x', changes: [{ path: 'a.md', property: 'topics', link: topicLink('Processor · memory'), op: 'remove' as const, topic: 't1' }] }
+    const run = {
+      at: 1,
+      label: 'x',
+      changes: [{ path: 'a.md', property: 'topics', link: topicLink('Processor · memory'), op: 'remove' as const, topic: 't1' }],
+    }
     const excluded = { ...reject(state, 'a.md', 't1'), runs: [run] }
     const undone = undoLast(excluded, () => '---\n---\nBody.\n')
     expect(undone.writes.size).toBe(0)

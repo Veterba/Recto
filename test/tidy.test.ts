@@ -56,9 +56,7 @@ describe('rule 1 — a tag naming an existing folder', () => {
       folders: ['work'],
       context: ctx({ 'meeting.md': { tags: ['#work'] } }),
     })
-    expect(result.moves).toEqual([
-      { path: 'meeting.md', into: 'work', creates: false, reason: 'tagged #work' },
-    ])
+    expect(result.moves).toEqual([{ path: 'meeting.md', into: 'work', creates: false, reason: 'tagged #work' }])
   })
 
   it('finds a nested folder by its last segment', () => {

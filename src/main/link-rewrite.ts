@@ -21,8 +21,7 @@ const MARKDOWN_LINK = /(?<!!)(\[[^\]]*\])\(([^)\n]*)\)/g
 /** Schemes and shapes that are not a note in this vault. */
 const NOT_A_NOTE = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i
 
-const normalize = (value: string): string =>
-  value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
+const normalize = (value: string): string => value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
 
 /**
  * Does this link target refer to `path`? With `exact`, only a link that spells
@@ -65,9 +64,7 @@ function replacementTarget(original: string, oldPath: string, newPath: string): 
  * around it that has to come back untouched - angle brackets, a `#heading`, a
  * `"title"`. Returns null when it does not point at a note in this vault.
  */
-function splitUrl(
-  url: string,
-): { path: string; prefix: string; suffix: string; encoded: boolean } | null {
+function splitUrl(url: string): { path: string; prefix: string; suffix: string; encoded: boolean } | null {
   const angled = /^<(.*)>$/.exec(url.trim())
   const inner = angled?.[1] ?? url
   const title = /\s+"[^"]*"$/.exec(inner)

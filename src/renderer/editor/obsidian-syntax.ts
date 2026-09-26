@@ -109,17 +109,13 @@ function inlineMath(cx: InlineContext, next: number, pos: number): number {
 
     if (display) {
       if (cx.char(i + 1) !== DOLLAR) continue
-      return cx.addElement(
-        cx.elt('InlineMath', pos, i + 2, [cx.elt('MathMark', pos, pos + 2), cx.elt('MathMark', i, i + 2)]),
-      )
+      return cx.addElement(cx.elt('InlineMath', pos, i + 2, [cx.elt('MathMark', pos, pos + 2), cx.elt('MathMark', i, i + 2)]))
     }
 
     const before = cx.char(i - 1)
     if (before === SPACE || before === TAB) continue
     if (isDigit(cx.char(i + 1))) continue
-    return cx.addElement(
-      cx.elt('InlineMath', pos, i + 1, [cx.elt('MathMark', pos, pos + 1), cx.elt('MathMark', i, i + 1)]),
-    )
+    return cx.addElement(cx.elt('InlineMath', pos, i + 1, [cx.elt('MathMark', pos, pos + 1), cx.elt('MathMark', i, i + 1)]))
   }
   return -1
 }
@@ -129,9 +125,7 @@ function inlineComment(cx: InlineContext, next: number, pos: number): number {
   const close = cx.slice(pos + 2, cx.end).indexOf('%%')
   if (close < 0) return -1
   const end = pos + 2 + close + 2
-  return cx.addElement(
-    cx.elt('Comment', pos, end, [cx.elt('CommentMark', pos, pos + 2), cx.elt('CommentMark', end - 2, end)]),
-  )
+  return cx.addElement(cx.elt('Comment', pos, end, [cx.elt('CommentMark', pos, pos + 2), cx.elt('CommentMark', end - 2, end)]))
 }
 
 const FOOTNOTE_REF = /^\[\^([^\]\s]+)\]/
@@ -182,8 +176,7 @@ export const obsidianSyntax: MarkdownConfig = {
     {
       name: 'CommentBlock',
       before: 'FencedCode',
-      parse: (cx, line) =>
-        opensCommentBlock(line) ? fenced(cx, line, 'CommentBlock', 'CommentMark', '%%') : false,
+      parse: (cx, line) => (opensCommentBlock(line) ? fenced(cx, line, 'CommentBlock', 'CommentMark', '%%') : false),
       endLeaf: (_cx, line) => opensCommentBlock(line),
     },
   ],

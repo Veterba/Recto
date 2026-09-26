@@ -46,19 +46,11 @@ function editorCommand(
   }
 }
 
-export function registerEditorCommands(
-  registry: CommandRegistry,
-  onToggleLivePreview: () => void,
-): () => void {
+export function registerEditorCommands(registry: CommandRegistry, onToggleLivePreview: () => void): () => void {
   const commands: Command[] = [
     // Headings: Mod+Shift+1..6, matching the request.
     ...([1, 2, 3, 4, 5, 6] as const).map((level) =>
-      editorCommand(
-        `editor:heading-${level}`,
-        `Heading ${level}`,
-        `Mod+Shift+${level}`,
-        (state) => md.toggleHeading(state, level),
-      ),
+      editorCommand(`editor:heading-${level}`, `Heading ${level}`, `Mod+Shift+${level}`, (state) => md.toggleHeading(state, level)),
     ),
     editorCommand('editor:bold', 'Bold', 'Mod+B', md.toggleBold),
     editorCommand('editor:italic', 'Italic', 'Mod+I', md.toggleItalic),
@@ -95,9 +87,7 @@ export function registerEditorCommands(
           if (!result.ok || result.paths.length === 0) return
           // One `![](...)` per file, on its own line, because two images on one
           // line render side by side in some readers and stacked in others.
-          const markdown = result.paths
-            .map((path) => `![${path.slice(path.lastIndexOf('/') + 1)}](${encodeURI(path)})`)
-            .join('\n')
+          const markdown = result.paths.map((path) => `![${path.slice(path.lastIndexOf('/') + 1)}](${encodeURI(path)})`).join('\n')
           editor.run((state) => {
             const range = state.selection.main
             return {
@@ -128,52 +118,77 @@ export function registerEditorCommands(
       isAvailable: () => getActiveEditor() !== null,
       run: toggleFocus,
     },
-    ...(['line', 'sentence', 'paragraph'] as const).map(
-      (unit): Command => ({
-        id: `writing:focus-${unit}`,
-        name: `Focus on the current ${unit}`,
-        section: 'Writing',
-        run: () => setFocusUnit(unit),
-      }),
-    ),
-    { id: 'writing:toggle-typewriter', name: 'Toggle typewriter scrolling', section: 'Writing', hotkey: 'Mod+Alt+T', run: toggleTypewriter },
-    { id: 'writing:toggle-syntax', name: 'Toggle syntax highlight', section: 'Writing', icon: 'highlighter', hotkey: 'Mod+Alt+S', run: toggleSyntax },
-    { id: 'writing:toggle-style', name: 'Toggle style check', section: 'Writing', icon: 'strikethrough', hotkey: 'Mod+Alt+C', run: toggleStyle },
-    { id: 'writing:toggle-authors', name: 'Show or hide authors', section: 'Writing', icon: 'user-round', hotkey: 'Mod+Alt+A', run: toggleAuthors },
-    ...([
-      ['human', 'Mark selection as written by me'],
-      ['ai', 'Mark selection as written by AI'],
-      ['reference', 'Mark selection as reference'],
-    ] as const).map(
-      ([author, name]): Command => ({
-        id: `writing:mark-${author}`,
-        name,
-        section: 'Writing',
-        isAvailable: () => getActiveEditor() !== null,
-        run: () => {
-          getActiveEditor()?.markSelection(author)
-        },
-      }),
-    ),
-    ...([
-      // Not ⌘⌥⇧V: that is the app menu's Paste and Match Style.
-      ['ai', 'Paste as AI text', 'Mod+Alt+V'],
-      ['reference', 'Paste as reference', undefined],
-    ] as const).map(
-      ([author, name, hotkey]): Command => ({
-        id: `writing:paste-${author}`,
-        name,
-        section: 'Writing',
-        scope: 'editor',
-        ...(hotkey === undefined ? {} : { hotkey }),
-        isAvailable: editorHasFocus,
-        run: () => {
-          void api.invoke('app:clipboard-text').then((text) => {
-            if (text !== '') getActiveEditor()?.insertAs(author, text)
-          })
-        },
-      }),
-    ),
+    ...(['line', 'sentence', 'paragraph'] as const).map((unit): Command => ({
+      id: `writing:focus-${unit}`,
+      name: `Focus on the current ${unit}`,
+      section: 'Writing',
+      run: () => setFocusUnit(unit),
+    })),
+    {
+      id: 'writing:toggle-typewriter',
+      name: 'Toggle typewriter scrolling',
+      section: 'Writing',
+      hotkey: 'Mod+Alt+T',
+      run: toggleTypewriter,
+    },
+    {
+      id: 'writing:toggle-syntax',
+      name: 'Toggle syntax highlight',
+      section: 'Writing',
+      icon: 'highlighter',
+      hotkey: 'Mod+Alt+S',
+      run: toggleSyntax,
+    },
+    {
+      id: 'writing:toggle-style',
+      name: 'Toggle style check',
+      section: 'Writing',
+      icon: 'strikethrough',
+      hotkey: 'Mod+Alt+C',
+      run: toggleStyle,
+    },
+    {
+      id: 'writing:toggle-authors',
+      name: 'Show or hide authors',
+      section: 'Writing',
+      icon: 'user-round',
+      hotkey: 'Mod+Alt+A',
+      run: toggleAuthors,
+    },
+    ...(
+      [
+        ['human', 'Mark selection as written by me'],
+        ['ai', 'Mark selection as written by AI'],
+        ['reference', 'Mark selection as reference'],
+      ] as const
+    ).map(([author, name]): Command => ({
+      id: `writing:mark-${author}`,
+      name,
+      section: 'Writing',
+      isAvailable: () => getActiveEditor() !== null,
+      run: () => {
+        getActiveEditor()?.markSelection(author)
+      },
+    })),
+    ...(
+      [
+        // Not ⌘⌥⇧V: that is the app menu's Paste and Match Style.
+        ['ai', 'Paste as AI text', 'Mod+Alt+V'],
+        ['reference', 'Paste as reference', undefined],
+      ] as const
+    ).map(([author, name, hotkey]): Command => ({
+      id: `writing:paste-${author}`,
+      name,
+      section: 'Writing',
+      scope: 'editor',
+      ...(hotkey === undefined ? {} : { hotkey }),
+      isAvailable: editorHasFocus,
+      run: () => {
+        void api.invoke('app:clipboard-text').then((text) => {
+          if (text !== '') getActiveEditor()?.insertAs(author, text)
+        })
+      },
+    })),
     {
       id: 'editor:toggle-fold',
       name: 'Toggle fold on current line',

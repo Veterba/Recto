@@ -138,12 +138,14 @@ export function selectTopics(similarity: Float64Array, n: number): number[][] {
   }
   for (;;) {
     const picked = best(root).picked
-    const scores = silhouettes(similarity, n, picked.map((p) => p.members))
+    const scores = silhouettes(
+      similarity,
+      n,
+      picked.map((p) => p.members),
+    )
     const worst = scores.reduce((w, s, i) => (s < scores[w]! ? i : w), 0)
     if (picked.length === 0 || scores[worst]! >= MIN_SILHOUETTE) {
-      return picked
-        .map((p) => [...p.members].sort((a, b) => a - b))
-        .sort((a, b) => b.length - a.length || a[0]! - b[0]!)
+      return picked.map((p) => [...p.members].sort((a, b) => a - b)).sort((a, b) => b.length - a.length || a[0]! - b[0]!)
     }
     banned.add(picked[worst]!)
   }

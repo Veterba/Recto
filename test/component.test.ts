@@ -6,7 +6,9 @@ describe('Component lifecycle', () => {
   it('calls onload once, and again only after unload', () => {
     const onload = vi.fn()
     class C extends Component {
-      override onload(): void { onload() }
+      override onload(): void {
+        onload()
+      }
     }
     const c = new C()
     c.load()
@@ -20,7 +22,9 @@ describe('Component lifecycle', () => {
   it('runs cleanups in reverse order, then onunload', () => {
     const order: string[] = []
     class C extends Component {
-      override onunload(): void { order.push('onunload') }
+      override onunload(): void {
+        order.push('onunload')
+      }
     }
     const c = new C()
     c.load()
@@ -33,8 +37,12 @@ describe('Component lifecycle', () => {
   it('unloads children before its own cleanups', () => {
     const order: string[] = []
     class Child extends Component {
-      constructor(private label: string) { super() }
-      override onunload(): void { order.push(`child:${this.label}`) }
+      constructor(private label: string) {
+        super()
+      }
+      override onunload(): void {
+        order.push(`child:${this.label}`)
+      }
     }
     const parent = new Component()
     parent.load()
@@ -48,7 +56,9 @@ describe('Component lifecycle', () => {
   it('loads a child added to an already-loaded parent', () => {
     const onload = vi.fn()
     class Child extends Component {
-      override onload(): void { onload() }
+      override onload(): void {
+        onload()
+      }
     }
     const parent = new Component()
     parent.load()
@@ -71,7 +81,9 @@ describe('Component lifecycle', () => {
   it('removeChild unloads it early and detaches it from later teardown', () => {
     const onunload = vi.fn()
     class Child extends Component {
-      override onunload(): void { onunload() }
+      override onunload(): void {
+        onunload()
+      }
     }
     const parent = new Component()
     const child = new Child()
@@ -88,7 +100,10 @@ describe('Events', () => {
   it('lets a listener detach itself mid-trigger without skipping others', () => {
     const events = new Events<{ tick: readonly [] }>()
     const seen: string[] = []
-    const a = events.on('tick', () => { seen.push('a'); a.detach() })
+    const a = events.on('tick', () => {
+      seen.push('a')
+      a.detach()
+    })
     events.on('tick', () => seen.push('b'))
     events.trigger('tick')
     events.trigger('tick')

@@ -80,9 +80,7 @@ function flush(): void {
 /** Feed one note to the index without telling the renderer anything changed. */
 function indexNote(relative: string): void {
   if (!relative.toLowerCase().endsWith('.md')) return
-  void send({ kind: 'note-changed', changes: [{ type: 'upserted', path: relative }] }, 30_000).catch(
-    () => undefined,
-  )
+  void send({ kind: 'note-changed', changes: [{ type: 'upserted', path: relative }] }, 30_000).catch(() => undefined)
 }
 
 function enqueue(change: VaultChange): void {
@@ -97,8 +95,7 @@ export function startWatching(window: BrowserWindow): void {
 
   target = window
   const root = vault.path
-  const toRelative = (absolute: string): string =>
-    path.relative(root, absolute).split(path.sep).join('/')
+  const toRelative = (absolute: string): string => path.relative(root, absolute).split(path.sep).join('/')
 
   watcher = chokidar.watch(root, {
     ignoreInitial: true,

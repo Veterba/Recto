@@ -1,17 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import {
-  conflictPath,
-  guard,
-  ignored,
-  planSync,
-  summarise,
-  type BaseEntry,
-  type PlanSummary,
-  type SideFile,
-  type SyncAction,
-} from './plan'
+import { conflictPath, guard, ignored, planSync, summarise, type BaseEntry, type PlanSummary, type SideFile, type SyncAction } from './plan'
 
 /**
  * Two-way sync: the part that touches files.
@@ -90,10 +80,7 @@ async function writeAtomically(file: string, data: string | Buffer): Promise<voi
 const hashOf = (data: Buffer): string => createHash('sha1').update(data).digest('hex')
 
 /** Every syncable file under a root, keyed by lower-cased relative path. */
-export async function scan(
-  root: string,
-  cached: (key: string) => Stat | undefined,
-): Promise<Map<string, SideFile>> {
+export async function scan(root: string, cached: (key: string) => Stat | undefined): Promise<Map<string, SideFile>> {
   const out = new Map<string, SideFile>()
 
   const walk = async (dir: string): Promise<void> => {

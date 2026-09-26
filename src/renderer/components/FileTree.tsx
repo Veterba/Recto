@@ -146,9 +146,7 @@ export function FileTree({
   /** The node a delete is waiting on confirmation for. */
   const [confirming, setConfirming] = useState<FileNode | null>(null)
   /** The open preview card, and the row it is anchored to. */
-  const [peek, setPeek] = useState<{ node: FileNode; anchor: { top: number; right: number; bottom: number } } | null>(
-    null,
-  )
+  const [peek, setPeek] = useState<{ node: FileNode; anchor: { top: number; right: number; bottom: number } } | null>(null)
   const peekTimer = useRef<number | undefined>(undefined)
   const peekOpen = useRef(false)
   peekOpen.current = peek !== null
@@ -461,8 +459,7 @@ export function FileTree({
       {rewrite !== null && (
         <p className="tree__notice" role="status">
           <span>
-            Updated {rewrite.links} {rewrite.links === 1 ? 'link' : 'links'} in {rewrite.files}{' '}
-            {rewrite.files === 1 ? 'note' : 'notes'}.
+            Updated {rewrite.links} {rewrite.links === 1 ? 'link' : 'links'} in {rewrite.files} {rewrite.files === 1 ? 'note' : 'notes'}.
           </span>
           <button
             className="tree__undo"
@@ -593,11 +590,7 @@ export function FileTree({
       )}
 
       {contextMenu.menu !== null && (
-        <ContextMenu
-          items={menuFor(contextMenu.menu.subject)}
-          at={contextMenu.menu.at}
-          onClose={contextMenu.close}
-        />
+        <ContextMenu items={menuFor(contextMenu.menu.subject)} at={contextMenu.menu.at} onClose={contextMenu.close} />
       )}
 
       {confirming !== null && (
@@ -606,13 +599,13 @@ export function FileTree({
           body={
             confirming.kind === 'folder' ? (
               <>
-                <strong>{confirming.name}</strong> and everything inside it goes to the archive.
-                Recoverable there, then it goes to the system trash.
+                <strong>{confirming.name}</strong> and everything inside it goes to the archive. Recoverable there, then it goes to the
+                system trash.
               </>
             ) : (
               <>
-                <strong>{confirming.name.replace(/\.md$/i, '')}</strong> goes to the archive.
-                Recoverable there, then it goes to the system trash.
+                <strong>{confirming.name.replace(/\.md$/i, '')}</strong> goes to the archive. Recoverable there, then it goes to the system
+                trash.
               </>
             )
           }
@@ -712,9 +705,7 @@ function TreeRow({
       {Array.from({ length: depth }, (_, level) => (
         <span key={level} className="tree__guide" style={{ left: level * INDENT + GUIDE_X }} aria-hidden />
       ))}
-      <span className={`tree__chevron${isFolder ? '' : ' is-hidden'}${isOpen ? ' is-open' : ''}`}>
-        {isFolder ? '›' : ''}
-      </span>
+      <span className={`tree__chevron${isFolder ? '' : ' is-hidden'}${isOpen ? ' is-open' : ''}`}>{isFolder ? '›' : ''}</span>
       {/* An icon per kind, so a folder and a note are distinguishable without
           reading the chevron - which is invisible on a file. */}
       <span className="tree__icon">
@@ -722,27 +713,25 @@ function TreeRow({
       </span>
 
       <>
-          {/* No `title` here. The browser's own tooltip showed the path after a
+        {/* No `title` here. The browser's own tooltip showed the path after a
               second and sat on top of the preview card - two things answering
               one hover. The preview carries the folder; long names are
               truncated with an ellipsis, and the full name is in the card. */}
-          <span className="tree__name">
-            {label}
-          </span>
-          <Tip label="Move to archive" hint="Recoverable for 10 days">
-            <button
-              className="tree__delete"
-              aria-label={`Delete ${node.name}`}
-              onMouseDown={(ev) => ev.stopPropagation()}
-              onClick={(ev) => {
-                ev.stopPropagation()
-                onDelete()
-              }}
-            >
-              <Icon name="x" size={13} />
-            </button>
-          </Tip>
-        </>
+        <span className="tree__name">{label}</span>
+        <Tip label="Move to archive" hint="Recoverable for 10 days">
+          <button
+            className="tree__delete"
+            aria-label={`Delete ${node.name}`}
+            onMouseDown={(ev) => ev.stopPropagation()}
+            onClick={(ev) => {
+              ev.stopPropagation()
+              onDelete()
+            }}
+          >
+            <Icon name="x" size={13} />
+          </button>
+        </Tip>
+      </>
     </div>
   )
 }

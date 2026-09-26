@@ -35,9 +35,8 @@ export function FirstRun({ state, onOpened }: Props): React.ReactElement {
         <div className="firstrun__mark" aria-hidden="true" />
         <h1>Choose a vault</h1>
         <p className="firstrun__lede">
-          A vault is just a folder on your disk. Your notes stay plain markdown files inside it —
-          readable by anything, yours to move, back up or delete. Pick an empty folder to start
-          fresh, or point at markdown you already have.
+          A vault is just a folder on your disk. Your notes stay plain markdown files inside it — readable by anything, yours to move, back
+          up or delete. Pick an empty folder to start fresh, or point at markdown you already have.
         </p>
 
         {state.lastPath !== undefined && (
@@ -56,9 +55,7 @@ export function FirstRun({ state, onOpened }: Props): React.ReactElement {
           {busy ? 'Opening…' : 'Choose folder…'}
         </button>
 
-        <p className="firstrun__fine">
-          Nothing is uploaded. No account, no sign-in, no server.
-        </p>
+        <p className="firstrun__fine">Nothing is uploaded. No account, no sign-in, no server.</p>
       </div>
     </main>
   )

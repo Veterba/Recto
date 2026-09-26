@@ -102,9 +102,7 @@ export function useWorkspace(): WorkspaceApi {
     void api.invoke('state:read', 'workspace').then((saved) => {
       if (cancelled) return
       const { layouts, active, graphWindow: win, historyWindow: hist } = parse(saved)
-      const built = Object.fromEntries(
-        SECTIONS.map((section) => [section.id, new Workspace(layouts[section.id])]),
-      ) as Sections
+      const built = Object.fromEntries(SECTIONS.map((section) => [section.id, new Workspace(layouts[section.id])])) as Sections
       setSections(built)
       setActive(active)
       setWindow(win)
@@ -118,9 +116,7 @@ export function useWorkspace(): WorkspaceApi {
   const serialize = useCallback(
     (current: Sections, active: SectionId, windows: { graph: GraphWindowState; history: GraphWindowState }): SavedFile => ({
       version: 2,
-      sections: Object.fromEntries(
-        SECTIONS.map((section) => [section.id, current[section.id].serialize()]),
-      ) as SavedFile['sections'],
+      sections: Object.fromEntries(SECTIONS.map((section) => [section.id, current[section.id].serialize()])) as SavedFile['sections'],
       activeSection: active,
       graphWindow: windows.graph,
       historyWindow: windows.history,
@@ -189,10 +185,8 @@ export function useWorkspace(): WorkspaceApi {
   )
 
   /** Shared by both floating windows; they differ only in which state they set. */
-  const makeSetter = (
-    setter: typeof setWindow,
-    pick: (next: GraphWindowState) => { graph: GraphWindowState; history: GraphWindowState },
-  ) =>
+  const makeSetter =
+    (setter: typeof setWindow, pick: (next: GraphWindowState) => { graph: GraphWindowState; history: GraphWindowState }) =>
     (patch: Partial<GraphWindowState>): void => {
       setter((prev) => {
         // Clamp on write, not just on drag: a hand-edited workspace.json could

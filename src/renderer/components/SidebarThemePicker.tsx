@@ -33,10 +33,7 @@ export function SidebarThemePicker({ at, appearance, update, onClose }: Props): 
 
   const themeRef = useRef(theme)
   themeRef.current = theme
-  const set = useCallback(
-    (patch: Partial<SidebarTheme>) => update({ sidebarTheme: { ...themeRef.current, ...patch } }),
-    [update],
-  )
+  const set = useCallback((patch: Partial<SidebarTheme>) => update({ sidebarTheme: { ...themeRef.current, ...patch } }), [update])
 
   useLayoutEffect(() => {
     const element = card.current

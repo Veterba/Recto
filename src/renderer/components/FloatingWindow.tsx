@@ -50,14 +50,7 @@ type Props = {
   children?: React.ReactNode
 }
 
-export function FloatingWindow({
-  title,
-  geometry,
-  onChange,
-  onClose,
-  closeHint,
-  children,
-}: Props): React.ReactElement {
+export function FloatingWindow({ title, geometry, onChange, onClose, closeHint, children }: Props): React.ReactElement {
   const ref = useRef<HTMLDivElement | null>(null)
 
   /** The area the panel floats over; its offsetParent. */
@@ -106,12 +99,7 @@ export function FloatingWindow({
       const origin = { x: geometry.x, y: geometry.y }
 
       const onMove = (move: PointerEvent): void => {
-        onChange(
-          clampGeometry(
-            { ...geometry, x: origin.x + move.clientX - startX, y: origin.y + move.clientY - startY },
-            bounds(),
-          ),
-        )
+        onChange(clampGeometry({ ...geometry, x: origin.x + move.clientX - startX, y: origin.y + move.clientY - startY }, bounds()))
       }
       const onUp = (): void => {
         window.removeEventListener('pointermove', onMove)
@@ -163,14 +151,12 @@ export function FloatingWindow({
     : { left: geometry.x, top: geometry.y, width: geometry.width, height: geometry.height }
 
   return (
-    <div
-      ref={ref}
-      className={`float${geometry.maximized ? ' is-maximized' : ''}`}
-      style={style}
-      role="dialog"
-      aria-label={title}
-    >
-      <header className="float__head" onPointerDown={startDrag} onDoubleClick={() => onChange({ ...geometry, maximized: !geometry.maximized })}>
+    <div ref={ref} className={`float${geometry.maximized ? ' is-maximized' : ''}`} style={style} role="dialog" aria-label={title}>
+      <header
+        className="float__head"
+        onPointerDown={startDrag}
+        onDoubleClick={() => onChange({ ...geometry, maximized: !geometry.maximized })}
+      >
         <h2 className="float__title">{title}</h2>
         <div className="float__actions">
           <Tip label={geometry.maximized ? 'Restore' : 'Expand to full size'} hint="Or double-click the title">
@@ -192,9 +178,7 @@ export function FloatingWindow({
 
       <div className="float__body">{children}</div>
 
-      {!geometry.maximized && (
-        <div className="float__resize" onPointerDown={startResize} aria-hidden="true" />
-      )}
+      {!geometry.maximized && <div className="float__resize" onPointerDown={startResize} aria-hidden="true" />}
     </div>
   )
 }

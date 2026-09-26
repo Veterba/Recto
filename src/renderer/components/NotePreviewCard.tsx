@@ -33,15 +33,7 @@ const GAP = 10
 /** Enough for a gist, and a bound on what one click sends to the API. */
 const SUMMARY_INPUT_CHARS = 24_000
 
-export function NotePreviewCard({
-  path,
-  anchor,
-  mtime,
-  model,
-  onOpen,
-  onPointerEnter,
-  onPointerLeave,
-}: Props): React.ReactElement {
+export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerEnter, onPointerLeave }: Props): React.ReactElement {
   const card = useRef<HTMLDivElement | null>(null)
   const [text, setText] = useState<string | null>(null)
   const [preview, setPreview] = useState<NotePreview | null>(null)
@@ -119,7 +111,7 @@ export function NotePreviewCard({
         id: streamId,
         model,
         system:
-          'Summarise the user\'s note in two or three plain sentences: what it is about and what matters in it. ' +
+          "Summarise the user's note in two or three plain sentences: what it is about and what matters in it. " +
           'No preamble, no bullet points, no markdown.',
         messages: [{ role: 'user', content: text.slice(0, SUMMARY_INPUT_CHARS) }],
       })

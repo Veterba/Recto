@@ -84,8 +84,7 @@ export function ChatList({ tree, activePath, query, onOpen, onChanged }: Props):
   if (entries.length === 0) {
     return (
       <p className="sidebar__empty">
-        No conversations yet. Press <kbd>New chat</kbd> — each one is saved as a markdown note in{' '}
-        <code>{CHAT_FOLDER}/</code>.
+        No conversations yet. Press <kbd>New chat</kbd> — each one is saved as a markdown note in <code>{CHAT_FOLDER}/</code>.
       </p>
     )
   }
@@ -112,8 +111,7 @@ export function ChatList({ tree, activePath, query, onOpen, onChanged }: Props):
           title="Delete conversation"
           body={
             <>
-              <strong>{confirming.title}</strong> goes to the archive. Recoverable there, then it goes
-              to the system trash.
+              <strong>{confirming.title}</strong> goes to the archive. Recoverable there, then it goes to the system trash.
             </>
           }
           confirmLabel="Move to archive"

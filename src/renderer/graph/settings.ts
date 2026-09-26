@@ -70,8 +70,7 @@ const LIMITS: Readonly<Record<keyof Tunables, [number, number]>> = {
   orphanPull: [0, 1],
 }
 
-const clamp = (value: number, [min, max]: [number, number]): number =>
-  Math.min(max, Math.max(min, value))
+const clamp = (value: number, [min, max]: [number, number]): number => Math.min(max, Math.max(min, value))
 
 export function parseSettings(raw: unknown): GraphSettings {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return DEFAULT_SETTINGS
@@ -96,9 +95,7 @@ export function parseSettings(raw: unknown): GraphSettings {
    * organic set out of it rather than throwing away a dialling someone did.
    */
   const perLayout =
-    saved !== null && typeof saved === 'object' && !Array.isArray(saved)
-      ? (saved as Record<string, unknown>)['organic']
-      : undefined
+    saved !== null && typeof saved === 'object' && !Array.isArray(saved) ? (saved as Record<string, unknown>)['organic'] : undefined
   const flat = (Object.keys(DEFAULT_TUNABLES) as (keyof Tunables)[]).some(
     (key) => saved !== null && typeof saved === 'object' && key in (saved as Record<string, unknown>),
   )

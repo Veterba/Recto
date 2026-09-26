@@ -26,9 +26,11 @@ import { DEFAULT_TEMPLATE_SETTINGS, type TemplateSettings } from '../src/rendere
 const MODEL_DIR = process.env['RECTO_MODEL_DIR'] ?? null
 
 const walk = (dir: string): string[] =>
-  fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.name.startsWith('.') ? [] : e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.md') ? [path.join(dir, e.name)] : [],
-  )
+  fs
+    .readdirSync(dir, { withFileTypes: true })
+    .flatMap((e) =>
+      e.name.startsWith('.') ? [] : e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.md') ? [path.join(dir, e.name)] : [],
+    )
 
 /** Hashed bag of words: topical enough for notes that share vocabulary, and deterministic. */
 const bagOfWords: Encoder = async (texts) =>
@@ -51,7 +53,9 @@ async function vaultVectors(
 ): Promise<{ paths: string[]; vectors: Float32Array[]; mean: Float32Array; texts: string[] }> {
   const all = walk(root).map((p) => path.relative(root, p).split(path.sep).join('/'))
   const excluded = excludedFolders(templates, [])
-  const template = templateLines(all.filter((p) => p.startsWith(`${templates.folder}/`)).map((p) => fs.readFileSync(path.join(root, p), 'utf8')))
+  const template = templateLines(
+    all.filter((p) => p.startsWith(`${templates.folder}/`)).map((p) => fs.readFileSync(path.join(root, p), 'utf8')),
+  )
   const chunksOf = new Map<string, Float32Array[]>()
   const textOf = new Map<string, string>()
   for (const p of all.sort()) {

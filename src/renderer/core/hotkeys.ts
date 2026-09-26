@@ -113,9 +113,7 @@ export function formatChord(binding: string, isMac = IS_MAC): string {
     delete: '⌦',
     tab: 'Tab',
   }
-  const label =
-    keyLabel[key] ??
-    (key.length === 1 ? key.toUpperCase() : key.charAt(0).toUpperCase() + key.slice(1))
+  const label = keyLabel[key] ?? (key.length === 1 ? key.toUpperCase() : key.charAt(0).toUpperCase() + key.slice(1))
   const mods = parts.map((m) => glyph[m] ?? m)
   return isMac ? [...mods, label].join('') : [...mods, label].join('+')
 }

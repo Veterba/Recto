@@ -213,10 +213,7 @@ export function parseNote(content: string): ParsedNote {
   }
 
   const fmTitle = frontmatter['title']
-  const title =
-    typeof fmTitle === 'string' && fmTitle !== ''
-      ? fmTitle
-      : (headings.find((h) => h.level === 1)?.text ?? null)
+  const title = typeof fmTitle === 'string' && fmTitle !== '' ? fmTitle : (headings.find((h) => h.level === 1)?.text ?? null)
 
   return { title, frontmatter, headings, links, tags, body: bodyLines.join('\n') }
 }
@@ -253,5 +250,4 @@ export function resolveLink(target: string, pathsByName: ReadonlyMap<string, str
   return [...matches].sort((a, b) => a.split('/').length - b.split('/').length || a.length - b.length)[0] ?? null
 }
 
-export const normalizeName = (value: string): string =>
-  value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
+export const normalizeName = (value: string): string => value.normalize('NFC').toLowerCase().replace(/\.md$/, '')

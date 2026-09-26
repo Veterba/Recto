@@ -1,0 +1,11 @@
+# Build output and generated files
+out/
+dist/
+snapshots/
+node_modules/
+package-lock.json
+# Data, not code: vault fixtures, dictionaries, recorded vectors
+test/fixtures/
+resources/
+# Prose is written by hand
+*.md

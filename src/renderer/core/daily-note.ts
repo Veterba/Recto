@@ -84,8 +84,7 @@ export async function ensureDailyNote(
 }
 
 /** The calendar day, as a key that changes exactly at local midnight. */
-export const dayKey = (date: Date = new Date()): string =>
-  `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+export const dayKey = (date: Date = new Date()): string => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
 
 /** What a daily note made from these settings would contain, before anyone edits it. */
 async function generatedText(settings: TemplateSettings, now: Date): Promise<string> {
@@ -121,11 +120,7 @@ async function generatedText(settings: TemplateSettings, now: Date): Promise<str
  * settings would have generated. One typed character and it is the user's note,
  * and it is left alone.
  */
-export async function retemplateDailyNote(
-  previous: TemplateSettings,
-  next: TemplateSettings,
-  now: Date = new Date(),
-): Promise<boolean> {
+export async function retemplateDailyNote(previous: TemplateSettings, next: TemplateSettings, now: Date = new Date()): Promise<boolean> {
   if (!next.daily.enabled || previous.daily.template === next.daily.template) return false
   if (previous.daily.folder !== next.daily.folder) return false
   const target = dailyNotePath(now, next.daily.folder)

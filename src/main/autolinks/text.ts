@@ -31,9 +31,7 @@ export function countWords(text: string): number {
 /** `[[a|b]]` -> `b`, `[[a]]` -> `a`, `[t](u)` -> `t`; embeds vanish. */
 export function unlink(line: string): string {
   return line
-    .replace(WIKILINK, (_m, bang: string, target: string, alias?: string) =>
-      bang === '!' ? '' : (alias ?? target).trim(),
-    )
+    .replace(WIKILINK, (_m, bang: string, target: string, alias?: string) => (bang === '!' ? '' : (alias ?? target).trim()))
     .replace(MD_LINK, (_m, bang: string, text: string) => (bang === '!' ? '' : text))
 }
 
@@ -232,7 +230,12 @@ function splitLong(paragraph: Chunk): Chunk[] {
 export function snippet(text: string, max: number): string {
   const plain = text
     .split('\n')
-    .map((line) => line.replace(LINE_PREFIX, '').replace(/(\*\*|__|`)/g, '').trim())
+    .map((line) =>
+      line
+        .replace(LINE_PREFIX, '')
+        .replace(/(\*\*|__|`)/g, '')
+        .trim(),
+    )
     .filter((line) => line !== '')
     .join(' · ')
   return plain.length > max ? `${plain.slice(0, max - 1).trimEnd()}…` : plain

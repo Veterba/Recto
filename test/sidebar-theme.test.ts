@@ -27,9 +27,7 @@ describe('tintCss', () => {
    * a bare colour there is an image with no colour in it.
    */
   it('makes one stop a flat wash rather than a bare colour', () => {
-    expect(tintCss({ colors: ['#5aaee0'], strength: 50 })).toBe(
-      'linear-gradient(rgb(90 174 224 / 0.500), rgb(90 174 224 / 0.500))',
-    )
+    expect(tintCss({ colors: ['#5aaee0'], strength: 50 })).toBe('linear-gradient(rgb(90 174 224 / 0.500), rgb(90 174 224 / 0.500))')
   })
 
   it('blends several stops', () => {

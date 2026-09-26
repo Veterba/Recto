@@ -89,7 +89,11 @@ async function embed(path: string, pieces: Piece[]): Promise<{ mean: number[] | 
  * The vault's mean chunk, over the chunks note vectors use: a 500-chunk log
  * counts as one note here too, or it would be most of the mean.
  */
-const meanChunk = (): Float32Array => vaultMean([...loadStore().values()].flatMap((v) => capped(v.chunks)), DIMS)
+const meanChunk = (): Float32Array =>
+  vaultMean(
+    [...loadStore().values()].flatMap((v) => capped(v.chunks)),
+    DIMS,
+  )
 
 /**
  * Note vectors for topics: every chunk centred on the vault's mean chunk
@@ -195,8 +199,7 @@ async function run(request: EmbedRequest): Promise<EmbedResponse> {
       return { kind: 'ok' }
     case 'meta-get': {
       const row = requireDb().prepare('SELECT value FROM autolink_meta WHERE key = ?').get(request.key) as
-        | { value: string | null }
-        | undefined
+        { value: string | null } | undefined
       return { kind: 'meta', value: row?.value ?? null }
     }
     case 'meta-set':

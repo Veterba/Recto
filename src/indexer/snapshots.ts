@@ -30,9 +30,8 @@ export const SNAPSHOT_MAX_AGE_MS = 30 * 86_400_000
 export type Now = () => number
 
 export function takeSnapshot(db: Database, path: string, content: string, now: Now = Date.now): void {
-  const latest = db
-    .prepare('SELECT content, ts FROM snapshots WHERE path = ? ORDER BY ts DESC LIMIT 1')
-    .get(path) as { content: string; ts: number } | undefined
+  const latest = db.prepare('SELECT content, ts FROM snapshots WHERE path = ? ORDER BY ts DESC LIMIT 1').get(path) as
+    { content: string; ts: number } | undefined
 
   if (latest !== undefined) {
     if (latest.content === content) return
@@ -51,12 +50,7 @@ export function takeSnapshot(db: Database, path: string, content: string, now: N
     }
   }
 
-  db.prepare('INSERT INTO snapshots (path, content, bytes, ts) VALUES (?, ?, ?, ?)').run(
-    path,
-    content,
-    Buffer.byteLength(content),
-    now(),
-  )
+  db.prepare('INSERT INTO snapshots (path, content, bytes, ts) VALUES (?, ?, ?, ?)').run(path, content, Buffer.byteLength(content), now())
 
   db.prepare(
     `DELETE FROM snapshots WHERE path = ? AND id NOT IN (
@@ -67,15 +61,11 @@ export function takeSnapshot(db: Database, path: string, content: string, now: N
 
 /** Content is omitted: listing 30 versions of a long note would be megabytes. */
 export function listSnapshots(db: Database, path: string): Snapshot[] {
-  return db
-    .prepare('SELECT id, path, ts, bytes FROM snapshots WHERE path = ? ORDER BY ts DESC')
-    .all(path) as Snapshot[]
+  return db.prepare('SELECT id, path, ts, bytes FROM snapshots WHERE path = ? ORDER BY ts DESC').all(path) as Snapshot[]
 }
 
 export function getSnapshot(db: Database, id: number): Snapshot | null {
-  const row = db
-    .prepare('SELECT id, path, ts, bytes, content FROM snapshots WHERE id = ?')
-    .get(id) as Snapshot | undefined
+  const row = db.prepare('SELECT id, path, ts, bytes, content FROM snapshots WHERE id = ?').get(id) as Snapshot | undefined
   return row ?? null
 }
 

@@ -82,12 +82,7 @@ export class Component {
     cb: (ev: HTMLElementEventMap[K]) => void,
     options?: AddEventListenerOptions,
   ): void
-  registerDomEvent(
-    target: EventTarget,
-    type: string,
-    cb: EventListenerOrEventListenerObject,
-    options?: AddEventListenerOptions,
-  ): void {
+  registerDomEvent(target: EventTarget, type: string, cb: EventListenerOrEventListenerObject, options?: AddEventListenerOptions): void {
     target.addEventListener(type, cb, options)
     this.register(() => target.removeEventListener(type, cb, options))
   }

@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  coerceLook,
-  DEFAULT_LOOK,
-  degreeT,
-  gradientAt,
-  mixColor,
-  paintSteps,
-  nodeRadius,
-  parseHex,
-} from '../src/renderer/graph/look'
+import { coerceLook, DEFAULT_LOOK, degreeT, gradientAt, mixColor, paintSteps, nodeRadius, parseHex } from '../src/renderer/graph/look'
 
 describe('node radius', () => {
   it("follows Obsidian's curve: a floor, a square root, then a ceiling", () => {

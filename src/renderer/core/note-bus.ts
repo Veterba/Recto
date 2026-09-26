@@ -48,7 +48,11 @@ const subscribe = (listener: () => void): (() => void) => {
 }
 
 export function useNoteBus(): Snapshot {
-  return useSyncExternalStore(subscribe, () => snapshot, () => snapshot)
+  return useSyncExternalStore(
+    subscribe,
+    () => snapshot,
+    () => snapshot,
+  )
 }
 
 /** Test seam - the module is a singleton, so tests need a way back to zero. */

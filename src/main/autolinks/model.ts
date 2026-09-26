@@ -74,11 +74,7 @@ export class OfflineError extends Error {}
  * failure throws `OfflineError` and leaves the `.part` for next time; a bad
  * checksum deletes the file, because resuming a corrupt file keeps it corrupt.
  */
-export async function downloadModel(
-  root: string,
-  onProgress: (received: number) => void,
-  signal?: AbortSignal,
-): Promise<void> {
+export async function downloadModel(root: string, onProgress: (received: number) => void, signal?: AbortSignal): Promise<void> {
   for (const spec of MODEL_FILES) {
     const final = target(root, spec.name)
     if (fs.existsSync(final) && fs.statSync(final).size === spec.size) continue

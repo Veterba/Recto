@@ -24,7 +24,6 @@
 
 import { cosine } from './vectors'
 
-
 export type Lang = 'en' | 'ru' | 'no'
 
 const words = (list: string): Set<string> => new Set(list.split(/\s+/).filter((w) => w !== ''))
@@ -138,11 +137,7 @@ export function language(text: string): Lang {
  * so a vault that is half and half does not flip back and forth - and never to
  * `declined`, a switch the user undid.
  */
-export function vaultLanguage(
-  counts: Partial<Record<Lang, number>>,
-  current: Lang | null,
-  declined: Lang | null = null,
-): Lang | null {
+export function vaultLanguage(counts: Partial<Record<Lang, number>>, current: Lang | null, declined: Lang | null = null): Lang | null {
   const n = (l: Lang | null): number => (l === null ? 0 : (counts[l] ?? 0))
   const leader = (Object.keys(counts) as Lang[])
     .filter((l) => n(l) > 0)
@@ -161,8 +156,7 @@ export function inScript(word: string, lang: Lang): boolean {
 }
 
 /** A lemma that may name a topic: three letters or more, in the script, not a stopword. */
-export const nameable = (lemma: string, lang: Lang): boolean =>
-  [...lemma].length >= 3 && inScript(lemma, lang) && !ALL_STOP.has(lemma)
+export const nameable = (lemma: string, lang: Lang): boolean => [...lemma].length >= 3 && inScript(lemma, lang) && !ALL_STOP.has(lemma)
 
 /**
  * The best CANDIDATES nouns for a topic, by c-TF-IDF. `members` and `vault`
@@ -227,7 +221,10 @@ const sameStem = (a: string, b: string): boolean => {
 export function clusterLanguage(langs: readonly Lang[], vault: Lang): Lang {
   const counts = new Map<Lang, number>()
   for (const l of langs) counts.set(l, (counts.get(l) ?? 0) + 1)
-  return [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] === vault ? -1 : b[0] === vault ? 1 : a[0].localeCompare(b[0])))[0]?.[0] ?? vault
+  return (
+    [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] === vault ? -1 : b[0] === vault ? 1 : a[0].localeCompare(b[0])))[0]?.[0] ??
+    vault
+  )
 }
 
 /** A word written capitalised in most of its occurrences is a name: "Rust" the language, not rust. */
@@ -263,7 +260,10 @@ export type Naming = { name: string | null; from: Lang; failed?: 'candidates' | 
 
 /** A cluster's name in the vault's language, or null - then it is not a topic. */
 export async function nameCluster(input: NamingInput): Promise<Naming> {
-  const from = clusterLanguage(input.members.map((m) => m.lang), input.vaultLang)
+  const from = clusterLanguage(
+    input.members.map((m) => m.lang),
+    input.vaultLang,
+  )
   const own = input.members.filter((m) => m.lang === from).map((m) => m.terms)
   const terms = candidates(own, input.members.length, input.vault)
   if (terms.length < 2) return { name: null, from, failed: 'candidates' }
@@ -275,15 +275,16 @@ export async function nameCluster(input: NamingInput): Promise<Naming> {
     const prose = input.members.filter((m) => m.lang === from).map((m) => m.prose)
     const sources = terms.filter((t) => !isProperName(t, prose))
     const options = sources.map((t) =>
-      [...new Set(input.translate(t, from, input.vaultLang))].filter((w) => nameable(w, input.vaultLang) && input.isNoun(w, input.vaultLang)),
+      [...new Set(input.translate(t, from, input.vaultLang))].filter(
+        (w) => nameable(w, input.vaultLang) && input.isNoun(w, input.vaultLang),
+      ),
     )
     const flat = [...new Set(options.flat())]
     const vectors = flat.length === 0 ? [] : await input.embed([...sources, ...flat])
     const vectorOf = new Map([...sources, ...flat].map((w, i) => [w, vectors[i]!]))
     ranked = []
     sources.forEach((source, k) => {
-      const best = options[k]!
-        .filter((w) => cosine(vectorOf.get(w)!, vectorOf.get(source)!) >= SAME_MEANING)
+      const best = options[k]!.filter((w) => cosine(vectorOf.get(w)!, vectorOf.get(source)!) >= SAME_MEANING)
         .map((w) => ({ term: w, sim: cosine(vectorOf.get(w)!, input.center) }))
         .sort((a, b) => b.sim - a.sim)[0]
       if (best !== undefined && best.sim >= TRANSLATION_FLOOR && !ranked.some((r) => r.term === best.term)) ranked.push(best)

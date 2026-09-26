@@ -189,10 +189,7 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
    * hold the next time the overlay is opened rather than the next time the app
    * is launched.
    */
-  const reduced = useMemo(
-    () => mounted && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    [mounted],
-  )
+  const reduced = useMemo(() => mounted && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [mounted])
 
   // --- open and close -----------------------------------------------------
 
@@ -609,7 +606,11 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
         <div
           className="home__track"
           ref={trackRef}
-          style={dragOffset === null ? undefined : { transform: `translate3d(calc(${-pane * 100}% + ${dragOffset}px), 0, 0)`, transition: 'none' }}
+          style={
+            dragOffset === null
+              ? undefined
+              : { transform: `translate3d(calc(${-pane * 100}% + ${dragOffset}px), 0, 0)`, transition: 'none' }
+          }
         >
           <section className="home__pane home__pane--hero" aria-label="Recto">
             {/*
@@ -633,9 +634,15 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
                 {tildePath(vaultPath)}
               </p>
               <div className="home__meta home__meta--creed">
-                <span data-hero-line data-ink="0.78">Notes are files.</span>
-                <span data-hero-line data-ink="0.78">The index is a cache.</span>
-                <span data-hero-line data-ink="0.78">Nothing is converted.</span>
+                <span data-hero-line data-ink="0.78">
+                  Notes are files.
+                </span>
+                <span data-hero-line data-ink="0.78">
+                  The index is a cache.
+                </span>
+                <span data-hero-line data-ink="0.78">
+                  Nothing is converted.
+                </span>
               </div>
 
               <div className="home__title">
@@ -686,7 +693,6 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
             <Statistics stats={stats} onBack={() => goTo(0)} />
           </section>
         </div>
-
       </div>
     </div>,
     document.body,
@@ -739,7 +745,10 @@ function Statistics({ stats, onBack }: { stats: HomeStats | null; onBack: () => 
       </div>
 
       <button className="home__back" type="button" onClick={onBack}>
-        <span className="home__arrow" aria-hidden="true">←</span> back
+        <span className="home__arrow" aria-hidden="true">
+          ←
+        </span>{' '}
+        back
       </button>
     </div>
   )
@@ -758,9 +767,7 @@ function Figure({ value, label, trend }: { value: string; label: string; trend?:
 /** A week of writing, as one line. No axes, no grid, no library. */
 function Sparkline({ values }: { values: number[] }): React.ReactElement {
   const top = Math.max(1, ...values)
-  const points = values
-    .map((value, i) => `${(i / Math.max(1, values.length - 1)) * 100},${18 - (value / top) * 16}`)
-    .join(' ')
+  const points = values.map((value, i) => `${(i / Math.max(1, values.length - 1)) * 100},${18 - (value / top) * 16}`).join(' ')
   return (
     <svg className="home__spark" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true">
       <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />

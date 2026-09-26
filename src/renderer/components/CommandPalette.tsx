@@ -49,13 +49,7 @@ export function CommandPalette({ registry, open, onClose }: Props): React.ReactE
 
   return (
     <div className="palette__backdrop" onMouseDown={onClose}>
-      <div
-        className="palette"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Command palette"
-        onMouseDown={(ev) => ev.stopPropagation()}
-      >
+      <div className="palette" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(ev) => ev.stopPropagation()}>
         <input
           ref={inputRef}
           className="palette__input"

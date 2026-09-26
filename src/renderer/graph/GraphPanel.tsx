@@ -76,7 +76,10 @@ type Props = {
 
 // --- the wheel ------------------------------------------------------------------
 
-function useWheelPosition(count: number, onSettle: (index: number) => void): {
+function useWheelPosition(
+  count: number,
+  onSettle: (index: number) => void,
+): {
   position: number
   nudge: (by: number) => void
   goTo: (index: number) => void
@@ -123,10 +126,7 @@ function useWheelPosition(count: number, onSettle: (index: number) => void): {
       if (next > count - 1) next = live.current + by * 0.3
       set(Math.min(count - 1 + 0.6, Math.max(-0.6, next)))
       window.clearTimeout(settleTimer.current)
-      settleTimer.current = window.setTimeout(
-        () => animateTo(Math.min(count - 1, Math.max(0, Math.round(live.current)))),
-        SETTLE_MS,
-      )
+      settleTimer.current = window.setTimeout(() => animateTo(Math.min(count - 1, Math.max(0, Math.round(live.current)))), SETTLE_MS)
     },
     [animateTo, count],
   )
@@ -282,14 +282,34 @@ function LayoutGlyph({ mode }: { mode: LayoutMode }): React.ReactElement {
   switch (mode) {
     case 'tree':
       shapes = [
-        line(16, 5, 8, 15), line(16, 5, 24, 15), line(8, 15, 4, 25), line(8, 15, 12, 25), line(24, 15, 20, 25), line(24, 15, 28, 25),
-        dot(16, 5, 2.4), dot(8, 15), dot(24, 15), dot(4, 25, 1.4), dot(12, 25, 1.4), dot(20, 25, 1.4), dot(28, 25, 1.4),
+        line(16, 5, 8, 15),
+        line(16, 5, 24, 15),
+        line(8, 15, 4, 25),
+        line(8, 15, 12, 25),
+        line(24, 15, 20, 25),
+        line(24, 15, 28, 25),
+        dot(16, 5, 2.4),
+        dot(8, 15),
+        dot(24, 15),
+        dot(4, 25, 1.4),
+        dot(12, 25, 1.4),
+        dot(20, 25, 1.4),
+        dot(28, 25, 1.4),
       ]
       break
     case 'radial':
       shapes = [
-        line(16, 15, 6, 8), line(16, 15, 26, 7), line(16, 15, 27, 22), line(16, 15, 6, 23), line(16, 15, 16, 27),
-        dot(16, 15, 3), dot(6, 8), dot(26, 7), dot(27, 22), dot(6, 23), dot(16, 27),
+        line(16, 15, 6, 8),
+        line(16, 15, 26, 7),
+        line(16, 15, 27, 22),
+        line(16, 15, 6, 23),
+        line(16, 15, 16, 27),
+        dot(16, 15, 3),
+        dot(6, 8),
+        dot(26, 7),
+        dot(27, 22),
+        dot(6, 23),
+        dot(16, 27),
       ]
       break
     case 'circle': {
@@ -307,16 +327,41 @@ function LayoutGlyph({ mode }: { mode: LayoutMode }): React.ReactElement {
     }
     case 'clusters':
       shapes = [
-        line(8, 9, 5, 5), line(8, 9, 12, 5), line(8, 9, 5, 13), line(23, 10, 27, 6), line(23, 10, 28, 13),
-        line(15, 23, 11, 27), line(15, 23, 20, 27), line(8, 9, 15, 23),
-        dot(8, 9, 2.4), dot(5, 5, 1.4), dot(12, 5, 1.4), dot(5, 13, 1.4), dot(23, 10, 2.4), dot(27, 6, 1.4), dot(28, 13, 1.4),
-        dot(15, 23, 2.4), dot(11, 27, 1.4), dot(20, 27, 1.4),
+        line(8, 9, 5, 5),
+        line(8, 9, 12, 5),
+        line(8, 9, 5, 13),
+        line(23, 10, 27, 6),
+        line(23, 10, 28, 13),
+        line(15, 23, 11, 27),
+        line(15, 23, 20, 27),
+        line(8, 9, 15, 23),
+        dot(8, 9, 2.4),
+        dot(5, 5, 1.4),
+        dot(12, 5, 1.4),
+        dot(5, 13, 1.4),
+        dot(23, 10, 2.4),
+        dot(27, 6, 1.4),
+        dot(28, 13, 1.4),
+        dot(15, 23, 2.4),
+        dot(11, 27, 1.4),
+        dot(20, 27, 1.4),
       ]
       break
     default:
       shapes = [
-        line(10, 9, 18, 14), line(18, 14, 25, 7), line(18, 14, 21, 24), line(10, 9, 5, 18), line(21, 24, 11, 25), line(25, 7, 28, 17),
-        dot(10, 9), dot(18, 14, 2.6), dot(25, 7), dot(21, 24), dot(5, 18, 1.4), dot(11, 25, 1.4), dot(28, 17, 1.4),
+        line(10, 9, 18, 14),
+        line(18, 14, 25, 7),
+        line(18, 14, 21, 24),
+        line(10, 9, 5, 18),
+        line(21, 24, 11, 25),
+        line(25, 7, 28, 17),
+        dot(10, 9),
+        dot(18, 14, 2.6),
+        dot(25, 7),
+        dot(21, 24),
+        dot(5, 18, 1.4),
+        dot(11, 25, 1.4),
+        dot(28, 17, 1.4),
       ]
   }
   return (
@@ -433,10 +478,7 @@ function ColourSection({ look, onLook }: { look: GraphLook; onLook: (next: Graph
   const lookRef = useRef(look)
   lookRef.current = look
 
-  const value: ColorValue =
-    target === 'background'
-      ? look.background
-      : { colors: look[target].colors, strength: look[target].strength }
+  const value: ColorValue = target === 'background' ? look.background : { colors: look[target].colors, strength: look[target].strength }
 
   const onChange = useCallback(
     (patch: Partial<ColorValue>) => {
@@ -600,8 +642,25 @@ function SectionBody({
     case 'links':
       return (
         <>
-          <PillSlider variant="inset" label="Thickness" value={look.edge.width} min={0.2} max={5} step={0.1} format={(v) => `${v.toFixed(1)}px`} onChange={(width) => setEdge({ width })} />
-          <PillSlider label="Opacity" value={look.edge.opacity} min={0.03} max={1} step={0.01} format={percent} onChange={(opacity) => setEdge({ opacity })} />
+          <PillSlider
+            variant="inset"
+            label="Thickness"
+            value={look.edge.width}
+            min={0.2}
+            max={5}
+            step={0.1}
+            format={(v) => `${v.toFixed(1)}px`}
+            onChange={(width) => setEdge({ width })}
+          />
+          <PillSlider
+            label="Opacity"
+            value={look.edge.opacity}
+            min={0.03}
+            max={1}
+            step={0.01}
+            format={percent}
+            onChange={(opacity) => setEdge({ opacity })}
+          />
           <PillSlider
             variant="classic"
             label="Curve"
@@ -622,7 +681,10 @@ function SectionBody({
           {look.edge.pulses && (
             <StepDots
               label="Signal speed"
-              value={nearestOf(look.edge.pulseSpeed, SPEEDS.map((o) => o.value))}
+              value={nearestOf(
+                look.edge.pulseSpeed,
+                SPEEDS.map((o) => o.value),
+              )}
               options={SPEEDS}
               onChange={(pulseSpeed) => setEdge({ pulseSpeed })}
             />
@@ -654,8 +716,25 @@ function SectionBody({
             summary={`${shown} shown`}
             onChange={(a, b) => onLinkRange(binsToRange(a, b))}
           />
-          <PillSlider variant="inset" label="Glow" value={look.node.glow} min={0} max={1} step={0.01} format={percent} onChange={(glow) => setNode({ glow })} />
-          <PillSlider label="Opacity" value={look.node.opacity} min={0.15} max={1} step={0.01} format={percent} onChange={(opacity) => setNode({ opacity })} />
+          <PillSlider
+            variant="inset"
+            label="Glow"
+            value={look.node.glow}
+            min={0}
+            max={1}
+            step={0.01}
+            format={percent}
+            onChange={(glow) => setNode({ glow })}
+          />
+          <PillSlider
+            label="Opacity"
+            value={look.node.opacity}
+            min={0.15}
+            max={1}
+            step={0.01}
+            format={percent}
+            onChange={(opacity) => setNode({ opacity })}
+          />
           <StepDots
             label="Shape"
             value={look.node.shape}
@@ -699,7 +778,15 @@ function SectionBody({
             ]}
             onChange={(density) => setLabel({ density })}
           />
-          <PillSlider label="Show from zoom" value={look.label.fadeZoom} min={0.05} max={3} step={0.05} format={times} onChange={(fadeZoom) => setLabel({ fadeZoom })} />
+          <PillSlider
+            label="Show from zoom"
+            value={look.label.fadeZoom}
+            min={0.05}
+            max={3}
+            step={0.05}
+            format={times}
+            onChange={(fadeZoom) => setLabel({ fadeZoom })}
+          />
         </>
       )
     case 'forces':
@@ -732,11 +819,7 @@ function SectionBody({
             max={2}
             step={0.05}
             format={(v) => v.toFixed(2)}
-            marks={[
-              { value: 0.2, label: 'Loose' },
-              ...DEFAULT_MARK.linkStrength,
-              { value: 1.6, label: 'Tight' },
-            ]}
+            marks={[{ value: 0.2, label: 'Loose' }, ...DEFAULT_MARK.linkStrength, { value: 1.6, label: 'Tight' }]}
             onChange={(linkStrength) => onTunables({ ...tunables, linkStrength })}
           />
           <PillSlider
@@ -777,7 +860,7 @@ const nearestOf = <T extends number>(value: number, options: readonly T[]): T =>
 
 /** Put one section back as it was out of the box. */
 function resetSection(id: SectionId, props: Omit<Props, 'onClose'>): void {
-  const { look, onLook, layout, onLayout, onTunables, onLinkRange } = props
+  const { look, onLook, onLayout, onTunables, onLinkRange } = props
   const d = DEFAULT_LOOK
   switch (id) {
     case 'layout':
@@ -839,7 +922,11 @@ export function GraphPanel(props: Props): React.ReactElement {
               {section.name}
             </span>
             <Tip label={`Reset ${section.name.toLowerCase()}`}>
-              <button className="icon-btn" aria-label={`Reset ${section.name.toLowerCase()}`} onClick={() => resetSection(section.id, props)}>
+              <button
+                className="icon-btn"
+                aria-label={`Reset ${section.name.toLowerCase()}`}
+                onClick={() => resetSection(section.id, props)}
+              >
                 <Icon name="rotate-ccw" size={13} />
               </button>
             </Tip>

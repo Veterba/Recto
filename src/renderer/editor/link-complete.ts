@@ -18,10 +18,7 @@ export function linkCompletion(getCandidates: () => readonly LinkCandidate[]): E
   return autocompletion({
     override: [
       (context: CompletionContext): CompletionResult | null => {
-        const before = context.state.doc.sliceString(
-          Math.max(0, context.pos - 200),
-          context.pos,
-        )
+        const before = context.state.doc.sliceString(Math.max(0, context.pos - 200), context.pos)
         const match = OPEN_LINK.exec(before)
         if (!match) return null
 

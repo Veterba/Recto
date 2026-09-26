@@ -3,12 +3,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { runMigrations } from './migrations'
-import {
-  getSnapshot,
-  listSnapshots,
-  pruneSnapshots,
-  takeSnapshot,
-} from './snapshots'
+import { getSnapshot, listSnapshots, pruneSnapshots, takeSnapshot } from './snapshots'
 import { normalizeName, parseNote, resolveLink } from './parse'
 import type {
   Backlink,
@@ -20,7 +15,6 @@ import type {
   NoteContext,
   IndexResponse,
   SearchHit,
-  Snapshot,
   VaultUsage,
 } from './protocol'
 
@@ -204,9 +198,10 @@ async function reindex(force: boolean): Promise<{ indexed: number; removed: numb
   const handle = requireDb()
   const onDisk = await walk(vaultRoot)
   const known = new Map(
-    (handle.prepare('SELECT path, mtime, size FROM notes').all() as { path: string; mtime: number; size: number }[]).map(
-      (r) => [r.path, r],
-    ),
+    (handle.prepare('SELECT path, mtime, size FROM notes').all() as { path: string; mtime: number; size: number }[]).map((r) => [
+      r.path,
+      r,
+    ]),
   )
 
   const stale = onDisk.filter((file) => {
@@ -521,8 +516,7 @@ function boards(): { board: string; count: number }[] {
  */
 function vaultUsage(): VaultUsage {
   const handle = requireDb()
-  const one = (sql: string, ...args: unknown[]): number =>
-    (handle.prepare(sql).get(...args) as { n: number } | undefined)?.n ?? 0
+  const one = (sql: string, ...args: unknown[]): number => (handle.prepare(sql).get(...args) as { n: number } | undefined)?.n ?? 0
 
   const DAY = 86_400_000
   const startOfToday = new Date()
@@ -553,9 +547,10 @@ function vaultUsage(): VaultUsage {
     .filter((row) => row.folder !== '')
     .map((row) => ({ name: row.folder, count: row.count }))
 
-  const topTags = handle
-    .prepare('SELECT tag, COUNT(*) AS count FROM tags GROUP BY tag ORDER BY count DESC, tag LIMIT 5')
-    .all() as { tag: string; count: number }[]
+  const topTags = handle.prepare('SELECT tag, COUNT(*) AS count FROM tags GROUP BY tag ORDER BY count DESC, tag LIMIT 5').all() as {
+    tag: string
+    count: number
+  }[]
 
   // Degree, both directions, over resolved links only - an unresolved link
   // points at a note that is not there to be a hub.
@@ -671,9 +666,7 @@ function handle(request: IndexRequest): IndexResponse {
       const handleDb = requireDb()
       const notes = (handleDb.prepare('SELECT COUNT(*) AS n FROM notes').get() as { n: number }).n
       const links = (handleDb.prepare('SELECT COUNT(*) AS n FROM links').get() as { n: number }).n
-      const unresolved = (
-        handleDb.prepare('SELECT COUNT(*) AS n FROM links WHERE target_path IS NULL').get() as { n: number }
-      ).n
+      const unresolved = (handleDb.prepare('SELECT COUNT(*) AS n FROM links WHERE target_path IS NULL').get() as { n: number }).n
       const tags = (handleDb.prepare('SELECT COUNT(DISTINCT tag) AS n FROM tags').get() as { n: number }).n
       return { kind: 'stats-result', notes, links, unresolved, tags }
     }
@@ -695,9 +688,7 @@ function handle(request: IndexRequest): IndexResponse {
         graph: {
           notes: handleDb.prepare('SELECT path, mtime FROM notes').all() as { path: string; mtime: number }[],
           links: handleDb
-            .prepare(
-              'SELECT DISTINCT source_path AS source, target_path AS target FROM links WHERE target_path IS NOT NULL',
-            )
+            .prepare('SELECT DISTINCT source_path AS source, target_path AS target FROM links WHERE target_path IS NOT NULL')
             .all() as { source: string; target: string }[],
           tags: handleDb.prepare('SELECT DISTINCT path, tag FROM tags').all() as { path: string; tag: string }[],
         },

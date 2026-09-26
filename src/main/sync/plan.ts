@@ -145,10 +145,7 @@ export function summarise(actions: readonly SyncAction[]): PlanSummary {
  * not mounted, or a folder renamed out from under the app, trips this - which
  * is the point.
  */
-export function guard(
-  summary: PlanSummary,
-  baseSize: number,
-): { ok: true } | { ok: false; side: 'recto' | 'obsidian'; count: number } {
+export function guard(summary: PlanSummary, baseSize: number): { ok: true } | { ok: false; side: 'recto' | 'obsidian'; count: number } {
   const limit = Math.max(20, Math.ceil(baseSize * 0.25))
   if (summary.deleteInRecto > limit) return { ok: false, side: 'recto', count: summary.deleteInRecto }
   if (summary.deleteInObsidian > limit) return { ok: false, side: 'obsidian', count: summary.deleteInObsidian }
