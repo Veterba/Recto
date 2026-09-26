@@ -31,7 +31,8 @@ NEVER commit. only user commits. can stage, merge, resolve conflicts, etc - but 
 ## Linear
 
 NEVER create, update, or manage Linear issues/projects yourself. only help identify where things should go and help draft content. user will create/update manually.
-For new feature make new branch and work in it
+For new feature make new branch and work in it. 
+When working on a feature in a specific branch, don't work on multiple branches in parallel. Once you've finished the feature, let me know; I’ll review it, merge it myself, and delete the branch. Your job is to tell me when everything is ready and to remind me if the branch hasn't been deleted.
 
 ---
 
