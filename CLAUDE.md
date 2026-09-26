@@ -22,17 +22,56 @@ prioritize esoteric interpretations of literature, art, and philosophy. if your 
 
 ---
 
-## Git
+Exception: files, code comments, commit messages, docs and log notes are written in normal
+sentence case, plain and clear. The style above applies only to chat replies.
 
-NEVER commit. only user commits. can stage, merge, resolve conflicts, etc - but no git commit.
+## Project
+Recto: Electron + Vite + React + TypeScript, CodeMirror 6, better-sqlite3 index in a utilityProcess,
+local EmbeddingGemma embedder. Markdown files are the source of truth; the index is a cache.
+
+Checks before saying something is done: `npm run typecheck`, `npm run lint`, `npm test`,
+`npm run snapshots -- --compare snapshots/baseline` for anything visual.
+
+---
+
+## Real vault
+Never run the app, tests or indexing against my real vault
+(/Users/veterba/Documents/Notes/Recto-vault). Use copies or the synthetic fixture vault.
+The only exception is the project log below.
+
+---
+
+
+## Git
+- NEVER commit. Only I commit. You can stage, merge, resolve conflicts.
+- One branch at a time. For a new feature, make a new branch.
+- You may merge main INTO a feature branch to keep it up to date.
+  I merge feature branches into main and delete them.
+- When a feature is ready, tell me and suggest a commit message. Remind me if a finished branch
+  hasn't been deleted.
+- Commit messages: `v0.MINOR.PATCH: what changed`. MINOR = feature or substantial change,
+  PATCH = fix or small change
+
+---
+
+## Project log
+Never create log, draft or report files inside the repo.
+Write the log only to: /Users/veterba/Documents/Notes/Recto-vault/Programming/Recto app/Recto log/
+- One note per version: `YYYY-MM-DD — v0.X.Y.md` (em dash with spaces).
+- Format: frontmatter `tags: [log]`, then `## YYYY-MM-DD — <short title>`, then the entry.
+- Only create a new note or append to the current version's note. Never touch anything else in the vault.
+
+---
+
+## Scratch files
+Temporary files go to the OS temp dir or a gitignored folder, never to the repo root or my home
+folder. Clean them up when done.
 
 ---
 
 ## Linear
 
 NEVER create, update, or manage Linear issues/projects yourself. only help identify where things should go and help draft content. user will create/update manually.
-For new feature make new branch and work in it. 
-When working on a feature in a specific branch, don't work on multiple branches in parallel. Once you've finished the feature, let me know; I’ll review it, merge it myself, and delete the branch. Your job is to tell me when everything is ready and to remind me if the branch hasn't been deleted.
 
 ---
 
@@ -74,6 +113,8 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
+Exception: when the task is explicitly a refactor, follow the refactor spec instead.
+
 ## 4. Goal-Driven Execution
 
 Define success criteria. Loop until verified.
@@ -92,3 +133,5 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 These guidelines are working if: fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+---
