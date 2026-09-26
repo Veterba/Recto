@@ -1,0 +1,102 @@
+/* --- statistics --- */
+
+/*
+ * A compact column, with the glass around it.
+ *
+ * The field is held deep blue behind every block of statistics, so white
+ * type keeps its contrast wherever it sits - which means the blocks decide
+ * how much of the page is held dark. Spread across the full width they made
+ * one solid blue slab; kept to a column, the bright masses have the rest of
+ * the page to move through, around and between the content.
+ */
+.home__stats {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  justify-self: start;
+  gap: clamp(var(--size-4), 3vh, var(--size-8));
+  width: min(100%, 40vw, 560px);
+  margin-left: clamp(0px, 2vw, var(--size-8));
+  color: #f2f2f2;
+}
+.home__stats--waiting {
+  justify-items: center;
+  color: #8a8a8a;
+  font-size: var(--font-size-12);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.home__figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: clamp(var(--size-4), 3vw, 40px) clamp(20px, 4vw, 56px);
+  width: 100%;
+}
+
+.home__figure {
+  display: grid;
+  gap: var(--size-1);
+  justify-items: start;
+}
+
+.home__number {
+  margin: 0;
+  font-size: clamp(28px, 3.4vw, 46px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: #f2f2f2;
+}
+
+.home__label {
+  margin: 0;
+  font-size: var(--font-size-10);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #ececec;
+}
+
+.home__spark {
+  width: 100%;
+  max-width: 120px;
+  height: 20px;
+  margin-top: 6px;
+  color: #ececec;
+}
+
+.home__lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: clamp(var(--size-4), 3vw, 48px);
+  width: 100%;
+}
+.home__list {
+  display: grid;
+  gap: 2px;
+}
+.home__list .home__label {
+  margin-bottom: var(--size-1);
+}
+.home__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--size-4);
+  margin: 0;
+  font-size: var(--font-size-14);
+  color: #f2f2f2;
+}
+.home__count {
+  color: #ececec;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A still frame, deliberately: no ramp, no slide, no letters moving. */
+  .home__backdrop,
+  .home__window,
+  .home__track,
+  .home__arrow {
+    transition: none;
+  }
+}

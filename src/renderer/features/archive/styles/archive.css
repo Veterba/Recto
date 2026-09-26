@@ -1,0 +1,126 @@
+/* ---------- archive ---------- */
+
+.archive {
+  height: 100%;
+  overflow: auto;
+  padding: var(--size-6) var(--size-6) var(--size-8);
+}
+
+.archive__head {
+  max-width: 70ch;
+  margin: 0 auto var(--size-6);
+}
+
+.archive__title {
+  margin: 0 0 var(--size-2);
+  font-size: var(--font-size-20);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.archive__lede {
+  margin: 0 0 var(--size-4);
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.archive__retention {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--size-1);
+}
+
+.archive__retention-label {
+  margin-right: var(--size-2);
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
+
+.chip {
+  all: unset;
+  box-sizing: border-box;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--font-size-12);
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  cursor: pointer;
+  transition:
+    background var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease);
+}
+.chip:hover {
+  color: var(--text-primary);
+}
+.chip.is-active {
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.archive__empty {
+  max-width: 70ch;
+  margin: 0 auto;
+  color: var(--text-muted);
+  font-size: var(--font-size-13);
+}
+
+.archive__list {
+  max-width: 70ch;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.archive__item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: 'icon name actions' 'icon path actions' 'icon meta actions';
+  align-items: center;
+  gap: 0 var(--size-3);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+}
+.archive__item.is-busy {
+  opacity: 0.5;
+}
+.archive__item > svg {
+  grid-area: icon;
+  color: var(--text-muted);
+}
+
+.archive__name {
+  grid-area: name;
+  font-weight: 500;
+  font-size: var(--font-size-13-5);
+}
+.archive__path,
+.archive__meta {
+  font-size: var(--font-size-11);
+  color: var(--text-muted);
+}
+.archive__path {
+  grid-area: path;
+  font-family: var(--font-mono);
+}
+.archive__meta {
+  grid-area: meta;
+}
+
+.archive__actions {
+  grid-area: actions;
+  display: flex;
+  gap: var(--size-1);
+}
+
+.btn--danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}

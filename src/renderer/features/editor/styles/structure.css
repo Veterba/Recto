@@ -1,0 +1,160 @@
+/* ---------- note structure: fold arrows, indent guides, outline ---------- */
+
+/* The arrows all share one column in the margin, whatever they fold and however
+   deeply it is nested. Positioned against the line rather than against its
+   text, which is what used to make a nested bullet's arrow sit further in than
+   its parent's. They take no room in the line, so a note does not reflow when
+   one appears. */
+.cm-line {
+  position: relative;
+}
+.cm-fold-toggle {
+  position: absolute;
+  left: 0;
+  margin-left: -22px;
+  width: 18px;
+  height: 1.75em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease);
+  user-select: none;
+}
+.cm-fold-toggle > span {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--anim-fast) var(--ease);
+}
+.cm-fold-toggle.is-folded > span {
+  transform: translateX(-1px) rotate(-45deg);
+}
+/* Headings are taller than their line's base size, so the arrow is given the
+   heading's own size and line height to centre on the text. */
+.cm-fold-toggle--h1 {
+  font-size: calc(pow(var(--heading-scale, 1.25), 3) * 1em);
+  height: 1.3em;
+}
+.cm-fold-toggle--h2 {
+  font-size: calc(pow(var(--heading-scale, 1.25), 2) * 1em);
+  height: 1.35em;
+}
+.cm-fold-toggle--h3 {
+  font-size: calc(var(--heading-scale, 1.25) * 1em);
+  height: 1.75em;
+}
+.cm-fold-toggle--h1 > span,
+.cm-fold-toggle--h2 > span,
+.cm-fold-toggle--h3 > span {
+  font-size: var(--font-size-14);
+}
+.cm-line:hover .cm-fold-toggle,
+.cm-fold-toggle.is-folded {
+  opacity: 1;
+}
+.cm-fold-toggle:hover {
+  color: var(--text-primary);
+}
+
+/* What stands in for a folded section. */
+/* The fold placeholder draws nothing: the arrow in the margin is the marker. */
+.cm-fold-more {
+  display: none;
+}
+
+/* One quiet line from each bullet down through its children. */
+.cm-indent-guides .cm-indent-guide {
+  background: var(--border-strong);
+  opacity: 0.7;
+}
+
+.md {
+  position: relative;
+}
+.md__outline-btn {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.md__outline-btn.is-on {
+  color: var(--accent);
+}
+
+.outline {
+  position: absolute;
+  top: 44px;
+  right: var(--size-4);
+  z-index: 5;
+  width: 220px;
+  max-height: calc(100% - 64px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-12-5);
+}
+.outline__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px var(--size-1) var(--size-3);
+  font-size: var(--font-size-10-5);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.outline__empty {
+  margin: 0;
+  padding: var(--size-1) var(--size-3) var(--size-3);
+  color: var(--text-muted);
+}
+.outline__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--size-1) 6px;
+  overflow-y: auto;
+}
+.outline__item {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding: 3px var(--size-2);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.outline__item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.outline__item.is-current {
+  color: var(--accent);
+}
+.outline__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* No tinted box behind the caret's line in Live Preview. With the caret on a
+   heading - where every note opens - the tint drew a grey slab behind the
+   title and made the raw `#` look like a code block. Obsidian draws nothing
+   there; the revealed syntax already says where the caret is. Source mode
+   keeps the tint, where every line looks alike without it. */
+.cm-editor.cm-live .cm-activeLine {
+  background-color: transparent;
+}

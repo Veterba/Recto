@@ -5,6 +5,9 @@
 //   npm run snapshots -- --out <dir>           shoot into <dir>
 //   npm run snapshots -- --compare <dir>       shoot, then compare pixel by pixel with <dir>;
 //                                              writes *.diff.png for each difference, exit 1 if any
+//   npm run snapshots -- --styles              also record every element's computed style (and its
+//                                              ::before/::after) per screen; --compare then compares
+//                                              those too - catching what pixels cannot, like transitions
 //
 // The vault is test/fixtures/snapshot-vault, copied fresh each run into a
 // folder with a fixed name (the name is on screen). Everything that could make
@@ -43,6 +46,9 @@ const flag = (name) => {
 }
 const OUT = path.resolve(flag('--out') ?? path.join(ROOT, 'snapshots/current'))
 const COMPARE = flag('--compare') ? path.resolve(flag('--compare')) : null
+const STYLES = args.includes('--styles')
+/** Record which CSS rules any screen used (Chrome's CSS coverage), into <out>/<theme>/css-coverage.json. */
+const COVERAGE = args.includes('--coverage')
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -111,6 +117,10 @@ async function shoot(page, dir, name, settle = 700) {
   await sleep(settle)
   // Caret blink and hover are the only moving parts left; park the mouse.
   await page.mouse.move(WIDTH - 2, HEIGHT - 2)
+  // A frame for :hover to leave whatever the mouse was over.
+  await sleep(150)
+  // Styles before the screenshot: taking it hides the caret, which is a style.
+  if (STYLES) fs.writeFileSync(path.join(dir, `${name}.styles.json`), JSON.stringify(await computedStyles(page)))
   await page.screenshot({ path: path.join(dir, `${name}.png`), caret: 'hide', animations: 'disabled' })
   console.log(`  ${name}`)
 }
@@ -145,34 +155,127 @@ async function screens(page, dir) {
   await page.waitForSelector('.palette--search .result')
   await shoot(page, dir, '05-search-open', 1000)
   await page.keyboard.press('Escape')
+  await page.waitForSelector('.palette--search', { state: 'detached' })
 
   await key(page, 'Mod+G')
+  await page.waitForSelector('.graph__canvas')
   // The layout settles on its own; wait until the graph says so.
   await page
     .waitForFunction(() => !document.querySelector('.graph__stat')?.textContent?.includes('settling'), null, { timeout: 30_000 })
     .catch(() => {})
   await shoot(page, dir, '06-graph', 1500)
   await key(page, 'Mod+G')
+  await page.waitForSelector('.graph__canvas', { state: 'detached' })
 
   await key(page, 'Mod+3')
-  await sleep(500)
-  await page.getByText('Launch', { exact: true }).first().click()
+  await page.waitForSelector('.boards__row')
+  await page.locator('.boards__row', { hasText: 'Launch' }).first().click()
+  await page.waitForSelector('.board__card')
   await shoot(page, dir, '07-board', 1800)
   await key(page, 'Mod+1')
+  await page.waitForSelector('[role=treeitem]')
 
   await key(page, 'Mod+,')
+  await page.waitForSelector('[role=dialog][aria-label=Settings]')
   for (const [i, tab] of SETTINGS_TABS.entries()) {
     await page.getByRole('dialog', { name: 'Settings' }).getByRole('tab', { name: tab, exact: true }).click()
     // The first tab waits out the dialog's own entrance.
     await shoot(page, dir, `${String(8 + i).padStart(2, '0')}-settings-${tab.toLowerCase()}`, i === 0 ? 3000 : 700)
   }
   await page.keyboard.press('Escape')
+  await page.waitForSelector('[role=dialog][aria-label=Settings]', { state: 'detached' })
 
+  // Each step waits for what it should have done, so a key press that did not
+  // land fails the run instead of photographing the wrong screen.
+  const pane = (name) => page.waitForFunction((n) => document.querySelector('.home__live')?.textContent === n, name)
   await key(page, 'Mod+Shift+H')
+  await pane('Recto')
   await shoot(page, dir, '17-home', 2500)
   await page.keyboard.press('ArrowRight')
+  await pane('Statistics')
   await shoot(page, dir, '18-statistics', 3000)
   await page.keyboard.press('Escape')
+  await page.waitForSelector('.home__live', { state: 'detached' })
+}
+
+/**
+ * Every element's computed style, keyed by its path in the document. Styles
+ * are stored once in a table and referenced by index: most elements share one.
+ */
+function computedStyles(page) {
+  return page.evaluate(() => {
+    const table = []
+    const index = new Map()
+    const id = (text) => {
+      if (!index.has(text)) {
+        index.set(text, table.length)
+        table.push(text)
+      }
+      return index.get(text)
+    }
+    const read = (el, pseudo) => {
+      const cs = getComputedStyle(el, pseudo)
+      if (pseudo && (cs.content === 'none' || cs.content === 'normal')) return -1
+      let text = ''
+      for (let i = 0; i < cs.length; i++) text += `${cs[i]}:${cs.getPropertyValue(cs[i])};`
+      return id(text)
+    }
+    const pathOf = (el) => {
+      const parts = []
+      for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+        const i = e.parentElement ? [...e.parentElement.children].indexOf(e) : 0
+        parts.unshift(`${e.tagName.toLowerCase()}${e.classList.length ? '.' + [...e.classList].join('.') : ''}[${i}]`)
+      }
+      return parts.join('>')
+    }
+    const elements = {}
+    for (const el of document.querySelectorAll('*')) elements[pathOf(el)] = [read(el, null), read(el, '::before'), read(el, '::after')]
+    return { table, elements }
+  })
+}
+
+/**
+ * CodeMirror draws only the lines near the viewport, and places its layers
+ * (cursor, selection, indent guides) from its own measurements - so inside the
+ * editor, which lines exist and where its layers sit vary from run to run.
+ * Only that measured geometry is ignored; any other property still counts.
+ */
+const GEOMETRY = /^(top|bottom|left|right|inset-.*|height|width|block-size|inline-size|transform|transform-origin|perspective-origin)$/
+const inEditor = (p) => p.includes('.cm-scroller')
+
+/** Elements whose computed style differs, with the properties that differ. */
+function compareStyles(a, b) {
+  const props = (text) =>
+    new Map(
+      text
+        .split(';')
+        .filter(Boolean)
+        .map((d) => [d.slice(0, d.indexOf(':')), d.slice(d.indexOf(':') + 1)]),
+    )
+  const out = []
+  for (const [p, ids] of Object.entries(a.elements)) {
+    const other = b.elements[p]
+    if (!other) {
+      if (!inEditor(p)) out.push({ path: p, missing: true })
+      continue
+    }
+    ids.forEach((x, k) => {
+      const y = other[k]
+      if ((x === -1) !== (y === -1)) return out.push({ path: p, part: k, changed: ['(pseudo-element present in one only)'] })
+      if (x === -1 || a.table[x] === b.table[y]) return
+      const pa = props(a.table[x])
+      const pb = props(b.table[y])
+      const changed = [...new Set([...pa.keys(), ...pb.keys()])]
+        .filter((key) => pa.get(key) !== pb.get(key))
+        .filter((key) => !(inEditor(p) && GEOMETRY.test(key)))
+        // A token added or removed is not a style change; what it does shows in real properties.
+        .filter((key) => !(key.startsWith('--') && (pa.get(key) === undefined || pb.get(key) === undefined)))
+        .map((key) => `${key}: ${pa.get(key)} -> ${pb.get(key)}`)
+      if (changed.length) out.push({ path: p, part: k, changed })
+    })
+  }
+  for (const p of Object.keys(b.elements)) if (!a.elements[p] && !inEditor(p)) out.push({ path: p, extra: true })
+  return out
 }
 
 /** The basics, still working: an edit is saved to disk, and search finds notes. */
@@ -250,7 +353,12 @@ for (const theme of ['light', 'dark']) {
   const { base, vault, userData } = prepareVault(theme)
   const { app, page } = await launch(userData)
   try {
+    if (COVERAGE) await page.coverage.startCSSCoverage({ resetOnNavigation: false })
     await screens(page, dir)
+    if (COVERAGE) {
+      const used = (await page.coverage.stopCSSCoverage()).map((e) => ({ url: e.url, text: e.text, ranges: e.ranges }))
+      fs.writeFileSync(path.join(dir, 'css-coverage.json'), JSON.stringify(used))
+    }
     await smoke(page, vault)
     if (COMPARE !== null) {
       for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.png'))) {
@@ -261,6 +369,16 @@ for (const theme of ['light', 'dark']) {
           continue
         }
         const r = await compare(page, old, path.join(dir, name), path.join(dir, name.replace('.png', '.diff.png')))
+        const oldStyles = path.join(COMPARE, theme, name.replace('.png', '.styles.json'))
+        const newStyles = path.join(dir, name.replace('.png', '.styles.json'))
+        if (STYLES && fs.existsSync(oldStyles) && fs.existsSync(newStyles)) {
+          const d = compareStyles(JSON.parse(fs.readFileSync(oldStyles, 'utf8')), JSON.parse(fs.readFileSync(newStyles, 'utf8')))
+          if (d.length > 0) {
+            failures++
+            fs.writeFileSync(path.join(dir, name.replace('.png', '.styles-diff.json')), JSON.stringify(d, null, 1))
+            console.log(`  ${name}: computed style differs on ${d.length} element(s) - see ${name.replace('.png', '.styles-diff.json')}`)
+          }
+        }
         if (r.diff === -1 || r.diff >= NOISE_PIXELS) {
           failures++
           console.log(

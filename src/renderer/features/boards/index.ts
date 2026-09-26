@@ -1,5 +1,8 @@
 // The boards feature's public entry: what the rest of the app may import from it.
 
+import './styles/board.css'
+import './styles/board-list.css'
+
 export * from './components/BoardList'
 export * from './components/BoardView'
 export * from './create-card'

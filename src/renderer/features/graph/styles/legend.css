@@ -1,0 +1,138 @@
+/* ---------- colour legend: which colour is which ---------- */
+
+/* A tag over a pad handle: Few / Mid / Most. */
+.arcpick__tag {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: var(--radius-s);
+  background: rgb(0 0 0 / 0.62);
+  color: #fff;
+  font-size: var(--font-size-9-5);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: tag-in 260ms var(--ease-pop) both;
+}
+.arcpick__tag.is-left {
+  left: -4px;
+  transform: none;
+  animation-name: tag-in-side;
+}
+.arcpick__tag.is-right {
+  left: auto;
+  right: -4px;
+  transform: none;
+  animation-name: tag-in-side;
+}
+@keyframes tag-in-side {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+.arcpick__tag.is-below {
+  bottom: auto;
+  top: calc(100% + 5px);
+}
+@keyframes tag-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px) scale(0.8);
+  }
+}
+
+.glegend {
+  margin: 10px 2px 0;
+}
+.glegend__row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+}
+.glegend__end {
+  flex: none;
+  font-size: var(--font-size-10-5);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.glegend__track {
+  position: relative;
+  flex: 1;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+.glegend__ramp {
+  position: absolute;
+  left: 4px;
+  right: 8px;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 999px;
+  opacity: 0.55;
+}
+/* Each dot a note of a bigger size, in its colour; a wave runs toward the hub. */
+.glegend__dot {
+  position: relative;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--bg-elevated),
+    0 1px 3px rgb(0 0 0 / 0.25);
+  transition: background 320ms var(--ease);
+  animation: legend-wave 2.2s var(--ease) infinite;
+}
+@keyframes legend-wave {
+  0%,
+  60%,
+  100% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.22);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glegend__dot {
+    animation: none;
+  }
+}
+.glegend__swap {
+  all: unset;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  cursor: pointer;
+  transition:
+    transform 380ms var(--ease-pop),
+    color var(--anim-fast) var(--ease);
+}
+.glegend__swap:hover {
+  color: var(--text-primary);
+}
+.glegend--single {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  font-size: var(--font-size-11);
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.glegend__swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}

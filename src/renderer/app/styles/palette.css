@@ -1,0 +1,116 @@
+/* ---------- command palette ---------- */
+
+.palette__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  /* Without this the flex default (stretch) makes the panel full height, so a
+     single search result sat in an 800px-tall white box. */
+  align-items: flex-start;
+  padding-top: 14vh;
+  background: rgb(0 0 0 / 0.4);
+  animation: fade var(--anim-fast) var(--ease);
+}
+
+.palette {
+  width: min(560px, calc(100vw - 32px));
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-l);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  animation: rise var(--anim-base) var(--ease);
+}
+
+.palette__input {
+  all: unset;
+  /* `all: unset` resets box-sizing too, so width + padding would overflow. */
+  box-sizing: border-box;
+  flex: none;
+  padding: var(--size-4);
+  font: inherit;
+  font-size: var(--font-size-15);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+.palette__input::placeholder {
+  color: var(--text-muted);
+}
+
+.palette__list {
+  margin: 0;
+  padding: var(--size-1);
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.palette__item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  cursor: default;
+}
+.palette__item.is-active {
+  background: var(--accent-muted);
+}
+
+.palette__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+.palette__item.is-active .palette__icon {
+  color: var(--accent);
+}
+
+.palette__section {
+  font-size: var(--font-size-11);
+  color: var(--text-muted);
+}
+
+.palette__key {
+  flex: none;
+}
+
+.palette__empty {
+  margin: 0;
+  padding: var(--size-6);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.hl {
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}

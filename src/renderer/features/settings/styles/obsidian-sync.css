@@ -1,0 +1,130 @@
+/* ---------- Obsidian sync (settings) ---------- */
+
+.osync {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+}
+.osync__label {
+  margin: var(--size-2) 0 0;
+  font-size: var(--font-size-11);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.osync__vaults {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-2);
+}
+.osync__vault {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--size-3);
+  padding: var(--size-2) var(--size-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  cursor: pointer;
+}
+.osync__vault:hover {
+  background: var(--bg-hover);
+}
+.osync__vault.is-chosen {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.osync__vault-name {
+  font-weight: 600;
+}
+.osync__vault-meta {
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
+.osync__vault-path,
+.osync__path {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-11-5);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.osync__counts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--size-1);
+  font-size: var(--font-size-13);
+}
+.osync__counts li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.osync__counts li.is-zero {
+  color: var(--text-muted);
+}
+.osync__pair {
+  display: flex;
+  gap: var(--size-3);
+  align-items: flex-start;
+  padding: var(--size-3);
+  border-radius: var(--radius-m);
+  background: var(--bg-secondary);
+}
+.osync__pair > div {
+  /* Without this a long vault path forces the whole settings pane to scroll
+     sideways instead of truncating. */
+  flex: 1;
+  min-width: 0;
+}
+.osync__title {
+  margin: 0;
+  font-weight: 600;
+}
+.osync__path {
+  margin: 2px 0 0;
+}
+.osync__state {
+  margin: 0;
+  font-size: var(--font-size-13);
+  color: var(--text-secondary);
+}
+.osync__problem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-size: var(--font-size-12-5);
+}
+.osync__problem p {
+  flex: 1;
+  margin: 0;
+}
+.osync__problem svg {
+  flex: none;
+  margin-top: 2px;
+}
+.osync__conflicts ul {
+  margin: var(--size-1) 0 0;
+  padding-left: var(--size-4);
+  font-size: var(--font-size-12);
+}
+.osync__preview {
+  padding: var(--size-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+.osync__actions {
+  margin-top: var(--size-1);
+}

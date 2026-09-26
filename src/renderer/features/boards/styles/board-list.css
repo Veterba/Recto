@@ -1,0 +1,83 @@
+/* ---------- board list (Tasks sidebar) ---------- */
+
+.boards {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--size-2);
+}
+
+.boards__row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-s);
+}
+.boards__row:hover {
+  background: var(--bg-hover);
+}
+
+.boards__name,
+.boards__add,
+.boards__remove {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.boards__name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: 6px var(--size-2);
+  font-size: calc(13px * var(--sidebar-scale));
+  font-weight: var(--sidebar-weight);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.boards__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 2px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  opacity: 0;
+}
+.boards__row:hover .boards__remove {
+  opacity: 1;
+}
+.boards__remove:hover {
+  color: var(--danger);
+}
+
+.boards__rename {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px var(--size-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-s);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-size-13);
+}
+
+.boards__add {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--size-1);
+  padding: 6px var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
+.boards__add:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}

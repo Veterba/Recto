@@ -1,0 +1,241 @@
+/* ---------- search ---------- */
+
+.sidebar__search {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0 var(--size-2) var(--size-2);
+}
+
+.sidebar__search-icon {
+  position: absolute;
+  left: var(--size-2);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.sidebar__search-input {
+  all: unset;
+  /* `all: unset` resets box-sizing too, so width + padding would overflow. */
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px var(--size-2) 6px 28px;
+  border-radius: var(--radius-s);
+  font-size: calc(12.5px * var(--sidebar-scale));
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  transition: box-shadow var(--anim-fast) var(--ease);
+}
+.sidebar__search-input::placeholder {
+  color: var(--text-muted);
+}
+.sidebar__search-input:focus {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.sidebar__search-input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.sidebar__body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--size-2) var(--size-2);
+}
+
+.sidebar__empty {
+  margin: 0;
+  padding: 0 var(--size-1);
+  font-size: var(--font-size-12);
+  line-height: 1.6;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+.sidebar__footer {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  padding: var(--size-2);
+  border-top: 1px solid var(--border);
+  /* Measured against its own width, not the window's - see the labels below. */
+  container-type: inline-size;
+}
+
+/* Archive and settings stay pinned to the right edge of the footer. */
+.sidebar__footer .icon-btn:first-of-type {
+  margin-left: auto;
+}
+
+.sidebar__resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 7px;
+  z-index: 3;
+  cursor: col-resize;
+  background: transparent;
+  transition: background var(--anim-fast) var(--ease);
+}
+.sidebar__resize:hover,
+body.is-resizing .sidebar__resize {
+  background: var(--accent-muted);
+}
+
+/* The strip left behind when the sidebar is collapsed. */
+.sidebar-stub {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  padding: var(--size-2) 6px;
+  border-right: 1px solid var(--border);
+  background: var(--chrome);
+}
+
+/* ---------- sidebar header actions ---------- */
+
+.icon-btn {
+  all: unset;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease);
+}
+.icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---------- sidebar search row + footer ---------- */
+
+/* One button shape for the whole footer. It used to mix labelled buttons with
+   bare icons at two sizes, which read as several bars crammed together. */
+.footer-btn {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: calc(12.5px * var(--sidebar-scale));
+  font-weight: var(--sidebar-weight);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease);
+}
+.footer-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.footer-btn--icon {
+  width: 28px;
+  padding: 0;
+}
+
+/*
+ * Narrow sidebar: the words go, the icons stay.
+ *
+ * "New note" and "New folder" carry labels, and at a dragged-in sidebar width
+ * the row could not fit them - so the two icon buttons at the end were squeezed
+ * into each other and pushed past the edge of the panel. Nothing in a flex row
+ * of nowrap buttons gives way on its own. Below the width where the labels fit,
+ * every button becomes the same 28px square and the row has room again.
+ */
+@container (max-width: 234px) {
+  .sidebar__footer .footer-btn {
+    width: 28px;
+    padding: 0;
+  }
+  .sidebar__footer .footer-btn > span {
+    display: none;
+  }
+}
+
+.sidebar__footer-gap {
+  flex: 1;
+}
+
+.graph__btn[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+.graph__btn[disabled]:hover {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+/* ---------- sidebar tools row ---------- */
+
+.sidebar__tools {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  /* center, not stretch — this row mixes a labelled button with two icon
+     buttons, and stretch makes them different heights. */
+  align-items: center;
+  gap: 2px;
+  margin: 0 var(--size-2) var(--size-2);
+}
+
+.sidebar__tools-gap {
+  /* A rule, not empty air. The row holds two unrelated things - what the tree
+     is showing on the left, what to do to it on the right - and a plain gap
+     left them reading as one ragged group. */
+  flex: 1;
+  height: 1px;
+  margin: 0 var(--size-2);
+  background: var(--border);
+}
+
+.tool-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  font-size: calc(12px * var(--sidebar-scale));
+  cursor: pointer;
+  transition:
+    background var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease);
+}
+.tool-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.tool-btn--label {
+  padding: 0 var(--size-2);
+}

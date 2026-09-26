@@ -47,6 +47,20 @@
   --radius-m: 10px;
   --radius-l: 16px;
 
+  /* Font sizes, one per size the stylesheets use three times or more. Named by value: they are a scale, not roles. */
+  --font-size-9-5: 9.5px;
+  --font-size-10: 10px;
+  --font-size-10-5: 10.5px;
+  --font-size-11: 11px;
+  --font-size-11-5: 11.5px;
+  --font-size-12: 12px;
+  --font-size-12-5: 12.5px;
+  --font-size-13: 13px;
+  --font-size-13-5: 13.5px;
+  --font-size-14: 14px;
+  --font-size-15: 15px;
+  --font-size-20: 20px;
+
   /* Motion as tokens: setting these to 0s kills all animation at once. */
   /**
    * The window's frosted chrome: sidebar, titlebar, status bar.
@@ -319,90 +333,6 @@
     --anim-base: 0s;
     --anim-slow: 0s;
   }
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-}
-
-/**
- * The canvas has to be transparent, not just `body`.
- *
- * This is why the vibrancy did nothing. The page's canvas background propagates
- * from `html` first and only falls through to `body` when `html` has none - and
- * when neither sets one, Chromium paints the `color-scheme` default, which is
- * opaque. So `body { background: transparent }` was covered by an opaque white
- * or near-black canvas underneath it, and no amount of translucency further up
- * could ever show through.
- */
-html {
-  background: transparent;
-}
-
-/* Translucency off, or a platform with no vibrancy: paint a real ground here,
-   because with a transparent canvas there would be nothing behind the app. */
-:root[data-translucent='off'] {
-  background: var(--bg-primary);
-}
-
-body {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--text-primary);
-  /* Transparent so the window's vibrancy shows through. Every surface that
-     needs a ground paints its own; `--surface` and `--chrome` are translucent,
-     and become opaque when translucency is switched off. */
-  background: transparent;
-  -webkit-font-smoothing: antialiased;
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/*
- * Scrollbars. The platform default is a bright opaque bar that reads as a
- * defect against a dark surface, so every scroll container gets a thin
- * token-coloured one that only shows on hover.
- */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: transparent;
-  border: 3px solid transparent;
-  border-radius: 999px;
-  background-clip: content-box;
-  transition: background-color var(--anim-base) var(--ease);
-}
-:hover::-webkit-scrollbar-thumb {
-  background-color: var(--border-strong);
-  background-clip: content-box;
-}
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--text-muted);
-  background-clip: content-box;
-}
-::-webkit-scrollbar-corner {
-  background: transparent;
 }
 
 /**

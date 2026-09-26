@@ -1,0 +1,66 @@
+/* ---------- first run ---------- */
+
+.firstrun {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--size-8);
+  background: radial-gradient(120% 90% at 50% -10%, var(--accent-muted), transparent 60%), var(--bg-primary);
+  -webkit-app-region: drag;
+}
+
+.firstrun__card {
+  max-width: 460px;
+  text-align: center;
+  -webkit-app-region: no-drag;
+}
+
+.firstrun__mark {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto var(--size-6);
+  border-radius: 12px;
+  background: linear-gradient(150deg, var(--accent), hsl(calc(var(--accent-h) + 40) var(--accent-s) var(--accent-l)));
+  box-shadow: var(--shadow-lg);
+}
+
+.firstrun h1 {
+  margin: 0 0 var(--size-3);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.firstrun__lede {
+  margin: 0 0 var(--size-6);
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+
+.firstrun__last,
+.firstrun__fine {
+  color: var(--text-muted);
+  font-size: var(--font-size-12);
+}
+.firstrun__last {
+  margin: 0 0 var(--size-3);
+}
+.firstrun__fine {
+  margin: var(--size-4) 0 0;
+}
+
+.firstrun__error {
+  margin: 0 0 var(--size-4);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-size: var(--font-size-13);
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  word-break: break-all;
+}

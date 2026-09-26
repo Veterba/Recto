@@ -1,0 +1,46 @@
+/* ---------- tooltips ---------- */
+
+/* The browser's `title` waits about a second, cannot be styled, and renders in
+   a system font belonging to no app. For a toolbar of unlabelled icons that
+   delay is the whole difference between usable and guesswork. */
+.tip__anchor {
+  display: contents;
+}
+
+.tip {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 260px;
+  padding: 5px var(--size-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-11-5);
+  line-height: 1.35;
+  pointer-events: none;
+  animation: tip-in 90ms var(--ease);
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+.tip__label {
+  white-space: nowrap;
+}
+.tip__hint {
+  color: var(--text-muted);
+  font-size: var(--font-size-10-5);
+  white-space: nowrap;
+}
+.tip--wrap .tip__hint {
+  white-space: normal;
+}

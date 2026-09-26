@@ -1,0 +1,271 @@
+/* ---------- settings ---------- */
+
+.settings {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.settings__tabs {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: var(--size-3) var(--size-6) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings__tab {
+  all: unset;
+  box-sizing: border-box;
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s) var(--radius-s) 0 0;
+  font-size: var(--font-size-13);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--anim-fast) var(--ease);
+}
+.settings__tab:hover {
+  color: var(--text-secondary);
+}
+.settings__tab.is-active {
+  color: var(--text-primary);
+  font-weight: 500;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.settings__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--size-6);
+}
+
+.setting {
+  max-width: 72ch;
+  margin: 0 auto var(--size-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-6);
+}
+
+.setting__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.setting__label {
+  font-size: var(--font-size-13-5);
+  font-weight: 500;
+}
+
+.setting__hint {
+  font-size: var(--font-size-11-5);
+  line-height: 1.5;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.setting__control {
+  flex: none;
+}
+
+.setting__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-1);
+  justify-content: flex-end;
+}
+
+.setting__note {
+  max-width: 72ch;
+  margin: var(--size-6) auto 0;
+  padding: var(--size-3);
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: var(--font-size-11-5);
+  line-height: 1.6;
+}
+.setting__note svg {
+  vertical-align: -2px;
+  margin-right: var(--size-1);
+}
+
+/* A named group inside a settings tab. The heading earns its keep once a tab
+   holds two unrelated things - window translucency and sidebar legibility are
+   both "appearance" and neither explains the other. */
+.settings__group {
+  display: contents;
+}
+.settings__grouphead {
+  margin: var(--size-4) 0 0;
+  padding-top: var(--size-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--font-size-11);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* An inline variant of the sidebar's segmented control. */
+.segmented--inline {
+  grid-template-columns: none;
+  display: inline-grid;
+  grid-auto-flow: column;
+  margin: 0;
+}
+.segmented--inline .segmented__tab {
+  flex-direction: row;
+  padding: var(--size-1) var(--size-3);
+  text-transform: capitalize;
+  letter-spacing: 0;
+  font-size: var(--font-size-12);
+}
+
+.slider {
+  width: 160px;
+  accent-color: var(--accent);
+}
+
+/* ---------- template settings ---------- */
+
+.setting__path {
+  width: 220px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12-5);
+}
+.setting__path.is-invalid {
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
+
+.setting__select {
+  max-width: 260px;
+  padding: 6px var(--size-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-size-13);
+}
+
+/* Where today's note actually goes, spelled out - the folder rule is easier to
+   trust once you have seen the path it produces. */
+.daily__preview {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  margin: var(--size-2) 0 0;
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+}
+.daily__label {
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.daily__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-12);
+}
+.daily__preview .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ---------- recent vaults ---------- */
+
+.vault-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -4px 0 var(--size-3);
+  padding: var(--size-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+.vault-recent__item {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: var(--size-2);
+  padding: 6px var(--size-2);
+  border-radius: var(--radius-s);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.vault-recent__item:hover:not([disabled]) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.vault-recent__item[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+/* Faded like a disabled row, except the button that takes it off the list. */
+.vault-recent__item.is-missing {
+  cursor: default;
+}
+.vault-recent__item.is-missing > :not(.vault-recent__forget) {
+  opacity: 0.45;
+}
+.vault-recent__forget {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.vault-recent__forget:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.vault-recent__forget:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.vault-recent__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.vault-recent__name {
+  font-weight: 500;
+  font-size: var(--font-size-13);
+}
+.vault-recent__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-11-5);
+  color: var(--text-muted);
+}
+.vault-recent__go {
+  opacity: 0;
+  transition:
+    opacity var(--anim-fast) var(--ease),
+    transform var(--anim-fast) var(--ease);
+}
+.vault-recent__item:hover:not([disabled]) .vault-recent__go {
+  opacity: 1;
+  transform: translateX(2px);
+}
+.setting__note--error {
+  color: var(--danger);
+}
