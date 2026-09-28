@@ -90,11 +90,13 @@ void main() {
 }`
 
 /**
- * Depth to colour: d = 1 - exp(-1.6 H), then a ramp from paper through warm
- * greys to blue, interpolated in OKLab so it has no bands and no steps.
+ * Depth to colour: d = 1 - exp(-1.6 H), then the theme's ramp - in the light,
+ * paper through warm greys to blue; in the dark, near-black to violet -
+ * interpolated in OKLab so it has no bands and no steps.
  *
  * Page one also gets the text cap - d held under 0.45 behind the words, so
- * the blue end never reaches them - and light from the top left: a normal from
+ * the deep end never reaches them: pale behind dark words in the light, dark
+ * behind light words in the dark - and light from the top left: a normal from
  * the smeared depth's slope, and at most 8% more or less luminance, so every
  * mass reads as a gentle hill lit from its upper left.
  *
@@ -102,8 +104,15 @@ void main() {
  * the lenses to show, and behind its statistics a soft darkening rather than
  * a floor, so the detail and the motion carry on under the type. How much
  * darkening applies is kept in alpha, for the glass to calm its highlights.
+ *
+ * Built twice. Behind its figures page two is pushed toward the deep end in
+ * the light theme and the shallow end in the dark; the push is a uniform only
+ * in the variant that needs one (`toward`). The GPU's compiler folds float
+ * maths as it likes, and any rewrite of the light theme's line - even one
+ * that adds an exact zero - moved its pixels by a level. The light theme runs
+ * the line exactly as it always was.
  */
-export const COLOR_FRAG = `#version 300 es
+export const colorFrag = (toward: boolean): string => `#version 300 es
 precision highp float;
 in vec2 v_uv;
 out vec4 fragColor;
@@ -125,6 +134,15 @@ uniform vec2 u_texel;
 /* Page one's text boxes, each an ellipse (centre, radii) in height units. */
 uniform vec4 u_textBoxes[${MAX_TEXT_BOXES}];
 uniform int u_textBoxCount;
+${
+  toward
+    ? `/* Which end page two pushes toward behind its figures: 1 deep, 0 shallow -
+   whichever end the light type on it reads against. */
+uniform float u_statsTo;
+`
+    : ''
+}/* Which end page two pushes toward behind its figures: 1 deep, 0 shallow -
+   whichever end the light type on it reads against. */
 
 vec3 ramp(float d) {
   for (int i = 0; i < 6; i++) {
@@ -253,7 +271,7 @@ void main() {
     // detail clipped away, leaving the pale end flat and still.
     d = clamp(0.18 + 0.82 * smoothstep(0.0, 0.7, d) + 0.72 * detail(v_uv), 0.0, 1.0);
     held = overStats(v_uv);
-    d += (1.0 - d) * ${STATS_PUSH} * held;
+    d += (${toward ? 'u_statsTo' : '1.0'} - d) * ${STATS_PUSH} * held;
   }
   if (u_lit > 0.5 && u_textBoxCount > 0) {
     // The ellipses are page one's, so they slide out with the words. One

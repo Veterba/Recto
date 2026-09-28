@@ -8,7 +8,7 @@ import { getHomeStats, type HomeStats } from '../home-stats'
 import { IPC_EVENT } from '@shared/ipc'
 import { useHomeScene } from '../hooks/use-home-scene'
 import { Statistics } from './HomeStatistics'
-import { lastEdited, clockText, tildePath, pad2 } from '../hero-text'
+import { lastEdited, clockText, tildePath, pad2, META_INK } from '../hero-text'
 // Bundled, offline, OFL: only the three faces this screen uses.
 import '@fontsource/bodoni-moda/400-italic.css'
 import '@fontsource/geist-sans/500.css'
@@ -333,26 +333,26 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
               their ink is transparent.
             */}
             <div className="home__hero" ref={heroRef}>
-              <p className="home__meta home__meta--tl" data-hero-line data-ink="0.78">
+              <p className="home__meta home__meta--tl" data-hero-line data-ink={META_INK}>
                 Recto / Home
               </p>
-              <p className="home__meta home__meta--top" data-hero-line data-ink="0.78">
+              <p className="home__meta home__meta--top" data-hero-line data-ink={META_INK}>
                 Index 01 — Home
               </p>
-              <p className="home__meta home__meta--tr" data-hero-line data-ink="0.78">
+              <p className="home__meta home__meta--tr" data-hero-line data-ink={META_INK}>
                 <time dateTime={now.toISOString()}>{clockText(now)}</time>
               </p>
-              <p className="home__meta home__meta--vault" data-hero-line data-ink="0.78">
+              <p className="home__meta home__meta--vault" data-hero-line data-ink={META_INK}>
                 {tildePath(vaultPath)}
               </p>
               <div className="home__meta home__meta--creed">
-                <span data-hero-line data-ink="0.78">
+                <span data-hero-line data-ink={META_INK}>
                   Notes are files.
                 </span>
-                <span data-hero-line data-ink="0.78">
+                <span data-hero-line data-ink={META_INK}>
                   The index is a cache.
                 </span>
-                <span data-hero-line data-ink="0.78">
+                <span data-hero-line data-ink={META_INK}>
                   Nothing is converted.
                 </span>
               </div>
@@ -367,10 +367,10 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
                 </p>
               </div>
 
-              <p className="home__meta home__meta--counts" data-hero-line data-ink="0.78">
+              <p className="home__meta home__meta--counts" data-hero-line data-ink={META_INK}>
                 {stats === null ? '—' : `${stats.notes} notes — ${stats.links} links — ${stats.tags} tags`}
               </p>
-              <p className="home__meta home__meta--edit" data-hero-line data-ink="0.78">
+              <p className="home__meta home__meta--edit" data-hero-line data-ink={META_INK}>
                 {lastEdit === null
                   ? 'Last edit — none'
                   : `Last edit — ${lastEdit.name} · ${pad2(lastEdit.at.getHours())}:${pad2(lastEdit.at.getMinutes())}`}
@@ -389,13 +389,13 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
                 Show your statistics →
               </button>
 
-              <p className="home__meta home__meta--bl" data-hero-line data-ink="0.78">
+              <p className="home__meta home__meta--bl" data-hero-line data-ink={META_INK}>
                 Local vault · Markdown
               </p>
-              <p className="home__meta home__meta--bottom" data-hero-line data-ink="0.78">
+              <p className="home__meta home__meta--bottom" data-hero-line data-ink={META_INK}>
                 Esc to close
               </p>
-              <p className="home__meta home__meta--br" data-hero-line data-ink="0.78">
+              <p className="home__meta home__meta--br" data-hero-line data-ink={META_INK}>
                 v{version}
               </p>
             </div>

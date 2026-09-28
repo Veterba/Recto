@@ -29,16 +29,53 @@ export type HeroLine = {
 /** A hairline or tick: CSS px, drawn on exact device pixels. */
 export type Rule = { x: number; y: number; width: number; height: number; alpha: number }
 
-/** Draw the hero lines and rules at device resolution into `tex`, mipmapped. */
+/**
+ * A line's kind, as the colour the kind texture has there: full-ink text and
+ * the crosshair red, meta labels green, the faint rules blue. It lets a theme
+ * weigh each kind differently (`u_textWeights`) - the dark theme's meta and
+ * rules are fainter - without touching the ink texture itself.
+ *
+ * A separate texture, not the ink texture's own colour: Chromium adjusts a
+ * glyph's coverage for the luminance of its fill, so small type drawn in red
+ * comes out with a different alpha than the same type drawn in white.
+ */
+const kindOf = (alpha: number): string => (alpha >= 0.99 ? 'rgb(255,0,0)' : alpha > 0.5 ? 'rgb(0,255,0)' : 'rgb(0,0,255)')
+
+/**
+ * Draw the hero lines and rules at device resolution: their ink into `tex`,
+ * mipmapped, and what kind each one is into `kindTex`.
+ */
 export function rasteriseText(
   gl: WebGL2RenderingContext,
   tex: WebGLTexture,
+  kindTex: WebGLTexture,
   lines: readonly HeroLine[],
   rules: readonly Rule[],
   cssW: number,
   cssH: number,
   pixelRatio: number,
 ): void {
+  const ink = paintText(lines, rules, cssW, cssH, pixelRatio, (alpha) => `rgba(255,255,255,${alpha})`)
+  const kinds = paintText(lines, rules, cssW, cssH, pixelRatio, kindOf)
+  if (ink === null || kinds === null) return
+  gl.bindTexture(gl.TEXTURE_2D, tex)
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ink)
+  gl.generateMipmap(gl.TEXTURE_2D)
+  gl.bindTexture(gl.TEXTURE_2D, kindTex)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, kinds)
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0)
+}
+
+/** The lines and rules drawn to a canvas, each in the fill `style` gives its ink strength. */
+function paintText(
+  lines: readonly HeroLine[],
+  rules: readonly Rule[],
+  cssW: number,
+  cssH: number,
+  pixelRatio: number,
+  style: (alpha: number) => string,
+): HTMLCanvasElement | null {
   const pad = 1
   const w = Math.max(1, Math.round(cssW * pixelRatio))
   const h = Math.max(1, Math.round(cssH * pixelRatio))
@@ -46,12 +83,12 @@ export function rasteriseText(
   flat.width = w
   flat.height = h
   const ctx = flat.getContext('2d')
-  if (ctx === null) return
+  if (ctx === null) return null
   ctx.clearRect(0, 0, w, h)
   // Rules on whole device pixels: a 1 CSS px line is exactly dpr pixels,
   // never a half-covered pair.
   for (const r of rules) {
-    ctx.fillStyle = `rgba(255,255,255,${r.alpha})`
+    ctx.fillStyle = style(r.alpha)
     const x0 = Math.round(r.x * pixelRatio)
     const y0 = Math.round(r.y * pixelRatio)
     const x1 = Math.max(x0 + 1, Math.round((r.x + r.width) * pixelRatio))
@@ -72,7 +109,7 @@ export function rasteriseText(
       while (text.length > 1 && ctx.measureText(`${text}…`).width > line.maxWidth) text = text.slice(0, -1)
       text = `${text.trimEnd()}…`
     }
-    ctx.fillStyle = `rgba(255,255,255,${line.alpha})`
+    ctx.fillStyle = style(line.alpha)
     // A rotated box is laid out upright and turned about its corner; the
     // box measured from the DOM is the turned one, so draw from its corner.
     if (line.rotate === 90) {
@@ -89,11 +126,7 @@ export function rasteriseText(
     }
     ctx.restore()
   }
-  gl.bindTexture(gl.TEXTURE_2D, tex)
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, flat)
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0)
-  gl.generateMipmap(gl.TEXTURE_2D)
+  return flat
 }
 
 /**

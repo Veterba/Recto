@@ -18,6 +18,15 @@ const FACES = ['italic 400 100px "Bodoni Moda"', '500 30px "Geist Sans"', '500 1
 export const loadFaces = (): Promise<unknown> => Promise.all(FACES.map((face) => document.fonts.load(face)))
 
 /**
+ * How strongly the text texture draws meta labels and the faint rules, as a
+ * fraction of full ink. The theme's own strengths (`--home-meta-ink`,
+ * `--home-rule-ink`) are measured against these, so the texture itself is
+ * drawn once whatever the theme.
+ */
+export const META_INK = 0.78
+export const RULE_INK = 0.38
+
+/**
  * The page's grid, in CSS px: margins, the column line at a third of the
  * width, the row line at 78% of the height. Ink at 38%, a gap either side of
  * each crossing, a full-ink crosshair where they meet and two ticks on the
@@ -28,7 +37,7 @@ export function layoutRules(w: number, h: number): Rule[] {
   const M = 40
   const col = Math.round(w / 3)
   const row = Math.round(h * 0.78)
-  const faint = 0.38
+  const faint = RULE_INK
   const gap = 18
   const arm = 17
   return [

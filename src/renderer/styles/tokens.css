@@ -218,6 +218,22 @@
   --glass-primary-bg: rgb(255 255 255 / 0.16);
   --glass-primary-fg: #fff;
   --glass-primary-highlight: rgb(255 255 255 / 0.14);
+  /* The home scene (features/home/scene-palette.ts): page one's ramp and page
+     two's, shallow to deep; the ink of the words and rules, and how strong
+     meta labels and grid rules are; grain; the ground before the scene draws;
+     and which end of the ramp page two pushes toward behind its figures (1
+     deep, 0 shallow). In the dark the depth logic inverts: near-black, and
+     deep inside the shapes glow violet, ending on the accent. */
+  --home-ramp: #0f0e13, #17151d, #221e2e, #33294a, #4b3572, #6a45a8, var(--accent);
+  --home-ramp-stops: 0 0.2 0.4 0.6 0.78 0.92 1;
+  --home-glass-ramp: #0f0e13, #17151d, #221e2e, #33294a, #4b3572, #6a45a8, var(--accent);
+  --home-glass-stops: 0 0.12 0.26 0.42 0.6 0.8 1;
+  --home-ink: #eceaf2;
+  --home-meta-ink: 0.6;
+  --home-rule-ink: 0.2;
+  --home-grain: 0.03;
+  --home-ground: #0f0e13;
+  --home-stats-to: 0;
 }
 
 @media (prefers-color-scheme: light) {
@@ -254,6 +270,16 @@
     --glass-primary-bg: var(--ink);
     --glass-primary-fg: var(--on-ink);
     --glass-primary-highlight: color-mix(in srgb, var(--on-ink) 18%, transparent);
+    --home-ramp: #f3f2ef, #dcd9d5, #a9a5a3, #85828a, #66708f, #5a6a9c, #6f82b8;
+    --home-ramp-stops: 0 0.2 0.4 0.6 0.78 0.92 1;
+    --home-glass-ramp: #bdcdd1, #9dbbd2, #73a0cf, #4173c9, #0e097b, #010003, #010003;
+    --home-glass-stops: 0 0.25 0.45 0.62 0.8 1 1.0001;
+    --home-ink: rgb(20.91 20.91 20.91);
+    --home-meta-ink: 0.78;
+    --home-rule-ink: 0.38;
+    --home-grain: 0.046;
+    --home-ground: #eee;
+    --home-stats-to: 1;
   }
 }
 
@@ -290,6 +316,16 @@
   --glass-primary-bg: var(--ink);
   --glass-primary-fg: var(--on-ink);
   --glass-primary-highlight: color-mix(in srgb, var(--on-ink) 18%, transparent);
+  --home-ramp: #f3f2ef, #dcd9d5, #a9a5a3, #85828a, #66708f, #5a6a9c, #6f82b8;
+  --home-ramp-stops: 0 0.2 0.4 0.6 0.78 0.92 1;
+  --home-glass-ramp: #bdcdd1, #9dbbd2, #73a0cf, #4173c9, #0e097b, #010003, #010003;
+  --home-glass-stops: 0 0.25 0.45 0.62 0.8 1 1.0001;
+  --home-ink: rgb(20.91 20.91 20.91);
+  --home-meta-ink: 0.78;
+  --home-rule-ink: 0.38;
+  --home-grain: 0.046;
+  --home-ground: #eee;
+  --home-stats-to: 1;
 }
 
 :root[data-theme='dark'] {
@@ -336,6 +372,22 @@
   --glass-primary-bg: rgb(255 255 255 / 0.16);
   --glass-primary-fg: #fff;
   --glass-primary-highlight: rgb(255 255 255 / 0.14);
+  /* The home scene (features/home/scene-palette.ts): page one's ramp and page
+     two's, shallow to deep; the ink of the words and rules, and how strong
+     meta labels and grid rules are; grain; the ground before the scene draws;
+     and which end of the ramp page two pushes toward behind its figures (1
+     deep, 0 shallow). In the dark the depth logic inverts: near-black, and
+     deep inside the shapes glow violet, ending on the accent. */
+  --home-ramp: #0f0e13, #17151d, #221e2e, #33294a, #4b3572, #6a45a8, var(--accent);
+  --home-ramp-stops: 0 0.2 0.4 0.6 0.78 0.92 1;
+  --home-glass-ramp: #0f0e13, #17151d, #221e2e, #33294a, #4b3572, #6a45a8, var(--accent);
+  --home-glass-stops: 0 0.12 0.26 0.42 0.6 0.8 1;
+  --home-ink: #eceaf2;
+  --home-meta-ink: 0.6;
+  --home-rule-ink: 0.2;
+  --home-grain: 0.03;
+  --home-ground: #0f0e13;
+  --home-stats-to: 0;
 }
 
 /*

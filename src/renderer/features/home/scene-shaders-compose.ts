@@ -44,6 +44,12 @@ uniform sampler2D u_test;
 uniform float u_glassTest;
 uniform float u_fringe;
 uniform float u_flatField;
+/* The words' and rules' ink, and each kind of line's strength relative to how
+   the texture drew it: strong text, meta labels, grid rules - red, green and
+   blue in the kind texture. All ones is the texture exactly as drawn. */
+uniform vec3 u_ink;
+uniform vec3 u_textWeights;
+uniform sampler2D u_textKind;
 
 float sdRoundBox(vec2 q, vec2 b, float r) {
   vec2 w = abs(q) - b;
@@ -146,7 +152,16 @@ void main() {
   vec3 color = u_progress > 0.0005 ? mix(light, glass(v_uv), u_progress) : light;
   // The text slides out with page one, and is ink over whatever it is on.
   if (uv1.x >= 0.0 && uv1.x <= 1.0) {
-    color = mix(color, vec3(0.082), texture(u_text, uv1).a);
+    vec4 t = texture(u_text, uv1);
+    float ink = t.a;
+    if (u_textWeights != vec3(1.0)) {
+      // Which kind of line this is. Where the kind texture has nothing - an
+      // edge the two rasters antialiased differently - the ink stands as is.
+      vec3 k = texture(u_textKind, uv1).rgb;
+      float sum = k.r + k.g + k.b;
+      ink = sum > 1e-3 ? t.a * dot(k / sum, u_textWeights) : t.a;
+    }
+    color = mix(color, u_ink, ink);
   }
   fragColor = vec4(color, 1.0);
 }`

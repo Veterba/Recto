@@ -30,24 +30,10 @@
  * never displaced, never blurred, never magnified.
  */
 
-import {
-  SPREAD,
-  MAX_SHAPES,
-  MAX_BLOCKS,
-  MAX_TEXT_BOXES,
-  MAX_SEGMENTS,
-  SPLAT_FORCE,
-  DISP_MAX,
-  LIGHT_RAMP,
-  GLASS_RAMP_LAB,
-  RAMP_AT,
-  GLASS_RAMP_AT,
-  GLASS_GAIN,
-  DISP_DECAY,
-  GRAIN,
-} from './scene-tuning'
+import { SPREAD, MAX_SHAPES, MAX_BLOCKS, MAX_TEXT_BOXES, MAX_SEGMENTS, SPLAT_FORCE, DISP_MAX, GLASS_GAIN, DISP_DECAY } from './scene-tuning'
+import { mixPalette, type Palette } from './scene-palette'
 import { link } from './scene-gl'
-import { HEIGHT_FRAG, FROST_FRAG, COLOR_FRAG } from './scene-shaders-depth'
+import { HEIGHT_FRAG, FROST_FRAG, colorFrag } from './scene-shaders-depth'
 import { SCENE_FRAG, SPLAT_FRAG, ADVECT_FRAG, FINAL_FRAG } from './scene-shaders-compose'
 import type { SceneDebug, SceneFlags } from './scene-flags'
 import { rng, type Shape, shapeNow, bornShape, coverageOf } from './scene-shapes'
@@ -62,6 +48,9 @@ import { paintGlassTestCard, rasteriseText, textCaps, type HeroLine, type Rule }
  * watching.
  */
 const GROUND_FRAME_MS = 66
+
+/** How long a theme change crossfades one palette into the other. */
+const PALETTE_MS = 400
 
 // --- GL plumbing ---------------------------------------------------------------
 
@@ -81,6 +70,8 @@ export type Scene = {
   push: (u: number, v: number, du: number, dv: number) => void
   /** 0 on page one, 1 on page two. */
   setProgress: (p: number) => void
+  /** The theme's palette; `fade` crossfades to it rather than switching. */
+  setPalette: (next: Palette, fade: boolean) => void
   /** Advance and draw. `dt` in seconds, already clamped by the caller. */
   frame: (dt: number) => void
   /** True while the displacement still has anything in it. */
@@ -89,7 +80,7 @@ export type Scene = {
   dispose: () => void
 }
 
-export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduced: boolean): Scene {
+export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduced: boolean, initialPalette: Palette): Scene {
   /*
    * `alpha: false` is not a preference.
    *
@@ -122,6 +113,7 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
       setBlocks: () => {},
       push: () => {},
       setProgress: () => {},
+      setPalette: () => {},
       frame: () => {},
       disturbed: () => false,
       debug: { shapes: () => [], coverage: () => 0, progress: () => 0, frames: () => 0, setFlags: () => {}, gpuMs: () => null },
@@ -168,7 +160,8 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
   const programs = {
     height: link(gl, HEIGHT_FRAG),
     frost: link(gl, FROST_FRAG),
-    color: link(gl, COLOR_FRAG),
+    color: link(gl, colorFrag(false)),
+    colorToward: link(gl, colorFrag(true)),
     scene: link(gl, SCENE_FRAG),
     splat: link(gl, SPLAT_FRAG),
     advect: link(gl, ADVECT_FRAG),
@@ -229,6 +222,14 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  /* What kind each line is (scene-text.ts), read only when the theme weighs the kinds differently. */
+  const kindTex = gl.createTexture()!
+  gl.bindTexture(gl.TEXTURE_2D, kindTex)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]))
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
   const dropTargets = (): void => {
     for (const t of targets) {
@@ -246,7 +247,7 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
   let lines: readonly HeroLine[] = []
   let rules: readonly Rule[] = []
 
-  const rasterise = (): void => rasteriseText(gl, textTex, lines, rules, cssW, cssH, pixelRatio)
+  const rasterise = (): void => rasteriseText(gl, textTex, kindTex, lines, rules, cssW, cssH, pixelRatio)
 
   const resize = (w: number, h: number, dpr: number): void => {
     cssW = Math.max(1, w)
@@ -390,6 +391,23 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
   let groundAt = -1e9
   let lastProgress = -1
 
+  /*
+   * The palette, and a crossfade in progress. A theme change blends every
+   * colour uniform from where it is to where it is going - the scene is not
+   * rebuilt, and nothing it has drawn is thrown away.
+   */
+  let palette = initialPalette
+  let paletteFade: { from: Palette; at: number } | null = null
+  const paletteAt = (now: number): Palette => {
+    if (paletteFade === null) return palette
+    const k = Math.min(1, (now - paletteFade.at) / PALETTE_MS)
+    if (k >= 1) {
+      paletteFade = null
+      return palette
+    }
+    return mixPalette(paletteFade.from, palette, k * k * (3 - 2 * k))
+  }
+
   const draw = (program: WebGLProgram | null, target: Target | null): void => {
     if (program === null) return
     gl.bindFramebuffer(gl.FRAMEBUFFER, target?.fb ?? null)
@@ -437,7 +455,9 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
      * rate rather than fifteen a second.
      */
     const onPage2 = progress > 0.0005
-    const groundDue = now - groundAt > (onPage2 ? 0 : GROUND_FRAME_MS) || progress !== lastProgress
+    const fading = paletteFade !== null
+    const colours = paletteAt(now)
+    const groundDue = now - groundAt > (onPage2 ? 0 : GROUND_FRAME_MS) || progress !== lastProgress || fading
     if (shapes.length === 0) seedShapes()
     if (!flags.freeze && !reduced) {
       time += dt
@@ -471,10 +491,13 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
       draw(frost, frostT)
 
       const paint = (source: Target, target: Target, lit: boolean): void => {
+        // The light theme's own variant whenever its push is the one in force.
+        const color = colours.statsTo === 1 || programs.colorToward === null ? programs.color! : programs.colorToward
         gl.useProgram(color)
         bind(color, 'u_h', 0, source.tex)
-        gl.uniform3fv(at(color, 'u_ramp'), lit ? LIGHT_RAMP : GLASS_RAMP_LAB)
-        gl.uniform1fv(at(color, 'u_stop'), lit ? RAMP_AT : GLASS_RAMP_AT)
+        gl.uniform3fv(at(color, 'u_ramp'), lit ? colours.ramp : colours.glass)
+        gl.uniform1fv(at(color, 'u_stop'), lit ? colours.rampAt : colours.glassAt)
+        if (color === programs.colorToward) gl.uniform1f(at(color, 'u_statsTo'), colours.statsTo)
         gl.uniform1f(at(color, 'u_gain'), lit ? 1.6 : GLASS_GAIN)
         gl.uniform4fv(at(color, 'u_blocks'), blocks)
         gl.uniform1i(at(color, 'u_blockCount'), blockCount)
@@ -496,6 +519,7 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
       bind(compose, 'u_light', 0, lightT.tex)
       bind(compose, 'u_dark', 1, darkT.tex)
       bind(compose, 'u_text', 2, textTex)
+      bind(compose, 'u_textKind', 4, kindTex)
       gl.uniform1f(at(compose, 'u_progress'), progress)
       gl.uniform2f(at(compose, 'u_css'), cssW, cssH)
       gl.uniform1f(at(compose, 'u_dpr'), pixelRatio)
@@ -503,6 +527,8 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
       gl.uniform1f(at(compose, 'u_glassTest'), flags.glassTest ? 1 : 0)
       gl.uniform1f(at(compose, 'u_fringe'), flags.noFringe ? 0 : 1)
       gl.uniform1f(at(compose, 'u_flatField'), flags.flatField ? 1 : 0)
+      gl.uniform3fv(at(compose, 'u_ink'), colours.ink)
+      gl.uniform3fv(at(compose, 'u_textWeights'), colours.textWeights)
       draw(compose, sceneT)
     }
     if (groundDue) {
@@ -557,7 +583,7 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
       gl.useProgram(programs.final)
       bind(programs.final, 'u_scene', 0, sceneT.tex)
       bind(programs.final, 'u_disp', 1, disp[0].tex)
-      gl.uniform1f(at(programs.final, 'u_grain'), flags.noGrain ? 0 : GRAIN)
+      gl.uniform1f(at(programs.final, 'u_grain'), flags.noGrain ? 0 : colours.grain)
       // Re-seeded on the film's clock, not the frame's.
       // The grain's own clock: wall time, so a grain's life is in seconds
       // whatever the frame rate. A reduced-motion frame holds still.
@@ -604,6 +630,12 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
     setProgress: (p) => {
       progress = Math.max(0, Math.min(1, p))
     },
+    setPalette: (next, fade) => {
+      const now = performance.now()
+      paletteFade = fade ? { from: paletteAt(now), at: now } : null
+      palette = next
+      groundAt = -1e9
+    },
     frame,
     disturbed: () => active,
     debug: {
@@ -617,6 +649,7 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
     dispose: () => {
       dropTargets()
       gl.deleteTexture(textTex)
+      gl.deleteTexture(kindTex)
       gl.deleteTexture(testTex)
       gl.deleteBuffer(quad)
       gl.deleteVertexArray(vao)

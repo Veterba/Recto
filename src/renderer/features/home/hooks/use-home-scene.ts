@@ -3,7 +3,14 @@ import { useEffect } from 'react'
 import { readFlags } from '../scene-flags'
 import type { HeroLine } from '../scene-text'
 import { SLIDE_MS, ease } from '../slide'
-import { layoutRules, loadFaces } from '../hero-text'
+import { META_INK, RULE_INK, layoutRules, loadFaces } from '../hero-text'
+import { readPalette, type Palette } from '../scene-palette'
+
+/** The home palette the theme on screen asks for, from its `--home-*` tokens. */
+function themePalette(): Palette {
+  const style = getComputedStyle(document.documentElement)
+  return readPalette((token) => style.getPropertyValue(token), { meta: META_INK, rule: RULE_INK })
+}
 
 /** The one frame loop: the WebGL scene behind both pages, the text it composites, the slide between pages, and the pointer river - created when the overlay mounts, torn down when it closes. */
 export function useHomeScene({
@@ -47,8 +54,27 @@ export function useHomeScene({
     if (canvas === null || host === null) return
 
     const flags = readFlags()
-    let scene = createScene(canvas, flags, reduced)
+    let palette = themePalette()
+    let scene = createScene(canvas, flags, reduced, palette)
     sceneRef.current = scene
+
+    /*
+     * Follow the theme while open. It lives in two places - `data-theme` on
+     * the root when chosen, the OS's scheme when on system - and the accent
+     * the dark ramp ends on is an inline style on the root, so all three are
+     * watched. Most root style changes are something else (the sidebar's
+     * width, say): only a palette that actually differs is faded to.
+     */
+    const onTheme = (): void => {
+      const next = themePalette()
+      if (JSON.stringify(next) === JSON.stringify(palette)) return
+      palette = next
+      scene.setPalette(next, !reduced)
+    }
+    const themeObserver = new MutationObserver(onTheme)
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] })
+    const schemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    schemeQuery.addEventListener('change', onTheme)
     /* A handle for measuring this screen: the acceptance criteria it was built
      against are all readings off the canvas, and nothing can take them from
      outside without a way in. The renderer runs no code but ours. */
@@ -160,7 +186,7 @@ export function useHomeScene({
       scene.dispose()
     }
     const onRestored = (): void => {
-      scene = createScene(canvas, flags, reduced)
+      scene = createScene(canvas, flags, reduced, palette)
       sceneRef.current = scene
       measure()
     }
@@ -226,6 +252,8 @@ export function useHomeScene({
       running = false
       cancelAnimationFrame(raf)
       observer.disconnect()
+      themeObserver.disconnect()
+      schemeQuery.removeEventListener('change', onTheme)
       dprQuery?.removeEventListener('change', onDpr)
       window.removeEventListener('pointermove', onPointerMove)
       document.removeEventListener('visibilitychange', onVisibility)
