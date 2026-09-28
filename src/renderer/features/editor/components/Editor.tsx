@@ -19,6 +19,9 @@ type EditorProps = {
   onSave: () => void
   onOpenLink: (target: string, heading: string | null) => void
   onDragLink?: (target: string, heading: string | null, x: number, y: number) => void
+  onLinkHover?: (link: { target: string; heading: string | null; anchor: DOMRect } | null) => void
+  /** Rendered and not editable: a reading view. */
+  readOnly?: boolean
   getLinkCandidates?: () => readonly LinkCandidate[]
   onSelectionChange?: () => void
   onFoldsChange?: (lines: number[]) => void
@@ -34,6 +37,8 @@ export function Editor({
   onSave,
   onOpenLink,
   onDragLink,
+  onLinkHover,
+  readOnly,
   getLinkCandidates,
   onSelectionChange,
   onFoldsChange,
@@ -51,6 +56,7 @@ export function Editor({
     onSave,
     onOpenLink,
     onDragLink,
+    onLinkHover,
     onReady,
     getLinkCandidates,
     onSelectionChange,
@@ -63,6 +69,7 @@ export function Editor({
     onSave,
     onOpenLink,
     onDragLink,
+    onLinkHover,
     onReady,
     getLinkCandidates,
     onSelectionChange,
@@ -81,6 +88,8 @@ export function Editor({
       onSave: () => callbacks.current.onSave(),
       onOpenLink: (target, heading) => callbacks.current.onOpenLink(target, heading),
       onDragLink: (target, heading, x, y) => callbacks.current.onDragLink?.(target, heading, x, y),
+      onLinkHover: (link) => callbacks.current.onLinkHover?.(link),
+      readOnly: readOnly === true,
       getLinkCandidates: () => callbacks.current.getLinkCandidates?.() ?? [],
       onSelectionChange: () => callbacks.current.onSelectionChange?.(),
       onFoldsChange: (lines) => callbacks.current.onFoldsChange?.(lines),

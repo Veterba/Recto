@@ -9,6 +9,10 @@ import { Sidebar, SidebarStub } from './Sidebar'
 import { StatusBar } from './StatusBar'
 import { WorkspaceView } from './WorkspaceView'
 import { PaneDropOverlay } from './PaneDropOverlay'
+import { NoteWindows } from './NoteWindows'
+import { LinkPeekHost } from './LinkPeekHost'
+import { closeNoteWindow, openNoteWindow } from '../note-windows'
+import { closeLinkPeek } from '../link-peek'
 import { setPaneDropHandler } from '../pane-drag'
 import type { DropZone } from '../pane-drop'
 import { registerStubViews } from './stub-views'
@@ -53,8 +57,19 @@ registerArchiveView()
 const THEME_CYCLE: readonly Theme[] = ['system', 'light', 'dark']
 
 export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React.ReactElement {
-  const { sections, active, activeSection, setActiveSection, graphWindow, setGraphWindow, historyWindow, setHistoryWindow, revision } =
-    useWorkspace()
+  const {
+    sections,
+    active,
+    activeSection,
+    setActiveSection,
+    graphWindow,
+    setGraphWindow,
+    historyWindow,
+    setHistoryWindow,
+    noteWindows,
+    setNoteWindows,
+    revision,
+  } = useWorkspace()
   const { appearance, ready, update } = useAppearance()
   const boards = useBoards()
   const { tree, refresh } = useVault(true)
@@ -164,6 +179,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     if (sections === null || tree.roots.length === 0) return
     const files = new Set(allFilePaths(tree.roots))
     for (const workspace of Object.values(sections)) workspace.pruneMissing((path) => files.has(path))
+    // A pinned note that is gone takes its window with it, as its tab would.
+    setNoteWindows((prev) => (prev.every((w) => files.has(w.path)) ? prev : prev.filter((w) => files.has(w.path))))
   }, [sections, tree])
 
   /** Every folder in the vault, for expand-all. */
@@ -198,6 +215,35 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
    */
   const activeRef = useRef(active)
   activeRef.current = active
+  const setNoteWindowsRef = useRef(setNoteWindows)
+  setNoteWindowsRef.current = setNoteWindows
+
+  /**
+   * Pin a note as a floating window where its preview card was, and put the
+   * card away. Positions are the workspace area's, where the windows live.
+   */
+  const contentRef = useRef<HTMLElement | null>(null)
+  const pinNote = useCallback(
+    (path: string, rect: DOMRect) => {
+      closeLinkPeek()
+      const area = contentRef.current
+      if (area === null) return
+      const box = area.getBoundingClientRect()
+      setNoteWindows((prev) =>
+        openNoteWindow(prev, path, { x: rect.left - box.left, y: rect.top - box.top }, { width: box.width, height: box.height }),
+      )
+    },
+    [setNoteWindows],
+  )
+  /** A link followed from a pinned note opens it in the main editor. */
+  const openLinkInEditor = useCallback(
+    (target: string, heading: string | null) => {
+      void api.invoke(IPC.indexResolveLink, target).then((resolved) => {
+        if (resolved !== null) openFile(resolved, heading)
+      })
+    },
+    [openFile],
+  )
   useEffect(() => {
     const open = (tabsId: string, zone: DropZone, path: string, heading?: string | null): void => {
       focusEditorOnOpen()
@@ -206,7 +252,11 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     setPaneDropHandler((payload, tabsId, zone) => {
       if (payload.kind === 'leaf') activeRef.current?.placeInPane(tabsId, zone, { leafId: payload.leafId })
       else if (payload.kind === 'path') open(tabsId, zone, payload.path, payload.heading)
-      else
+      else if (payload.kind === 'window') {
+        // The window becomes the pane: the note opens there, and the window goes.
+        open(tabsId, zone, payload.path)
+        setNoteWindowsRef.current((prev) => closeNoteWindow(prev, payload.windowId))
+      } else
         void api.invoke(IPC.indexResolveLink, payload.target).then((resolved) => {
           if (resolved !== null) open(tabsId, zone, resolved, payload.heading)
         })
@@ -388,6 +438,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
                 templateFolder={templates.settings.folder}
                 aiModel={appearance.aiModel}
                 previewDelayMs={appearance.previewDelay * 1000}
+                onPinNote={pinNote}
               />
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} />
@@ -399,7 +450,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
           <SidebarStub onExpand={toggleSidebar} />
         )}
 
-        <main className="shell__content">
+        <main className="shell__content" ref={contentRef}>
           {active ? (
             // Keyed by section only: switching workspace is a genuine remount,
             // a layout change inside one is not.
@@ -409,6 +460,13 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
               <p>Restoring layout…</p>
             </div>
           )}
+          <NoteWindows
+            windows={noteWindows}
+            setWindows={setNoteWindows}
+            area={contentRef}
+            onOpenInEditor={(path) => openFile(path)}
+            onOpenLink={openLinkInEditor}
+          />
         </main>
 
         <ShellWindows
@@ -452,6 +510,13 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       <CommandPalette registry={commands} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={openFile} />
       <QuickSwitcher open={switcherOpen} roots={tree.roots} onClose={() => setSwitcherOpen(false)} onOpen={openFile} />
+      <LinkPeekHost
+        delayMs={appearance.previewDelay * 1000}
+        model={appearance.aiModel}
+        mtimeOf={(path) => tree.byPath.get(path)?.mtime}
+        onOpen={(path) => openFile(path)}
+        onPin={pinNote}
+      />
       <PaneDropOverlay />
     </div>
   )

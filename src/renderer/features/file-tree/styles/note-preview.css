@@ -243,3 +243,8 @@
   margin: 0;
   color: var(--danger);
 }
+
+/* A click on the card pins it as a floating note window. */
+.note-peek.is-pinnable {
+  cursor: pointer;
+}

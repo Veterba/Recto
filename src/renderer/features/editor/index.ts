@@ -12,6 +12,7 @@ import './styles/find.css'
 
 export * from './components/History'
 export * from './components/MarkdownView'
+export * from './components/NoteReader'
 export * from './editor-commands'
 export * from './focus-range'
 export * from './link-complete'

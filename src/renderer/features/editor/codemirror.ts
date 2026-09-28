@@ -44,6 +44,8 @@ type EditorOptions = {
   onOpenLink: (target: string, heading: string | null) => void
   /** A link was dragged rather than clicked, and the pointer is now at x, y. */
   onDragLink?: (target: string, heading: string | null, x: number, y: number) => void
+  /** The pointer came to rest on a link to a note (or left it: null), for its preview. */
+  onLinkHover?: (link: { target: string; heading: string | null; anchor: DOMRect } | null) => void
   readOnly?: boolean
   /** Note names offered after typing `[[`. Read lazily, so it stays current. */
   getLinkCandidates?: () => readonly LinkCandidate[]
@@ -109,6 +111,49 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
     if (drag === undefined) open()
     else pressOrDrag(event, { onClick: open, onDrag: (x, y) => drag(target, heading, x, y) })
   }
+
+  /**
+   * The note a rendered link points at, from its decoration alone - enough
+   * for a preview, which only rendered links get. Links out of the vault have
+   * no note to preview.
+   */
+  const noteLinkOf = (element: HTMLElement): { target: string; heading: string | null } | null => {
+    if (element.classList.contains('cm-wikilink')) {
+      const parsed = /^([^#|]+)(?:#([^|]+))?/.exec((element.textContent ?? '').trim())
+      const name = parsed?.[1]?.trim()
+      return name === undefined || name === '' ? null : { target: name, heading: parsed?.[2]?.trim() ?? null }
+    }
+    const href = element.getAttribute('data-href')
+    if (href === null || /^[a-z][a-z0-9+.-]*:/i.test(href)) return null
+    const hash = href.indexOf('#')
+    const path = (hash === -1 ? href : href.slice(0, hash)).trim()
+    if (path === '') return null
+    let decoded = path
+    try {
+      decoded = decodeURIComponent(path)
+    } catch {
+      // A stray '%' is not an escape; take the path as written.
+    }
+    const heading = hash === -1 ? '' : href.slice(hash + 1).trim()
+    return { target: decoded.replace(/\.md$/i, ''), heading: heading === '' ? null : heading }
+  }
+  let hovered: HTMLElement | null = null
+  const linkHover = EditorView.domEventHandlers({
+    mouseover: (event) => {
+      const element = (event.target as HTMLElement | null)?.closest<HTMLElement>('.cm-wikilink, .cm-mdlink') ?? null
+      if (element === hovered) return false
+      hovered = element
+      const link = element === null ? null : noteLinkOf(element)
+      options.onLinkHover?.(link === null || element === null ? null : { ...link, anchor: element.getBoundingClientRect() })
+      return false
+    },
+    mouseleave: () => {
+      if (hovered === null) return false
+      hovered = null
+      options.onLinkHover?.(null)
+      return false
+    },
+  })
 
   const linkClick = EditorView.domEventHandlers({
     mousedown: (event, view) => {
@@ -223,6 +268,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         editorTheme(),
         imageDrop(),
         linkClick,
+        linkHover,
         EditorView.lineWrapping,
         editable.of(EditorView.editable.of(options.readOnly !== true)),
         // Before the default keymap, or Vim's bindings lose every collision.

@@ -6,12 +6,13 @@ import { Icon } from '../../../ui/Icon'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 
 /**
- * A note's gist, shown when the pointer rests on it in the sidebar.
+ * A note's gist, shown when the pointer rests on it - in the sidebar, or on a
+ * link in a note.
  *
- * Read-only and fixed in place: it is a glance, not a window. It is
- * deliberately not draggable - pulling a note out into the workspace is a
- * separate feature, and a preview that half-behaves like a window invites
- * exactly the drag it cannot finish.
+ * Read-only and fixed in place: it is a glance, not a window. A click on it
+ * (anywhere but its buttons) pins the note as a floating window, which is the
+ * window. The card itself is deliberately not draggable - a preview that
+ * half-behaves like a window invites exactly the drag it cannot finish.
  *
  * The summary is compiled locally (see `note-preview.ts`). Claude is one button
  * away when a key is saved, and only when pressed: a hover is not consent to
@@ -25,6 +26,8 @@ type Props = {
   mtime: number | undefined
   model: string
   onOpen: (path: string) => void
+  /** Pin the note as a floating window, where the card is now. */
+  onPin?: (path: string, rect: DOMRect) => void
   onPointerEnter: () => void
   onPointerLeave: () => void
 }
@@ -34,7 +37,7 @@ const GAP = 10
 /** Enough for a gist, and a bound on what one click sends to the API. */
 const SUMMARY_INPUT_CHARS = 24_000
 
-export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerEnter, onPointerLeave }: Props): React.ReactElement {
+export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPin, onPointerEnter, onPointerLeave }: Props): React.ReactElement {
   const card = useRef<HTMLDivElement | null>(null)
   const [text, setText] = useState<string | null>(null)
   const [preview, setPreview] = useState<NotePreview | null>(null)
@@ -125,10 +128,16 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPointerE
 
   return createPortal(
     <div
-      className="note-peek"
+      className={`note-peek${onPin !== undefined ? ' is-pinnable' : ''}`}
       ref={card}
       role="dialog"
       aria-label="Note preview"
+      title={onPin !== undefined ? 'Click to pin as a window' : undefined}
+      onClick={(event) => {
+        if (onPin === undefined || card.current === null) return
+        if ((event.target as HTMLElement).closest('button, a, input, textarea') !== null) return
+        onPin(path, card.current.getBoundingClientRect())
+      }}
       style={{ left: position.left, top: position.top, width: WIDTH }}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}

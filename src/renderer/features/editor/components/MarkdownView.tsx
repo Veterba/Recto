@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { beginPaneDrag } from '../../../app/pane-drag'
+import { hoverLink } from '../../../app/link-peek'
 import { api } from '../../../app/api'
 import { Backlinks } from './Backlinks'
 import { FormatBar } from './FormatBar'
@@ -387,6 +388,7 @@ function MarkdownEditor({
         onSave={flush}
         onOpenLink={onOpenLink}
         onDragLink={(target, heading, x, y) => beginPaneDrag({ kind: 'link', target, heading }, target, x, y)}
+        onLinkHover={(link) => hoverLink(link)}
         getLinkCandidates={getLinkCandidates}
         onSelectionChange={syncFormats}
         onFoldsChange={(lines) => writeFolds(path, lines)}

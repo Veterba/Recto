@@ -3,8 +3,8 @@ import { zoneAt, type DropZone, type Rect } from './pane-drop'
 /**
  * A drag that ends in a pane: the session, the hit-testing, and the drop.
  *
- * Two kinds of drag feed it. Tabs, links in a note and palette results are
- * pointer drags this module follows itself. A note dragged out of the file
+ * Two kinds of drag feed it. Tabs, links in a note, palette results and
+ * floating note windows are pointer drags this module follows itself. A note dragged out of the file
  * tree is a native HTML drag, because the tree already moves files that way;
  * its dragover and drop events are followed instead. Either way the pane under
  * the pointer is found by its `data-tabs-id`, the zone by `zoneAt`, and the
@@ -15,6 +15,8 @@ export type PaneDragPayload =
   | { kind: 'leaf'; leafId: string }
   | { kind: 'path'; path: string; heading?: string | null }
   | { kind: 'link'; target: string; heading: string | null }
+  /** A floating note window, dragged into the layout with ⌥. */
+  | { kind: 'window'; windowId: string; path: string }
 
 export type PaneDragSession = {
   payload: PaneDragPayload

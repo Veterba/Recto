@@ -53,9 +53,13 @@ const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
  */
 const LOOSE_LINK = /(?<!!)\[([^\]\n]+)\]\(([^)\n]*\s[^)\n]*)\)/g
 
-/** Line numbers the selection touches. Those lines are left raw. */
+/**
+ * Line numbers the selection touches. Those lines are left raw - unless the
+ * view is read-only: nobody is editing there, so every line is rendered.
+ */
 function activeLines(view: EditorView): Set<number> {
   const lines = new Set<number>()
+  if (!view.state.facet(EditorView.editable)) return lines
   for (const range of view.state.selection.ranges) {
     const from = view.state.doc.lineAt(range.from).number
     const to = view.state.doc.lineAt(range.to).number

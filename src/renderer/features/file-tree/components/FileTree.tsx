@@ -45,6 +45,8 @@ type Props = {
   aiModel: string
   /** Milliseconds the pointer rests on a note before its preview opens. */
   previewDelayMs: number
+  /** A note's preview card was clicked: pin it as a floating window. */
+  onPinNote: (path: string, rect: DOMRect) => void
 }
 
 /*
@@ -67,6 +69,7 @@ export function FileTree({
   templateFolder,
   aiModel,
   previewDelayMs,
+  onPinNote,
 }: Props): React.ReactElement {
   // Read every render rather than fixed at module load: the sidebar's text
   // size is a setting, and the virtualiser has to agree with the stylesheet
@@ -420,6 +423,10 @@ export function FileTree({
           onOpen={(path) => {
             cancelPeek()
             onOpenFile(path)
+          }}
+          onPin={(path, rect) => {
+            cancelPeek()
+            onPinNote(path, rect)
           }}
           // Resting on the card keeps it; leaving it starts the same short
           // grace a row does, so card and row behave as one target.

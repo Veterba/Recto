@@ -4,6 +4,7 @@ import './styles/file-tree.css'
 import './styles/note-preview.css'
 
 export * from './components/FileTree'
+export * from './components/NotePreviewCard'
 export * from './file-tree-ops'
 export * from './note-preview'
 export * from './tree-lists'

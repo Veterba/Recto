@@ -60,9 +60,9 @@ export const blockHiding = StateField.define<DecorationSet>({
     if (!(state.field(livePreviewEnabled, false) ?? false)) return Decoration.none
 
     const doc = state.doc
-    /** Line numbers the selection touches; those stay raw. */
+    /** Line numbers the selection touches; those stay raw - none in a read-only view. */
     const touched = new Set<number>()
-    for (const range of state.selection.ranges) {
+    for (const range of state.facet(EditorView.editable) ? state.selection.ranges : []) {
       const from = doc.lineAt(range.from).number
       const to = doc.lineAt(range.to).number
       for (let n = from; n <= to; n++) touched.add(n)

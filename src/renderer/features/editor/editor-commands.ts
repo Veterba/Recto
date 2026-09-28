@@ -30,7 +30,8 @@ const editorHasFocus = (): boolean => inEditor() && document.activeElement?.clos
 const inEditor = (): boolean => {
   if (getActiveEditor() === null) return false
   const active = document.activeElement
-  return active !== null && active.closest('.cm-editor') !== null
+  // A floating note window reads a note; the editor commands are for the one being written.
+  return active !== null && active.closest('.cm-editor') !== null && active.closest('.note-window') === null
 }
 
 /** Wrap a markdown action as a command that runs against the live editor. */

@@ -3,6 +3,7 @@ import { api } from '../api'
 import { DEFAULT_SECTION, isSectionId, SECTIONS, type SectionId } from '../sections'
 import { clampGeometry, type WindowGeometry } from '../components/FloatingWindow'
 import { Workspace, type WorkspaceLayout } from '../workspace'
+import { parseNoteWindows, serializeNoteWindows, type NoteWindowState } from '../note-windows'
 import { IPC } from '@shared/ipc'
 
 /**
@@ -24,9 +25,14 @@ type SavedFile = {
   graphWindow?: { open: boolean } & Partial<WindowGeometry>
   /** Floating version-history window. */
   historyWindow?: { open: boolean } & Partial<WindowGeometry>
+  /** Pinned read-only note windows, bottom of the stack first. */
+  noteWindows?: Omit<NoteWindowState, 'id'>[]
 }
 
 type GraphWindowState = { open: boolean } & WindowGeometry
+
+/** Every floating window, as a save writes them. */
+type Windows = { graph: GraphWindowState; history: GraphWindowState; notes: NoteWindowState[] }
 
 const GRAPH_WINDOW_DEFAULT: GraphWindowState = {
   open: false,
@@ -51,12 +57,14 @@ function parse(saved: unknown): {
   active: SectionId
   graphWindow: GraphWindowState
   historyWindow: GraphWindowState
+  noteWindows: NoteWindowState[]
 } {
   const fallback = {
     layouts: {},
     active: DEFAULT_SECTION,
     graphWindow: GRAPH_WINDOW_DEFAULT,
     historyWindow: HISTORY_WINDOW_DEFAULT,
+    noteWindows: [],
   }
   if (typeof saved !== 'object' || saved === null) return fallback
 
@@ -75,6 +83,7 @@ function parse(saved: unknown): {
       ...file.historyWindow,
       open: file.historyWindow?.open ?? false,
     },
+    noteWindows: parseNoteWindows(file.noteWindows),
   }
 }
 
@@ -87,6 +96,9 @@ export type WorkspaceApi = {
   setGraphWindow: (next: Partial<GraphWindowState>) => void
   historyWindow: GraphWindowState
   setHistoryWindow: (next: Partial<GraphWindowState>) => void
+  noteWindows: NoteWindowState[]
+  /** Change the note windows; the change is saved like any layout change. */
+  setNoteWindows: (update: (prev: NoteWindowState[]) => NoteWindowState[]) => void
   revision: number
 }
 
@@ -95,6 +107,7 @@ export function useWorkspace(): WorkspaceApi {
   const [activeSection, setActive] = useState<SectionId>(DEFAULT_SECTION)
   const [graphWindow, setWindow] = useState(GRAPH_WINDOW_DEFAULT)
   const [historyWindow, setHistory] = useState(HISTORY_WINDOW_DEFAULT)
+  const [noteWindows, setNotes] = useState<NoteWindowState[]>([])
   const [revision, setRevision] = useState(0)
   const saveTimer = useRef<number | undefined>(undefined)
 
@@ -102,12 +115,13 @@ export function useWorkspace(): WorkspaceApi {
     let cancelled = false
     void api.invoke(IPC.stateRead, 'workspace').then((saved) => {
       if (cancelled) return
-      const { layouts, active, graphWindow: win, historyWindow: hist } = parse(saved)
+      const { layouts, active, graphWindow: win, historyWindow: hist, noteWindows: notes } = parse(saved)
       const built = Object.fromEntries(SECTIONS.map((section) => [section.id, new Workspace(layouts[section.id])])) as Sections
       setSections(built)
       setActive(active)
       setWindow(win)
       setHistory(hist)
+      setNotes(notes)
     })
     return () => {
       cancelled = true
@@ -115,18 +129,19 @@ export function useWorkspace(): WorkspaceApi {
   }, [])
 
   const serialize = useCallback(
-    (current: Sections, active: SectionId, windows: { graph: GraphWindowState; history: GraphWindowState }): SavedFile => ({
+    (current: Sections, active: SectionId, windows: Windows): SavedFile => ({
       version: 2,
       sections: Object.fromEntries(SECTIONS.map((section) => [section.id, current[section.id].serialize()])) as SavedFile['sections'],
       activeSection: active,
       graphWindow: windows.graph,
       historyWindow: windows.history,
+      noteWindows: serializeNoteWindows(windows.notes),
     }),
     [],
   )
 
   const save = useCallback(
-    (current: Sections, active: SectionId, windows: { graph: GraphWindowState; history: GraphWindowState }) => {
+    (current: Sections, active: SectionId, windows: Windows) => {
       window.clearTimeout(saveTimer.current)
       saveTimer.current = window.setTimeout(() => {
         void api.invoke(IPC.stateWrite, 'workspace', serialize(current, active, windows))
@@ -146,13 +161,14 @@ export function useWorkspace(): WorkspaceApi {
    * persisted the *previous* state. A "never lose the last change" safety net
    * that reliably lost the last change.
    */
-  const latest = useRef({ sections, activeSection, graphWindow, historyWindow })
-  latest.current = { sections, activeSection, graphWindow, historyWindow }
+  const latest = useRef({ sections, activeSection, graphWindow, historyWindow, noteWindows })
+  latest.current = { sections, activeSection, graphWindow, historyWindow, noteWindows }
 
-  /** Both floating windows, as the save functions want them. */
-  const windowsOf = (state: typeof latest.current): { graph: GraphWindowState; history: GraphWindowState } => ({
+  /** The floating windows, as the save functions want them. */
+  const windowsOf = (state: typeof latest.current): Windows => ({
     graph: state.graphWindow,
     history: state.historyWindow,
+    notes: state.noteWindows,
   })
 
   useEffect(() => {
@@ -180,14 +196,14 @@ export function useWorkspace(): WorkspaceApi {
     (id: SectionId) => {
       setActive(id)
       setRevision((n) => n + 1)
-      if (sections) save(sections, id, { graph: graphWindow, history: historyWindow })
+      if (sections) save(sections, id, { graph: graphWindow, history: historyWindow, notes: latest.current.noteWindows })
     },
     [sections, graphWindow, historyWindow, save],
   )
 
   /** Shared by both floating windows; they differ only in which state they set. */
   const makeSetter =
-    (setter: typeof setWindow, pick: (next: GraphWindowState) => { graph: GraphWindowState; history: GraphWindowState }) =>
+    (setter: typeof setWindow, pick: (next: GraphWindowState) => Windows) =>
     (patch: Partial<GraphWindowState>): void => {
       setter((prev) => {
         // Clamp on write, not just on drag: a hand-edited workspace.json could
@@ -200,13 +216,25 @@ export function useWorkspace(): WorkspaceApi {
     }
 
   const setGraphWindow = useCallback(
-    makeSetter(setWindow, (next) => ({ graph: next, history: latest.current.historyWindow })),
+    makeSetter(setWindow, (next) => ({ graph: next, history: latest.current.historyWindow, notes: latest.current.noteWindows })),
     [sections, activeSection, save],
   )
 
   const setHistoryWindow = useCallback(
-    makeSetter(setHistory, (next) => ({ graph: latest.current.graphWindow, history: next })),
+    makeSetter(setHistory, (next) => ({ graph: latest.current.graphWindow, history: next, notes: latest.current.noteWindows })),
     [sections, activeSection, save],
+  )
+
+  const setNoteWindows = useCallback(
+    (update: (prev: NoteWindowState[]) => NoteWindowState[]) => {
+      setNotes((prev) => {
+        const next = update(prev)
+        const now = latest.current
+        if (now.sections) save(now.sections, now.activeSection, { graph: now.graphWindow, history: now.historyWindow, notes: next })
+        return next
+      })
+    },
+    [save],
   )
 
   const active = useMemo(() => (sections ? sections[activeSection] : null), [sections, activeSection])
@@ -220,6 +248,8 @@ export function useWorkspace(): WorkspaceApi {
     setGraphWindow,
     historyWindow,
     setHistoryWindow,
+    noteWindows,
+    setNoteWindows,
     revision,
   }
 }
