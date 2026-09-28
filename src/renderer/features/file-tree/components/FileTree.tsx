@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { FileNode } from '@shared/vault'
 import { api } from '../../../app/api'
+import { beginNativePaneDrag } from '../../../app/pane-drag'
 import { treeRowHeight } from '../../../app/appearance'
 import type { VaultTree } from '../file-tree-ops'
 import { moveWithin, placeInto } from '../tree-order'
@@ -377,6 +378,10 @@ export function FileTree({
                   cancelPeek()
                   ev.dataTransfer.setData('text/plain', row.node.path)
                   ev.dataTransfer.effectAllowed = 'move'
+                  // A file can also be dropped on a pane, to open it there.
+                  if (row.node.kind === 'file') {
+                    beginNativePaneDrag({ kind: 'path', path: row.node.path }, nameOf(row.node.path).replace(/\.md$/i, ''))
+                  }
                 }}
                 onDragOverRow={(ev) => {
                   ev.preventDefault()

@@ -21,6 +21,7 @@ import { linkCompletion, type LinkCandidate } from './link-complete'
 import { editorTheme, markdownHighlighting } from './theme'
 import { findInNote, openFind } from './find'
 import type { EditorHandle } from './editor-handle'
+import { pressOrDrag } from '../../ui/press-or-drag'
 
 /**
  * The CodeMirror wrapper.
@@ -41,6 +42,8 @@ type EditorOptions = {
   onSave: () => void
   /** Called when a wikilink is clicked, with the target and any `#heading`. */
   onOpenLink: (target: string, heading: string | null) => void
+  /** A link was dragged rather than clicked, and the pointer is now at x, y. */
+  onDragLink?: (target: string, heading: string | null, x: number, y: number) => void
   readOnly?: boolean
   /** Note names offered after typing `[[`. Read lazily, so it stays current. */
   getLinkCandidates?: () => readonly LinkCandidate[]
@@ -95,6 +98,18 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
    * the browser through the window-open handler, which is the one path in the
    * app allowed to open anything outside it.
    */
+  /**
+   * Follow a link when the press is released, or hand it over as a drag when
+   * the pointer moves first - dragged onto a pane, it opens there. The press
+   * itself is swallowed either way, so the caret never lands in the link.
+   */
+  const followOrDrag = (event: MouseEvent, target: string, heading: string | null): void => {
+    const open = (): void => options.onOpenLink(target, heading)
+    const drag = options.onDragLink
+    if (drag === undefined) open()
+    else pressOrDrag(event, { onClick: open, onDrag: (x, y) => drag(target, heading, x, y) })
+  }
+
   const linkClick = EditorView.domEventHandlers({
     mousedown: (event, view) => {
       const target = event.target as HTMLElement | null
@@ -106,7 +121,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         const name = parsed?.[1]?.trim()
         if (name === undefined || name === '') return false
         event.preventDefault()
-        options.onOpenLink(name, parsed?.[2]?.trim() ?? null)
+        followOrDrag(event, name, parsed?.[2]?.trim() ?? null)
         return true
       }
 
@@ -142,7 +157,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       } catch {
         // A stray '%' is not an escape; take the path as written.
       }
-      options.onOpenLink(decoded.replace(/\.md$/i, ''), heading === '' ? null : heading)
+      followOrDrag(event, decoded.replace(/\.md$/i, ''), heading === '' ? null : heading)
       return true
     },
   })

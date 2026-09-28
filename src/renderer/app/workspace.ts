@@ -1,4 +1,5 @@
 import { Events } from './events'
+import type { DropZone } from './pane-drop'
 
 /**
  * The workspace tree: split -> tabs -> leaf.
@@ -267,6 +268,78 @@ export class Workspace extends Events<WorkspaceEvents> {
     this.trigger('layout-change')
   }
 
+  /**
+   * Put something dropped on a pane into it: as a tab for the centre, or as a
+   * new pane on that side, taking half of the pane it was dropped on - the
+   * area the drop preview showed. The source is a tab being moved, or a view
+   * to open. Returns the leaf that ends up there, or null for a drop that
+   * does nothing (a pane's only tab dropped on its own edge).
+   */
+  placeInPane(
+    tabsId: string,
+    zone: DropZone,
+    source: { leafId: string } | { type: string; state: Record<string, unknown> },
+  ): LeafNode | null {
+    const target = this.findTabs(tabsId)
+    if (!target) return null
+
+    let leaf: LeafNode
+    let from: TabsNode | null = null
+    if ('leafId' in source) {
+      from = this.tabsContaining(source.leafId)
+      const moving = this.getLeaf(source.leafId)
+      if (!from || !moving) return null
+      if (zone === 'center') {
+        if (from !== target) this.moveLeaf(moving.id, target.id)
+        this.setActiveLeaf(moving.id)
+        this.trigger('layout-change')
+        return moving
+      }
+      if (from === target && target.children.length === 1) return null
+      from.children.splice(from.children.indexOf(moving), 1)
+      from.active = Math.max(0, Math.min(from.active, from.children.length - 1))
+      leaf = moving
+    } else {
+      if (zone === 'center') {
+        const same = JSON.stringify(source.state)
+        const existing = target.children.find((child) => child.type === source.type && JSON.stringify(child.state) === same)
+        if (existing) {
+          this.setActiveLeaf(existing.id)
+          return existing
+        }
+        leaf = makeLeaf(source.type, source.state)
+        target.children.push(leaf)
+        target.active = target.children.length - 1
+        this.setActiveLeaf(leaf.id)
+        this.trigger('layout-change')
+        return leaf
+      }
+      leaf = makeLeaf(source.type, source.state)
+    }
+
+    const pane = makeTabs([leaf], 0)
+    const direction: SplitNode['direction'] = zone === 'left' || zone === 'right' ? 'vertical' : 'horizontal'
+    const before = zone === 'left' || zone === 'top'
+    const parent = this.parentOf(target.id)
+    if (parent !== null && parent.direction === direction) {
+      // A sibling in the same row: halve the pane dropped on, leave the rest.
+      const at = parent.children.indexOf(target)
+      const half = (parent.sizes[at] ?? 1 / parent.children.length) / 2
+      parent.children.splice(before ? at : at + 1, 0, pane)
+      parent.sizes.splice(at, 1, half, half)
+    } else {
+      const split = makeSplit(direction, before ? [pane, target] : [target, pane])
+      if (parent === null) this.root = split
+      else parent.children[parent.children.indexOf(target)] = split
+    }
+    // A tab dragged out of a pane can leave that pane empty.
+    if (from !== null && from.children.length === 0) this.pruneEmpty()
+
+    this.setActiveLeaf(leaf.id)
+    this.trigger('layout-change')
+    return leaf
+  }
+
   setSizes(splitId: string, sizes: number[]): void {
     const node = this.findNode(splitId)
     if (node?.kind !== 'split') return
@@ -343,11 +416,19 @@ export class Workspace extends Events<WorkspaceEvents> {
     const prune = (node: WorkspaceNode): WorkspaceNode | null => {
       if (node.kind === 'leaf') return node
       if (node.kind === 'tabs') return node.children.length > 0 ? node : null
-      const kept = node.children.map(prune).filter((child): child is WorkspaceNode => child !== null)
+      const results = node.children.map(prune)
+      const kept = results.filter((child): child is WorkspaceNode => child !== null)
       if (kept.length === 0) return null
       if (kept.length === 1) return kept[0] ?? null
+      if (kept.length !== node.children.length) {
+        // The panes that stay keep their proportions to each other; only the
+        // room the pruned ones had is shared out. Evening every split out on
+        // each prune reset every divider in the window whenever a tab closed.
+        const sizes = node.sizes.filter((_, i) => results[i] !== null)
+        const total = sizes.reduce((a, b) => a + b, 0)
+        node.sizes = total > 0 && sizes.length === kept.length ? sizes.map((size) => size / total) : evenSizes(kept.length)
+      }
       node.children = kept
-      node.sizes = evenSizes(kept.length)
       return node
     }
 

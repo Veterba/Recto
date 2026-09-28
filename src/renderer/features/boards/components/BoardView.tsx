@@ -269,6 +269,8 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
             <section
               className={`board__col${drop?.column === column.id ? ' is-target' : ''}`}
               key={column.id}
+              // A note dragged onto a column becomes a card, not a new pane.
+              data-accepts-drop
               onDragOver={allowDrop(column.id, list.length)}
               onDrop={onDropInto(column.id, list.length)}
             >

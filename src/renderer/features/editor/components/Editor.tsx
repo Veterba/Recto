@@ -18,6 +18,7 @@ type EditorProps = {
   onChange: (value: string) => void
   onSave: () => void
   onOpenLink: (target: string, heading: string | null) => void
+  onDragLink?: (target: string, heading: string | null, x: number, y: number) => void
   getLinkCandidates?: () => readonly LinkCandidate[]
   onSelectionChange?: () => void
   onFoldsChange?: (lines: number[]) => void
@@ -32,6 +33,7 @@ export function Editor({
   onChange,
   onSave,
   onOpenLink,
+  onDragLink,
   getLinkCandidates,
   onSelectionChange,
   onFoldsChange,
@@ -48,6 +50,7 @@ export function Editor({
     onChange,
     onSave,
     onOpenLink,
+    onDragLink,
     onReady,
     getLinkCandidates,
     onSelectionChange,
@@ -59,6 +62,7 @@ export function Editor({
     onChange,
     onSave,
     onOpenLink,
+    onDragLink,
     onReady,
     getLinkCandidates,
     onSelectionChange,
@@ -76,6 +80,7 @@ export function Editor({
       onChange: (value) => callbacks.current.onChange(value),
       onSave: () => callbacks.current.onSave(),
       onOpenLink: (target, heading) => callbacks.current.onOpenLink(target, heading),
+      onDragLink: (target, heading, x, y) => callbacks.current.onDragLink?.(target, heading, x, y),
       getLinkCandidates: () => callbacks.current.getLinkCandidates?.() ?? [],
       onSelectionChange: () => callbacks.current.onSelectionChange?.(),
       onFoldsChange: (lines) => callbacks.current.onFoldsChange?.(lines),

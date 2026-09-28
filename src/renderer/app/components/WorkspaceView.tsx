@@ -4,6 +4,8 @@ import type { SplitNode, TabsNode, Workspace, WorkspaceNode } from '../workspace
 import { Icon } from '../../ui/Icon'
 import { Tip } from '../../ui/Tip'
 import { ViewBoundary } from './ViewBoundary'
+import { beginPaneDrag } from '../pane-drag'
+import { pressOrDrag } from '../../ui/press-or-drag'
 
 /**
  * Renders the workspace tree. Recursive and dumb: it reads the tree and calls
@@ -98,7 +100,7 @@ function Tabs({ workspace, node }: { workspace: Workspace; node: TabsNode; revis
   const isFocusedGroup = active !== undefined && active.id === activeLeafId
 
   return (
-    <div className={`tabs${isFocusedGroup ? ' is-focused' : ''}`}>
+    <div className={`tabs${isFocusedGroup ? ' is-focused' : ''}`} data-tabs-id={node.id}>
       <div className="tabs__bar">
         <div className="tabs__strip" role="tablist">
           {node.children.map((leaf, i) => (
@@ -109,6 +111,13 @@ function Tabs({ workspace, node }: { workspace: Workspace; node: TabsNode; revis
               tabIndex={0}
               className={`tab${i === node.active ? ' is-active' : ''}`}
               onMouseDown={() => workspace.setActiveTab(node.id, i)}
+              // Dragged onto a pane, the tab moves there - or splits it.
+              onPointerDown={(ev) => {
+                if ((ev.target as HTMLElement).closest('.tab__close') !== null) return
+                pressOrDrag(ev, {
+                  onDrag: (x, y) => beginPaneDrag({ kind: 'leaf', leafId: leaf.id }, viewTitle(leaf.type, leaf.state), x, y),
+                })
+              }}
               onKeyDown={(ev) => {
                 if (ev.key === 'Enter' || ev.key === ' ') workspace.setActiveTab(node.id, i)
               }}

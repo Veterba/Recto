@@ -3,6 +3,8 @@ import type { SearchResult } from '@shared/index-results'
 import { api } from '../../../app/api'
 import { plainSnippet } from '../snippet'
 import { pickerKeyDown } from '../../../ui/picker'
+import { pressOrDrag } from '../../../ui/press-or-drag'
+import { beginPaneDrag } from '../../../app/pane-drag'
 import { IPC } from '@shared/ipc'
 
 /**
@@ -93,7 +95,19 @@ export function SearchPanel({ open, onClose, onOpenFile }: Props): React.ReactEl
                 onMouseEnter={() => setCursor(i)}
                 onMouseDown={(ev) => {
                   ev.preventDefault()
-                  commit(i)
+                  // A click opens it; dragged out, it goes to the pane it is dropped on.
+                  pressOrDrag(ev, {
+                    onClick: () => commit(i),
+                    onDrag: (x, y) => {
+                      onClose()
+                      beginPaneDrag(
+                        { kind: 'path', path: hit.path },
+                        hit.path.slice(hit.path.lastIndexOf('/') + 1).replace(/\.md$/, ''),
+                        x,
+                        y,
+                      )
+                    },
+                  })
                 }}
               >
                 <span className="search-result__name">{hit.path.slice(hit.path.lastIndexOf('/') + 1).replace(/\.md$/, '')}</span>

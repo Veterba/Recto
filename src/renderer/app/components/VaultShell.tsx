@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ATTACHMENTS_FOLDER, type VaultInfo } from '@shared/vault'
+import { IPC } from '@shared/ipc'
+import { api } from '../api'
 import { Breadcrumb } from './Breadcrumb'
 import { CommandPalette } from './CommandPalette'
 import { ShellWindows } from './ShellWindows'
 import { Sidebar, SidebarStub } from './Sidebar'
 import { StatusBar } from './StatusBar'
 import { WorkspaceView } from './WorkspaceView'
+import { PaneDropOverlay } from './PaneDropOverlay'
+import { setPaneDropHandler } from '../pane-drag'
+import type { DropZone } from '../pane-drop'
 import { registerStubViews } from './stub-views'
 import { useAppearance, type Theme } from '../appearance'
 import { commands } from '../commands'
@@ -23,7 +28,7 @@ import { useShellKeys } from '../hooks/use-shell-keys'
 import { useShellCreate } from '../hooks/use-shell-create'
 import { fuzzyMatch } from '../../ui/fuzzy'
 import { FileTree, allFilePaths, allFolderPaths, filterTree, noteEntries, notePaths } from '../../features/file-tree'
-import type { LinkCandidate } from '../../features/editor'
+import { focusEditorOnOpen, type LinkCandidate } from '../../features/editor'
 import { QuickSwitcher, SearchPanel } from '../../features/search'
 import { SettingsDialog, SidebarThemePicker } from '../../features/settings'
 import { TemplatePicker, useDailyNoteAutoCreate, useTemplateActions, useTemplateSettings } from '../../features/templates'
@@ -186,6 +191,28 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   }, [])
 
   // --- actions ------------------------------------------------------------
+
+  /**
+   * A drop on a pane lands in the workspace on screen: a dragged tab moves,
+   * a note or a link's target opens, beside the pane or in it.
+   */
+  const activeRef = useRef(active)
+  activeRef.current = active
+  useEffect(() => {
+    const open = (tabsId: string, zone: DropZone, path: string, heading?: string | null): void => {
+      focusEditorOnOpen()
+      activeRef.current?.placeInPane(tabsId, zone, { type: 'markdown', state: heading ? { path, heading } : { path } })
+    }
+    setPaneDropHandler((payload, tabsId, zone) => {
+      if (payload.kind === 'leaf') activeRef.current?.placeInPane(tabsId, zone, { leafId: payload.leafId })
+      else if (payload.kind === 'path') open(tabsId, zone, payload.path, payload.heading)
+      else
+        void api.invoke(IPC.indexResolveLink, payload.target).then((resolved) => {
+          if (resolved !== null) open(tabsId, zone, resolved, payload.heading)
+        })
+    })
+    return () => setPaneDropHandler(null)
+  }, [])
 
   // The link handler is created once, so it reads the current openFile via a ref.
   const openFileRef = useRef(openFile)
@@ -425,6 +452,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       <CommandPalette registry={commands} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={openFile} />
       <QuickSwitcher open={switcherOpen} roots={tree.roots} onClose={() => setSwitcherOpen(false)} onOpen={openFile} />
+      <PaneDropOverlay />
     </div>
   )
 }

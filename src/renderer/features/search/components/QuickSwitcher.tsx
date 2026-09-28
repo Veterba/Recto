@@ -4,6 +4,8 @@ import { fuzzyFilter } from '../../../ui/fuzzy'
 import { noteEntries } from '../../file-tree'
 import { Highlight } from '../../../app/components/CommandPalette'
 import { pickerKeyDown, usePicker, useScrollSelected } from '../../../ui/picker'
+import { pressOrDrag } from '../../../ui/press-or-drag'
+import { beginPaneDrag } from '../../../app/pane-drag'
 
 /**
  * Jump to any note by name (⌘O).
@@ -72,7 +74,14 @@ export function QuickSwitcher({ open, roots, onClose, onOpen }: Props): React.Re
                 onMouseEnter={() => setCursor(i)}
                 onMouseDown={(ev) => {
                   ev.preventDefault()
-                  commit(i)
+                  // A click opens it; dragged out, it goes to the pane it is dropped on.
+                  pressOrDrag(ev, {
+                    onClick: () => commit(i),
+                    onDrag: (x, y) => {
+                      onClose()
+                      beginPaneDrag({ kind: 'path', path: hit.item.path }, hit.item.name, x, y)
+                    },
+                  })
                 }}
               >
                 <span className="palette__name">
