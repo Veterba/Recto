@@ -392,6 +392,11 @@ function MarkdownEditor({
           const ranges = handle.current?.getAuthors()
           if (ranges !== undefined) saveAuthors(path, ranges)
         }}
+        // With a split open, the editor you are in is not necessarily the one
+        // that mounted last, and editor commands must reach the one you are in.
+        onFocus={() => {
+          if (handle.current !== null) activeHandle = handle.current
+        }}
         onReady={(editor: EditorHandle) => {
           handle.current = editor
           activeHandle = editor

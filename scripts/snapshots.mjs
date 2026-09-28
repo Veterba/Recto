@@ -196,6 +196,20 @@ async function screens(page, dir) {
   await shoot(page, dir, '18-statistics', 3000)
   await page.keyboard.press('Escape')
   await page.waitForSelector('.home__live', { state: 'detached' })
+
+  // Find in the note: the card, then the card with replace.
+  await page.evaluate(() => document.querySelector('.cm-content')?.focus())
+  await key(page, 'Mod+F')
+  await page.waitForSelector('.find')
+  await page.keyboard.type('soil')
+  await page.waitForFunction(() => document.querySelector('.find__count')?.textContent?.includes('/'))
+  await shoot(page, dir, '19-find-bar')
+  await key(page, 'Mod+Alt+F')
+  await page.waitForSelector('.find__row--replace:not([hidden])')
+  await page.keyboard.type('earth')
+  await shoot(page, dir, '20-find-replace')
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('.find', { state: 'detached' })
 }
 
 /**

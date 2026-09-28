@@ -7,6 +7,8 @@ import './styles/properties.css'
 import './styles/blocks.css'
 import './styles/structure.css'
 import './styles/writing.css'
+import '@fontsource/geist-mono/500.css'
+import './styles/find.css'
 
 export * from './components/History'
 export * from './components/MarkdownView'

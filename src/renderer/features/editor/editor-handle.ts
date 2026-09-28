@@ -58,6 +58,7 @@ export type EditorHandle = {
   focus: () => void
   undo: () => void
   redo: () => void
-  openSearch: () => void
+  /** Open the find bar, with the replace row when `replace` is set. */
+  openFind: (replace: boolean) => void
   destroy: () => void
 }

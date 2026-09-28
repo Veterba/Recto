@@ -22,6 +22,7 @@ type EditorProps = {
   onSelectionChange?: () => void
   onFoldsChange?: (lines: number[]) => void
   onAuthorsChange?: () => void
+  onFocus?: () => void
   onReady?: (handle: EditorHandle) => void
 }
 
@@ -35,6 +36,7 @@ export function Editor({
   onSelectionChange,
   onFoldsChange,
   onAuthorsChange,
+  onFocus,
   onReady,
 }: EditorProps): React.ReactElement {
   const host = useRef<HTMLDivElement | null>(null)
@@ -42,8 +44,28 @@ export function Editor({
 
   // Latest callbacks, read through the ref, so identity changes on re-render
   // cannot cause a remount.
-  const callbacks = useRef({ onChange, onSave, onOpenLink, onReady, getLinkCandidates, onSelectionChange, onFoldsChange, onAuthorsChange })
-  callbacks.current = { onChange, onSave, onOpenLink, onReady, getLinkCandidates, onSelectionChange, onFoldsChange, onAuthorsChange }
+  const callbacks = useRef({
+    onChange,
+    onSave,
+    onOpenLink,
+    onReady,
+    getLinkCandidates,
+    onSelectionChange,
+    onFoldsChange,
+    onAuthorsChange,
+    onFocus,
+  })
+  callbacks.current = {
+    onChange,
+    onSave,
+    onOpenLink,
+    onReady,
+    getLinkCandidates,
+    onSelectionChange,
+    onFoldsChange,
+    onAuthorsChange,
+    onFocus,
+  }
 
   useEffect(() => {
     const parent = host.current
@@ -58,6 +80,7 @@ export function Editor({
       onSelectionChange: () => callbacks.current.onSelectionChange?.(),
       onFoldsChange: (lines) => callbacks.current.onFoldsChange?.(lines),
       onAuthorsChange: () => callbacks.current.onAuthorsChange?.(),
+      onFocus: () => callbacks.current.onFocus?.(),
     })
     handle.current = editor
     callbacks.current.onReady?.(editor)

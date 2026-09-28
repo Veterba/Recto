@@ -3,8 +3,7 @@ import { indentListItems, newlineFromIndent } from './list-indent'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { foldedRanges, indentOnInput, syntaxTree } from '@codemirror/language'
-import { search, searchKeymap } from '@codemirror/search'
-import { Compartment, EditorState } from '@codemirror/state'
+import { Compartment, EditorState, type Extension } from '@codemirror/state'
 import { EditorView, drawSelection, dropCursor, highlightActiveLine, keymap, rectangularSelection } from '@codemirror/view'
 import { vim } from '@replit/codemirror-vim'
 import { activeFormats } from './active-formats'
@@ -20,6 +19,7 @@ import { livePreview, livePreviewCompartment } from './live-preview'
 import { setLivePreview } from './live-preview-state'
 import { linkCompletion, type LinkCandidate } from './link-complete'
 import { editorTheme, markdownHighlighting } from './theme'
+import { findInNote, openFind } from './find'
 import type { EditorHandle } from './editor-handle'
 
 /**
@@ -51,6 +51,8 @@ type EditorOptions = {
   onFoldsChange?: (lines: number[]) => void
   /** Fires when authorship changes - text marked, or a marked passage edited. */
   onAuthorsChange?: () => void
+  /** Focus entered this editor - its text or its find bar. */
+  onFocus?: () => void
 }
 
 const editable = new Compartment()
@@ -60,6 +62,14 @@ const editable = new Compartment()
  * history every time someone tried it out.
  */
 const vimMode = new Compartment()
+/**
+ * No status line. Vim's status panel reads its plugin while being built, and
+ * switched on through the compartment - which is how it always arrives - the
+ * panel is built first, throws, and CodeMirror turns off panels for the whole
+ * editor: no find bar, and no prompt for Vim's own `/`. The status line never
+ * showed for the same reason.
+ */
+const vimExtension = (): Extension => vim({ status: false })
 
 export function createEditor(parent: HTMLElement, options: EditorOptions): EditorHandle {
   /** Where a `[text](target)` link goes, given a position inside its label. */
@@ -178,7 +188,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         noteStructure(),
         // iA Writer's tools: focus, typewriter, syntax, style, authors.
         writingTools(),
-        search({ top: true }),
+        findInNote(),
         ...(options.getLinkCandidates === undefined ? [] : [linkCompletion(options.getLinkCandidates)]),
         EditorState.allowMultipleSelections.of(true),
         // Markdown with GFM-ish extensions; the grammar is CM's own, so
@@ -201,11 +211,10 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         EditorView.lineWrapping,
         editable.of(EditorView.editable.of(options.readOnly !== true)),
         // Before the default keymap, or Vim's bindings lose every collision.
-        vimMode.of(options.vim === true ? vim({ status: true }) : []),
+        vimMode.of(options.vim === true ? vimExtension() : []),
         // App shortcuts are registered in the command registry and handled by
         // the window listener, so only editor-native bindings live here.
         keymap.of([
-          ...searchKeymap,
           ...historyKeymap,
           // No `foldKeymap`: folding is app commands now (⌘. and ⌘⌥[ / ⌘⌥]),
           // and CodeMirror's own ⌘⌥[ folded by different rules - it would have
@@ -263,6 +272,10 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       ],
     }),
   })
+
+  // `focusin` rather than CodeMirror's focus handler, which only sees the text:
+  // the find bar is part of this editor too.
+  view.dom.addEventListener('focusin', () => options.onFocus?.())
 
   return {
     getValue: () => view.state.doc.toString(),
@@ -380,7 +393,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
     },
 
     setVim: (on) => {
-      view.dispatch({ effects: vimMode.reconfigure(on ? vim({ status: true }) : []) })
+      view.dispatch({ effects: vimMode.reconfigure(on ? vimExtension() : []) })
     },
 
     focus: () => view.focus(),
@@ -390,13 +403,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
     redo: () => {
       redo(view)
     },
-    openSearch: () => {
-      // The search panel's own keymap owns Mod+F; this is the menu path in.
-      view.focus()
-      view.dispatch({ effects: [] })
-      const event = new KeyboardEvent('keydown', { key: 'f', metaKey: true, ctrlKey: true, bubbles: true })
-      view.contentDOM.dispatchEvent(event)
-    },
+    openFind: (replace) => openFind(view, replace),
     destroy: () => view.destroy(),
   }
 }

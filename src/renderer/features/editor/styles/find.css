@@ -1,0 +1,218 @@
+/* ---------- find in note: a glass card floating over the bottom of the note ---------- */
+
+/* CodeMirror's bottom panel strip, lifted out of the layout so the card floats
+   over the text instead of pushing it up. It stays a panel as far as
+   CodeMirror knows, which is what makes its height a scroll margin: the
+   current match always scrolls into view above the card. Only the card takes
+   clicks; the strip around it lets them through to the text. */
+.cm-editor .cm-panels-bottom:has(> .find) {
+  position: absolute;
+  bottom: 0;
+  padding: var(--size-2) var(--size-4) var(--size-4);
+  background: none;
+  border: none;
+  pointer-events: none;
+}
+/* Room for the last lines to scroll up past the card. */
+.cm-editor:has(.cm-panels .find) .cm-scroller {
+  padding-bottom: max(40vh, 240px);
+}
+
+.find {
+  width: min(440px, 100%);
+  margin: 0 auto;
+  pointer-events: auto;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-primary);
+  /* The material is `.glass-surface`; the shape is the card's. */
+  border-radius: 24px;
+  animation: find-in 220ms var(--ease-pop) both;
+}
+.find.is-closing {
+  animation: find-out 140ms var(--ease) both;
+}
+@keyframes find-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+}
+@keyframes find-out {
+  to {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+}
+@keyframes find-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes find-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+/* Reduced motion keeps the fade and drops the travel. The app turns every
+   animation off under it; a fade is not movement, so this one is let back. */
+@media (prefers-reduced-motion: reduce) {
+  .cm-editor .find {
+    animation: find-fade-in 160ms linear both !important;
+  }
+  .cm-editor .find.is-closing {
+    animation: find-fade-out 120ms linear both !important;
+  }
+}
+
+.find__row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: 0 var(--size-4) 0 20px;
+  height: 48px;
+}
+.find__row[hidden],
+.find__actions[hidden] {
+  display: none;
+}
+.find__row--replace,
+.find__tools {
+  border-top: 1px solid var(--glass-border);
+}
+.cm-editor .cm-panel .find__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  outline: none;
+}
+.cm-editor .cm-panel .find__input::placeholder {
+  color: var(--text-muted);
+}
+.cm-editor .cm-panel .find__input[aria-invalid='true'] {
+  color: var(--danger);
+}
+.find__count {
+  font-family: 'Geist Mono', var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.find__tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--size-2) var(--size-2) var(--size-2) var(--size-3);
+}
+.find__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  margin-left: auto;
+}
+.cm-editor .cm-panel .find__tool,
+.cm-editor .cm-panel .find__secondary,
+.cm-editor .cm-panel .find__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  transition:
+    background-color var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease),
+    box-shadow var(--anim-fast) var(--ease),
+    transform var(--anim-fast) var(--ease);
+}
+.cm-editor .cm-panel .find__tool {
+  min-width: 32px;
+  padding: 0 6px;
+  color: var(--text-primary);
+  background: transparent;
+  border-radius: 10px;
+}
+.cm-editor .cm-panel .find__toggle {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.cm-editor .cm-panel .find__tool:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+}
+/* The only colour on the card: a toggle that is on, and muted at that. */
+.cm-editor .cm-panel .find__toggle[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+.cm-editor .cm-panel .find__secondary {
+  padding: 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  border-radius: 999px;
+}
+.cm-editor .cm-panel .find__secondary:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+}
+/* The primary action: a pill in ink with an ordinary soft shadow - in the
+   dark, a quieter translucent light fill. */
+.cm-editor .cm-panel .find__pill {
+  min-width: 64px;
+  padding: 0 18px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glass-primary-fg);
+  background: var(--glass-primary-bg);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 var(--glass-primary-highlight),
+    0 1px 2px rgb(0 0 0 / 0.12),
+    0 4px 12px -4px rgb(0 0 0 / 0.22);
+}
+.cm-editor .cm-panel .find__pill:hover {
+  background: color-mix(in srgb, var(--glass-primary-bg) 86%, var(--glass-primary-fg));
+}
+.cm-editor .cm-panel .find__pill:active {
+  transform: scale(0.97);
+}
+
+/* One tick per match along the right edge, over the scrollbar. */
+.find-marks {
+  position: absolute;
+  right: 0;
+  width: 10px;
+  pointer-events: none;
+  z-index: 2;
+}
+.find-marks[hidden] {
+  display: none;
+}
+.find-marks__tick {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0.8;
+}

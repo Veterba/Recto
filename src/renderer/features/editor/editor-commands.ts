@@ -21,7 +21,13 @@ import { IPC } from '@shared/ipc'
  * Checking merely that an editor exists is not enough: the chord would then be
  * claimed by the editor while you were typing in the sidebar's search box.
  */
-const editorHasFocus = (): boolean => {
+const editorHasFocus = (): boolean => inEditor() && document.activeElement?.closest('.cm-panels') === null
+
+/**
+ * Focus is in an editor, its find bar included. Only find wants the bar:
+ * ⌘B there would bold the note while you were typing a query.
+ */
+const inEditor = (): boolean => {
   if (getActiveEditor() === null) return false
   const active = document.activeElement
   return active !== null && active.closest('.cm-editor') !== null
@@ -240,8 +246,17 @@ export function registerEditorCommands(registry: CommandRegistry, onToggleLivePr
       section: 'Editor',
       scope: 'editor',
       hotkey: 'Mod+F',
-      isAvailable: editorHasFocus,
-      run: () => getActiveEditor()?.openSearch(),
+      isAvailable: inEditor,
+      run: () => getActiveEditor()?.openFind(false),
+    },
+    {
+      id: 'editor:replace',
+      name: 'Find and replace in note',
+      section: 'Editor',
+      scope: 'editor',
+      hotkey: 'Mod+Alt+F',
+      isAvailable: inEditor,
+      run: () => getActiveEditor()?.openFind(true),
     },
   ]
 
