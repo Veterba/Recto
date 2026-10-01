@@ -4,6 +4,7 @@ import type { SplitNode, TabsNode, Workspace, WorkspaceNode } from '../workspace
 import { Icon } from '../../ui/Icon'
 import { Tip } from '../../ui/Tip'
 import { ViewBoundary } from './ViewBoundary'
+import { boundaryOf, evenPair, resizeSplit } from '../split-resize'
 import { beginPaneDrag } from '../pane-drag'
 import { pressOrDrag } from '../../ui/press-or-drag'
 
@@ -31,6 +32,24 @@ export function WorkspaceView({ workspace, node, revision }: Props): React.React
   return null
 }
 
+/**
+ * Pane sizes change without animating while they are being set by hand.
+ *
+ * Panes carry a flex-basis transition so focus mode can fold them away; left
+ * on, every drag step, double-click and arrow key animated over 420ms behind
+ * the pointer. The class goes on before the change and comes off a frame after
+ * it has rendered, so the final size is not animated either.
+ */
+const SIZING = 'is-sizing-panes'
+function sizingEnds(): void {
+  requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove(SIZING)))
+}
+function sizeInstantly(apply: () => void): void {
+  document.body.classList.add(SIZING)
+  apply()
+  sizingEnds()
+}
+
 function Split({
   workspace,
   node,
@@ -43,34 +62,78 @@ function Split({
   const ref = useRef<HTMLDivElement | null>(null)
   const horizontal = node.direction === 'horizontal'
 
-  // Drag a divider: recompute the two adjacent fractions from pointer position.
+  /**
+   * Drag a divider.
+   *
+   * The container's rect is taken once, at the press, and every move places
+   * the divider at the pointer's position in it - absolute, never summed
+   * deltas - keeping whatever offset the grab had from the line, so pressing
+   * does not jump it. Moves are applied once a frame. The pointer is captured,
+   * so a release outside the window still ends the drag.
+   */
   const startDrag = useCallback(
-    (index: number, ev: React.PointerEvent) => {
+    (index: number, ev: React.PointerEvent<HTMLDivElement>) => {
+      if (ev.button !== 0) return
+      ev.preventDefault()
+      const container = ref.current
+      if (!container) return
+      const divider = ev.currentTarget
+      const rect = container.getBoundingClientRect()
+      const total = horizontal ? rect.height : rect.width
+      const origin = horizontal ? rect.top : rect.left
+      const sizes = [...node.sizes]
+      const along = (e: PointerEvent | React.PointerEvent): number => (horizontal ? e.clientY : e.clientX) - origin
+      const grab = boundaryOf(sizes, index, total) - along(ev)
+      let pending: number | null = null
+      let frame = 0
+
+      const apply = (): void => {
+        frame = 0
+        if (pending === null) return
+        workspace.setSizes(node.id, resizeSplit({ sizes, index, total, boundaryPx: pending + grab }))
+        pending = null
+      }
+      const onMove = (move: PointerEvent): void => {
+        pending = along(move)
+        if (frame === 0) frame = requestAnimationFrame(apply)
+      }
+      const onEnd = (): void => {
+        divider.removeEventListener('pointermove', onMove)
+        divider.removeEventListener('pointerup', onEnd)
+        divider.removeEventListener('lostpointercapture', onEnd)
+        if (frame !== 0) cancelAnimationFrame(frame)
+        apply()
+        document.body.classList.remove('is-resizing', cursorClass)
+        sizingEnds()
+      }
+      const cursorClass = horizontal ? 'is-resizing--row' : 'is-resizing--col'
+      divider.setPointerCapture(ev.pointerId)
+      document.body.classList.add('is-resizing', cursorClass, SIZING)
+      divider.addEventListener('pointermove', onMove)
+      divider.addEventListener('pointerup', onEnd)
+      divider.addEventListener('lostpointercapture', onEnd)
+    },
+    [workspace, node, horizontal],
+  )
+
+  /** Arrow keys nudge a focused divider; Shift for a bigger step. */
+  const nudge = useCallback(
+    (index: number, ev: React.KeyboardEvent<HTMLDivElement>) => {
+      const back = horizontal ? 'ArrowUp' : 'ArrowLeft'
+      const forward = horizontal ? 'ArrowDown' : 'ArrowRight'
+      if (ev.key !== back && ev.key !== forward) return
       ev.preventDefault()
       const container = ref.current
       if (!container) return
       const rect = container.getBoundingClientRect()
       const total = horizontal ? rect.height : rect.width
-      const start = horizontal ? ev.clientY - rect.top : ev.clientX - rect.left
-      const pair = (node.sizes[index] ?? 0) + (node.sizes[index + 1] ?? 0)
-
-      const onMove = (move: PointerEvent): void => {
-        const at = horizontal ? move.clientY - rect.top : move.clientX - rect.left
-        const delta = (at - start) / total
-        const first = Math.min(Math.max((node.sizes[index] ?? 0) + delta, 0.08), pair - 0.08)
-        const next = [...node.sizes]
-        next[index] = first
-        next[index + 1] = pair - first
-        workspace.setSizes(node.id, next)
-      }
-      const onUp = (): void => {
-        window.removeEventListener('pointermove', onMove)
-        window.removeEventListener('pointerup', onUp)
-        document.body.classList.remove('is-resizing')
-      }
-      document.body.classList.add('is-resizing')
-      window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onUp)
+      const step = (ev.shiftKey ? 64 : 16) * (ev.key === forward ? 1 : -1)
+      sizeInstantly(() =>
+        workspace.setSizes(
+          node.id,
+          resizeSplit({ sizes: node.sizes, index, total, boundaryPx: boundaryOf(node.sizes, index, total) + step }),
+        ),
+      )
     },
     [workspace, node, horizontal],
   )
@@ -84,8 +147,13 @@ function Split({
             <div
               className="split__divider"
               role="separator"
+              tabIndex={0}
+              aria-label="Resize panes"
               aria-orientation={horizontal ? 'horizontal' : 'vertical'}
+              aria-valuenow={Math.round(((node.sizes[i] ?? 0) / ((node.sizes[i] ?? 0) + (node.sizes[i + 1] ?? 0) || 1)) * 100)}
               onPointerDown={(ev) => startDrag(i, ev)}
+              onDoubleClick={() => sizeInstantly(() => workspace.setSizes(node.id, evenPair(node.sizes, i)))}
+              onKeyDown={(ev) => nudge(i, ev)}
             />
           )}
         </div>
