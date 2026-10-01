@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 // Stylesheets first: the build orders CSS by when modules are evaluated, and
 // these must come before every feature's own (imported from its index.ts).
 // Their order is the cascade: tokens, element rules, layout, the shell, then
@@ -36,8 +37,20 @@ import './styles/sidebar-colour.css'
 const root = document.getElementById('root')
 if (!root) throw new Error('missing #root')
 
-createRoot(root).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+// The bot's design page, in dev builds only. Imported by path, not through the
+// feature's index, so the production bundle never contains it.
+if (import.meta.env.DEV && location.pathname === '/dev/recto-bot') {
+  void import('../features/recto-bot/components/RectoBotDesign').then(({ RectoBotDesign }) =>
+    createRoot(root).render(
+      <StrictMode>
+        <RectoBotDesign />
+      </StrictMode>,
+    ),
+  )
+} else {
+  createRoot(root).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}

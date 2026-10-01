@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Recto bot animations</title>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,wght@1,400&family=Geist:wght@400;500&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f2ef;--card:#fbfbfa;--ink:#18181b;--paper:#fbfbfa;--muted:#8a8a90;--line:#e2e1dd}
+:root[data-theme=dark]{--bg:#121116;--card:#1a1920;--ink:#ecebf2;--paper:#1a1920;--muted:#8b8996;--line:#2a2833}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Geist,system-ui,sans-serif;padding:40px 24px}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font:italic 400 44px 'Bodoni Moda',Georgia,serif;margin:0 0 6px}
+.sub{color:var(--muted);margin:0 0 8px;max-width:740px;line-height:1.5}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+h2{font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:30px 0 12px}
+button{font:500 10.5px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.stage{height:180px;border-radius:10px;background:var(--bg);display:grid;place-items:center;position:relative}
+.c h3{font:500 14px Geist,sans-serif;margin:10px 0 3px}
+.c p{font-size:12.5px;line-height:1.45;color:var(--muted);margin:0}
+.rand{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:center}
+@media(max-width:760px){.rand{grid-template-columns:1fr}}
+.rand .stage{height:320px}
+.now{position:absolute;left:12px;top:10px;font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.bot{position:relative;perspective:600px;cursor:pointer}
+.rig{position:absolute;inset:0;transform-style:preserve-3d;transform-origin:50% 85%}
+.layer{position:absolute;inset:0}.layer svg{width:100%;height:100%;overflow:visible;display:block}
+</style></head><body><div class="wrap">
+<div class="top"><div><h1>Recto, every animation</h1>
+<p class="sub">Each card loops one behaviour so you don't have to wait. The big one at the top is the real thing: it picks behaviours at random with their real odds (the pencil ones are rare), and reacts to your cursor and clicks.</p></div>
+<button id="theme">dark</button></div>
+
+<h2>Random, as it will behave in the app</h2>
+<div class="c rand"><div class="stage" id="random"><span class="now" id="now"></span></div>
+<p style="font-size:13.5px;line-height:1.55;color:var(--muted)">Notices the cursor only when you move it nearby, loses interest after a few seconds, then does its own thing. Click it to make it curious. Pencil behaviours come up about once in every nine picks.</p></div>
+
+<h2>Eyes</h2><div class="grid" id="eyes"></div>
+<h2>Pencil</h2><div class="grid" id="pencil"></div>
+</div>
+
+<script>
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rnd=(a,b)=>a+Math.random()*(b-a),pick=a=>a[Math.floor(Math.random()*a.length)],lerp=(a,b,t)=>a+(b-a)*t;
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+let mouse={x:-9999,y:-9999,t:0};addEventListener('pointermove',e=>{const m=Math.hypot(e.clientX-mouse.x,e.clientY-mouse.y);mouse={x:e.clientX,y:e.clientY,t:m>2?performance.now():mouse.t}});
+document.getElementById('theme').onclick=e=>{const d=document.documentElement;const dk=d.dataset.theme!=='dark';d.dataset.theme=dk?'dark':'light';e.target.textContent=dk?'light':'dark'};
+class Spring{constructor(v=0,k=150,c=15){this.v=v;this.t=v;this.vel=0;this.k=k;this.c=c}step(dt){this.vel+=(-this.k*(this.v-this.t)-this.c*this.vel)*dt;this.v+=this.vel*dt;return this.v}}
+const PAGE='M-27 -30 Q-27 -36 -21 -36 L16 -36 L27 -25 L27 30 Q27 36 21 36 L-21 36 Q-27 36 -27 30 Z';
+
+const BEH={
+ daydream:['Daydreaming','Looks up and aside, lids a little low, gaze drifts.',4500,'eyes'],
+ bored:['Bored','Looks away and down, heavy lids, a sigh now and then.',4500,'eyes'],
+ eyeroll:['Eye roll','Eyes sweep up and over in an arc, then settle half-closed.',2000,'eyes'],
+ glance:['Glance','A quick look somewhere and back.',1400,'eyes'],
+ scan:['Reading','Eyes run along its own lines, line by line.',4300,'eyes'],
+ doze:['Dozing','Lids sink slowly, then it startles awake and looks around.',5600,'eyes'],
+ squint:['Suspicious','Narrows its eyes, lids slanted.',2600,'eyes'],
+ curious:['Curious','Wide eyes, a quick look, a tiny hop. Also on click.',1600,'eyes'],
+ idea:['An idea','Thinks, eyes widen, the pencil pops out, taps twice, hides.',5000,'pencil'],
+ write:['Writing it down','The pencil comes out and writes a new line on its own page.',5200,'pencil'],
+ chin:['Chin tap','Taps the pencil under its eyes while looking up, thinking hard.',4800,'pencil'],
+ point:['Pointing','Points the pencil at the paragraph next to it. For "has a comment".',3800,'pencil'],
+};
+const IDLE=[['daydream',.2],['bored',.18],['glance',.16],['scan',.13],['eyeroll',.08],['doze',.07],['squint',.07],['idea',.04],['write',.04],['chin',.03]];
+
+function makeBot(host,size,opts={}){
+ const bot=document.createElement('div');bot.className='bot';bot.style.width=size+'px';bot.style.height=size+'px';host.appendChild(bot);
+ const rig=document.createElement('div');rig.className='rig';bot.appendChild(rig);
+ const small=size<60,id=Math.random().toString(36).slice(2);
+ const L=(z,html)=>{const d=document.createElement('div');d.className='layer';d.dataset.z=z;d.innerHTML=`<svg viewBox="-60 -60 120 120">${html}</svg>`;rig.appendChild(d);return d};
+ const PEN=`<g class="pen"><rect x="-3.4" y="-17" width="6.8" height="27" rx="1.3" fill="var(--ink)" stroke="var(--paper)" stroke-width="1.5"/><path d="M-3.4 10 L0 17.5 L3.4 10 Z" fill="var(--ink)" stroke="var(--paper)" stroke-width="1.5" stroke-linejoin="round"/><rect x="-3.4" y="-17" width="6.8" height="4.2" fill="var(--paper)" opacity=".5"/></g>`;
+ const LpenBack=L(-6,PEN);
+ L(0,`<path d="${PAGE}" fill="var(--ink)"/><path d="M16 -36 L27 -25 L16 -25 Z" fill="var(--paper)" opacity=".2"/>`);
+ const Llines=L(2,`<g stroke="var(--paper)" stroke-width="2.6" stroke-linecap="round" fill="none"><path class="l1" d="M-15 15 L15 15" opacity=".28"/><path class="l2" d="M-15 22 L9 22" opacity=".28"/><path class="l3" d="M-15 29 L1 29" opacity=".28"/><path class="lw" opacity=".55"/></g>`);
+ const eyeSVG=s=>`<g><clipPath id="c${s}${id}"><polygon class="vis${s}"/></clipPath><rect class="ball${s}" fill="var(--paper)" clip-path="url(#c${s}${id})"/></g>`;
+ const Leyes=L(6,eyeSVG('L')+eyeSVG('R'));
+ const LpenFront=L(10,PEN);
+ const layers=[...rig.children];
+ const E=['L','R'].map(s=>({ball:Leyes.querySelector('.ball'+s),vis:Leyes.querySelector('.vis'+s)}));
+ const pens=[LpenBack.querySelector('.pen'),LpenFront.querySelector('.pen')];
+ const l2=Llines.querySelector('.l2'),lw=Llines.querySelector('.lw');
+ const S={ry:new Spring(0,60,10),rx:new Spring(0,60,10),hop:new Spring(0,240,16),sq:new Spring(1,300,15),gx:new Spring(0,420,30),gy:new Spring(0,420,30),
+  lid:new Spring(0,160,18),low:new Spring(0,160,18),slant:new Spring(0,120,14),wide:new Spring(1,200,16)};
+ let last=performance.now(),beh=null,behEnd=0,interest=0,target={x:0,y:0},nextSac=0,blinkT=-1,nextBlink=performance.now()+rnd(1500,3500),clickT=0,phaseT=0,data={};
+ const setBeh=(b)=>{beh=b;behEnd=performance.now()+BEH[b][2]*(opts.force?1:rnd(.85,1.2));phaseT=performance.now();data={};opts.onBeh&&opts.onBeh(b)};
+ const choose=()=>{if(opts.force)return setBeh(opts.force);let r=Math.random()*IDLE.reduce((a,b)=>a+b[1],0);for(const[b,w]of IDLE){if((r-=w)<0)return setBeh(b)}setBeh('glance')};
+ bot.addEventListener('click',()=>{clickT=performance.now();interest=1;if(!opts.force)setBeh('curious');S.sq.v=.86;S.hop.vel-=50});
+ choose();
+ // pencil pose: from tucked behind the corner to wherever the behaviour wants it
+ const TUCK={x:22,y:-42,r:38};
+ function penPose(pt){
+  const P=(x,y,r,front=0,vis=1)=>({x,y,r,front,vis});
+  const mix=(a,b,t)=>({x:lerp(a.x,b.x,t),y:lerp(a.y,b.y,t),r:lerp(a.r,b.r,t),front:t>.5?b.front:a.front,vis:lerp(a.vis??1,b.vis??1,t)});
+  const hidden=P(6,-6,38,0);            // fully behind the page, occluded by it
+  const outB=P(26,-60,32,0), outF=P(26,-60,32,1); // above the corner, clear of the page: safe to change layer
+  const seq=(steps)=>{let acc=0;for(let i=0;i<steps.length-1;i++){const d=steps[i+1][0];if(pt<acc+d)return mix(steps[i][1],steps[i+1][1],ease((pt-acc)/d));acc+=d}return steps[steps.length-1][1]};
+  switch(beh){
+   case 'idea':{const up=P(24,-54,30,0);const tap=pt>2.3&&pt<3.3?Math.abs(Math.sin((pt-2.3)*Math.PI*2))*-4:0;
+     return seq([[0,hidden],[1.5,hidden],[.45,up],[2.2,{...up,y:up.y+tap}],[.7,hidden]])}
+   case 'write':{
+     if(pt<.5)return mix(hidden,outB,ease(pt/.5));
+     if(pt<.8)return mix(outF,P(36,4,25,1),ease((pt-.5)/.3));
+     if(pt<1.1)return mix(P(36,4,25,1),P(8.2,13.6,25,1),ease((pt-.8)/.3));
+     if(pt<3.6){const k=(pt-1.1)/2.5;return P(8.2+k*14,13.6+Math.sin(pt*28)*1.1,25+Math.sin(pt*14)*3,1)}
+     if(pt<3.9)return mix(P(22.2,13.6,25,1),P(36,4,25,1),ease((pt-3.6)/.3));
+     if(pt<4.3)return mix(P(36,4,25,1),outF,ease((pt-3.9)/.4));
+     return mix(outB,hidden,ease(clamp((pt-4.3)/.6,0,1)))}
+   case 'chin':{const pos=P(7.8,18,160,1);const tap=pt>1&&pt<4?Math.max(0,Math.sin((pt-1)*Math.PI*2.5))*-3.5:0;
+     return seq([[0,hidden],[.5,outB],[.01,outF],[.3,P(40,-8,110,1)],[.3,pos],[3,{...pos,y:pos.y+tap}],[.3,P(40,-8,110,1)],[.3,outF],[.01,outB],[.5,hidden]])}
+   case 'point':{const pos=P(-40,-6,-90,1);const push=pt>.9&&pt<3.1?Math.max(0,Math.sin((pt-.9)*Math.PI*1.8))*-4:0;
+     return seq([[0,hidden],[.45,outB],[.01,outF],[.3,P(-6,-64,-40,1)],[.3,pos],[2.1,{...pos,x:pos.x+push}],[.3,P(-6,-64,-40,1)],[.3,outF],[.01,outB],[.45,hidden]])}
+  }
+  return hidden;
+ }
+ return now=>{
+  const dt=Math.min(.033,(now-last)/1000);last=now;const t=now/1000,pt=(now-phaseT)/1000;
+  const r=bot.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=mouse.x-cx,dy=mouse.y-cy,dist=Math.hypot(dx,dy);
+  const recent=now-mouse.t<1200,near=dist<Math.max(360,size*2.5),cursor={x:clamp(dx/220,-1,1),y:clamp(dy/220,-1,1)};
+  if(!opts.force){if(recent&&near)interest=Math.min(1,interest+dt*1.6);else interest=Math.max(0,interest-dt*.25);
+   if(!['curious','watch'].includes(beh)&&BEH[beh][3]==='eyes'&&interest>.55&&recent&&near&&Math.random()<.04){beh='watch';behEnd=now+rnd(2500,4500);phaseT=now;opts.onBeh&&opts.onBeh('watch')}}
+  if(now>behEnd||(beh==='watch'&&(!near||interest<.2)))choose();
+  let lid=0,low=0,slant=0,wide=1;S.sq.t=1;
+  switch(beh){
+   case 'watch':target=cursor;lid=.05;break;
+   case 'curious':target=opts.force?{x:Math.sin(t*2)*.6,y:0}:cursor;wide=1.22;if(pt<.1&&!data.h){S.hop.vel-=45;data.h=1}break;
+   case 'daydream':if(!data.d)data.d={x:pick([-1,1])*rnd(.5,.9),y:-rnd(.6,.95)};target={x:data.d.x+Math.sin(t*.7)*.12,y:data.d.y+Math.cos(t*.5)*.08};lid=.28;break;
+   case 'bored':if(!data.s)data.s=pick([-1,1]);target={x:data.s*.95,y:.45};lid=.48;if(pt%2.6<.5)S.sq.t=.93;break;
+   case 'eyeroll':{const p=clamp(pt/.9,0,1),a=Math.PI*(1-p);target={x:Math.cos(a)*.9,y:-Math.sin(a)*.95};lid=p>.95?.42:.12;break}
+   case 'glance':if(!data.g)data.g={x:pick([-1,1])*rnd(.6,1),y:rnd(-.7,.5)};target=pt<.7?data.g:{x:0,y:0};break;
+   case 'scan':{const lp=(pt*.7)%1,line=Math.floor(pt*.7)%3;target={x:-.75+lp*1.5,y:.55+line*.17};lid=.18;break}
+   case 'doze':{const sink=clamp(pt/3.2,0,1);lid=.15+sink*.8;target={x:0,y:.3};if(pt>3.6&&pt<3.75){lid=0;wide=1.25;if(!data.h){S.hop.vel-=45;data.h=1}}if(pt>3.75){lid=0;wide=1.12;target={x:Math.sin(pt*9)>0?.8:-.8,y:-.1}}break}
+   case 'squint':target=opts.force?{x:Math.sin(t*.8)*.5,y:0}:cursor;lid=.42;low=.32;slant=.5;break;
+   case 'idea':target=pt<1.5?{x:.6,y:-.9}:(pt<4.2?{x:.75,y:-.75}:{x:.3,y:-.2});lid=pt<1.5?.3:0;wide=pt>1.4&&pt<1.8?1.22:1;break;
+   case 'write':target=pt>1.1&&pt<3.6?{x:.05+(pt-1.1)/2.5*.7,y:.95}:{x:.4,y:-.3};lid=pt>1.1&&pt<3.6?.22:0;break;
+   case 'chin':target={x:-.3+Math.sin(pt*.8)*.25,y:-.95};lid=.25;break;
+   case 'point':target=pt>.6&&pt<3.2?{x:-1,y:.1}:{x:0,y:0};wide=pt>.9&&pt<1.4?1.15:1;break;
+  }
+  if(now>nextSac||Math.hypot(target.x-S.gx.t,target.y-S.gy.t)>.35){S.gx.t=target.x+rnd(-.05,.05);S.gy.t=target.y+rnd(-.04,.04);nextSac=now+rnd(180,520)}
+  S.ry.t=S.gx.v*5;S.rx.t=-S.gy.v*3.5;S.lid.t=lid;S.low.t=low;S.slant.t=slant;S.wide.t=wide;S.hop.t=0;
+  for(const k in S)S[k].step(dt);
+  const hop=Math.min(0,S.hop.v),sq=S.sq.v*(1+Math.sin(t*2)*.01);
+  rig.style.transform=`translateY(${hop*size/120}px) rotateX(${S.rx.v}deg) rotateY(${S.ry.v}deg) scale(${2-sq},${sq})`;
+  layers.forEach(l=>l.style.transform=`translateZ(${(+l.dataset.z)*size/120}px)`);
+  // pencil
+  const p=penPose(pt);pens.forEach((g,i)=>{const on=(i===1)===(p.front===1);g.setAttribute('transform',`translate(${p.x.toFixed(2)} ${p.y.toFixed(2)}) rotate(${p.r.toFixed(1)})`);g.setAttribute('opacity',on?1:0)});
+  // lines: writing a new line, scribbling one out
+  if(beh==='write'){const k=clamp((pt-1.1)/2.5,0,1),fade=pt>4.6?clamp(1-(pt-4.6)/.5,0,1):1;lw.setAttribute('d',`M1 29 L${(1+k*14).toFixed(1)} 29`);lw.setAttribute('opacity',(k>0?.55*fade:0).toFixed(2))}else lw.setAttribute('opacity',0);
+  if(beh==='scribble'&&pt>.9){const k=clamp((pt-.9)/1.7,0,1);let d='M-15 22';for(let x=-15;x<=9;x+=1.5)d+=` L${x} ${(22+Math.sin(x*1.3+pt*8)*k*3.2).toFixed(2)}`;l2.setAttribute('d',d);l2.setAttribute('opacity',(pt<2.8?.28+k*.3:clamp(.58-(pt-2.8)*1.2,0,.58)+(pt>3.6?clamp((pt-3.6)*.6,0,.28):0)).toFixed(2))}else{l2.setAttribute('d','M-15 22 L9 22');l2.setAttribute('opacity',.28)}
+  // blink
+  if(now>nextBlink){blinkT=now;nextBlink=now+(Math.random()<.22?230:rnd(2000,5200))}
+  let blink=0;if(blinkT>0){const d=(now-blinkT)/140;blink=d<1?Math.sin(d*Math.PI):0}if(now-clickT<160)blink=1;
+  // eyes on a sphere with clipped lids
+  const R=17,th=S.gx.v*.62,ph=S.gy.v*.5;
+  E.forEach((e,i)=>{const sd=i?1:-1,a=Math.asin(sd*8.4/R)+th,x=clamp(Math.sin(a)*R,-16.5,16.5),fx=Math.max(.58,Math.cos(a));
+   const y=-8+Math.sin(ph)*8.5,fy=Math.max(.6,Math.cos(ph));
+   const w=(small?6.6:5)*fx*(S.wide.v*.6+.4),h=(small?13.5:12)*fy*S.wide.v,x0=x-w/2,y0=y-h/2;
+   const hb=h*(1-blink*.85),yb=y-hb/2;
+   e.ball.setAttribute('x',x0.toFixed(2));e.ball.setAttribute('y',yb.toFixed(2));e.ball.setAttribute('width',w.toFixed(2));e.ball.setAttribute('height',Math.max(1.6,hb).toFixed(2));e.ball.setAttribute('rx',(Math.min(w,hb)/2).toFixed(2));
+   const slope=Math.tan(S.slant.v*14*sd*Math.PI/180),yB=y0+h-h*S.low.v*.6,yT=Math.min(y0+h*S.lid.v,yB-2.2);
+   e.vis.setAttribute('points',`${x-12},${(yT-slope*12).toFixed(2)} ${x+12},${(yT+slope*12).toFixed(2)} ${x+12},${yB.toFixed(2)} ${x-12},${yB.toFixed(2)}`)});
+ }
+}
+const bots=[];
+const nowEl=document.getElementById('now');
+bots.push(makeBot(document.getElementById('random'),240,{onBeh:b=>nowEl.textContent=b==='watch'?'Watching you':BEH[b][0]}));
+for(const k in BEH){const g=document.getElementById(BEH[k][3]==='pencil'?'pencil':'eyes');const c=document.createElement('div');c.className='c';c.innerHTML=`<div class="stage"></div><h3>${BEH[k][0]}</h3><p>${BEH[k][1]}</p>`;g.appendChild(c);bots.push(makeBot(c.querySelector('.stage'),150,{force:k}))}
+function frame(){const n=performance.now();bots.forEach(b=>b(n));requestAnimationFrame(frame)}frame();
+</script></body></html>

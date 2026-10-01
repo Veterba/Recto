@@ -1,0 +1,163 @@
+/* The dev-only design page (/dev/recto-bot): imported by its component, never shipped. */
+
+html:has(.bot-design),
+html:has(.bot-design__stills) {
+  overflow: auto;
+}
+
+.bot-design {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+}
+
+.bot-design h1 {
+  margin: 0 0 6px;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.bot-design p {
+  max-width: 740px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-13);
+  line-height: 1.5;
+}
+
+.bot-design h2 {
+  margin: 30px 0 12px;
+  color: var(--text-muted);
+  font: 500 var(--font-size-11) var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bot-design h3 {
+  margin: 10px 0 3px;
+  font-size: var(--font-size-14);
+  font-weight: 500;
+}
+
+.bot-design__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.bot-design__button {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font: 500 var(--font-size-10-5) var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.bot-design__button[aria-checked='true'] {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.bot-design__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+
+.bot-design__card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+}
+
+.bot-design__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 180px;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+}
+
+.bot-design__auto {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.bot-design__stage--big {
+  height: 320px;
+}
+
+.bot-design__now {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  color: var(--text-muted);
+  font: 500 var(--font-size-11) var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bot-design__side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bot-design__states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bot-design__field {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-size-13);
+}
+
+.bot-design__sizes {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+@media (max-width: 760px) {
+  .bot-design__auto {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ?still: fixed poses in a row, for the snapshot script. */
+.bot-design__stills {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+  background: var(--bg-primary);
+  width: max-content;
+}
+
+.bot-design__still {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  color: var(--text-muted);
+  font: 500 var(--font-size-11) var(--font-mono);
+}

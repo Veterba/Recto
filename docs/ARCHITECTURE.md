@@ -126,6 +126,7 @@ test/            the same folders as src/
 | `templates` | template picker, daily notes | (uses `palette`) |
 | `archive` | archived notes | `archive` |
 | `links` | unresolved links | `unresolved` |
+| `recto-bot` | the bot character: presets (look + personality), the shared frame loop; its design page is dev-only (`/dev/recto-bot`) | `recto-bot`, `bot-design` (dev only) |
 
 Features import each other only through `index.ts`. The app shell imports features; features import
 `app/` for the api, the note bus and the view registry, and `ui/` for primitives. `ui/` imports

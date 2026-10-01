@@ -17,11 +17,17 @@
 //
 // It also checks, after the screenshots, that the basics still work: a typed
 // edit reaches the file on disk, and a search finds notes.
+//
+// The bot (features/recto-bot) is shot apart from the app: its still poses -
+// a fixed seed and a fixed moment each - from the dev-only design page
+// (/dev/recto-bot?still), served by Vite and opened in a bare Electron window.
 
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron } from 'playwright'
+import { createServer } from 'vite'
+import react from '@vitejs/plugin-react'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const FIXTURE = path.join(ROOT, 'test/fixtures/snapshot-vault')
@@ -358,7 +364,41 @@ async function compare(page, a, b, diffPath) {
   return result
 }
 
+/** The renderer, served as in development: the bot's design page exists only there. */
+async function serveRenderer() {
+  const server = await createServer({
+    configFile: false,
+    root: path.join(ROOT, 'src/renderer'),
+    logLevel: 'error',
+    resolve: { alias: { '@renderer': path.join(ROOT, 'src/renderer'), '@shared': path.join(ROOT, 'src/shared') } },
+    plugins: [react()],
+    server: { port: 0 },
+  })
+  await server.listen()
+  return { server, origin: `http://localhost:${server.httpServer.address().port}` }
+}
+
+/** The bot's still poses, sizes 40 and 120, in one shot. */
+async function botStills(origin, dir, theme) {
+  const app = await _electron.launch({
+    args: [path.join(ROOT, 'scripts/snapshot-window.cjs')],
+    env: { ...process.env, RECTO_URL: `${origin}/dev/recto-bot?still&theme=${theme}` },
+  })
+  try {
+    const page = await app.firstWindow()
+    await page.waitForSelector('.bot-design__stills[data-ready]')
+    // Fonts for the labels, then a frame to paint.
+    await page.evaluate(() => document.fonts.ready)
+    await sleep(300)
+    await page.locator('.bot-design__stills').screenshot({ path: path.join(dir, '21-recto-bot.png'), animations: 'disabled' })
+    console.log('  21-recto-bot')
+  } finally {
+    await app.close()
+  }
+}
+
 fs.rmSync(OUT, { recursive: true, force: true })
+const renderer = await serveRenderer()
 let failures = 0
 for (const theme of ['light', 'dark']) {
   console.log(`${theme}:`)
@@ -374,6 +414,7 @@ for (const theme of ['light', 'dark']) {
       fs.writeFileSync(path.join(dir, 'css-coverage.json'), JSON.stringify(used))
     }
     await smoke(page, vault)
+    await botStills(renderer.origin, dir, theme)
     if (COMPARE !== null) {
       for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.png'))) {
         const old = path.join(COMPARE, theme, name)
@@ -408,5 +449,6 @@ for (const theme of ['light', 'dark']) {
     fs.rmSync(base, { recursive: true, force: true })
   }
 }
+await renderer.server.close()
 if (COMPARE !== null) console.log(failures === 0 ? 'same as the baseline' : `${failures} screenshot(s) differ from the baseline`)
 process.exit(failures === 0 ? 0 : 1)

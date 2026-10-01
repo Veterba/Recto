@@ -56,10 +56,13 @@ The only exception is the project log below.
 
 ## Project log
 Never create log, draft or report files inside the repo.
-Write the log only to: /Users/veterba/Documents/Notes/Recto-vault/Programming/Recto app/Recto log/
+Write the log only to: /Users/veterba/Documents/Notes/Recto-vault/Programming/Projects/Recto app/Recto log/
 - One note per version: `YYYY-MM-DD — v0.X.Y.md` (em dash with spaces).
 - Format: frontmatter `tags: [log]`, then `## YYYY-MM-DD — <short title>`, then the entry.
-- Only create a new note or append to the current version's note. Never touch anything else in the vault.
+- Add every new note to the list at the end of `Recto log.md` in that folder:
+  `- [[Recto log/YYYY-MM-DD — v0.X.Y|YYYY-MM-DD — v0.X.Y]]`.
+- Only create a new note, append to the current version's note, or add it to that list.
+  Never touch anything else in the vault.
 
 ---
 

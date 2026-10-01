@@ -1,0 +1,52 @@
+/*
+ * Recto, the bot. The page is ink, the eyes and lines are what sits on ink -
+ * the theme's two strongest colours, inverted between themes, and nothing else.
+ * The perspective is what turns the layers' small z offsets into depth.
+ */
+
+.recto-bot {
+  position: relative;
+  flex: none;
+  perspective: 600px;
+}
+
+.recto-bot__rig {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  /* Squash and hop pivot near the bottom edge, like something sitting on a desk. */
+  transform-origin: 50% 85%;
+}
+
+.recto-bot__layer {
+  position: absolute;
+  inset: 0;
+}
+
+.recto-bot__layer svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.recto-bot__page {
+  fill: var(--ink);
+}
+
+.recto-bot__corner {
+  fill: var(--on-ink);
+  opacity: 0.2;
+}
+
+.recto-bot__lines {
+  fill: none;
+  stroke: var(--on-ink);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  opacity: 0.28;
+}
+
+.recto-bot__eye {
+  fill: var(--on-ink);
+}
