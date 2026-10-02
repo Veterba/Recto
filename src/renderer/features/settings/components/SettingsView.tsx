@@ -11,6 +11,7 @@ import { EditorSettings } from './EditorSettings'
 import { TemplateSettingsTab } from './TemplateSettings'
 import { AiSettings } from './AiSettings'
 import { VaultSettings } from './VaultSettings'
+import { BotsSettings } from '../../bots'
 
 /**
  * Settings.
@@ -22,7 +23,7 @@ import { VaultSettings } from './VaultSettings'
  * there is no "apply" button and nothing to get out of sync.
  */
 
-type Tab = 'appearance' | 'editor' | 'writing' | 'templates' | 'topics' | 'obsidian' | 'ai' | 'shortcuts' | 'vault'
+type Tab = 'appearance' | 'editor' | 'writing' | 'templates' | 'topics' | 'obsidian' | 'ai' | 'bots' | 'shortcuts' | 'vault'
 
 const TABS: readonly { id: Tab; label: string }[] = [
   { id: 'appearance', label: 'Appearance' },
@@ -32,6 +33,7 @@ const TABS: readonly { id: Tab; label: string }[] = [
   { id: 'topics', label: 'Topics' },
   { id: 'obsidian', label: 'Obsidian' },
   { id: 'ai', label: 'AI' },
+  { id: 'bots', label: 'Bots' },
   { id: 'shortcuts', label: 'Shortcuts' },
   { id: 'vault', label: 'Vault' },
 ]
@@ -63,6 +65,7 @@ function Settings(deps: SettingsDeps): React.ReactElement {
         {tab === 'topics' && <TopicsSettingsTab />}
         {tab === 'obsidian' && <ObsidianSync />}
         {tab === 'ai' && <AiSettings {...deps} />}
+        {tab === 'bots' && <BotsSettings />}
         {tab === 'shortcuts' && <HotkeyEditor />}
         {tab === 'vault' && <VaultSettings {...deps} />}
       </div>

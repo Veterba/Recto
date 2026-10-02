@@ -4,4 +4,5 @@ import './styles/chat.css'
 
 export * from './components/ChatList'
 export * from './components/ChatView'
+export * from './components/ChatParts'
 export * from './conversation'

@@ -66,8 +66,21 @@ function tick(now: number): void {
   start()
 }
 
+/**
+ * A debug switch, `localStorage.rectoBotStill = '1'`: no bot moves, each keeps
+ * the resting face it was first drawn with. For screenshots that must come out
+ * the same every run - even reduced motion still blinks, at random moments.
+ */
+const still = ((): boolean => {
+  try {
+    return localStorage.getItem('rectoBotStill') === '1'
+  } catch {
+    return false
+  }
+})()
+
 function start(): void {
-  if (frame === 0 && members.size > 0 && !document.hidden) frame = requestAnimationFrame(tick)
+  if (frame === 0 && members.size > 0 && !document.hidden && !still) frame = requestAnimationFrame(tick)
 }
 
 function stop(): void {

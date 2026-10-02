@@ -184,6 +184,7 @@ export function RectoBot({
       style={{ width: size, height: size }}
       role="img"
       aria-label="Recto"
+      data-state={state}
       onClick={(event) => {
         bot.current?.click(performance.now())
         onClick?.(event)

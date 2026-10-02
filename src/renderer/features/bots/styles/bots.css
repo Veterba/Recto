@@ -1,0 +1,248 @@
+/* ---------- bots: the sidebar's contacts, a bot's chat, and its status ---------- */
+
+/*
+ * The list sits under the main chat's, with a small label rather than a rule:
+ * the bots are more of the same section, not a new one.
+ */
+.bot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--size-1) var(--size-2) var(--size-2);
+}
+.bot-list__head {
+  margin: var(--size-2) 0 var(--size-1);
+  padding: 0 var(--size-2);
+  font-size: var(--font-size-11);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/*
+ * A bot's face in a slot. The figure's own box leaves room around the page for
+ * its hop and turn, so the page fills under half of it; drawn larger and let
+ * spill over the slot, the page reads at the slot's size.
+ */
+.bot-face {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.bot-face .recto-bot {
+  margin: calc((var(--slot) - var(--drawn)) / 2);
+}
+.bot-face--row {
+  --slot: 32px;
+  --drawn: 48px;
+  width: var(--slot);
+  height: var(--slot);
+}
+.bot-face--head {
+  --slot: 40px;
+  --drawn: 64px;
+  width: var(--slot);
+  height: var(--slot);
+}
+
+/* A contact: the face, the name with the time beside it, and the last line said. */
+.bot-row {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: 5px var(--size-2);
+  border-radius: var(--radius-s);
+  cursor: pointer;
+}
+.bot-row:hover {
+  background: var(--bg-hover);
+}
+.bot-row.is-active {
+  background: var(--accent-muted);
+}
+.bot-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.bot-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.bot-row__top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-2);
+}
+.bot-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(13px * var(--sidebar-scale));
+  font-weight: var(--sidebar-weight);
+  color: var(--text-primary);
+}
+.bot-row.is-active .bot-row__name {
+  font-weight: 650;
+}
+.bot-row__time {
+  flex: none;
+  font-size: var(--font-size-11);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.bot-row__preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
+
+/* A bot's chat: the main chat's column, under a header with the bot in it. */
+.bot-chat__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--size-3);
+  width: 100%;
+  max-width: 760px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: var(--size-4) var(--size-6) var(--size-2);
+}
+.bot-chat__who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.bot-chat__name {
+  font-size: var(--font-size-15);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.bot-chat__specialty {
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
+.bot-chat .chat__thread {
+  padding-top: var(--size-4);
+}
+
+/* Under an answer: the notes it was read from, each one a way back to the note. */
+.bot-sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-1);
+  margin-top: var(--size-2);
+}
+.bot-sources__label {
+  margin-right: var(--size-1);
+  font-size: var(--font-size-11);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.bot-sources__note {
+  all: unset;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: var(--font-size-12);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.bot-sources__note:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.bot-sources__note:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+/* Whether the local model can run - and, when it cannot, the one thing to do. */
+.bot-status {
+  margin: 0;
+  padding: var(--size-3) var(--size-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  font-size: var(--font-size-13);
+  color: var(--text-secondary);
+}
+.bot-status p {
+  margin: 0;
+}
+.bot-status__label {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.bot-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.bot-status.is-ready .bot-status__dot {
+  background: var(--accent);
+}
+.bot-status.is-down .bot-status__dot {
+  background: var(--danger);
+}
+.bot-status__again {
+  all: unset;
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.bot-status__again:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.bot-status__fix {
+  margin-top: var(--size-2) !important;
+  line-height: 1.5;
+}
+.bot-status__command {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-2);
+  margin-top: var(--size-2);
+  padding: var(--size-1) var(--size-1) var(--size-1) var(--size-3);
+  border-radius: var(--radius-s);
+  background: var(--code-bg);
+}
+.bot-status__command code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12-5);
+  color: var(--text-primary);
+}
+
+/* Settings → Bots: the status sits in the column the setting rows use. */
+.bots-settings__status {
+  max-width: 72ch;
+  margin: 0 auto var(--size-4);
+}
+
+.bot-path {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12-5);
+  color: var(--text-secondary);
+}

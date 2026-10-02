@@ -2,6 +2,7 @@ import { BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from 'e
 import { ATTACHMENTS_FOLDER as ATTACHMENTS, type RenameOutcome } from '../shared/vault'
 import { IPC, type IpcApi } from '../shared/ipc'
 import * as ai from './ai'
+import * as bots from './bots'
 import * as topics from './topics/service'
 import * as topicCommands from './topics/commands'
 import * as topicStorage from './topics/storage'
@@ -299,6 +300,13 @@ export function registerIpc(): void {
   handle(IPC.aiTest, (model) => ai.test(model))
   handle(IPC.aiSend, (request) => ai.startStream(request))
   handle(IPC.aiCancel, (id) => ai.cancel(id))
+
+  handle(IPC.botsList, () => bots.list())
+  handle(IPC.botsStatus, (model) => bots.status(model))
+  handle(IPC.botsSettings, () => bots.settings())
+  handle(IPC.botsSetSettings, (patch) => bots.setSettings(patch))
+  handle(IPC.botsSend, (request) => bots.ask(request))
+  handle(IPC.botsCancel, (id) => bots.cancel(id))
 
   handle(IPC.indexSearch, async (query, limit) => {
     const response = await send({ kind: 'search', query, ...(limit === undefined ? {} : { limit }) }, 15_000)

@@ -171,7 +171,8 @@ async function launch(userData) {
   const app = await _electron.launch({
     args: [...ISOLATE, ROOT, `--user-data-dir=${userData}`],
     // The vault is a throwaway copy: open it as it is (see dev-guard).
-    env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
+    // Bots answer from a fixed stand-in, so a bot chat needs no Ollama and reads the same every run.
+    env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1', RECTO_BOTS_MOCK: '1' },
   })
   // Out of the way: the window never takes the screen from whoever is working.
   await app.evaluate(({ app }) => app.hide())
@@ -189,6 +190,8 @@ async function launch(userData) {
     // The home scene's own debug switches (features/home/scene-flags.ts): one
     // still frame, deaf to the pointer.
     localStorage.setItem('homeFlags', JSON.stringify({ freeze: true, noInput: true }))
+    // The bots' own switch (features/recto-bot/loop.ts): their resting face, no blinks.
+    localStorage.setItem('rectoBotStill', '1')
     let seed = 0x2f6b
     Math.random = () => {
       seed = (seed + 0x6d2b79f5) | 0
@@ -216,6 +219,10 @@ async function launch(userData) {
           animation-delay: 0s !important;
           animation-iteration-count: 1 !important;
         }`
+      // No grain on the frosted chrome: the same noise is rasterised a little
+      // differently from time to time (measured: the same mean colour, single
+      // pixels up to 6 levels apart), and it is texture, not what is checked.
+      style.textContent += ':root { --grain-amount: 0 !important; --grain-boost: 0 !important; }'
       document.head.append(style)
     })
   })
@@ -277,7 +284,7 @@ async function settleFind(page) {
   )
 }
 
-async function screens(page, dir) {
+async function screens(page, dir, vault) {
   await shoot(page, dir, '01-start')
 
   await page.getByRole('button', { name: 'Expand all folders' }).click()
@@ -374,6 +381,36 @@ async function screens(page, dir) {
   await shoot(page, dir, '20-find-replace')
   await page.keyboard.press('Escape')
   await page.waitForSelector('.find', { state: 'detached' })
+
+  // The AI section with its bots, then a question to Recto and its answer.
+  // Recto's thread arrives only now - as a note it would change every screen
+  // above - with one earlier exchange, dated by the run's clock: written aside,
+  // dated, then moved in, so the watcher sees it whole.
+  const folder = path.join(vault, 'chats', 'recto')
+  fs.mkdirSync(folder, { recursive: true })
+  const aside = path.join(vault, 'chats', '.thread.tmp')
+  fs.writeFileSync(
+    aside,
+    '---\nrecto: chat\n---\n\n# What goes in the soil mix?\n\n## You\n\nWhat goes in the soil mix?\n\n## Recto\n\nCompost, loam and grit.\n',
+  )
+  fs.utimesSync(aside, NOW, NOW)
+  fs.renameSync(aside, path.join(folder, '2026-09-20 10-00-00.md'))
+  await key(page, 'Mod+2')
+  await page.waitForFunction(() => document.querySelector('.bot-row__time')?.textContent === '10:00')
+  await shoot(page, dir, '22-ai-sidebar')
+  await page.locator('.bot-row').first().click()
+  await page.waitForSelector('.bot-chat .chat__turn')
+  await page.locator('.bot-chat .chat__input').click()
+  await page.keyboard.type('How do I mix soil for raised beds?')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.bot-chat .bot-sources')
+  await page.waitForFunction(() => document.querySelector('.bot-row__time')?.textContent === '10:00')
+  await shoot(page, dir, '23-bot-chat')
+  // Back to Data: the smoke test after the screens edits a note from the tree.
+  // The composer keeps its keys to itself, so it lets go of the focus first.
+  await page.evaluate(() => document.activeElement?.blur())
+  await key(page, 'Mod+1')
+  await page.waitForSelector('[role=treeitem]')
 }
 
 /**
@@ -586,7 +623,7 @@ for (const theme of ['light', 'dark']) {
   const { app, page } = await launch(userData)
   try {
     if (COVERAGE) await page.coverage.startCSSCoverage({ resetOnNavigation: false })
-    await screens(page, dir)
+    await screens(page, dir, vault)
     if (COVERAGE) {
       const used = (await page.coverage.stopCSSCoverage()).map((e) => ({ url: e.url, text: e.text, ranges: e.ranges }))
       fs.writeFileSync(path.join(dir, 'css-coverage.json'), JSON.stringify(used))

@@ -10,6 +10,11 @@ type AppState = {
   lastVaultPath?: string
   /** Most recent first; for switching vaults from Settings. */
   recentVaults?: string[]
+  /**
+   * The local model bots use when theirs names none. Per machine, not per
+   * vault: it is whatever this Mac has downloaded and can run.
+   */
+  botDefaultModel?: string
 }
 
 const file = () => path.join(app.getPath('userData'), 'app-state.json')

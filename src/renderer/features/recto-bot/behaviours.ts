@@ -7,6 +7,7 @@
  * the switch in its frame loop). They are tuned; change them there first.
  */
 
+import type { BehaviourId, Weights } from '@shared/bot-presets'
 import { clamp } from './face'
 
 export type Random = () => number
@@ -22,7 +23,7 @@ export function seededRandom(seed: number): Random {
   }
 }
 
-export type BehaviourId = 'daydream' | 'bored' | 'eyeroll' | 'glance' | 'scan' | 'doze' | 'squint' | 'curious'
+export type { BehaviourId, Weights }
 /** `watch` is never picked by weight: interest in the cursor starts it. */
 export type ActiveBehaviour = BehaviourId | 'watch'
 
@@ -36,9 +37,6 @@ export const BEHAVIOURS: Record<BehaviourId, { label: string; about: string; ms:
   squint: { label: 'Suspicious', about: 'Narrows its eyes, lids slanted.', ms: 2600 },
   curious: { label: 'Curious', about: 'Wide eyes, a quick look, a tiny hop. Also on click.', ms: 1600 },
 }
-
-/** Behaviour odds: any non-negative numbers, they need not add up to 1. */
-export type Weights = Record<Exclude<BehaviourId, 'curious'>, number>
 
 export const rnd = (random: Random, lo: number, hi: number): number => lo + random() * (hi - lo)
 const pick = <T>(random: Random, items: readonly T[]): T => items[Math.floor(random() * items.length)]!

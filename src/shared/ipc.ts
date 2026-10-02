@@ -8,6 +8,7 @@
 
 import type { AiDelta, AiDone, AiError, AiMessage } from './ai'
 import type { ArchiveState } from './archive'
+import type { Bot, BotModelStatus, BotSettings, BotSource } from './bots'
 import type {
   BacklinkResult,
   BoardCardInfo,
@@ -116,6 +117,12 @@ export const IPC = {
   topicsPreview: 'topics:preview',
   topicsSeen: 'topics:seen',
   topicsUndoLastRun: 'topics:undo-last-run',
+  botsList: 'bots:list',
+  botsStatus: 'bots:status',
+  botsSettings: 'bots:settings',
+  botsSetSettings: 'bots:set-settings',
+  botsSend: 'bots:send',
+  botsCancel: 'bots:cancel',
 } as const
 
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
@@ -128,6 +135,9 @@ export const IPC_EVENT = {
   aiError: 'ai:error',
   topicsStatus: 'topics:status',
   topicsRun: 'topics:run',
+  botsDelta: 'bots:delta',
+  botsDone: 'bots:done',
+  botsError: 'bots:error',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -158,6 +168,14 @@ export type IpcEvents = Exhaustive<
     [IPC_EVENT.topicsStatus]: (status: TopicsStatus) => void
     /** A run wrote something - for the status-bar notice with Undo. */
     [IPC_EVENT.topicsRun]: (run: TopicsRunNotice) => void
+    /**
+     * A bot's reply, token by token, on channels of its own: bots run on a
+     * local model and never share the main chat's client or its streams.
+     * `bots:done` and `bots:error` are terminal, one per accepted `bots:send`.
+     */
+    [IPC_EVENT.botsDelta]: (delta: { id: string; text: string }) => void
+    [IPC_EVENT.botsDone]: (done: { id: string }) => void
+    [IPC_EVENT.botsError]: (error: { id: string; message: string }) => void
   }
 >
 
@@ -283,6 +301,25 @@ export type IpcApi = Exhaustive<
     [IPC.topicsSeen]: () => { ok: boolean }
     /** Reverse the most recent run: added topics come out (and are blocked), removed entries go back. */
     [IPC.topicsUndoLastRun]: () => { ok: boolean; changes: number }
+    /** The open vault's bots, from `.recto/bots/`. The first call in a vault without bots creates Recto. */
+    [IPC.botsList]: () => Bot[]
+    /** Whether the local model can run: Ollama reachable, and the model downloaded. */
+    [IPC.botsStatus]: (model?: string) => BotModelStatus
+    [IPC.botsSettings]: () => BotSettings
+    [IPC.botsSetSettings]: (patch: Partial<BotSettings>) => BotSettings
+    /**
+     * Ask a bot. Main searches the vault for the question, puts what it found
+     * into the prompt, and resolves with those sources as soon as the model has
+     * the request; the reply arrives on `bots:delta`. `id` names the stream:
+     * the thread's note path.
+     */
+    [IPC.botsSend]: (request: {
+      id: string
+      botId: string
+      messages: AiMessage[]
+    }) => { ok: true; sources: BotSource[] } | { ok: false; error: string; status?: BotModelStatus }
+    /** Stop a running reply. Unknown ids are a no-op. */
+    [IPC.botsCancel]: (id: string) => { ok: boolean }
   }
 >
 

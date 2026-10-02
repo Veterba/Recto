@@ -1,6 +1,7 @@
 import type { AiMessage } from '@shared/ai'
 import { frontmatterClose } from '@shared/frontmatter'
 import { CODE_FENCE } from '@shared/parse'
+import { CHATS_FOLDER } from '@shared/bots'
 
 /**
  * A conversation IS a note.
@@ -17,7 +18,7 @@ import { CODE_FENCE } from '@shared/parse'
  */
 
 /** Where conversations live. A real folder, hidden from the file tree. */
-export const CHAT_FOLDER = 'chats'
+export const CHAT_FOLDER = CHATS_FOLDER
 
 const USER_HEADING = '## You'
 const ASSISTANT_HEADING = '## Claude'
@@ -42,9 +43,11 @@ function splitFrontmatter(lines: readonly string[]): { head: string[]; body: str
  * must not be chopped in half by it. This is the one piece of parsing here that
  * is not obvious, and the one that would silently corrupt history.
  */
-export function parseConversation(text: string): Conversation {
+/** `assistant` is the heading over the assistant's turns: `Claude` here, a bot's name in a bot's thread. */
+export function parseConversation(text: string, assistant = 'Claude'): Conversation {
   const lines = text.split(/\r?\n/)
   const { head, body } = splitFrontmatter(lines)
+  const assistantHeading = assistant === 'Claude' ? ASSISTANT_HEADING : `## ${assistant}`
 
   const model = head
     .map((line) => /^model:\s*(.+)$/.exec(line.trim()))
@@ -67,7 +70,7 @@ export function parseConversation(text: string): Conversation {
   for (const line of body) {
     if (CODE_FENCE.test(line)) inFence = !inFence
 
-    if (!inFence && (line.trim() === USER_HEADING || line.trim() === ASSISTANT_HEADING)) {
+    if (!inFence && (line.trim() === USER_HEADING || line.trim() === assistantHeading)) {
       flush()
       role = line.trim() === USER_HEADING ? 'user' : 'assistant'
       continue
@@ -89,14 +92,14 @@ export function parseConversation(text: string): Conversation {
  * No `created:` field: the filename is the timestamp, and two records of one
  * fact drift apart the first time anything touches either.
  */
-export function serialiseConversation(conversation: Conversation): string {
+export function serialiseConversation(conversation: Conversation, assistant = 'Claude'): string {
   const out: string[] = ['---', 'recto: chat']
   if (conversation.model !== null) out.push(`model: ${conversation.model}`)
   out.push('---', '')
   out.push(`# ${conversation.title === '' ? 'New chat' : conversation.title}`, '')
 
   for (const message of conversation.messages) {
-    out.push(message.role === 'user' ? USER_HEADING : ASSISTANT_HEADING, '')
+    out.push(message.role === 'user' ? USER_HEADING : assistant === 'Claude' ? ASSISTANT_HEADING : `## ${assistant}`, '')
     out.push(message.content.trim(), '')
   }
   return `${out.join('\n').trimEnd()}\n`

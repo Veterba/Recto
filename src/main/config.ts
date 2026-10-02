@@ -15,6 +15,9 @@
  *                                 the user is active. A test seam.
  *   RECTO_WRITE_LOG=1             Log every note write to the console, with the
  *                                 caller's stack.
+ *   RECTO_BOTS_MOCK=1             Bots answer from a fixed stand-in instead of
+ *                                 Ollama, and always report the model ready.
+ *                                 The snapshot script sets it.
  *
  * Read by the tests and scripts only, not by the app:
  *
@@ -29,6 +32,8 @@ export const allowRealVault = (): boolean => process.env['RECTO_ALLOW_REAL_VAULT
 export const anyPower = process.env['RECTO_TOPICS_ANY_POWER'] === '1'
 
 export const writeLog = process.env['RECTO_WRITE_LOG'] === '1'
+
+export const botsMock = (): boolean => process.env['RECTO_BOTS_MOCK'] === '1'
 
 export const modelDir = (): string | undefined => process.env['RECTO_MODEL_DIR']
 

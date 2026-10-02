@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AI_MODELS, type AiMessage, type AiModelId } from '@shared/ai'
 import { api } from '../../../app/api'
-import { Icon } from '../../../ui/Icon'
-import { Tip } from '../../../ui/Tip'
 import { registerView } from '../../../app/view-registry'
 import { noteIndexChanged } from '../../../app/note-bus'
-import { Markdownish } from './Markdownish'
+import { ChatComposer, ChatMessages } from './ChatParts'
 import { parseConversation, serialiseConversation, titleFrom } from '../conversation'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 
@@ -197,66 +195,19 @@ function Chat({
             </div>
           )}
 
-          {messages.map((message, index) => (
-            <article className={`chat__turn chat__turn--${message.role}`} key={index}>
-              <span className="chat__role">{message.role === 'user' ? 'You' : 'Claude'}</span>
-              <div className="chat__body">
-                {message.role === 'user' ? <p className="chat__para">{message.content}</p> : <Markdownish text={message.content} />}
-              </div>
-            </article>
-          ))}
-
-          {pending !== null && (
-            <article className="chat__turn chat__turn--assistant">
-              <span className="chat__role">Claude</span>
-              <div className="chat__body">
-                {pending === '' ? (
-                  <span className="chat__thinking" aria-live="polite">
-                    Thinking
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                ) : (
-                  <Markdownish text={pending} />
-                )}
-              </div>
-            </article>
-          )}
-
-          {error !== null && (
-            <p className="chat__error" role="alert" onClick={() => setError(null)}>
-              {error}
-            </p>
-          )}
+          <ChatMessages messages={messages} pending={pending} error={error} onDismissError={() => setError(null)} />
         </div>
       </div>
 
-      <div className="chat__composer">
-        <textarea
-          ref={composer}
-          className="chat__input"
-          rows={1}
-          value={draft}
-          placeholder={`Message ${AI_MODELS.find((m) => m.id === model)?.label ?? 'Claude'}…`}
-          onChange={(event) => {
-            setDraft(event.target.value)
-            // Grow with the text, to a point. Past that it scrolls, or the
-            // composer eats the conversation it belongs to.
-            const element = event.target
-            element.style.height = 'auto'
-            element.style.height = `${Math.min(220, element.scrollHeight)}px`
-          }}
-          onKeyDown={(event) => {
-            event.stopPropagation()
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault()
-              void send()
-            }
-            if (event.key === 'Escape' && pending !== null) stop()
-          }}
-        />
-        <div className="chat__tools">
+      <ChatComposer
+        inputRef={composer}
+        draft={draft}
+        onDraft={setDraft}
+        pending={pending !== null}
+        onSend={() => void send()}
+        onStop={stop}
+        placeholder={`Message ${AI_MODELS.find((m) => m.id === model)?.label ?? 'Claude'}…`}
+        tools={
           <select className="chat__model" value={model} aria-label="Model" onChange={(event) => onModel(event.target.value as AiModelId)}>
             {AI_MODELS.map((entry) => (
               <option key={entry.id} value={entry.id}>
@@ -264,22 +215,8 @@ function Chat({
               </option>
             ))}
           </select>
-          <span className="chat__hint">{pending === null ? 'Enter to send · Shift+Enter for a new line' : 'Esc to stop'}</span>
-          {pending === null ? (
-            <Tip label="Send" hint="Enter">
-              <button className="chat__send" onClick={() => void send()} disabled={draft.trim() === ''} aria-label="Send">
-                <Icon name="arrow-up" size={15} />
-              </button>
-            </Tip>
-          ) : (
-            <Tip label="Stop" hint="Esc">
-              <button className="chat__send chat__send--stop" onClick={stop} aria-label="Stop">
-                <Icon name="square" size={13} />
-              </button>
-            </Tip>
-          )}
-        </div>
-      </div>
+        }
+      />
       <span className="chat__title" hidden>
         {title}
       </span>

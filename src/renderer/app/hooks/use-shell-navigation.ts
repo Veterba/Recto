@@ -5,6 +5,7 @@ import type { SectionId } from '../sections'
 import type { WorkspaceApi } from './use-workspace'
 import { focusEditorOnOpen } from '../../features/editor'
 import { CHAT_FOLDER, chatFileName, serialiseConversation } from '../../features/ai'
+import { botThreadFolder, type Bot } from '@shared/bots'
 
 /** Where things open: notes in Data, chats in AI, boards and cards in Tasks. */
 export function useShellNavigation(
@@ -18,6 +19,7 @@ export function useShellNavigation(
   newChat: () => Promise<void>
   openBoard: (id: string) => void
   openBoardCard: (path: string) => void
+  openBot: (bot: Bot, threadPath: string | null) => Promise<void>
 } {
   const openChat = useCallback(
     (path: string) => {
@@ -81,5 +83,26 @@ export function useShellNavigation(
     [sections],
   )
 
-  return { openFile, openChat, newChat, openBoard, openBoardCard }
+  /**
+   * A bot opens on its newest thread. A bot that has none gets one, created
+   * as an empty note up front - like a new chat, so what is on screen always
+   * has somewhere on disk to be.
+   */
+  const openBot = useCallback(
+    async (bot: Bot, threadPath: string | null) => {
+      let path = threadPath
+      if (path === null) {
+        const created = await api.invoke(IPC.fsCreate, botThreadFolder(bot.id), chatFileName(new Date()), 'file')
+        if (!created.ok) return
+        await api.invoke(IPC.fsWrite, created.path, serialiseConversation({ title: 'New chat', model: null, messages: [] }, bot.name))
+        await refresh()
+        path = created.path
+      }
+      setActiveSection('ai')
+      sections?.ai.openView('bot', { bot: bot.id, path })
+    },
+    [sections, setActiveSection, refresh],
+  )
+
+  return { openFile, openChat, newChat, openBoard, openBoardCard, openBot }
 }
