@@ -72,8 +72,9 @@ export function BotsSettings(): React.ReactElement {
 
       <p className="setting__note">
         <Icon name="lock" size={13} />
-        Model runs locally in Ollama · Network: none. Bots talk only to Ollama on this Mac (localhost); your notes and questions never leave
-        it.
+        Model runs locally in Ollama · Network: none. Bots talk only to Ollama on this Mac (localhost). The one exception is Recto with an
+        API model picked in its chat (which needs a key in Settings → AI): then its questions, and the notes found for them, go to
+        Anthropic.
       </p>
     </>
   )

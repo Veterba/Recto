@@ -246,3 +246,218 @@
   font-size: var(--font-size-12-5);
   color: var(--text-secondary);
 }
+
+/* Recto first, then - once there are any - the specialist bots under a hairline. */
+.bot-list__divider {
+  height: 1px;
+  margin: var(--size-2) var(--size-2);
+  background: var(--border);
+}
+
+/* ---------- a bot's conversation: header actions, chat topics, history, undo ---------- */
+
+.bot-chat {
+  position: relative;
+}
+.bot-chat__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  margin-left: auto;
+}
+.bot-chat__action {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-12-5);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.bot-chat__action:hover,
+.bot-chat__action.is-on {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.bot-chat__action:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.bot-chat__action--icon {
+  padding: 5px;
+}
+
+/*
+ * One scroll, split into chat topics. Each opens with a divider carrying its
+ * title; the topics before the current one sit back, so the eye goes to the
+ * one the conversation is in.
+ */
+.chat-topic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-6);
+}
+.chat-topic.is-past {
+  opacity: 0.55;
+}
+.chat-topic__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--size-3);
+  font-size: var(--font-size-11);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.chat-topic__divider::before,
+.chat-topic__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.chat-topic__divider span {
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bot-chat__status {
+  flex: none;
+  width: 100%;
+  max-width: 760px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: var(--size-2) var(--size-6) 0;
+}
+
+.chat-topic__top {
+  height: 1px;
+}
+
+/* History: a panel under the header, over the conversation. */
+.bot-history {
+  position: absolute;
+  z-index: 5;
+  top: 64px;
+  right: var(--size-4);
+  width: min(380px, calc(100% - var(--size-8)));
+  max-height: min(520px, calc(100% - 140px));
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-l);
+  overflow: hidden;
+}
+.bot-history__head {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  padding: var(--size-2);
+  border-bottom: 1px solid var(--border);
+}
+.bot-history__search,
+.bot-history__rename {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  padding: 6px var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-13);
+  color: var(--text-primary);
+}
+.bot-history__rename {
+  border: 1px solid var(--accent);
+}
+.bot-history__list {
+  margin: 0;
+  padding: var(--size-1);
+  list-style: none;
+  overflow-y: auto;
+}
+.bot-history__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: var(--radius-s);
+}
+.bot-history__row:hover {
+  background: var(--bg-hover);
+}
+.bot-history__row.is-current {
+  background: var(--accent-muted);
+}
+.bot-history__open {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px var(--size-2);
+  cursor: pointer;
+}
+.bot-history__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-13);
+  color: var(--text-primary);
+}
+.bot-history__when {
+  font-size: var(--font-size-11);
+  color: var(--text-muted);
+}
+.bot-history__tool {
+  all: unset;
+  display: inline-flex;
+  padding: 5px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+}
+.bot-history__row:hover .bot-history__tool,
+.bot-history__tool:focus-visible {
+  opacity: 1;
+}
+.bot-history__tool:hover {
+  color: var(--text-primary);
+}
+.bot-history__tool--danger:hover {
+  color: var(--danger);
+}
+.bot-history__empty {
+  padding: var(--size-3);
+  font-size: var(--font-size-12-5);
+  color: var(--text-muted);
+}
+
+/* A deleted topic can come back for a few seconds. */
+.bot-undo {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--size-3);
+  padding: var(--size-2) var(--size-2) var(--size-2) var(--size-4);
+  border-radius: var(--radius-m);
+  background: var(--ink);
+  color: var(--on-ink);
+  font-size: var(--font-size-12-5);
+  box-shadow: var(--shadow-md);
+}
+.bot-undo button {
+  all: unset;
+  padding: 3px 10px;
+  border-radius: var(--radius-s);
+  font-weight: 600;
+  cursor: pointer;
+}
+.bot-undo button:hover {
+  background: color-mix(in srgb, var(--on-ink) 14%, transparent);
+}

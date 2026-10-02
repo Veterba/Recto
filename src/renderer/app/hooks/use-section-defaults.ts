@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { FileNode } from '@shared/vault'
 import type { SectionId } from '../sections'
 import type { WorkspaceApi } from './use-workspace'
-import { CHAT_FOLDER } from '../../features/ai'
+import { MAIN_BOT } from '../../features/bots'
 import type { useBoards } from '../../features/boards'
 
 /** What an empty AI or Tasks workspace opens by itself. */
@@ -14,23 +14,18 @@ export function useSectionDefaults(
   boards: ReturnType<typeof useBoards>,
 ): void {
   /**
-   * An empty AI workspace opens the most recent conversation.
-   *
-   * Same reasoning as Tasks below: arriving at a blank pane and having to work
-   * out that the thing you want is in the sidebar is a worse first second than
-   * landing in the conversation you had last.
+   * The AI workspace always has Recto, the main chat. Opened when the section
+   * holds no conversation at all - empty, or only tabs from before it was
+   * Recto's (a saved layout can still carry a long-gone Settings tab).
+   * Landing on a blank or unknown pane and having to find the conversation in
+   * the sidebar is a worse first second than landing in it.
    */
   useEffect(() => {
     if (activeSection !== 'ai') return
     const ai = sections?.ai
-    if (ai === undefined || ai.activeLeaf !== null) return
-    const folder = roots.find((node) => node.kind === 'folder' && node.path === CHAT_FOLDER)
-    const newest = (folder?.children ?? [])
-      .filter((node) => node.kind === 'file' && node.name.toLowerCase().endsWith('.md'))
-      .map((node) => node.path)
-      .sort((a, b) => b.localeCompare(a))[0]
-    if (newest !== undefined) ai.openView('chat', { path: newest })
-  }, [activeSection, sections, revision, roots])
+    if (ai === undefined || ai.leaves().some((leaf) => leaf.type === 'bot' || leaf.type === 'chat')) return
+    ai.openView('bot', { bot: MAIN_BOT })
+  }, [activeSection, sections, revision])
 
   /**
    * An empty Tasks workspace opens its first board.

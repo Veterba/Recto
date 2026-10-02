@@ -42,9 +42,11 @@ export const SECTIONS: readonly Section[] = [
     id: 'ai',
     label: 'AI',
     icon: 'sparkles',
-    viewType: 'chat',
-    searchPlaceholder: 'Search chats…',
-    newLabel: 'Chat',
+    viewType: 'bot',
+    // The box filters the bots; a topic is found in History.
+    searchPlaceholder: 'Search bots…',
+    // A new topic with Recto, the main chat.
+    newLabel: 'Topic',
   },
   {
     id: 'tasks',

@@ -37,8 +37,8 @@ import { QuickSwitcher, SearchPanel } from '../../features/search'
 import { SettingsDialog, SidebarThemePicker } from '../../features/settings'
 import { TemplatePicker, useDailyNoteAutoCreate, useTemplateActions, useTemplateSettings } from '../../features/templates'
 import { TidyDialog, useTidy } from '../../features/tidy'
-import { CHAT_FOLDER, ChatList } from '../../features/ai'
-import { BotList, reloadBots } from '../../features/bots'
+import { CHAT_FOLDER } from '../../features/ai'
+import { BotList, MAIN_BOT, reloadBots } from '../../features/bots'
 import { BoardList, CARD_FOLDER, useBoards } from '../../features/boards'
 import { registerArchiveView } from '../../features/archive'
 import { HomeOverlay } from '../../features/home'
@@ -106,17 +106,12 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   // Obsidian does, so the editor needs every file's path - not just notes.
   useEffect(() => setVaultFiles(allFilePaths(tree.roots)), [tree.roots])
 
-  /** Which conversation the AI workspace is showing. */
-  const activeChat = useMemo(() => {
-    const leaf = sections?.ai.activeLeaf
-    const path = leaf?.type === 'chat' ? leaf.state['path'] : undefined
-    return typeof path === 'string' ? path : null
-  }, [sections, revision])
-
   /** Which bot the AI workspace is showing, if it is showing one. */
   const activeBot = useMemo(() => {
     const leaf = sections?.ai.activeLeaf
-    const id = leaf?.type === 'bot' ? leaf.state['bot'] : undefined
+    // A `chat` tab from a layout saved before Recto became the main chat is Recto's.
+    if (leaf?.type === 'chat') return MAIN_BOT
+    const id = leaf?.type === 'bot' ? (leaf.state['bot'] ?? MAIN_BOT) : undefined
     return typeof id === 'string' ? id : null
   }, [sections, revision])
 
@@ -139,12 +134,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const updateRef = useRef(update)
   updateRef.current = update
 
-  const { openFile, openChat, newChat, openBoard, openBoardCard, openBot } = useShellNavigation(
-    sections,
-    setActiveSection,
-    refresh,
-    () => appearanceRef.current.aiModel,
-  )
+  const { openFile, newChat, openBoard, openBoardCard, openBot } = useShellNavigation(sections, setActiveSection)
 
   // --- sidebar list -------------------------------------------------------
 
@@ -454,10 +444,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} />
             ) : (
-              <>
-                <ChatList tree={tree.roots} activePath={activeChat} query={query} onOpen={openChat} onChanged={() => void refresh()} />
-                <BotList tree={tree.roots} activeBot={activeBot} query={query} onOpen={(bot, thread) => void openBot(bot, thread)} />
-              </>
+              <BotList tree={tree.roots} activeBot={activeBot} query={query} onOpen={(bot) => void openBot(bot)} />
             )}
           </Sidebar>
         ) : (

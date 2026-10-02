@@ -6,7 +6,6 @@ import { registerMarkdownView } from '../../features/editor'
 import { registerUnresolvedView } from '../../features/links'
 import { registerGraphView } from '../../features/graph'
 import { registerBoardView } from '../../features/boards'
-import { registerChatView } from '../../features/ai'
 import { registerBotView } from '../../features/bots'
 import type { Appearance } from '../appearance'
 
@@ -42,9 +41,5 @@ export function useRegisterViews(refs: {
   registerUnresolvedView((p) => refs.openFile.current(p))
   registerGraphView((p) => refs.openFile.current(p))
   registerBoardView((p) => refs.openBoardCard.current(p))
-  registerChatView(
-    () => refs.appearance.current.aiModel,
-    (aiModel) => refs.update.current({ aiModel }),
-  )
   registerBotView((p, heading) => refs.openFile.current(p, heading ?? null))
 }

@@ -38,11 +38,15 @@ export type BotSource = { path: string; heading: string | null }
 export type BotMessage = AiMessage & { sources?: BotSource[] }
 
 /**
- * Whether the bots can run. One of three states, each with its own fix:
- * Ollama not running (open it), the model not downloaded (pull it), or ready.
+ * Whether a bot's model can run, each state with its own fix: Ollama not
+ * running (open it), the model not downloaded (pull it), an API model with no
+ * key saved (add one), or ready.
  */
 export type BotModelStatus =
-  { state: 'ready'; model: string } | { state: 'not-running'; model: string } | { state: 'no-model'; model: string; installed: string[] }
+  | { state: 'ready'; model: string }
+  | { state: 'not-running'; model: string }
+  | { state: 'no-model'; model: string; installed: string[] }
+  | { state: 'no-key'; model: string }
 
 export type BotSettings = {
   /** The model a bot uses when its definition names none. */

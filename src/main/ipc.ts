@@ -3,6 +3,7 @@ import { ATTACHMENTS_FOLDER as ATTACHMENTS, type RenameOutcome } from '../shared
 import { IPC, type IpcApi } from '../shared/ipc'
 import * as ai from './ai'
 import * as bots from './bots'
+import { migrateChats } from './bots/migration'
 import * as topics from './topics/service'
 import * as topicCommands from './topics/commands'
 import * as topicStorage from './topics/storage'
@@ -33,6 +34,16 @@ const renameUndo = new Map<string, { from: string; to: string; entries: { path: 
 
 /** Restart the watcher and the index whenever the open vault changes. */
 function rewatch(): void {
+  // Before the watcher starts, so the files it moves are not reported as edits.
+  const vault = currentVault()
+  if (vault !== null) {
+    try {
+      const report = migrateChats(vault.path)
+      if (report !== null) console.log(`[bots] chats became Recto's topics: ${report.moved.length} moved, ${report.skipped.length} skipped`)
+    } catch (err) {
+      console.error('[bots] chat migration', err)
+    }
+  }
   const window = BrowserWindow.getAllWindows()[0]
   if (window) startWatching(window)
   // Topics reads the index, so it starts once the index is open.
@@ -307,6 +318,8 @@ export function registerIpc(): void {
   handle(IPC.botsSetSettings, (patch) => bots.setSettings(patch))
   handle(IPC.botsSend, (request) => bots.ask(request))
   handle(IPC.botsCancel, (id) => bots.cancel(id))
+  handle(IPC.botsSetModel, (botId, model) => bots.setModel(botId, model))
+  handle(IPC.botsTitle, (request) => bots.title(request))
 
   handle(IPC.indexSearch, async (query, limit) => {
     const response = await send({ kind: 'search', query, ...(limit === undefined ? {} : { limit }) }, 15_000)

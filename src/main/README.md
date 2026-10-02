@@ -11,7 +11,7 @@ The Electron main process: the only code that touches the disk, the network and 
 - `link-rewrite.ts` - rewriting links when a note is renamed or moved.
 - `state.ts` (`.recto/<feature>.json`), `store.ts` (app-state in userData), `secrets.ts` (the API key, encrypted).
 - `index-client.ts` - starts the indexer process and sends it requests.
-- `archive.ts`, `sync/` (Obsidian), `ai/` (Claude), `bots/` (bots: definitions, vault context, the local model via Ollama), `topics/` (topics: the service, clustering, naming, the embedder client).
+- `archive.ts`, `sync/` (Obsidian), `ai/` (Claude), `bots/` (bots: definitions, vault context, the model - Ollama, or an Anthropic model for Recto with a key - and the one-time move of old chats into Recto's topics), `topics/` (topics: the service, clustering, naming, the embedder client).
 - `config.ts` - every `RECTO_*` environment variable.
 
 **Must not be imported from here:** nothing outside `src/main` imports this folder. The renderer

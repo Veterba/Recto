@@ -123,6 +123,8 @@ export const IPC = {
   botsSetSettings: 'bots:set-settings',
   botsSend: 'bots:send',
   botsCancel: 'bots:cancel',
+  botsSetModel: 'bots:set-model',
+  botsTitle: 'bots:title',
 } as const
 
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
@@ -320,6 +322,10 @@ export type IpcApi = Exhaustive<
     }) => { ok: true; sources: BotSource[] } | { ok: false; error: string; status?: BotModelStatus }
     /** Stop a running reply. Unknown ids are a no-op. */
     [IPC.botsCancel]: (id: string) => { ok: boolean }
+    /** A bot's model, written to its bot.json: an API model id, an Ollama model, or null for the local default. Returns the bots. */
+    [IPC.botsSetModel]: (botId: string, model: string | null) => Bot[]
+    /** A 2-5 word title for a chat topic from its first exchange, by the bot's model; null when it cannot make one. */
+    [IPC.botsTitle]: (request: { botId: string; messages: AiMessage[] }) => string | null
   }
 >
 

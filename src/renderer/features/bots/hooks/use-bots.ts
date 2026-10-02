@@ -74,6 +74,8 @@ export function describeStatus(status: BotModelStatus): { label: string; fix: st
       return { label: 'Ollama running · model ready', fix: null, command: null }
     case 'not-running':
       return { label: 'Ollama not running', fix: 'Open the Ollama app, or run this in a terminal:', command: 'ollama serve' }
+    case 'no-key':
+      return { label: 'No API key', fix: 'Add your Anthropic key in Settings → AI, or pick the local model.', command: null }
     case 'no-model':
       return {
         label: 'Model not downloaded',

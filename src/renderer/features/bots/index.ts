@@ -3,7 +3,7 @@
 import './styles/bots.css'
 
 export * from './components/BotList'
-export * from './components/BotChatView'
+export { MAIN_BOT, registerBotView } from './components/BotConversation'
 export * from './components/BotsSettings'
 export { reloadBots } from './hooks/use-bots'
-export { threadsOf } from './threads'
+export { requestNewTopic } from './new-topic'

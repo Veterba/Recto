@@ -62,7 +62,7 @@ signature disagree.
 | `history:` | a note's stored versions, and restoring one |
 | `archive:` | archive, list, restore, purge, retention |
 | `ai:` | key status (never the key), test, send, cancel; `ai:delta` / `ai:done` / `ai:error` stream the reply |
-| `bots:` | list, model status, settings, send, cancel; `bots:delta` / `bots:done` / `bots:error` stream a bot's reply |
+| `bots:` | list, model status, settings, send, cancel, set model, title a chat topic; `bots:delta` / `bots:done` / `bots:error` stream a bot's reply |
 | `obsidian:` | find vaults, preview, enable, disable, sync now; `obsidian:status` pushes |
 | `topics:` | settings, status, list, rename, delete, rebuild, preview, undo; `topics:status` / `topics:run` push |
 | `shell:` | open an external URL |
@@ -70,10 +70,11 @@ signature disagree.
 What does not cross: the API key (main uses it, the renderer gets a masked hint), absolute paths
 outside the vault, and anything that would let the renderer touch the disk directly.
 
-The one connection main opens for bots is to Ollama on `127.0.0.1:11434` (`main/bots/provider.ts`):
-a bot's question, the vault sections found for it, and the answer never leave the machine. Bots do
-not use the main chat's client or its key. The vault search for a bot runs in main, over the same
-index (`main/bots/context.ts`).
+A bot's model runs in Ollama on `127.0.0.1:11434` by default (`main/bots/provider.ts`): its
+question, the vault sections found for it, and the answer never leave the machine. Recto, the main
+chat, can instead use an Anthropic model when a key is saved and that model is chosen in its picker;
+then the same request goes to Anthropic over the app's own client. The vault search for a bot runs
+in main, over the same index (`main/bots/context.ts`).
 
 ## A note, from disk to screen
 
@@ -128,11 +129,11 @@ test/            the same folders as src/
 | `tidy` | filing loose notes | `tidy` |
 | `home` | the home overlay and statistics | `home` |
 | `settings` | the settings dialog and its tabs | `settings`, `setting` notes, `osync`, `hotkeys`, `vault-recent`, `daily`, `note-error` |
-| `ai` | chats with Claude, saved as notes | `chat` |
+| `ai` | the chat's parts every conversation is built from: its turns and its composer | `chat` |
 | `templates` | template picker, daily notes | (uses `palette`) |
 | `archive` | archived notes | `archive` |
 | `links` | unresolved links | `unresolved` |
-| `bots` | bots under the main chat: the sidebar list, a bot's chat (the main chat's turns and composer), Settings → Bots | `bot-list`, `bot-row`, `bot-chat`, `bot-sources`, `bot-status` |
+| `bots` | the AI section: Recto (the main chat) and the specialist bots in the sidebar, a bot's conversation in chat topics with History, Settings → Bots | `bot-list`, `bot-row`, `bot-chat`, `chat-topic`, `bot-history`, `bot-undo`, `bot-sources`, `bot-status` |
 | `recto-bot` | the bot character: presets (look + personality), the shared frame loop; its design page is dev-only (`/dev/recto-bot`) | `recto-bot`, `bot-design` (dev only) |
 
 Features import each other only through `index.ts`. The app shell imports features; features import
@@ -149,8 +150,8 @@ In the vault:
 | `attachments/` | images pasted or dropped into notes | editor |
 | `templates/`, `Daily/` (configurable) | ordinary notes | templates |
 | `tasks/` | cards: notes whose frontmatter has `board`, `status`, `order` | boards |
-| `chats/` | conversations: notes with `## You` / `## Claude` sections | ai |
-| `chats/<bot>/` | a bot's threads: `## You` / `## <Bot>`, each answer's sources in a `<!-- recto:sources … -->` comment | bots |
+| `chats/<bot>/` | a bot's chat topics, one note each: `YYYY-MM-DD HH-mm — <title>.md`, frontmatter `bot`, `created`, `title`; `## You` / `## <Bot>` turns (an old main-chat answer keeps `## Claude`), each answer's sources in a `<!-- recto:sources … -->` comment; turns are appended, never rewritten (`shared/chat-topics.ts`) | bots |
+| `.recto/chats-migration.json`, `.recto/backups/chats-<date>/` | the one-time move of the old main chats and first bot threads into Recto's topics: what moved, and a copy of `chats/` from before (`main/bots/migration.ts`) | `main/bots` |
 | `.recto/bots/<id>/` | a bot: `bot.json` (name, specialty, look, personality, model, excluded folders) and `SYSTEM.md`; Recto is written once into a vault with no `bots` folder | `main/bots` |
 | `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `boards`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive` | `main/state.ts` |
 | `.recto/index.db` | SQLite (WAL): the index, version snapshots, usage events, topic vectors | indexer, embedder |

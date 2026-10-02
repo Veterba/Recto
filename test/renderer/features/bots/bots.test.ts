@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parseThread, previewOf, serialiseThread, shortTime, threadsOf } from '../../../../src/renderer/features/bots/threads'
+import { previewOf, shortTime } from '../../../../src/renderer/features/bots/threads'
+import { fromFileName, topicPaths } from '../../../../src/renderer/features/bots/chat-topics-model'
+import { appendTurns, parseTopic, topicFile } from '../../../../src/shared/chat-topics'
 import { describeStatus } from '../../../../src/renderer/features/bots/hooks/use-bots'
-import { parseConversation, serialiseConversation } from '../../../../src/renderer/features/ai/conversation'
 import { OllamaProvider } from '../../../../src/main/bots/provider'
 import type { BotMessage } from '../../../../src/shared/bots'
 import type { FileNode } from '../../../../src/shared/vault'
 
-describe('bot threads', () => {
+describe('chat topics', () => {
   const messages: BotMessage[] = [
     { role: 'user', content: 'How do I mix soil?' },
     {
@@ -18,33 +19,19 @@ describe('bot threads', () => {
       ],
     },
   ]
+  const file = topicFile({ bot: 'recto', created: '2026-09-20T10:00', title: 'Soil' }, [], appendTurns('', messages, 'Recto'))
 
   it('round-trips, sources included, under the bot’s own name', () => {
-    const text = serialiseThread({ title: 'Soil', messages }, 'Recto')
-    expect(text).toContain('## Recto')
-    expect(text).not.toContain('## Claude')
-    expect(parseThread(text, 'Recto')).toEqual({ title: 'Soil', messages })
+    expect(file).toContain('## Recto')
+    const parsed = parseTopic(file, ['Recto'])
+    expect(parsed.meta).toEqual({ bot: 'recto', created: '2026-09-20T10:00', title: 'Soil' })
+    expect(parsed.messages.map(({ role, content, sources }) => ({ role, content, ...(sources ? { sources } : {}) }))).toEqual(messages)
   })
 
   it('keeps sources out of the answer as a comment that `--` cannot close early, and not as links', () => {
-    const text = serialiseThread({ title: 'Soil', messages }, 'Recto')
-    const comment = /<!-- recto:sources (.*) -->/.exec(text)![1]!
+    const comment = /<!-- recto:sources (.*) -->/.exec(file)![1]!
     expect(comment).not.toContain('--')
-    expect(text).not.toContain('[[')
-  })
-
-  it('leaves the main chat’s format exactly as it was', () => {
-    const chat = {
-      title: 'Q',
-      model: 'opus',
-      messages: [
-        { role: 'user' as const, content: 'hi' },
-        { role: 'assistant' as const, content: 'hello' },
-      ],
-    }
-    const text = serialiseConversation(chat)
-    expect(text).toBe('---\nrecto: chat\nmodel: opus\n---\n\n# Q\n\n## You\n\nhi\n\n## Claude\n\nhello\n')
-    expect(parseConversation(text)).toEqual(chat)
+    expect(file).not.toContain('[[')
   })
 
   it('previews the last thing said on one line', () => {
@@ -53,7 +40,7 @@ describe('bot threads', () => {
     expect(previewOf([])).toBe('')
   })
 
-  it('finds a bot’s threads, newest first', () => {
+  it('finds a bot’s topics, newest first, and reads a title from a file name', () => {
     const tree: FileNode[] = [
       {
         path: 'chats',
@@ -65,17 +52,44 @@ describe('bot threads', () => {
             name: 'recto',
             kind: 'folder',
             children: [
-              { path: 'chats/recto/2026-09-01 10-00-00.md', name: '2026-09-01 10-00-00.md', kind: 'file' },
-              { path: 'chats/recto/2026-09-20 10-00-00.md', name: '2026-09-20 10-00-00.md', kind: 'file' },
+              { path: 'chats/recto/2026-09-01 10-00 — Old.md', name: '2026-09-01 10-00 — Old.md', kind: 'file' },
+              { path: 'chats/recto/2026-09-20 10-00 — Soil mix.md', name: '2026-09-20 10-00 — Soil mix.md', kind: 'file' },
               { path: 'chats/recto/notes.txt', name: 'notes.txt', kind: 'file' },
             ],
           },
-          { path: 'chats/2026-09-24.md', name: '2026-09-24.md', kind: 'file' },
         ],
       },
     ]
-    expect(threadsOf(tree, 'recto').map((n) => n.name)).toEqual(['2026-09-20 10-00-00.md', '2026-09-01 10-00-00.md'])
-    expect(threadsOf(tree, 'calm')).toEqual([])
+    expect(topicPaths(tree, 'recto')).toEqual(['chats/recto/2026-09-20 10-00 — Soil mix.md', 'chats/recto/2026-09-01 10-00 — Old.md'])
+    expect(topicPaths(tree, 'calm')).toEqual([])
+    const sameMinute: FileNode[] = [
+      {
+        path: 'chats',
+        name: 'chats',
+        kind: 'folder',
+        children: [
+          {
+            path: 'chats/recto',
+            name: 'recto',
+            kind: 'folder',
+            children: ['2026-09-20 10-00 — Soil mix.md', '2026-09-20 10-00 — Soil mix (2).md', '2026-09-20 09-59 — Zebra.md'].map(
+              (name) => ({
+                path: `chats/recto/${name}`,
+                name,
+                kind: 'file' as const,
+              }),
+            ),
+          },
+        ],
+      },
+    ]
+    expect(topicPaths(sameMinute, 'recto').map((p) => p.slice(12))).toEqual([
+      '2026-09-20 10-00 — Soil mix (2).md',
+      '2026-09-20 10-00 — Soil mix.md',
+      '2026-09-20 09-59 — Zebra.md',
+    ])
+    expect(fromFileName('2026-09-20 10-00 — Soil mix.md')).toEqual({ created: '2026-09-20T10:00', title: 'Soil mix' })
+    expect(fromFileName('2026-09-20 10-00 — Soil mix (2).md')).toEqual({ created: '2026-09-20T10:00', title: 'Soil mix' })
   })
 
   it('says when, briefly', () => {

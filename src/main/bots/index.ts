@@ -18,8 +18,10 @@ import { readState, writeState } from '../store'
 import { currentVault } from '../vault'
 import * as vaultFs from '../vault-fs'
 import { buildSystem, estimateTokens, fitHistory, queryTerms, rankNotes, selectChunks, splitSections } from './context'
-import { listBots } from './definitions'
-import { CONTEXT_TOKENS, MockProvider, OllamaProvider, type BotModelProvider } from './provider'
+import { cleanTitle } from '../../shared/chat-topics'
+import { listBots, writeBotModel } from './definitions'
+import { AnthropicProvider, CONTEXT_TOKENS, MockProvider, OllamaProvider, isApiModel, type BotModelProvider } from './provider'
+import { readKey } from '../secrets'
 
 /**
  * Bots, on the main side: who they are, whether their model can run, and
@@ -27,7 +29,11 @@ import { CONTEXT_TOKENS, MockProvider, OllamaProvider, type BotModelProvider } f
  * search, the prompt and the connection to the model all happen here.
  */
 
-const provider: BotModelProvider = botsMock() ? new MockProvider() : new OllamaProvider()
+const local: BotModelProvider = botsMock() ? new MockProvider() : new OllamaProvider()
+const api: BotModelProvider = botsMock() ? new MockProvider() : new AnthropicProvider(readKey)
+
+/** The model's provider: an Anthropic model when it is one of the API models, otherwise Ollama on this Mac. */
+const providerFor = (model: string): BotModelProvider => (isApiModel(model) ? api : local)
 
 /** Notes ranked per question, and the most of them read from disk for sections. */
 const NOTES_TO_READ = 8
@@ -59,9 +65,17 @@ const modelOf = (bot: Bot | undefined): string => bot?.model ?? settings().defau
  * typed, the ten-second cold start is over.
  */
 export async function status(model?: string): Promise<BotModelStatus> {
-  const result = await provider.status(model ?? settings().defaultModel)
-  if (result.state === 'ready') provider.warm(result.model)
+  const chosen = model ?? settings().defaultModel
+  const result = await providerFor(chosen).status(chosen)
+  if (result.state === 'ready') providerFor(chosen).warm(result.model)
   return result
+}
+
+/** A bot's model, changed from its chat: an API model id, an Ollama model, or null for the local default. */
+export function setModel(botId: string, model: string | null): Bot[] {
+  const vault = currentVault()
+  if (vault !== null) writeBotModel(vault.path, botId, model)
+  return list()
 }
 
 /**
@@ -118,6 +132,7 @@ export async function ask(request: {
   const question = [...request.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
 
   const model = modelOf(bot)
+  const provider = providerFor(model)
   const ready = await provider.status(model)
   if (ready.state !== 'ready') return { ok: false, error: 'The model is not available.', status: ready }
 
@@ -151,4 +166,36 @@ export function cancel(id: string): { ok: boolean } {
   if (controller === undefined) return { ok: false }
   controller.abort()
   return { ok: true }
+}
+
+const TITLE_SYSTEM = [
+  'Write a title for this conversation: two to five words, in the language the conversation is in.',
+  'Name what it is about, like the title of a note ("Soil mix for raised beds"), never the conversation itself',
+  '("Conversation history", "Greeting").',
+  'Sentence case: only the first word and names capitalised.',
+  'Reply with the title only - no quotes, no full stop, no "Title:".',
+].join(' ')
+
+/**
+ * A title for a chat topic, from its first exchange, by the bot's own model.
+ * Null when the model cannot run or gives nothing usable; the renderer falls
+ * back to the first question.
+ */
+export async function title(request: { botId: string; messages: AiMessage[] }): Promise<string | null> {
+  const bot = list().find((b) => b.id === request.botId)
+  const model = modelOf(bot)
+  const provider = providerFor(model)
+  if ((await provider.status(model)).state !== 'ready') return null
+  const conversation = request.messages
+    .slice(0, 2)
+    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.slice(0, 1500)}`)
+    .join('\n\n')
+  let text = ''
+  try {
+    const signal = AbortSignal.timeout(30_000)
+    for await (const piece of provider.stream([{ role: 'user', content: conversation }], TITLE_SYSTEM, { model, signal })) text += piece
+  } catch {
+    return null
+  }
+  return cleanTitle(text)
 }

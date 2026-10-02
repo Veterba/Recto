@@ -93,4 +93,89 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
     expect(await answersOnScreen()).toBe(1)
     expect(answersInFile()).toBe(1)
   }, 60_000)
+
+  const topicFiles = (): string[] =>
+    fs
+      .readdirSync(path.join(vault, 'chats', 'recto'))
+      .filter((f) => f.endsWith('.md'))
+      .sort()
+  const ask = async (question: string): Promise<void> => {
+    const before = await answersOnScreen()
+    await page.locator('.bot-chat .chat__input').click()
+    await page.keyboard.type(question)
+    await page.keyboard.press('Enter')
+    await page.waitForFunction((n) => document.querySelectorAll('.bot-chat .chat__turn--assistant').length > n, before)
+    // The title arrives after the answer, and renames the file.
+    await page.waitForFunction(
+      () => !document.querySelector('.chat-topic:last-of-type .chat-topic__divider')?.textContent?.includes('New topic · New topic'),
+    )
+  }
+
+  it('⌘N starts a new topic: a file of its own, under its own divider, holding only its own turns', async () => {
+    await page.locator('.bot-chat .chat__input').click()
+    await page.keyboard.press('Meta+n')
+    await ask('hei')
+    const files = topicFiles()
+    expect(files).toHaveLength(2)
+    // Begun in the same minute on the same subject, the second gets a number.
+    expect(files.map((f) => f.slice(17)).sort()).toEqual(['— Soil mix (2).md', '— Soil mix.md'])
+    const newest = fs.readFileSync(
+      path.join(
+        vault,
+        'chats',
+        'recto',
+        files.find((f) => f.includes('(2)'))!,
+      ),
+      'utf8',
+    )
+    expect(newest).toMatch(/^---\nbot: recto\ncreated: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}\ntitle: Soil mix\n---/)
+    expect(newest).toContain('hei')
+    expect(newest).not.toContain('How do I mix soil?')
+    expect(await page.locator('.chat-topic').count()).toBe(2)
+    expect(await page.locator('.chat-topic.is-past').count()).toBe(1)
+  }, 60_000)
+
+  it('History renames a topic: its file name and its title', async () => {
+    await page.getByRole('button', { name: 'History' }).click()
+    await page.waitForSelector('.bot-history__row')
+    await page.locator('.bot-history__row').first().hover()
+    await page
+      .locator('.bot-history__row')
+      .first()
+      .getByRole('button', { name: /^Rename/ })
+      .click()
+    await page.keyboard.press('Meta+a')
+    await page.keyboard.type('Greetings')
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => document.querySelector('.bot-history__title')?.textContent === 'Greetings')
+    const renamed = topicFiles().find((f) => f.endsWith(' — Greetings.md'))
+    expect(renamed).toBeDefined()
+    expect(fs.readFileSync(path.join(vault, 'chats', 'recto', renamed!), 'utf8')).toContain('title: Greetings\n')
+  }, 60_000)
+
+  it('delete takes a topic away, and Undo brings it back as it was', async () => {
+    const before = topicFiles()
+    const greetings = before.find((f) => f.endsWith(' — Greetings.md'))!
+    const content = fs.readFileSync(path.join(vault, 'chats', 'recto', greetings), 'utf8')
+    const row = page.locator('.bot-history__row', { hasText: 'Greetings' })
+    await row.hover()
+    await row.getByRole('button', { name: /^Delete/ }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Delete topic' }).click()
+    await page.waitForSelector('.bot-undo')
+    expect(topicFiles()).toHaveLength(before.length - 1)
+    await page.locator('.bot-undo').getByRole('button', { name: 'Undo' }).click()
+    await page.waitForFunction(() => document.querySelectorAll('.bot-history__row').length === 2)
+    expect(topicFiles()).toEqual(before)
+    expect(fs.readFileSync(path.join(vault, 'chats', 'recto', greetings), 'utf8')).toBe(content)
+  }, 60_000)
+
+  it('Clear all says how many topics go, and takes them all', async () => {
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByText('Clear all').click()
+    await expect(page.getByRole('alertdialog').innerText()).resolves.toContain('All 2 topics')
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Delete 2 topics' }).click()
+    await page.waitForFunction(() => document.querySelectorAll('.chat-topic').length === 1)
+    expect(topicFiles()).toEqual([])
+  }, 60_000)
 })

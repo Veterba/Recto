@@ -382,30 +382,52 @@ async function screens(page, dir, vault) {
   await page.keyboard.press('Escape')
   await page.waitForSelector('.find', { state: 'detached' })
 
-  // The AI section with its bots, then a question to Recto and its answer.
-  // Recto's thread arrives only now - as a note it would change every screen
-  // above - with one earlier exchange, dated by the run's clock: written aside,
-  // dated, then moved in, so the watcher sees it whole.
+  // The AI section: Recto, the main chat, with one earlier topic. The topic
+  // arrives only now - as a note it would change every screen above - begun at
+  // 09:30 by the run's clock: written aside, dated, then moved in, so the
+  // watcher sees it whole.
   const folder = path.join(vault, 'chats', 'recto')
   fs.mkdirSync(folder, { recursive: true })
-  const aside = path.join(vault, 'chats', '.thread.tmp')
+  const aside = path.join(vault, 'chats', '.topic.tmp')
   fs.writeFileSync(
     aside,
-    '---\nrecto: chat\n---\n\n# What goes in the soil mix?\n\n## You\n\nWhat goes in the soil mix?\n\n## Recto\n\nCompost, loam and grit.\n',
+    '---\nbot: recto\ncreated: 2026-09-20T09:30\ntitle: Soil mix\n---\n\n## You\n\nWhat goes in the soil mix?\n\n## Recto\n\nCompost, loam and grit.\n',
   )
-  fs.utimesSync(aside, NOW, NOW)
-  fs.renameSync(aside, path.join(folder, '2026-09-20 10-00-00.md'))
+  const earlier = new Date(NOW.getTime() - 30 * 60_000)
+  fs.utimesSync(aside, earlier, earlier)
+  fs.renameSync(aside, path.join(folder, '2026-09-20 09-30 — Soil mix.md'))
   await key(page, 'Mod+2')
-  await page.waitForFunction(() => document.querySelector('.bot-row__time')?.textContent === '10:00')
-  await shoot(page, dir, '22-ai-sidebar')
-  await page.locator('.bot-row').first().click()
+  await page.waitForFunction(() => document.querySelector('.bot-row__time')?.textContent === '09:30')
   await page.waitForSelector('.bot-chat .chat__turn')
+  await shoot(page, dir, '22-ai-sidebar')
+
+  // A question in the current topic, answered with its sources.
   await page.locator('.bot-chat .chat__input').click()
   await page.keyboard.type('How do I mix soil for raised beds?')
   await page.keyboard.press('Enter')
-  await page.waitForSelector('.bot-chat .bot-sources')
+  await page.waitForFunction(() => document.querySelectorAll('.bot-chat .chat__turn--assistant').length === 2)
+  await page.waitForSelector('.bot-chat .chat__turn--assistant:last-of-type .bot-sources')
   await page.waitForFunction(() => document.querySelector('.bot-row__time')?.textContent === '10:00')
   await shoot(page, dir, '23-bot-chat')
+
+  // ⌘N: a new topic under its own divider; the one before sits back.
+  await key(page, 'Mod+N')
+  await page.keyboard.type('Which beds need the most sun?')
+  await page.keyboard.press('Enter')
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll('.chat-topic.is-past').length === 1 &&
+      [...document.querySelectorAll('.chat-topic__divider')].map((d) => d.textContent).join() ===
+        'New topic · Soil mix,New topic · Soil mix',
+  )
+  await shoot(page, dir, '24-topic-divider')
+
+  // History: the topics, newest first.
+  await page.getByRole('button', { name: 'History' }).click()
+  await page.waitForFunction(() => document.querySelectorAll('.bot-history__row').length === 2)
+  await shoot(page, dir, '25-history')
+  await page.getByRole('button', { name: 'Close history' }).click()
+
   // Back to Data: the smoke test after the screens edits a note from the tree.
   // The composer keeps its keys to itself, so it lets go of the focus first.
   await page.evaluate(() => document.activeElement?.blur())

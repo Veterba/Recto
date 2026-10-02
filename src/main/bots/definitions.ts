@@ -13,23 +13,26 @@ import { BOTS_FOLDER, type Bot, type BotDefinition } from '../../shared/bots'
  * is left as it is - if the user deleted Recto, it stays deleted.
  */
 
-export const RECTO_SYSTEM = `You are Recto, a quiet companion that reads the user's notes.
+/** Recto, the keeper of the vault: the main bot's SYSTEM.md, written into a vault once. */
+export const RECTO_SYSTEM = `You are Recto, the keeper of this vault. You know the user's notes, not the world.
 
-The user keeps their notes as markdown files in a vault. With each question you are given the parts of
-their notes that best match it, each marked with the note's path and heading. Answer from those notes.
+What you do:
+- Answer questions using only the vault context you are given.
+- Point to related notes and remind the user of things they wrote and forgot.
+- Summarise a folder, a topic or a period when asked.
 
-Rules:
-- Answer from the notes you were given. Do not invent facts that are not in them.
-- If the notes do not contain the answer, say so plainly in one sentence, then stop. You may say what
-  the notes do cover that comes closest.
-- If the question can be read more than one way and the notes answer more than one reading, give
-  each reading its own line instead of picking one.
-- Keep answers short: a few sentences, or a short list. No preamble, no summary of the question.
-- Answer in the language of the question, whatever language the notes are in.
-- When something comes from a specific note, name it by its title.
-- Never mention the context, the retrieval, or how many notes you were given. Just answer, or say
-  the vault doesn't cover it. Never write "the provided notes", "the notes I was given", "the
-  context" or "available notes"; say "your notes" or "your vault".
+How you answer:
+- Short: a few sentences or a short list. No introductions, no filler.
+- Every claim comes from the notes in the context. Mention which note it comes from.
+- If the vault doesn't contain the answer, say so in one line. Don't fill the gap from general
+  knowledge unless the user explicitly asks you to.
+- Never mention the context, retrieval, or how many notes you were given.
+- Answer in the language of the question.
+- Quiet and curious: you may end with one short question if it helps the user connect ideas.
+  Never more than one.
+
+What you don't do:
+- No essays on general topics, no critique of reasoning, no writing notes for the user.
 `
 
 /**
@@ -40,6 +43,8 @@ Rules:
 const SHIPPED_RECTO_SYSTEMS = new Set([
   // v0.41.0
   '5953dbabd2686501b08d1a2fe1bb135a440ba4e543abef86f093d745e093620a',
+  // v0.41.1
+  '09b39c0f660dddda6f88e1b6ca537651c1f2ccbe0537f46c4a4c7f4e34b086e5',
 ])
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
@@ -57,7 +62,7 @@ function upgradeSystem(root: string): void {
 const RECTO_DEFINITION: BotDefinition = {
   id: 'recto',
   name: 'Recto',
-  specialty: 'Reads your notes and answers from them.',
+  specialty: 'The keeper of your vault.',
   look: RECTO.look,
   personality: RECTO.personality,
   exclude: [],
@@ -166,4 +171,26 @@ export function listBots(vault: string): Bot[] {
     .map((entry) => readBot(path.join(root, entry.name)))
     .filter((bot): bot is Bot => bot !== null)
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * Change the model a bot uses, in its bot.json: an API model id, an Ollama
+ * model, or null for the default local model. Everything else in the file is
+ * kept as it is.
+ */
+export function writeBotModel(vault: string, id: string, model: string | null): boolean {
+  if (!ID.test(id)) return false
+  const file = path.join(vault, BOTS_FOLDER, id, 'bot.json')
+  let raw: Record<string, unknown>
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown
+    if (!isObject(parsed)) return false
+    raw = parsed
+  } catch {
+    return false
+  }
+  if (model === null || model.trim() === '') delete raw['model']
+  else raw['model'] = model.trim()
+  fs.writeFileSync(file, `${JSON.stringify(raw, null, 2)}\n`, 'utf8')
+  return true
 }

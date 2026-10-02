@@ -16,6 +16,7 @@ export function ChatMessages<M extends AiMessage>({
   error,
   onDismissError,
   assistant = 'Claude',
+  labelOf,
   after,
 }: {
   messages: readonly M[]
@@ -25,6 +26,8 @@ export function ChatMessages<M extends AiMessage>({
   onDismissError: () => void
   /** The name over the assistant's turns. */
   assistant?: string
+  /** A turn's own name, when turns of one thread were written by different models (an old main-chat answer is Claude's). */
+  labelOf?: (message: M) => string | undefined
   /** Anything to show under a turn (a bot's sources). */
   after?: (message: M, index: number) => React.ReactNode
 }): React.ReactElement {
@@ -32,7 +35,7 @@ export function ChatMessages<M extends AiMessage>({
     <>
       {messages.map((message, index) => (
         <article className={`chat__turn chat__turn--${message.role}`} key={index}>
-          <span className="chat__role">{message.role === 'user' ? 'You' : assistant}</span>
+          <span className="chat__role">{message.role === 'user' ? 'You' : (labelOf?.(message) ?? assistant)}</span>
           <div className="chat__body">
             {message.role === 'user' ? <p className="chat__para">{message.content}</p> : <Markdownish text={message.content} />}
           </div>
