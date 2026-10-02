@@ -49,8 +49,8 @@ async function walk(dir: string, out: { path: string; mtime: number; size: numbe
   return out
 }
 
-/** Write one note's rows. Caller wraps this in a transaction. */
-function writeNote(relative: string, content: string, mtime: number, size: number): void {
+/** Write one note's rows. Caller wraps this in a transaction. Exported for the tests. */
+export function writeNote(relative: string, content: string, mtime: number, size: number): void {
   const handle = requireDb()
   const parsed = parseNote(content)
   const name = relative.slice(relative.lastIndexOf('/') + 1)

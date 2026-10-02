@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { RECTO, type BotLook, type BotPersonality } from '../../shared/bot-presets'
@@ -26,7 +27,32 @@ Rules:
 - Keep answers short: a few sentences, or a short list. No preamble, no summary of the question.
 - Answer in the language of the question, whatever language the notes are in.
 - When something comes from a specific note, name it by its title.
+- Never mention the context, the retrieval, or how many notes you were given. Just answer, or say
+  the vault doesn't cover it. Never write "the provided notes", "the notes I was given", "the
+  context" or "available notes"; say "your notes" or "your vault".
 `
+
+/**
+ * Recto's SYSTEM.md as shipped before, by SHA-256. A vault whose SYSTEM.md is
+ * still exactly one of these was never edited, so it is brought up to the
+ * current text; an edited one is the user's and is left alone.
+ */
+const SHIPPED_RECTO_SYSTEMS = new Set([
+  // v0.41.0
+  '5953dbabd2686501b08d1a2fe1bb135a440ba4e543abef86f093d745e093620a',
+])
+
+const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
+
+/** Bring an unedited Recto SYSTEM.md up to the current text. */
+function upgradeSystem(root: string): void {
+  const file = path.join(root, RECTO_DEFINITION.id, 'SYSTEM.md')
+  try {
+    if (SHIPPED_RECTO_SYSTEMS.has(sha256(fs.readFileSync(file, 'utf8')))) fs.writeFileSync(file, RECTO_SYSTEM, 'utf8')
+  } catch {
+    // No SYSTEM.md, or unreadable: nothing to upgrade.
+  }
+}
 
 const RECTO_DEFINITION: BotDefinition = {
   id: 'recto',
@@ -128,6 +154,7 @@ function seed(root: string): void {
 export function listBots(vault: string): Bot[] {
   const root = path.join(vault, BOTS_FOLDER)
   if (!fs.existsSync(root)) seed(root)
+  else upgradeSystem(root)
   let entries: fs.Dirent[] = []
   try {
     entries = fs.readdirSync(root, { withFileTypes: true })

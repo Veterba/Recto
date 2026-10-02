@@ -70,7 +70,7 @@ function BotChat({
     void api.invoke(IPC.fsRead, path).then((result) => {
       if (cancelled) return
       const thread = result.ok ? parseThread(result.content, bot.name) : { title: '', messages: [] }
-      setMessages(thread.messages)
+      commit(thread.messages)
       setTitle(thread.title)
       if (thread.title !== '') onTitle(thread.title)
       setLoaded(true)
@@ -90,37 +90,44 @@ function BotChat({
     [path, bot.name],
   )
 
-  const land = useCallback(
-    (text: string) => {
-      const reply = text.trim()
-      if (reply === '') return
-      setMessages((prev) => {
-        const next: BotMessage[] = [...prev, { role: 'assistant', content: reply, sources: sources.current }]
-        void save(next, titleFrom(next))
-        return next
-      })
-    },
-    [save],
-  )
+  /**
+   * The thread and the reply being streamed, mirrored in refs so the stream's
+   * handlers read them directly. Nothing here runs inside a state updater:
+   * development React calls an updater twice when it applies it during a
+   * render, and an answer saved from one landed twice.
+   */
+  const messagesRef = useRef<BotMessage[]>([])
+  const pendingRef = useRef<string | null>(null)
+  const commit = useCallback((next: BotMessage[]) => {
+    messagesRef.current = next
+    setMessages(next)
+  }, [])
+  const setStream = useCallback((next: string | null) => {
+    pendingRef.current = next
+    setPending(next)
+  }, [])
+
+  /** The stream ended: whatever arrived becomes one answer, saved once. */
+  const land = useCallback(() => {
+    const reply = (pendingRef.current ?? '').trim()
+    setStream(null)
+    if (reply === '') return
+    const next: BotMessage[] = [...messagesRef.current, { role: 'assistant', content: reply, sources: sources.current }]
+    commit(next)
+    void save(next, titleFrom(next))
+  }, [commit, save, setStream])
 
   useEffect(() => {
     const offDelta = api.on(IPC_EVENT.botsDelta, (delta) => {
-      if (delta.id === path) setPending((current) => (current ?? '') + delta.text)
+      if (delta.id === path) setStream((pendingRef.current ?? '') + delta.text)
     })
     const offDone = api.on(IPC_EVENT.botsDone, (done) => {
-      if (done.id !== path) return
-      setPending((current) => {
-        land(current ?? '')
-        return null
-      })
+      if (done.id === path) land()
     })
     const offError = api.on(IPC_EVENT.botsError, (failure) => {
       if (failure.id !== path) return
       // Whatever arrived before the failure is kept, as the main chat does.
-      setPending((current) => {
-        land(current ?? '')
-        return null
-      })
+      land()
       setError(failure.message)
       setFailed(true)
     })
@@ -129,7 +136,7 @@ function BotChat({
       offDone()
       offError()
     }
-  }, [path, land])
+  }, [path, land, setStream])
 
   useLayoutEffect(() => {
     const element = scroller.current
@@ -144,8 +151,8 @@ function BotChat({
     if (text === '' || pending !== null || !ready) return
     setError(null)
     setFailed(false)
-    const next: BotMessage[] = [...messages, { role: 'user', content: text }]
-    setMessages(next)
+    const next: BotMessage[] = [...messagesRef.current, { role: 'user', content: text }]
+    commit(next)
     setDraft('')
     const nextTitle = titleFrom(next)
     setTitle(nextTitle)
@@ -153,7 +160,7 @@ function BotChat({
     await save(next, nextTitle)
 
     sources.current = []
-    setPending('')
+    setStream('')
     const started = await api.invoke(IPC.botsSend, {
       id: path,
       botId: bot.id,
@@ -163,13 +170,13 @@ function BotChat({
       sources.current = started.sources
       return
     }
-    setPending(null)
+    setStream(null)
     setFailed(true)
     // The model went away since the last check: show what to do, not an error.
     if (started.status !== undefined) recheck()
     else setError(started.error)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, messages, pending, ready, save, path, bot.id])
+  }, [draft, pending, ready, save, path, bot.id, commit, setStream])
 
   const stop = useCallback(() => {
     void api.invoke(IPC.botsCancel, path)

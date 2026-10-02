@@ -9,3 +9,5 @@ test/fixtures/
 resources/
 # Prose is written by hand
 *.md
+# The approved bot prototype, kept exactly as it was handed over.
+docs/design/recto-bot-reference.html

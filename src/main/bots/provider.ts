@@ -129,9 +129,10 @@ export class MockProvider implements BotModelProvider {
 
   async *stream(_messages: AiMessage[], _system: string, { signal }: { model: string; signal: AbortSignal }): AsyncIterable<string> {
     const reply = 'Your notes keep the soil mix simple: compost, loam and grit, tested for pH before planting.'
+    // All at once, the way a real model's last tokens and its end arrive: the
+    // case where the renderer gets the end before it has drawn the last token.
     for (const word of reply.split(/(?<= )/)) {
       if (signal.aborted) return
-      await new Promise((resolve) => setTimeout(resolve, 15))
       yield word
     }
   }

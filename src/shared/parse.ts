@@ -166,17 +166,30 @@ export function parseNote(content: string): ParsedNote {
   })
 
   let inCode = false
+  let inComment = false
 
   for (let i = bodyStart; i < lines.length; i++) {
-    const line = lines[i] ?? ''
-    bodyLines.push(line)
+    const raw = lines[i] ?? ''
 
-    if (CODE_FENCE.test(line)) {
+    if (!inComment && CODE_FENCE.test(raw)) {
+      bodyLines.push(raw)
       inCode = !inCode
       continue
     }
     // Links and tags inside a fenced block are code, not references.
-    if (inCode) continue
+    if (inCode) {
+      bodyLines.push(raw)
+      continue
+    }
+
+    // An HTML comment is hidden text: not searched, not a link, not a tag. It
+    // is where a bot keeps an answer's sources, and a note that cited "Soil"
+    // there must not come up when searching for Soil. Blanked rather than
+    // dropped, so every line keeps its number.
+    const visible = withoutComments(raw, inComment)
+    inComment = visible.open
+    const line = visible.text
+    bodyLines.push(line)
 
     const heading = HEADING.exec(line)
     let scannable = line
@@ -215,6 +228,31 @@ export function parseNote(content: string): ParsedNote {
   const title = typeof fmTitle === 'string' && fmTitle !== '' ? fmTitle : (headings.find((h) => h.level === 1)?.text ?? null)
 
   return { title, frontmatter, headings, links, tags, body: bodyLines.join('\n') }
+}
+
+/**
+ * A line with its HTML comments taken out. `open` says whether a comment is
+ * still open at the end of the line (comments can span lines), and is passed
+ * back in for the next one.
+ */
+export function withoutComments(line: string, open: boolean): { text: string; open: boolean } {
+  let text = ''
+  let rest = line
+  let inside = open
+  for (;;) {
+    if (inside) {
+      const end = rest.indexOf('-->')
+      if (end === -1) return { text, open: true }
+      rest = rest.slice(end + 3)
+      inside = false
+    } else {
+      const start = rest.indexOf('<!--')
+      if (start === -1) return { text: text + rest, open: false }
+      text += rest.slice(0, start)
+      rest = rest.slice(start + 4)
+      inside = true
+    }
+  }
 }
 
 /** Note paths keyed by their normalised file name: the lookup `resolveLink` takes. */

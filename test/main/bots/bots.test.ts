@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -30,6 +31,33 @@ describe('query terms', () => {
   it('drops repeats and stops at the maximum', () => {
     expect(queryTerms('soil soil soil')).toEqual(['soil'])
     expect(queryTerms('one two three four five six seven eight nine ten eleven', 3)).toEqual(['one', 'two', 'three'])
+  })
+})
+
+describe('small talk', () => {
+  it('has no words worth searching for', () => {
+    for (const message of ['hei', 'Hi!', 'hello there', 'thanks', 'ok', 'привет', 'спасибо!', 'Доброе утро'])
+      expect(queryTerms(message)).toEqual([])
+  })
+
+  it('a short word only counts as a whole word, a longer one from the start of a word', () => {
+    expect(scoreSection({ heading: null, text: 'The height of the bed' }, ['hei'])).toBe(0)
+    expect(scoreSection({ heading: null, text: 'hei og hå' }, ['hei'])).toBeGreaterThan(0)
+    expect(scoreSection({ heading: null, text: 'I decided to wait' }, ['decid'])).toBeGreaterThan(0)
+    expect(scoreSection({ heading: null, text: 'still undecided' }, ['decid'])).toBe(0)
+    expect(scoreSection({ heading: null, text: 'Заметки о почве' }, ['заметк'])).toBeGreaterThan(0)
+  })
+
+  it('a question of two or more words needs two of them in a section, not one by chance', () => {
+    const log = { path: 'log.md', title: 'Log', score: 1, sections: [{ heading: null, text: 'Capitalise the first letter.' }] }
+    expect(selectChunks([log], queryTerms('what is the capital of France?'))).toEqual([])
+    expect(selectChunks([log], queryTerms('capitalise'))).toHaveLength(1)
+  })
+
+  it('a word only in a heading is not enough to be read', () => {
+    expect(selectChunks([{ path: 'a.md', title: 'A', score: 1, sections: [{ heading: 'Soil', text: 'nothing here' }] }], ['soil'])).toEqual(
+      [],
+    )
   })
 })
 
@@ -111,8 +139,8 @@ describe('choosing chunks', () => {
       score: 2.5,
       sections: [
         { heading: 'Naming', text: 'Topics naming: call the feature topics.' },
-        { heading: 'Topics UI', text: 'topics in the sidebar' },
-        { heading: 'Topics more', text: 'topics again' },
+        { heading: 'Topics UI', text: 'topics naming in the sidebar' },
+        { heading: 'Topics more', text: 'topics naming again' },
       ],
     },
     { path: 'Other.md', title: 'Other', score: 1.2, sections: [{ heading: null, text: 'unrelated text' }] },
@@ -140,8 +168,8 @@ describe('choosing chunks', () => {
     expect(selectChunks([busier], ['topics']).map((c) => c.heading)).toContain('Phase 6')
   })
 
-  it('gives a note that matched only by name its opening section', () => {
-    expect(selectChunks(notes, ['topics']).some((c) => c.path === 'Other.md')).toBe(true)
+  it('takes nothing from a note that matched only by its title', () => {
+    expect(selectChunks(notes, ['topics']).some((c) => c.path === 'Other.md')).toBe(false)
   })
 
   it('stays within the budget and the maximum', () => {
@@ -154,6 +182,10 @@ describe('choosing chunks', () => {
     const chunks = selectChunks(many, ['soil'], { max: 6, budget: 3000 })
     expect(chunks.length).toBeLessThanOrEqual(6)
     expect(chunks.reduce((n, c) => n + c.text.length, 0)).toBeLessThanOrEqual(3000)
+  })
+
+  it('gives small talk no notes at all, and says so when a real question matched nothing', () => {
+    expect(buildSystem('Be brief.', null)).toBe('Be brief.')
   })
 
   it('tells the model plainly when nothing matched', () => {
@@ -195,6 +227,19 @@ describe('definitions', () => {
     expect(bots[0]!.look).toEqual(RECTO.look)
     expect(bots[0]!.system).toBe(RECTO_SYSTEM.trim())
     expect(fs.existsSync(path.join(root, '.recto/bots/recto/SYSTEM.md'))).toBe(true)
+  })
+
+  it('an unedited SYSTEM.md from an earlier version is brought up to date; an edited one is not', () => {
+    const root = vault()
+    listBots(root)
+    const file = path.join(root, '.recto/bots/recto/SYSTEM.md')
+    const shipped = execSync('git show 63445a2:src/main/bots/definitions.ts', { cwd: path.resolve(__dirname, '../../..') }).toString()
+    const old = /export const RECTO_SYSTEM = `([\s\S]*?)`/.exec(shipped)![1]!
+    fs.writeFileSync(file, old)
+    expect(listBots(root)[0]!.system).toBe(RECTO_SYSTEM.trim())
+    expect(RECTO_SYSTEM).toContain('Never mention the context')
+    fs.writeFileSync(file, `${old}\n- My own rule.\n`)
+    expect(listBots(root)[0]!.system).toContain('My own rule.')
   })
 
   it('a deleted Recto stays deleted', () => {

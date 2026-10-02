@@ -21,7 +21,11 @@ const STOPWORDS = new Set(
   будто чего раз тоже себе под будет ж тогда кто этот того потому этого какой совсем ним здесь этом один
   почти мой тем чтобы нее сейчас были куда зачем всех никогда можно при наконец два об другой хоть после
   над больше тот через эти нас про всего них какая много разве три эту моя впрочем хорошо свою этой перед
-  иногда лучше чуть том нельзя такой им более всегда конечно всю между мои мой моё моих`.split(/\s+/),
+  иногда лучше чуть том нельзя такой им более всегда конечно всю между мои мой моё моих
+  hi hey hei hello hallo hej yo thanks thank thx please cool nice great good morning evening night bye
+  okay yeah yep nope sure
+  привет приветик здравствуй здравствуйте спасибо пожалуйста пока хорошо отлично ок окей ага угу ладно
+  доброе добрый утро вечер ночи`.split(/\s+/),
 )
 
 const WORD = /[\p{L}\p{N}]+/gu
@@ -128,11 +132,44 @@ export function scoreSection(section: Section, terms: readonly string[]): number
   const heading = (section.heading ?? '').toLowerCase()
   let score = 0
   for (const term of terms) {
-    if (heading.includes(term)) score += 0.5
-    if (text.includes(term)) score += 1 + Math.min(2, (text.split(term).length - 2) * 0.25)
+    const hits = (where: string): number => where.match(termPattern(term))?.length ?? 0
+    if (hits(heading) > 0) score += 0.5
+    const inText = hits(text)
+    if (inText > 0) score += 1 + Math.min(2, (inText - 1) * 0.25)
   }
   return score
 }
+
+/**
+ * Where a term counts: at the start of a word, as the index's prefix search
+ * finds it - "decid" in "decided", never in "undecided". A term of three
+ * letters must be the whole word, or "hei" is found in every "height".
+ */
+function termPattern(term: string): RegExp {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}${term.length <= 3 ? '(?![\\p{L}\\p{N}])' : ''}`, 'gu')
+}
+
+/**
+ * The least a section must score to be read: one of the question's words in
+ * its text. A word only in its heading is not enough to answer from.
+ */
+export const MIN_SECTION_SCORE = 1
+
+/**
+ * How many of the question's words must be in a section's text for it to be
+ * read: two, when the question has two or more. One stray word is chance -
+ * "capital of France" found "capitalise" in a log - and a bot answering "your
+ * vault doesn't cover it" should not list notes under it.
+ */
+export function enoughTerms(section: Section, terms: readonly string[]): boolean {
+  const text = section.text.toLowerCase()
+  const found = terms.filter((term) => termPattern(term).test(text)).length
+  return found >= Math.min(2, terms.length)
+}
+
+const readable = (section: Section, terms: readonly string[]): boolean =>
+  scoreSection(section, terms) >= MIN_SECTION_SCORE && enoughTerms(section, terms)
 
 export type Chunk = BotSource & { text: string; title: string }
 
@@ -143,7 +180,8 @@ export type Chunk = BotSource & { text: string; title: string }
  * top, and a later section can outscore it just by mentioning the words in
  * passing. Then the best other sections fill what is left, at most two from
  * one note so a long note cannot crowd out the rest. A note that matched only
- * by its title still gives its opening.
+ * Only sections that hold one of the question's words are read; a note that
+ * matched the search by its title alone gives nothing.
  */
 export function selectChunks(
   notes: readonly { path: string; title: string; score: number; sections: readonly Section[] }[],
@@ -158,10 +196,10 @@ export function selectChunks(
     const chunk = (section: Section): Chunk => ({ path: note.path, heading: section.heading, title: note.title, text: section.text })
     const best = rest
       .map((section) => ({ section, score: scoreSection(section, terms) }))
-      .filter((s) => s.score > 0)
+      .filter((s) => readable(s.section, terms))
       .sort((a, b) => b.score - a.score)
       .slice(0, 2)
-    if (scoreSection(opening, terms) > 0 || best.length === 0) openings.push(chunk(opening))
+    if (readable(opening, terms)) openings.push(chunk(opening))
     for (const { section, score } of best) others.push({ ...chunk(section), score: score + note.score })
   }
   others.sort((a, b) => b.score - a.score)
@@ -182,7 +220,10 @@ export function selectChunks(
 }
 
 /** The bot's own instructions, then what it found in the vault - or a plain statement that it found nothing. */
-export function buildSystem(botSystem: string, chunks: readonly Chunk[]): string {
+export function buildSystem(botSystem: string, chunks: readonly Chunk[] | null): string {
+  // Small talk ("hei", "thanks") asks nothing of the vault: no notes, and no
+  // line saying none matched, or the bot answers a greeting with an apology.
+  if (chunks === null) return botSystem.trim()
   const notes =
     chunks.length === 0
       ? 'No notes in the vault matched this question.'

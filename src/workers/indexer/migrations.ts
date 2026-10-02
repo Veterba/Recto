@@ -212,6 +212,17 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 9,
+    name: 'html-comments-hidden',
+    sql: `
+      -- No schema change. HTML comments stopped being indexed (search text,
+      -- links, tags), and a migration is what makes the next open reindex
+      -- every note rather than only changed ones - without it, a note's old
+      -- comment would stay searchable until the note was next edited.
+      SELECT 1;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

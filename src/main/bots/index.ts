@@ -64,10 +64,14 @@ export async function status(model?: string): Promise<BotModelStatus> {
   return result
 }
 
-/** The vault's best parts for a question, within budget, skipping chats and the bot's excluded folders. */
-async function findContext(question: string, bot: Bot): Promise<ReturnType<typeof selectChunks>> {
+/**
+ * The vault's best parts for a question, within budget, skipping chats and the
+ * bot's excluded folders. Null when the message asks nothing of the vault -
+ * small talk, no words worth searching for - so nothing is read at all.
+ */
+async function findContext(question: string, bot: Bot): Promise<ReturnType<typeof selectChunks> | null> {
   const terms = queryTerms(question)
-  if (terms.length === 0) return []
+  if (terms.length === 0) return null
   const hitsByTerm = await Promise.all(
     terms.map(async (term) => {
       const response = await indexer({ kind: 'search', query: term, limit: 12 }, 15_000).catch(() => null)
@@ -139,7 +143,7 @@ export async function ask(request: {
     }
   })()
 
-  return { ok: true, sources: chunks.map(({ path: p, heading }) => ({ path: p, heading })) }
+  return { ok: true, sources: (chunks ?? []).map(({ path: p, heading }) => ({ path: p, heading })) }
 }
 
 export function cancel(id: string): { ok: boolean } {

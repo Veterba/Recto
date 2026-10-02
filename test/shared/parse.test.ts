@@ -197,3 +197,32 @@ describe('the name lookup', () => {
     expect(resolveLink('other', pathsByName(paths), new Set(paths))).toBe('c/Other.md')
   })
 })
+
+describe('HTML comments', () => {
+  const note = [
+    '# Thread',
+    'Visible text about soil.',
+    '<!-- recto:sources [{"path":"Garden/Tomatoes.md"}] -->',
+    'Before <!-- hidden [[Ideas]] #secret --> after [[Basil]]',
+    '<!-- a comment',
+    'over two lines [[Soil]] #tag',
+    '-->',
+    '```html',
+    '<!-- inside code, kept -->',
+    '```',
+  ].join('\n')
+
+  it('are not searchable text, links or tags, and every line keeps its number', () => {
+    const parsed = parseNote(note)
+    expect(parsed.body).not.toContain('Tomatoes')
+    expect(parsed.body).not.toContain('over two lines')
+    expect(parsed.body).toContain('Before  after [[Basil]]')
+    expect(parsed.links.map((l) => l.target)).toEqual(['Basil'])
+    expect(parsed.tags).toEqual([])
+    expect(parsed.body.split('\n')).toHaveLength(note.split('\n').length)
+  })
+
+  it('inside a code fence are code, left as they are', () => {
+    expect(parseNote(note).body).toContain('<!-- inside code, kept -->')
+  })
+})

@@ -22,6 +22,11 @@ export function open(root: string, dbPath: string): { migratedFrom: number; migr
   // A cache can afford to lose the last few writes to a power cut; it cannot
   // afford to fsync on every keystroke-triggered reindex.
   handle.pragma('synchronous = NORMAL')
+  // The embedder writes topic vectors into this same file. Without a wait,
+  // the moment both write at once SQLite fails the indexer's statement with
+  // "database is locked" instead of letting it queue for the lock; the
+  // embedder already waits up to 5 s, and so does this side now.
+  handle.pragma('busy_timeout = 5000')
 
   const { from, to } = runMigrations(handle)
   db = handle
