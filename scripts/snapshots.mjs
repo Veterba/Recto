@@ -4,7 +4,9 @@
 //   npm run snapshots                          build, then shoot into snapshots/current/
 //   npm run snapshots -- --out <dir>           shoot into <dir>
 //   npm run snapshots -- --compare <dir>       shoot, then compare pixel by pixel with <dir>;
-//                                              writes *.diff.png for each difference, exit 1 if any
+//                                              exit 1 if any differ. Each difference is kept, with
+//                                              the shot, as snapshots/diffs/<theme>/<shot>.run-<n>.diff.png
+//                                              (n counts compare runs; earlier runs' files stay)
 //   npm run snapshots -- --styles              also record every element's computed style (and its
 //                                              ::before/::after) per screen; --compare then compares
 //                                              those too - catching what pixels cannot, like transitions
@@ -43,6 +45,14 @@ const NOW = new Date('2026-09-20T10:00:00')
  * difference is still printed; only this many or more fails the run.
  */
 const NOISE_PIXELS = 100
+/**
+ * How far one colour channel may differ and still count as the same pixel.
+ * A translucent surface over a blurred one (the find card's input over the
+ * glass) is blended by the GPU compositor, which rounds it a level either way
+ * from run to run: measured, 9,771 pixels of the input off by exactly 1.
+ * A real change moves a colour by far more than one level in 255.
+ */
+const LEVELS = 1
 const SETTINGS_TABS = ['Appearance', 'Editor', 'Writing', 'Templates', 'Topics', 'Obsidian', 'AI', 'Shortcuts', 'Vault']
 
 const args = process.argv.slice(2)
@@ -58,13 +68,90 @@ const COVERAGE = args.includes('--coverage')
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/**
+ * Isolation. Every run works on a fresh copy of the fixture vault and gives
+ * every Electron it starts a new, empty profile (userData); both are deleted
+ * when the run ends. The vault's folder has a fixed path, because Settings ->
+ * Vault shows it - so only one run may hold it at a time (SNAPSHOT_LOCK).
+ */
+const SNAPSHOT_ROOT = path.join(os.tmpdir(), 'recto-snapshots')
+const SNAPSHOT_LOCK = path.join(SNAPSHOT_ROOT, 'run.lock')
+const profiles = []
+/**
+ * Keeps the user's typing and clicks out of every Electron the run starts (see
+ * snapshot-isolate.cjs). As an argument: Playwright drops NODE_OPTIONS.
+ */
+const ISOLATE = ['-r', path.join(ROOT, 'scripts/snapshot-isolate.cjs')]
+
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return error.code === 'EPERM'
+  }
+}
+
+/** Takes the run lock, or exits saying who holds it. A lock left by a dead run is taken over. */
+function lockRun() {
+  fs.mkdirSync(SNAPSHOT_ROOT, { recursive: true })
+  for (;;) {
+    try {
+      fs.writeFileSync(SNAPSHOT_LOCK, String(process.pid), { flag: 'wx' })
+      return
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+      const holder = Number(fs.readFileSync(SNAPSHOT_LOCK, 'utf8'))
+      if (alive(holder)) {
+        console.error(`Another snapshot run (pid ${holder}) is using ${SNAPSHOT_ROOT}. Wait for it to finish, or stop it, then run again.`)
+        process.exit(2)
+      }
+      fs.rmSync(SNAPSHOT_LOCK, { force: true })
+    }
+  }
+}
+
+/** Deletes every profile and vault copy this run made, and gives the lock back. */
+function cleanUp() {
+  for (const dir of profiles) fs.rmSync(dir, { recursive: true, force: true })
+  for (const theme of ['light', 'dark']) fs.rmSync(path.join(SNAPSHOT_ROOT, theme), { recursive: true, force: true })
+  if (fs.existsSync(SNAPSHOT_LOCK) && fs.readFileSync(SNAPSHOT_LOCK, 'utf8') === String(process.pid)) fs.rmSync(SNAPSHOT_LOCK)
+  // The folder itself, once empty - another run's lock keeps it.
+  if (fs.existsSync(SNAPSHOT_ROOT) && fs.readdirSync(SNAPSHOT_ROOT).length === 0) fs.rmdirSync(SNAPSHOT_ROOT)
+}
+
+/**
+ * A new, empty profile for one Electron. Refuses to go on if Recto (or any
+ * Chromium) is already running on it: its SingletonLock names a live process.
+ */
+function newProfile() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-snapshot-profile-'))
+  profiles.push(dir)
+  return dir
+}
+
+function assertProfileFree(dir) {
+  let target
+  try {
+    target = fs.readlinkSync(path.join(dir, 'SingletonLock'))
+  } catch {
+    return
+  }
+  const pid = Number(target.slice(target.lastIndexOf('-') + 1))
+  if (alive(pid)) {
+    console.error(`A Recto instance (pid ${pid}) is already running with the profile ${dir}. Quit it, then run again.`)
+    cleanUp()
+    process.exit(2)
+  }
+}
+
 function prepareVault(theme) {
   // A fixed path, not a random one: Settings -> Vault shows it.
-  const base = path.join(os.tmpdir(), 'recto-snapshots', theme)
+  const base = path.join(SNAPSHOT_ROOT, theme)
   fs.rmSync(base, { recursive: true, force: true })
   fs.mkdirSync(base, { recursive: true })
   const vault = path.join(base, 'Snapshot vault')
-  const userData = path.join(base, 'user-data')
+  const userData = newProfile()
   fs.cpSync(FIXTURE, vault, { recursive: true })
   fs.writeFileSync(path.join(vault, '.recto', 'appearance.json'), JSON.stringify({ theme }))
   const walk = (dir) => {
@@ -75,20 +162,23 @@ function prepareVault(theme) {
     }
   }
   walk(vault)
-  fs.mkdirSync(userData)
   fs.writeFileSync(path.join(userData, 'app-state.json'), JSON.stringify({ lastVaultPath: vault }))
   return { base, vault, userData }
 }
 
 async function launch(userData) {
+  assertProfileFree(userData)
   const app = await _electron.launch({
-    args: [ROOT, `--user-data-dir=${userData}`],
+    args: [...ISOLATE, ROOT, `--user-data-dir=${userData}`],
     // The vault is a throwaway copy: open it as it is (see dev-guard).
     env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
   })
   // Out of the way: the window never takes the screen from whoever is working.
   await app.evaluate(({ app }) => app.hide())
   await app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows()[0]?.setContentSize(w, h), [WIDTH, HEIGHT])
+  // A hidden window stops drawing once nothing moves - and nothing does, with
+  // animations off below - so a screenshot could wait forever for a frame.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.webContents.setBackgroundThrottling(false))
   const page = await app.firstWindow()
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.clock.setFixedTime(NOW)
@@ -96,6 +186,9 @@ async function launch(userData) {
   // graph's layout runs in a worker this does not reach; it settles to within
   // a few pixels.
   await page.addInitScript(() => {
+    // The home scene's own debug switches (features/home/scene-flags.ts): one
+    // still frame, deaf to the pointer.
+    localStorage.setItem('homeFlags', JSON.stringify({ freeze: true, noInput: true }))
     let seed = 0x2f6b
     Math.random = () => {
       seed = (seed + 0x6d2b79f5) | 0
@@ -103,11 +196,26 @@ async function launch(userData) {
       t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296
     }
-    // macOS overlay scrollbars fade in and out on their own schedule.
+    // macOS overlay scrollbars fade in and out on their own schedule, and
+    // anything still in motion is a different picture each run.
     addEventListener('DOMContentLoaded', () => {
       const style = document.createElement('style')
       // Both: an element with `scrollbar-width` set ignores the pseudo-element.
       style.textContent = '* { scrollbar-width: none !important; } ::-webkit-scrollbar { display: none !important; }'
+      // No motion at all: every transition and animation lands on its end state
+      // at once. Reduced motion already shortens most to 1ms, but lets a few
+      // back (the find card's fade). The :not(#…) lifts this rule to id
+      // specificity, so it wins over those `!important` rules too. Zero rather
+      // than `none`: an animation that fills forwards still ends where it
+      // should.
+      style.textContent += `
+        *:not(#snapshot), *:not(#snapshot)::before, *:not(#snapshot)::after {
+          transition-duration: 0s !important;
+          transition-delay: 0s !important;
+          animation-duration: 0s !important;
+          animation-delay: 0s !important;
+          animation-iteration-count: 1 !important;
+        }`
       document.head.append(style)
     })
   })
@@ -131,6 +239,44 @@ async function shoot(page, dir, name, settle = 700) {
   console.log(`  ${name}`)
 }
 
+/** Scroll the open note end to end, so CodeMirror has measured every line instead of estimating it. */
+async function measureNote(page) {
+  for (let y = 0; y <= 20_000; y += 500) {
+    await page.evaluate((top) => document.querySelector('.cm-scroller')?.scrollTo(0, top), y)
+    await sleep(60)
+  }
+}
+
+/**
+ * Until the find card is at rest: no animation running on the page, one
+ * scrollbar tick per counted match, and the note's scroll and the ticks the
+ * same over ten frames in a row.
+ */
+async function settleFind(page) {
+  await page.waitForFunction(
+    () =>
+      new Promise((resolve) => {
+        const state = () => {
+          const ticks = [...document.querySelectorAll('.find-marks__tick')].map((t) => t.style.top).join()
+          return `${document.querySelector('.cm-scroller')?.scrollTop}|${ticks}`
+        }
+        const count = Number(/\/\s*(\d+)/.exec(document.querySelector('.find__count')?.textContent ?? '')?.[1] ?? -1)
+        const first = state()
+        let frames = 0
+        const check = () => {
+          const busy = document.getAnimations().some((a) => a.playState === 'running')
+          const ticks = document.querySelectorAll('.find-marks__tick').length
+          if (busy || ticks !== count || state() !== first) return resolve(false)
+          if (++frames === 10) return resolve(true)
+          requestAnimationFrame(check)
+        }
+        requestAnimationFrame(check)
+      }),
+    null,
+    { polling: 100, timeout: 15_000 },
+  )
+}
+
 async function screens(page, dir) {
   await shoot(page, dir, '01-start')
 
@@ -146,10 +292,7 @@ async function screens(page, dir) {
   // CodeMirror guesses the height of lines it has not drawn, so a pixel offset
   // lands on different lines from run to run. Pass over the whole note first,
   // so every line is measured, then go to the offset.
-  for (let y = 0; y <= 20_000; y += 500) {
-    await page.evaluate((top) => document.querySelector('.cm-scroller')?.scrollTo(0, top), y)
-    await sleep(60)
-  }
+  await measureNote(page)
   await page.evaluate(() => document.querySelector('.cm-scroller')?.scrollTo(0, 1600))
   await sleep(300)
   await page.evaluate(() => document.querySelector('.cm-scroller')?.scrollTo(0, 1600))
@@ -194,6 +337,12 @@ async function screens(page, dir) {
   // Each step waits for what it should have done, so a key press that did not
   // land fails the run instead of photographing the wrong screen.
   const pane = (name) => page.waitForFunction((n) => document.querySelector('.home__live')?.textContent === n, name)
+  // The overlay measures its type once, as it opens, to hold the glass dark
+  // behind it. Its fonts load lazily; one that lands after that measurement
+  // leaves the glass shaped around the fallback font. Load them first.
+  await page.evaluate(() =>
+    Promise.all(['italic 400 16px "Bodoni Moda"', '500 16px "Geist Sans"', '500 16px "Geist Mono"'].map((f) => document.fonts.load(f))),
+  )
   await key(page, 'Mod+Shift+H')
   await pane('Recto')
   await shoot(page, dir, '17-home', 2500)
@@ -203,16 +352,25 @@ async function screens(page, dir) {
   await page.keyboard.press('Escape')
   await page.waitForSelector('.home__live', { state: 'detached' })
 
-  // Find in the note: the card, then the card with replace.
-  await page.evaluate(() => document.querySelector('.cm-content')?.focus())
+  // Find in the note: the card, then the card with replace. What is behind
+  // the glass card, and where the match ticks sit, both depend on line heights
+  // CodeMirror has measured rather than guessed - so the whole note is
+  // measured first and the search starts from the top, every run alike.
+  await measureNote(page)
+  await page.evaluate(() => {
+    document.querySelector('.cm-scroller')?.scrollTo(0, 0)
+    document.querySelector('.cm-content')?.focus()
+  })
   await key(page, 'Mod+F')
   await page.waitForSelector('.find')
   await page.keyboard.type('soil')
   await page.waitForFunction(() => document.querySelector('.find__count')?.textContent?.includes('/'))
+  await settleFind(page)
   await shoot(page, dir, '19-find-bar')
   await key(page, 'Mod+Alt+F')
   await page.waitForSelector('.find__row--replace:not([hidden])')
   await page.keyboard.type('earth')
+  await settleFind(page)
   await shoot(page, dir, '20-find-replace')
   await page.keyboard.press('Escape')
   await page.waitForSelector('.find', { state: 'detached' })
@@ -322,7 +480,7 @@ async function smoke(page, vault) {
 async function compare(page, a, b, diffPath) {
   const [pa, pb] = [a, b].map((p) => fs.readFileSync(p).toString('base64'))
   const result = await page.evaluate(
-    async ([pa, pb]) => {
+    async ([pa, pb, levels]) => {
       // Not fetch(data:...): the app's content security policy refuses it.
       const load = (b64) => createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: 'image/png' }))
       const [ia, ib] = await Promise.all([load(pa), load(pb)])
@@ -339,10 +497,10 @@ async function compare(page, a, b, diffPath) {
       let diff = 0
       for (let i = 0; i < da.data.length; i += 4) {
         const same =
-          da.data[i] === db.data[i] &&
-          da.data[i + 1] === db.data[i + 1] &&
-          da.data[i + 2] === db.data[i + 2] &&
-          da.data[i + 3] === db.data[i + 3]
+          Math.abs(da.data[i] - db.data[i]) <= levels &&
+          Math.abs(da.data[i + 1] - db.data[i + 1]) <= levels &&
+          Math.abs(da.data[i + 2] - db.data[i + 2]) <= levels &&
+          Math.abs(da.data[i + 3] - db.data[i + 3]) <= levels
         if (!same) diff++
         out.data[i] = same ? da.data[i] * 0.3 + 178 : 255
         out.data[i + 1] = same ? da.data[i + 1] * 0.3 + 178 : 0
@@ -358,7 +516,7 @@ async function compare(page, a, b, diffPath) {
       for (const x of bytes) s += String.fromCharCode(x)
       return { diff, png: btoa(s), total: ia.width * ia.height }
     },
-    [pa, pb],
+    [pa, pb, LEVELS],
   )
   if (result.png) fs.writeFileSync(diffPath, Buffer.from(result.png, 'base64'))
   return result
@@ -380,8 +538,10 @@ async function serveRenderer() {
 
 /** The bot's still poses, sizes 40 and 120, in one shot. */
 async function botStills(origin, dir, theme) {
+  const userData = newProfile()
+  assertProfileFree(userData)
   const app = await _electron.launch({
-    args: [path.join(ROOT, 'scripts/snapshot-window.cjs')],
+    args: [...ISOLATE, path.join(ROOT, 'scripts/snapshot-window.cjs'), `--user-data-dir=${userData}`],
     env: { ...process.env, RECTO_URL: `${origin}/dev/recto-bot?still&theme=${theme}` },
   })
   try {
@@ -396,6 +556,24 @@ async function botStills(origin, dir, theme) {
     await app.close()
   }
 }
+
+/**
+ * Diffs outlive the run that made them, so a flake seen once can still be
+ * looked at: each compare run takes the next number, and its files carry it.
+ */
+const DIFFS = path.join(ROOT, 'snapshots/diffs')
+function nextRun() {
+  const counter = path.join(DIFFS, 'last-run')
+  const run = (fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) || 0 : 0) + 1
+  fs.mkdirSync(DIFFS, { recursive: true })
+  fs.writeFileSync(counter, String(run))
+  return run
+}
+lockRun()
+// Whatever ends the run - done, a failed step, Ctrl-C - nothing is left behind.
+process.on('exit', cleanUp)
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(130))
+const RUN = COMPARE !== null ? nextRun() : 0
 
 fs.rmSync(OUT, { recursive: true, force: true })
 const renderer = await serveRenderer()
@@ -423,7 +601,9 @@ for (const theme of ['light', 'dark']) {
           failures++
           continue
         }
-        const r = await compare(page, old, path.join(dir, name), path.join(dir, name.replace('.png', '.diff.png')))
+        const kept = path.join(DIFFS, theme, name.replace('.png', `.run-${RUN}`))
+        fs.mkdirSync(path.dirname(kept), { recursive: true })
+        const r = await compare(page, old, path.join(dir, name), `${kept}.diff.png`)
         const oldStyles = path.join(COMPARE, theme, name.replace('.png', '.styles.json'))
         const newStyles = path.join(dir, name.replace('.png', '.styles.json'))
         if (STYLES && fs.existsSync(oldStyles) && fs.existsSync(newStyles)) {
@@ -436,10 +616,13 @@ for (const theme of ['light', 'dark']) {
         }
         if (r.diff === -1 || r.diff >= NOISE_PIXELS) {
           failures++
+          fs.copyFileSync(path.join(dir, name), `${kept}.png`)
           console.log(
-            `  ${name}: ${r.diff === -1 ? `size ${r.size}` : `${r.diff} of ${r.total} pixels differ`} - see ${name.replace('.png', '.diff.png')}`,
+            `  ${name}: ${r.diff === -1 ? `size ${r.size}` : `${r.diff} of ${r.total} pixels differ`} - see ${path.relative(ROOT, kept)}.diff.png`,
           )
         } else if (r.diff > 0) {
+          // Noise is not kept: a diff image only for what failed.
+          fs.rmSync(`${kept}.diff.png`, { force: true })
           console.log(`  ${name}: ${r.diff} pixels differ (rasteriser noise, under ${NOISE_PIXELS})`)
         }
       }
@@ -450,5 +633,6 @@ for (const theme of ['light', 'dark']) {
   }
 }
 await renderer.server.close()
-if (COMPARE !== null) console.log(failures === 0 ? 'same as the baseline' : `${failures} screenshot(s) differ from the baseline`)
+if (COMPARE !== null)
+  console.log(`run ${RUN}: ${failures === 0 ? 'same as the baseline' : `${failures} screenshot(s) differ from the baseline`}`)
 process.exit(failures === 0 ? 0 : 1)
