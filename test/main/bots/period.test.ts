@@ -46,3 +46,11 @@ describe('time words to a period', () => {
     expect(p('что было 5 мая')).toBe('2026-05-05..2026-05-05')
   })
 })
+
+describe('this and last week', () => {
+  it('runs from last week’s Monday to today', () => {
+    const sat = new Date(2026, 9, 3, 12)
+    expect(periodFrom('Посмотри все задачи что я не сделал на это и прошлой неделе', sat)).toEqual({ from: '2026-09-21', to: '2026-10-03' })
+    expect(periodFrom('tasks from this and last week', sat)).toEqual({ from: '2026-09-21', to: '2026-10-03' })
+  })
+})

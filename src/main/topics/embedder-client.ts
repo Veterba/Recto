@@ -84,6 +84,9 @@ export async function ask<K extends EmbedResponse['kind']>(
   return response as Extract<EmbedResponse, { kind: K }>
 }
 
+/** The index.db the embedder was last opened on (it re-opens it itself after an idle exit); null when stopped. */
+export const openedDb = (): string | null => opening?.dbPath ?? null
+
 export function stopEmbedder(): void {
   opening = null
   child?.kill()

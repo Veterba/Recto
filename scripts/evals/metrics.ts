@@ -19,6 +19,10 @@ export type Answered = {
   totalMs: number
   prepareMs: number
   stats: Stats | null
+  /** The part of the answer the harness wrote itself (a task list), shown before the model's words. */
+  preface?: string | null
+  /** The prompt the model answered from (scored, not kept in results.jsonl). */
+  contextText?: string
   /** Filled from stage 3 on; null before. */
   router?: unknown
   steps?: unknown
@@ -121,6 +125,8 @@ export const ROUTE: Record<Case['kind'], string> = {
   tasks: 'tasks',
   'small-talk': 'smalltalk',
   self: 'self',
+  review: 'review',
+  advice: 'advice',
 }
 
 /** "a|b": does the answer say either? Case-insensitive. */
@@ -133,7 +139,13 @@ const mentions = (answer: string, item: string): boolean => item.split('|').some
  * the text first ("2026-09-28" inside "2026-09-28 — v0.9" is not a claim), and
  * a title merely used as words in a sentence ("weekly goals") is not one either.
  */
-export function ungroundedClaims(answer: string, context: readonly ContextNote[], vaultTitles: readonly string[]): string[] {
+export function ungroundedClaims(
+  answer: string,
+  context: readonly ContextNote[],
+  vaultTitles: readonly string[],
+  contextText = '',
+): string[] {
+  const given = fold(contextText)
   const had = [...new Set(context.flatMap((c) => [fold(noteName(c.path)), fold(c.title)]))].sort((a, b) => b.length - a.length)
   let text = fold(answer)
   for (const h of had) if (h !== '') text = text.split(h).join(' ')
@@ -147,9 +159,24 @@ export function ungroundedClaims(answer: string, context: readonly ContextNote[]
   for (const m of text.matchAll(quoted)) {
     const inner = (m[1] ?? m[2] ?? m[3] ?? m[4] ?? '').trim().replace(/\.md$/, '')
     const title = titles.get(inner)
-    if (title !== undefined) out.add(title)
+    // Words quoted from the notes it was given ("Weekly goals — asked by 7 of 12") are not a claim about another note.
+    if (title !== undefined && !given.includes(inner)) out.add(title)
   }
   return [...out]
+}
+
+/**
+ * The model's own words: the answer without what the harness wrote for it
+ * (a task list quotes the notes' items in their own language, and their
+ * quotes). Runs from before the preface was recorded drop the list's "•"
+ * lines instead.
+ */
+export function ownWords(a: Pick<Answered, 'answer' | 'preface'>): string {
+  if (a.preface != null && a.answer.startsWith(a.preface)) return a.answer.slice(a.preface.length)
+  return a.answer
+    .split('\n')
+    .filter((l) => !/^\s*•/.test(l))
+    .join('\n')
 }
 
 export function score(c: Case, a: Answered, vaultTitles: readonly string[] = []): Scores {
@@ -162,11 +189,13 @@ export function score(c: Case, a: Answered, vaultTitles: readonly string[] = [])
   const routed = (a.router as { kind?: unknown } | null | undefined)?.kind
   const routerOk = typeof routed === 'string' ? routed === ROUTE[c.kind] : null
   const decoys = c.forbidNotes.map(fold).filter((n) => read.includes(n))
-  const ungrounded = ungroundedClaims(a.answer, a.context, vaultTitles)
+  const own = ownWords(a)
+  // A template or a draft in code ("[[Related note]]" as a placeholder, `[[Link]]` as syntax) is a suggestion, not a claim.
+  const ungrounded = ungroundedClaims(own.replace(/```[\s\S]*?```|`[^`\n]*`/g, ' '), a.context, vaultTitles, a.contextText ?? '')
   const namedInAnswer = expected.length === 0 ? null : expected.some((n) => fold(a.answer).includes(n))
   const sourcesCorrect = noSources ? read.length === 0 : expected.length > 0 ? expected.some((n) => read.includes(n)) : null
   const honest = c.kind === 'not-in-vault' ? saysNotFound(a.answer) : null
-  const languageOk = a.answer.trim() === '' || languageOf(a.answer) === languageOf(c.question)
+  const languageOk = own.trim() === '' || languageOf(own) === languageOf(c.question)
 
   const reasons: Reason[] = []
   if (a.error !== null) reasons.push(a.error.toLowerCase().includes('timeout') || a.error.includes('aborted') ? 'too slow' : 'error')
@@ -212,6 +241,11 @@ export type Summary = {
   ungrounded: number
   /** Router replies that could not be read as JSON. */
   routerParseFailures: number
+  /** Tool calls the model made itself, and the ones it wrote as text instead (parse failures). */
+  modelToolCalls: number
+  toolParseFailures: number
+  /** How the router decided: by rules, by the example questions, by the model. */
+  routerBy: { rules: number; embedding: number; model: number }
   ttftP50: number | null
   ttftP90: number | null
   totalP50: number | null
@@ -239,6 +273,16 @@ export function summarise(rows: readonly Scored[]): Summary {
     ungrounded: rows.reduce((n, r) => n + (r.scores.ungrounded?.length ?? 0), 0),
     routerParseFailures: rows.filter((r) => (r.answered.router as { parseFailed?: boolean } | null | undefined)?.parseFailed === true)
       .length,
+    modelToolCalls: rows.reduce(
+      (n, r) => n + ((r.answered.toolCalls as { by?: string }[] | null | undefined) ?? []).filter((t) => t.by === 'model').length,
+      0,
+    ),
+    toolParseFailures: rows.reduce((n, r) => n + ((r.answered as { toolParseFailures?: number }).toolParseFailures ?? 0), 0),
+    routerBy: {
+      rules: rows.filter((r) => (r.answered.router as { by?: string } | null | undefined)?.by === 'rules').length,
+      embedding: rows.filter((r) => (r.answered.router as { by?: string } | null | undefined)?.by === 'embedding').length,
+      model: rows.filter((r) => (r.answered.router as { by?: string } | null | undefined)?.by === 'model').length,
+    },
     ttftP50: percentile(ttft, 50),
     ttftP90: percentile(ttft, 90),
     totalP50: percentile(total, 50),

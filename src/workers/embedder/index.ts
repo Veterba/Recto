@@ -1,8 +1,8 @@
 import Database from 'better-sqlite3'
 import { meanVector } from '../../shared/score'
 import { capped, centre, noteVector, vaultMean } from '../../shared/vectors'
-import { createEncoder, DIMS, type Encoder } from './encoder'
-import type { EmbedRequest, EmbedResponse, Piece, StateRow } from '../../shared/embedder-protocol'
+import { CLASSIFY_PROMPT, createEncoder, DIMS, DOCUMENT_PROMPT, QUERY_PROMPT, type Encoder } from './encoder'
+import type { BotHit, BotPiece, EmbedRequest, EmbedResponse, Piece, StateRow } from '../../shared/embedder-protocol'
 
 /**
  * The embedder, in its own process.
@@ -125,6 +125,82 @@ async function termVectors(terms: string[]): Promise<number[][]> {
   return terms.map((t) => [...centre(termCache.get(t)!, mean)])
 }
 
+// ---- the bots' search pieces ---------------------------------------------------
+
+type BotRow = { path: string; idx: number; heading: string; text: string; vec: Float32Array }
+/** Every bot piece with its vector, loaded once per process: a few thousand rows at most. */
+let botStore: BotRow[] | null = null
+
+function loadBotStore(): BotRow[] {
+  if (botStore !== null) return botStore
+  const rows = requireDb().prepare('SELECT path, idx, heading, text, vec FROM bot_chunks ORDER BY path, idx').all() as (Omit<
+    BotRow,
+    'vec'
+  > & {
+    vec: Buffer
+  })[]
+  botStore = rows.map((r) => ({ ...r, vec: fromBlob(r.vec) }))
+  return botStore
+}
+
+async function botEmbed(path: string, mtime: number, pieces: BotPiece[]): Promise<number> {
+  const handle = requireDb()
+  const old = handle.prepare('SELECT hash, vec FROM bot_chunks WHERE path = ?').all(path) as { hash: string; vec: Buffer }[]
+  const known = new Map(old.map((r) => [r.hash, fromBlob(r.vec)]))
+  const missing = pieces.filter((p) => !known.has(p.hash))
+  if (missing.length > 0) {
+    encoder ??= createEncoder(modelDir)
+    const vecs = await (
+      await encoder
+    )(
+      missing.map((p) => p.input),
+      DOCUMENT_PROMPT,
+    )
+    missing.forEach((p, i) => known.set(p.hash, vecs[i]!))
+  }
+  handle.transaction(() => {
+    handle.prepare('DELETE FROM bot_chunks WHERE path = ?').run(path)
+    const insert = handle.prepare('INSERT INTO bot_chunks (path, idx, hash, heading, text, mtime, vec) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    for (const p of pieces) insert.run(path, p.idx, p.hash, p.heading, p.text, mtime, toBlob(known.get(p.hash)!))
+  })()
+  if (botStore !== null) {
+    botStore = botStore.filter((r) => r.path !== path)
+    for (const p of pieces) botStore.push({ path, idx: p.idx, heading: p.heading, text: p.text, vec: known.get(p.hash)! })
+  }
+  return missing.length
+}
+
+function botForget(paths: string[]): void {
+  const handle = requireDb()
+  const gone = new Set(paths)
+  handle.transaction(() => {
+    for (const p of paths) handle.prepare('DELETE FROM bot_chunks WHERE path = ?').run(p)
+  })()
+  if (botStore !== null) botStore = botStore.filter((r) => !gone.has(r.path))
+}
+
+const inside = (path: string, folders: readonly string[]): boolean => {
+  const lower = path.toLowerCase()
+  return folders.some((f) => {
+    const folder = f.toLowerCase().replace(/^\/+|\/+$/g, '')
+    return folder !== '' && (lower === folder || lower.startsWith(`${folder}/`))
+  })
+}
+
+async function botSearch(query: string, k: number, exclude: string[], only?: string[]): Promise<BotHit[]> {
+  encoder ??= createEncoder(modelDir)
+  const [q] = await (await encoder)([query], QUERY_PROMPT)
+  const hits: BotHit[] = []
+  const within = only === undefined ? null : new Set(only)
+  for (const row of loadBotStore()) {
+    if (inside(row.path, exclude) || (within !== null && !within.has(row.path))) continue
+    let dot = 0
+    for (let i = 0; i < DIMS; i++) dot += row.vec[i]! * q![i]!
+    hits.push({ path: row.path, idx: row.idx, heading: row.heading, text: row.text, score: dot })
+  }
+  return hits.sort((a, b) => b.score - a.score).slice(0, k)
+}
+
 type RawState = {
   path: string
   mean_vec: Buffer | null
@@ -184,6 +260,7 @@ async function run(request: EmbedRequest): Promise<EmbedResponse> {
       db.pragma('synchronous = NORMAL')
       modelDir = request.modelDir
       store = null
+      botStore = null
       termCache.clear()
       return { kind: 'ok' }
     }
@@ -232,6 +309,25 @@ async function run(request: EmbedRequest): Promise<EmbedResponse> {
       const notes = (handle.prepare('SELECT COUNT(DISTINCT path) AS n FROM autolink_chunks').get() as { n: number }).n
       const chunks = (handle.prepare('SELECT COUNT(*) AS n FROM autolink_chunks WHERE idx >= 0').get() as { n: number }).n
       return { kind: 'stats', notes, chunks, rss: process.memoryUsage().rss }
+    }
+    case 'bot-embed':
+      return { kind: 'bot-embedded', computed: await botEmbed(request.path, request.mtime, request.pieces) }
+    case 'bot-forget':
+      botForget(request.paths)
+      return { kind: 'ok' }
+    case 'bot-mtimes': {
+      const rows = requireDb().prepare('SELECT path, MAX(mtime) AS mtime FROM bot_chunks GROUP BY path').all() as {
+        path: string
+        mtime: number
+      }[]
+      return { kind: 'bot-mtimes', mtimes: Object.fromEntries(rows.map((r) => [r.path, r.mtime])) }
+    }
+    case 'bot-search':
+      return { kind: 'bot-hits', hits: await botSearch(request.query, request.k, request.exclude, request.only) }
+    case 'embed-texts': {
+      encoder ??= createEncoder(modelDir)
+      const vecs = await (await encoder)(request.texts, request.prompt === 'classify' ? CLASSIFY_PROMPT : QUERY_PROMPT)
+      return { kind: 'vectors', vectors: vecs.map((v) => [...v]) }
     }
   }
 }

@@ -19,6 +19,8 @@ export const KINDS = [
   'not-in-vault',
   'small-talk',
   'self',
+  'review',
+  'advice',
   'private',
 ] as const
 
@@ -36,6 +38,8 @@ export type Case = {
   expectItems: string[]
   /** Notes that must never be in the context. */
   forbidNotes: string[]
+  /** What a good answer must contain or avoid, for whoever judges it (private cases). */
+  rubric?: string[]
 }
 
 export type CaseFile = { today: string | null; cases: Case[] }
@@ -48,7 +52,16 @@ const list = (value: unknown): string[] => {
       .split(/[,;]\s*/)
       .map((s) => s.trim())
       .filter(Boolean)
-  if (Array.isArray(value)) return value.map((v) => (typeof v === 'string' ? v.trim() : String(v))).filter(Boolean)
+  // A loose YAML item with a colon in it ("Uses the note: …") reads as a one-key mapping: put it back together.
+  const item = (v: unknown): string =>
+    typeof v === 'string'
+      ? v.trim()
+      : typeof v === 'object' && v !== null && !Array.isArray(v)
+        ? Object.entries(v)
+            .map(([k, x]) => `${k}: ${String(x)}`)
+            .join('; ')
+        : String(v)
+  if (Array.isArray(value)) return value.map(item).filter(Boolean)
   return []
 }
 
@@ -83,6 +96,7 @@ function normalise(raw: unknown, index: number, prefix: string): Case | null {
     expectNoSources,
     expectItems: list(r['expectItems'] ?? r['items']),
     forbidNotes: list(r['forbidNotes']).map((n) => n.replace(/^\[\[|\]\]$/g, '').replace(/\.md$/i, '')),
+    ...(Array.isArray(r['rubric']) ? { rubric: list(r['rubric']) } : {}),
   }
 }
 

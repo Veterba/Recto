@@ -3,16 +3,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  buildSystem,
-  fitHistory,
-  isExcluded,
-  queryTerms,
-  rankNotes,
-  scoreSection,
-  selectChunks,
-  splitSections,
-} from '../../../src/main/bots/context'
+import { buildSystem, fitHistory, isExcluded, queryTerms, rankNotes, scoreSection } from '../../../src/main/bots/context'
+import { wordRanked } from '../../../src/main/bots/retrieve'
 import { RECTO_SYSTEM, listBots, readBot } from '../../../src/main/bots/definitions'
 import { hasModel, readLines } from '../../../src/main/bots/provider'
 import { RECTO } from '../../../src/shared/bot-presets'
@@ -25,7 +17,7 @@ describe('query terms', () => {
 
   it('cuts long words back to a stem, so prefix search finds their other forms', () => {
     expect(queryTerms('refactoring')).toEqual(['refactori'])
-    expect(queryTerms('заметках')).toEqual(['заметк'])
+    expect(queryTerms('закладках')).toEqual(['закладк'])
   })
 
   it('drops repeats and stops at the maximum', () => {
@@ -48,16 +40,14 @@ describe('small talk', () => {
     expect(scoreSection({ heading: null, text: 'Заметки о почве' }, ['заметк'])).toBeGreaterThan(0)
   })
 
-  it('a question of two or more words needs two of them in a section, not one by chance', () => {
-    const log = { path: 'log.md', title: 'Log', score: 1, sections: [{ heading: null, text: 'Capitalise the first letter.' }] }
-    expect(selectChunks([log], queryTerms('what is the capital of France?'))).toEqual([])
-    expect(selectChunks([log], queryTerms('capitalise'))).toHaveLength(1)
+  it('a question of two or more words needs two of them in a piece, not one by chance', () => {
+    const log = { path: 'log.md', title: 'Log', content: 'Capitalise the first letter.' }
+    expect(wordRanked([log], queryTerms('what is the capital of France?'))).toEqual([])
+    expect(wordRanked([log], queryTerms('capitalise'))).toHaveLength(1)
   })
 
   it('a word only in a heading is not enough to be read', () => {
-    expect(selectChunks([{ path: 'a.md', title: 'A', score: 1, sections: [{ heading: 'Soil', text: 'nothing here' }] }], ['soil'])).toEqual(
-      [],
-    )
+    expect(wordRanked([{ path: 'a.md', title: 'A', content: '# Soil\nnothing here' }], ['soil'])).toEqual([])
   })
 })
 
@@ -86,40 +76,6 @@ describe('ranking notes', () => {
 })
 
 describe('sections', () => {
-  const note = `---
-tags: [x]
----
-# Title
-
-Intro line.
-
-## Naming
-
-Call it topics.
-
-\`\`\`md
-## not a heading
-\`\`\`
-
-## Later
-
-Something else.
-`
-
-  it('splits at headings, drops frontmatter, and keeps fenced headings as text', () => {
-    const sections = splitSections(note)
-    expect(sections.map((s) => s.heading)).toEqual(['Title', 'Naming', 'Later'])
-    expect(sections[1]!.text).toContain('## not a heading')
-    expect(sections.some((s) => s.text.includes('tags:'))).toBe(false)
-  })
-
-  it('cuts a long section into pieces that keep its heading', () => {
-    const long = `## Long\n\n${Array.from({ length: 10 }, (_, i) => `Paragraph ${i} ${'x'.repeat(300)}`).join('\n\n')}`
-    const sections = splitSections(long)
-    expect(sections.length).toBeGreaterThan(1)
-    expect(sections.every((s) => s.heading === 'Long' && s.text.length <= 1200 + 320)).toBe(true)
-  })
-
   it('weighs a term in the text above one only in the heading', () => {
     expect(scoreSection({ heading: 'Other', text: 'about topics' }, ['topics'])).toBeGreaterThan(
       scoreSection({ heading: 'Topics', text: 'nothing' }, ['topics']),
@@ -131,59 +87,7 @@ Something else.
   })
 })
 
-describe('choosing chunks', () => {
-  const notes = [
-    {
-      path: 'Decisions.md',
-      title: 'Decisions',
-      score: 2.5,
-      sections: [
-        { heading: 'Naming', text: 'Topics naming: call the feature topics.' },
-        { heading: 'Topics UI', text: 'topics naming in the sidebar' },
-        { heading: 'Topics more', text: 'topics naming again' },
-      ],
-    },
-    { path: 'Other.md', title: 'Other', score: 1.2, sections: [{ heading: null, text: 'unrelated text' }] },
-  ]
-
-  it('takes from one note its opening and its two best other sections, the best first', () => {
-    const chunks = selectChunks(notes, ['topics', 'naming'])
-    expect(chunks.filter((c) => c.path === 'Decisions.md')).toHaveLength(3)
-    expect(chunks[0]).toMatchObject({ path: 'Decisions.md', heading: 'Naming' })
-  })
-
-  it("prefers a note's opening section when it matches as well as a later one", () => {
-    const log = {
-      path: 'log.md',
-      title: 'Log',
-      score: 1,
-      sections: [
-        { heading: 'Phase 6', text: 'The feature is now called topics everywhere.' },
-        { heading: 'Topics run', text: 'topics ran on the fixture.' },
-      ],
-    }
-    expect(selectChunks([log], ['topics'], { max: 1 })[0]!.heading).toBe('Phase 6')
-    // Even when a later section mentions the words more often.
-    const busier = { ...log, sections: [log.sections[0]!, { heading: 'Topics run', text: 'topics topics topics topics topics' }] }
-    expect(selectChunks([busier], ['topics']).map((c) => c.heading)).toContain('Phase 6')
-  })
-
-  it('takes nothing from a note that matched only by its title', () => {
-    expect(selectChunks(notes, ['topics']).some((c) => c.path === 'Other.md')).toBe(false)
-  })
-
-  it('stays within the budget and the maximum', () => {
-    const many = Array.from({ length: 10 }, (_, i) => ({
-      path: `n${i}.md`,
-      title: `n${i}`,
-      score: 1,
-      sections: [{ heading: null, text: `soil ${'y'.repeat(900)}` }],
-    }))
-    const chunks = selectChunks(many, ['soil'], { max: 6, budget: 3000 })
-    expect(chunks.length).toBeLessThanOrEqual(6)
-    expect(chunks.reduce((n, c) => n + c.text.length, 0)).toBeLessThanOrEqual(3000)
-  })
-
+describe('the prompt', () => {
   it('gives small talk no notes at all, and says so when a real question matched nothing', () => {
     expect(buildSystem('Be brief.', null)).toBe('Be brief.')
   })

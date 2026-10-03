@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react'
-import { BOTS_FOLDER, CHATS_FOLDER, DEFAULT_BOT_MODEL, type BotSettings } from '@shared/bots'
-import { IPC } from '@shared/ipc'
+import { BOTS_FOLDER, CHATS_FOLDER, DEFAULT_BOT_MODEL, type BotSettings, type NoteCardsStatus } from '@shared/bots'
+import { IPC, IPC_EVENT } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { Icon } from '../../../ui/Icon'
 import { SettingRow } from '../../../ui/SettingRow'
 import { useBotStatus } from '../hooks/use-bots'
 import { BotStatusLine } from './BotStatusLine'
+
+/** "Note cards: 412/530", and why it isn't moving when it isn't. */
+function cardsLine(cards: NoteCardsStatus | null): string {
+  if (cards === null || cards.state === 'off') return 'Off'
+  if (cards.total === 0) return 'Not started yet'
+  const count = `${cards.done}/${cards.total}`
+  if (cards.state === 'running') return `${count} · writing…`
+  if (cards.state === 'paused-battery') return `${count} · paused, battery low`
+  if (cards.state === 'waiting' && cards.done < cards.total) return `${count} · waits until you're away`
+  return count
+}
 
 /**
  * Settings → Bots: which local model the bots use, whether it can run, and
@@ -15,6 +26,12 @@ export function BotsSettings(): React.ReactElement {
   const [settings, setSettings] = useState<BotSettings | null>(null)
   const [draft, setDraft] = useState('')
   const { status, recheck } = useBotStatus(settings?.defaultModel)
+  const [cards, setCards] = useState<NoteCardsStatus | null>(null)
+
+  useEffect(() => {
+    void api.invoke(IPC.botsCards).then(setCards)
+    return api.on(IPC_EVENT.botsCardsStatus, setCards)
+  }, [])
 
   useEffect(() => {
     void api.invoke(IPC.botsSettings).then((s) => {
@@ -59,6 +76,13 @@ export function BotsSettings(): React.ReactElement {
       <div className="bots-settings__status">
         <BotStatusLine status={status} onRecheck={recheck} />
       </div>
+
+      <SettingRow
+        label="Note cards"
+        hint="A short summary of every note, written by the local model while you're away from the keyboard. Recto reads them to review a folder or the whole vault. Paused on battery below 20%."
+      >
+        <span className="bot-cards">{cardsLine(cards)}</span>
+      </SettingRow>
 
       <SettingRow
         label="Bot definitions"

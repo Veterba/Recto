@@ -18,10 +18,26 @@ import { requestFields } from './models/profiles'
 /** What the model reports about one answer when it is done (Ollama's last line). The evals read it. */
 export type StreamStats = { promptTokens: number; promptMs: number; evalTokens: number; evalMs: number; loadMs: number }
 
-export type StreamOptions = { model: string; signal: AbortSignal; onStats?: (stats: StreamStats) => void }
+/** `maxTokens`: the longest answer, over the profile's - a review or a plan may run longer than a plain answer. */
+export type StreamOptions = { model: string; signal: AbortSignal; onStats?: (stats: StreamStats) => void; maxTokens?: number }
 
 /** A short call that is not shown to anyone: the router, extracting tasks. Greedy, short, optionally JSON. */
 export type CompleteOptions = { model: string; signal: AbortSignal; json?: boolean; maxTokens: number }
+
+/** A tool the model may call, in Ollama's (OpenAI-style) format. */
+export type ToolSpec = {
+  type: 'function'
+  function: { name: string; description: string; parameters: { type: 'object'; properties: Record<string, unknown>; required: string[] } }
+}
+
+/** A turn in a conversation with tool calls: the model's calls, and what each returned. */
+export type ChatTurn =
+  | AiMessage
+  | { role: 'assistant'; content: string; tool_calls: { function: { name: string; arguments: Record<string, unknown> } }[] }
+  | { role: 'tool'; content: string; tool_name: string }
+
+/** What comes back while the model answers with tools: text, or the tools it wants called. */
+export type ChatEvent = { type: 'text'; text: string } | { type: 'tools'; calls: { name: string; args: Record<string, unknown> }[] }
 
 export interface BotModelProvider {
   /** The reply, token by token. Throws when the model cannot run; stops when `signal` aborts. */
@@ -31,6 +47,8 @@ export interface BotModelProvider {
   status(model: string): Promise<BotModelStatus>
   /** Load the model ahead of the first question, so it is not the user's wait. */
   warm(model: string): void
+  /** The reply with tools offered: text as it comes, or the calls the model asks for. Only local models. */
+  streamChat?(turns: ChatTurn[], system: string, tools: ToolSpec[], options: StreamOptions): AsyncIterable<ChatEvent>
 }
 
 /** How much the model is asked to hold at once, in tokens: prompt and answer together. */
@@ -189,7 +207,8 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
     return typeof body.message?.content === 'string' ? body.message.content : ''
   }
 
-  async *stream(messages: AiMessage[], system: string, { model, signal, onStats }: StreamOptions): AsyncIterable<string> {
+  async *stream(messages: AiMessage[], system: string, { model, signal, onStats, maxTokens }: StreamOptions): AsyncIterable<string> {
+    const fields = requestFields(model, this.capabilities.get(model) ?? null)
     const response = await fetch(`${OLLAMA}/api/chat`, {
       method: 'POST',
       signal,
@@ -199,7 +218,8 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
         stream: true,
         keep_alive: KEEP_ALIVE,
         // How thinking is turned off, the context size, the answer's length: the model's profile.
-        ...requestFields(model, this.capabilities.get(model) ?? null),
+        ...fields,
+        ...(maxTokens === undefined ? {} : { options: { ...fields.options, num_predict: maxTokens } }),
         messages: [{ role: 'system', content: system }, ...messages],
       }),
     })
@@ -214,6 +234,81 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
       throw new Error(detail)
     }
     yield* readLines(response.body, onStats)
+  }
+
+  async *streamChat(
+    turns: ChatTurn[],
+    system: string,
+    tools: ToolSpec[],
+    { model, signal, onStats, maxTokens }: StreamOptions,
+  ): AsyncIterable<ChatEvent> {
+    const fields = requestFields(model, this.capabilities.get(model) ?? null)
+    const response = await fetch(`${OLLAMA}/api/chat`, {
+      method: 'POST',
+      signal,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        stream: true,
+        keep_alive: KEEP_ALIVE,
+        ...fields,
+        ...(maxTokens === undefined ? {} : { options: { ...fields.options, num_predict: maxTokens } }),
+        tools,
+        messages: [{ role: 'system', content: system }, ...turns],
+      }),
+    })
+    if (!response.ok || response.body === null) throw new Error(`Ollama answered ${response.status}`)
+    yield* readChatLines(response.body, onStats)
+  }
+}
+
+/** Ollama's stream with tools: each line carries text, or (once) the tool calls. */
+export async function* readChatLines(body: ReadableStream<Uint8Array>, onStats?: (stats: StreamStats) => void): AsyncIterable<ChatEvent> {
+  const decoder = new TextDecoder()
+  let pending = ''
+  for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
+    pending += decoder.decode(chunk, { stream: true })
+    let newline = pending.indexOf('\n')
+    while (newline !== -1) {
+      const line = pending.slice(0, newline).trim()
+      pending = pending.slice(newline + 1)
+      newline = pending.indexOf('\n')
+      if (line === '') continue
+      const event = JSON.parse(line) as {
+        message?: { content?: unknown; tool_calls?: { function?: { name?: unknown; arguments?: unknown } }[] }
+        error?: unknown
+        done?: unknown
+        prompt_eval_count?: unknown
+        prompt_eval_duration?: unknown
+        eval_count?: unknown
+        eval_duration?: unknown
+        load_duration?: unknown
+      }
+      if (typeof event.error === 'string') throw new Error(event.error)
+      const calls = (event.message?.tool_calls ?? [])
+        .map((c) => ({
+          name: typeof c.function?.name === 'string' ? c.function.name : '',
+          args:
+            typeof c.function?.arguments === 'object' && c.function.arguments !== null
+              ? (c.function.arguments as Record<string, unknown>)
+              : {},
+        }))
+        .filter((c) => c.name !== '')
+      if (calls.length > 0) yield { type: 'tools', calls }
+      const text = event.message?.content
+      if (typeof text === 'string' && text !== '') yield { type: 'text', text }
+      if (event.done === true) {
+        const n = (v: unknown): number => (typeof v === 'number' ? v : 0)
+        onStats?.({
+          promptTokens: n(event.prompt_eval_count),
+          promptMs: n(event.prompt_eval_duration) / 1e6,
+          evalTokens: n(event.eval_count),
+          evalMs: n(event.eval_duration) / 1e6,
+          loadMs: n(event.load_duration) / 1e6,
+        })
+        return
+      }
+    }
   }
 }
 
@@ -278,7 +373,7 @@ export class AnthropicProvider implements BotModelProvider {
     return text
   }
 
-  async *stream(messages: AiMessage[], system: string, { model, signal }: StreamOptions): AsyncIterable<string> {
+  async *stream(messages: AiMessage[], system: string, { model, signal, maxTokens = 1024 }: StreamOptions): AsyncIterable<string> {
     const key = this.key()
     if (key === null) throw new Error('No API key saved. Add one in Settings → AI.')
     const queue: string[] = []
@@ -287,7 +382,7 @@ export class AnthropicProvider implements BotModelProvider {
     let wake: (() => void) | null = null
     const poke = (): void => wake?.()
     const running = new DirectProvider(key).stream(
-      { model, system, messages, maxTokens: 1024 },
+      { model, system, messages, maxTokens },
       {
         onDelta: (text) => {
           queue.push(text)

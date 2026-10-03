@@ -8,7 +8,7 @@
 
 import type { AiDelta, AiDone, AiError, AiMessage } from './ai'
 import type { ArchiveState } from './archive'
-import type { Bot, BotModelStatus, BotSettings, BotSource, ModelChoice, PullProgress } from './bots'
+import type { Bot, BotModelStatus, BotSettings, BotSource, ModelChoice, NoteCardsStatus, PullProgress } from './bots'
 import type {
   BacklinkResult,
   BoardCardInfo,
@@ -128,6 +128,7 @@ export const IPC = {
   botsModels: 'bots:models',
   botsPull: 'bots:pull',
   botsPullCancel: 'bots:pull-cancel',
+  botsCards: 'bots:cards',
 } as const
 
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
@@ -145,6 +146,7 @@ export const IPC_EVENT = {
   botsError: 'bots:error',
   botsPullProgress: 'bots:pull-progress',
   botsProgress: 'bots:progress',
+  botsCardsStatus: 'bots:cards-status',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -187,6 +189,8 @@ export type IpcEvents = Exhaustive<
     [IPC_EVENT.botsPullProgress]: (progress: PullProgress & { done: boolean; error?: string }) => void
     /** What a bot is doing before it answers ("Checking your tasks…"), for the status line; the steps card from 3.8. */
     [IPC_EVENT.botsProgress]: (progress: { id: string; text: string }) => void
+    /** Note cards being built in the background: how many notes have one. */
+    [IPC_EVENT.botsCardsStatus]: (status: NoteCardsStatus) => void
   }
 >
 
@@ -328,6 +332,8 @@ export type IpcApi = Exhaustive<
       id: string
       botId: string
       messages: AiMessage[]
+      /** What the last two answers in this topic read, newest last: they stay in reach (sticky context). */
+      sticky?: BotSource[]
     }) => { ok: true; sources: BotSource[] } | { ok: false; error: string; status?: BotModelStatus }
     /** Stop a running reply. Unknown ids are a no-op. */
     [IPC.botsCancel]: (id: string) => { ok: boolean }
@@ -337,6 +343,8 @@ export type IpcApi = Exhaustive<
     [IPC.botsTitle]: (request: { botId: string; messages: AiMessage[] }) => string | null
     /** The local models for the picker, whether Ollama runs, and this Mac's memory. */
     [IPC.botsModels]: () => { local: ModelChoice[]; running: boolean; ramBytes: number }
+    /** How far the background note cards are. */
+    [IPC.botsCards]: () => NoteCardsStatus
     /** Download a model the user picked and confirmed; progress arrives on `bots:pull-progress`. */
     [IPC.botsPull]: (name: string) => { ok: boolean; error?: string }
     [IPC.botsPullCancel]: () => { ok: boolean }

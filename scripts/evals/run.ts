@@ -113,8 +113,11 @@ function copyVault(source: string, into: string, fixture: boolean): void {
   fs.cpSync(source, into, {
     recursive: true,
     preserveTimestamps: true,
-    // The index is rebuilt from the notes; backups and trash are not notes.
-    filter: (src) => !/[\\/]\.recto[\\/](index\.db.*|backups|archive)(?:$|[\\/])|[\\/]\.trash(?:$|[\\/])|[\\/]\.git(?:$|[\\/])/.test(src),
+    // The index is rebuilt from the notes; backups and trash are not notes. The evals folder is
+    // the eval's own: its questions and earlier runs' answers would be found as notes.
+    filter: (src) =>
+      !/[\\/]\.recto[\\/](index\.db.*|backups|archive)(?:$|[\\/])|[\\/]\.trash(?:$|[\\/])|[\\/]\.git(?:$|[\\/])/.test(src) &&
+      !(src.split(/[\\/]/).at(-1)?.toLowerCase() === 'evals qwen'),
   })
   if (!fixture) return
   const walk = (dir: string): void => {
@@ -228,6 +231,9 @@ async function main(): Promise<void> {
     throw new Error(`${model} is not installed. Pull it first: ollama pull ${model}`)
   const loadedNow = (await ollama<{ models: { name: string }[] }>('/api/ps'))?.models.map((m) => m.name) ?? []
   for (const other of loadedNow.filter((n) => n !== model)) await ollama('/api/generate', { model: other, keep_alive: 0 })
+  // The model itself too: one left loaded for hours under memory pressure is partly paged out and runs
+  // at a third of its speed. Loaded fresh, the timings are the model's, not the swap's.
+  if (loadedNow.includes(model)) await ollama('/api/generate', { model, keep_alive: 0 })
 
   // A Mac that is throttling (a flat battery, heat) runs the model at a tenth
   // of its speed, and every timing in the report would be wrong. Measured
@@ -270,10 +276,13 @@ async function main(): Promise<void> {
       out,
       ...(loaded.today === null ? {} : { today: loaded.today }),
       harness,
+      // Cards and loose-task readings carried from run to run (by content hash and model), outside the repo and the vault.
+      cache: path.join(os.tmpdir(), 'recto-eval-cache', `${fixture ? 'fixture' : 'vault'}-${modelSlug(model)}.json`),
       cases: cases.map((c) => ({ id: c.id, messages: conversationOf(c) })),
     }),
   )
 
+  fs.mkdirSync(path.join(os.tmpdir(), 'recto-eval-cache'), { recursive: true })
   const swapBefore = swapUsed()
   const require = createRequire(import.meta.url)
   const electron = require('electron') as unknown as string
@@ -283,7 +292,15 @@ async function main(): Promise<void> {
     ['-r', path.join(ROOT, 'scripts/snapshot-isolate.cjs'), ROOT, `--user-data-dir=${path.join(scratch, 'profile')}`],
     {
       cwd: ROOT,
-      env: { ...process.env, RECTO_EVAL_JOB: jobPath, RECTO_ALLOW_REAL_VAULT: '1', OLLAMA_MAX_LOADED_MODELS: '1', RECTO_BOTS_MOCK: '' },
+      env: {
+        ...process.env,
+        RECTO_EVAL_JOB: jobPath,
+        RECTO_ALLOW_REAL_VAULT: '1',
+        OLLAMA_MAX_LOADED_MODELS: '1',
+        RECTO_BOTS_MOCK: '',
+        // The embedding model the installed app downloaded: the run's own profile has none.
+        RECTO_MODEL_DIR: process.env['RECTO_MODEL_DIR'] ?? path.join(os.homedir(), 'Library/Application Support/Recto/models'),
+      },
       stdio: ['ignore', 'inherit', 'inherit'],
     },
   )
@@ -316,7 +333,16 @@ async function main(): Promise<void> {
         .map((l) => JSON.parse(l) as { type: string } & Record<string, unknown>)
     : []
   const run = lines.find((l) => l.type === 'run') as
-    { system: string; profile: unknown; notes: number | null; cpu: string; ramBytes: number; harness?: Harness } | undefined
+    | {
+        system: string
+        profile: unknown
+        notes: number | null
+        cpu: string
+        ramBytes: number
+        harness?: Harness
+        build?: RunConfig['build']
+      }
+    | undefined
   const answered = new Map(lines.filter((l) => l.type === 'case').map((l) => [l['id'] as string, l as unknown as Answered]))
   if (code !== 0 || run === undefined)
     throw new Error(`The app's eval run failed (exit ${code}); ${answered.size} of ${cases.length} cases answered.`)
@@ -376,6 +402,7 @@ async function main(): Promise<void> {
       one_model_loaded: `other models unloaded before the run (were: ${loadedNow.filter((n) => n !== model).join(', ') || 'none'})`,
     },
     memory,
+    build: run.build ?? null,
     why: flag('--why') ?? null,
   }
 

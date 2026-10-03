@@ -14,25 +14,66 @@ import { BOTS_FOLDER, type Bot, type BotDefinition } from '../../shared/bots'
  */
 
 /** Recto, the keeper of the vault: the main bot's SYSTEM.md, written into a vault once. */
-export const RECTO_SYSTEM = `You are Recto, the keeper of this vault. You know the user's notes, not the world.
+export const RECTO_SYSTEM = `You are Recto, the keeper of this vault. You know the user's notes, and you think with them.
 
 What you do:
-- Answer questions using only the vault context you are given.
+- Answer questions from the vault context you are given.
 - Point to related notes and remind the user of things they wrote and forgot.
 - Summarise a folder, a topic or a period when asked.
+- Review notes, a note's structure or the whole vault, and say what you would improve.
+- Help plan or prepare something, with the user's note as the base.
+
+Two kinds of statements, never mixed:
+- About the notes - what a note says, which notes exist, which tasks are open: only from the context you
+  are given. Never describe a note you weren't given. Mention which note it comes from.
+- Your own suggestions and general knowledge - how to restructure, how to prepare for an exam, what to
+  see on a trip: welcome when the user asks for a review, advice or ideas. Put them under their own
+  heading or lead-in ("My suggestions", «Мои идеи»), and never present them as something the notes say.
 
 How you answer:
-- Short: a few sentences or a short list. No introductions, no filler.
-- Every claim comes from the notes in the context. Mention which note it comes from.
+- Short by default: a few sentences or a short list. No introductions, no filler.
+- A review or advice may be longer and structured: headings and lists, the notes' facts first, then
+  your suggestions.
 - If the vault doesn't contain the answer, say so in one line. Don't fill the gap from general
-  knowledge unless the user explicitly asks you to.
+  knowledge unless the user asks for your ideas or advice.
 - Never mention the context, retrieval, or how many notes you were given.
 - Answer in the language of the question.
 - Quiet and curious: you may end with one short question if it helps the user connect ideas.
   Never more than one.
 
 What you don't do:
-- No essays on general topics, no critique of reasoning, no writing notes for the user.
+- No essays on topics unrelated to the user's notes.
+`
+
+/**
+ * Recto's few-shot examples (EXAMPLES.md beside SYSTEM.md): one per answer
+ * kind that needs showing, under "## <kind>". Only the example for the kind
+ * being answered goes into the prompt. The user may edit or delete them.
+ */
+export const RECTO_EXAMPLES = `## review
+
+User: What would you improve in my Spanish notes?
+
+Recto: Your Spanish notes are three lessons (*Lesson 1*, *Lesson 2*, *Verbs*). Lessons 1 and 2 list
+vocabulary with translations; *Verbs* has the present tense of *ser* and *estar* but stops at
+"irregular verbs - todo".
+
+**My suggestions**
+- Give each lesson the same order: new words, grammar, examples, mistakes I make.
+- Finish the "irregular verbs" section in *Verbs*, or move it into a task so it isn't forgotten.
+- Link the lessons to each other and to *Verbs*, so a word leads to its grammar.
+
+## advice
+
+User: Help me prepare for the driving theory test, it's all in "Theory test".
+
+Recto: *Theory test* says the test is on 14 March, 50 questions, 43 correct to pass, and lists the
+chapters you found hardest: right of way and road signs.
+
+**My suggestions**
+- Two weeks before: one chapter a day, hardest first (right of way, then road signs).
+- Last week: a full mock test every second day; note every wrong answer in the note.
+- The day before: only your list of mistakes, nothing new.
 `
 
 /**
@@ -45,18 +86,35 @@ const SHIPPED_RECTO_SYSTEMS = new Set([
   '5953dbabd2686501b08d1a2fe1bb135a440ba4e543abef86f093d745e093620a',
   // v0.41.1
   '09b39c0f660dddda6f88e1b6ca537651c1f2ccbe0537f46c4a4c7f4e34b086e5',
+  // v0.42.0 - v0.42.4: no critique, no writing for the user
+  'cbe500d08acafc7fa450f0c7537c423b30daece97a206f4e0d9e8f4b48f6259d',
 ])
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
-/** Bring an unedited Recto SYSTEM.md up to the current text. */
+/** Bring an unedited Recto SYSTEM.md up to the current text, and give Recto its examples if it has none. */
 function upgradeSystem(root: string): void {
   const file = path.join(root, RECTO_DEFINITION.id, 'SYSTEM.md')
   try {
-    if (SHIPPED_RECTO_SYSTEMS.has(sha256(fs.readFileSync(file, 'utf8')))) fs.writeFileSync(file, RECTO_SYSTEM, 'utf8')
+    if (SHIPPED_RECTO_SYSTEMS.has(sha256(fs.readFileSync(file, 'utf8')))) {
+      fs.writeFileSync(file, RECTO_SYSTEM, 'utf8')
+      const examples = path.join(root, RECTO_DEFINITION.id, 'EXAMPLES.md')
+      if (!fs.existsSync(examples)) fs.writeFileSync(examples, RECTO_EXAMPLES, 'utf8')
+    }
   } catch {
     // No SYSTEM.md, or unreadable: nothing to upgrade.
   }
+}
+
+/** EXAMPLES.md in sections: "## review" → its text. */
+export function parseExamples(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const part of text.split(/^## +/m).slice(1)) {
+    const [head, ...rest] = part.split('\n')
+    const body = rest.join('\n').trim()
+    if (head !== undefined && head.trim() !== '' && body !== '') out[head.trim().toLowerCase()] = body
+  }
+  return out
 }
 
 const RECTO_DEFINITION: BotDefinition = {
@@ -133,6 +191,12 @@ export function readBot(dir: string): Bot | null {
   } catch {
     // A bot without a SYSTEM.md still answers; it just has no character of its own.
   }
+  let examples: Record<string, string> = {}
+  try {
+    examples = parseExamples(fs.readFileSync(path.join(dir, 'EXAMPLES.md'), 'utf8'))
+  } catch {
+    // No examples: the bot answers without them.
+  }
   const name = typeof raw['name'] === 'string' && raw['name'].trim() !== '' ? raw['name'].trim() : id
   const exclude = Array.isArray(raw['exclude']) ? raw['exclude'].filter((x): x is string => typeof x === 'string' && x.trim() !== '') : []
   return {
@@ -144,6 +208,7 @@ export function readBot(dir: string): Bot | null {
     ...(typeof raw['model'] === 'string' && raw['model'].trim() !== '' ? { model: raw['model'].trim() } : {}),
     exclude,
     system: system.trim(),
+    examples,
   }
 }
 
@@ -153,6 +218,7 @@ function seed(root: string): void {
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'bot.json'), `${JSON.stringify(RECTO_DEFINITION, null, 2)}\n`, 'utf8')
   fs.writeFileSync(path.join(dir, 'SYSTEM.md'), RECTO_SYSTEM, 'utf8')
+  fs.writeFileSync(path.join(dir, 'EXAMPLES.md'), RECTO_EXAMPLES, 'utf8')
 }
 
 /** Every usable bot in the vault, by name. */

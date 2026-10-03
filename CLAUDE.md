@@ -64,6 +64,8 @@ Never create log, draft or report files inside the repo.
 Write the log only to: /Users/veterba/Documents/Notes/Recto-vault/Programming/Projects/Recto app/Recto log/
 - One note per version: `YYYY-MM-DD — v0.X.Y.md` (em dash with spaces).
 - Format: frontmatter `tags: [log]`, then `## YYYY-MM-DD — <short title>`, then the entry.
+- Every log note ends with a section "## How it works (for vell)": in plain words, how the feature works end to end, which files do what (with paths), why this design was chosen over the alternatives, and which eval report or test shows it works.
+  Write it for someone who knows programming basics but hasn't read this code.
 - Add every new note to the list at the end of `Recto log.md` in that folder:
   `- [[Recto log/YYYY-MM-DD — v0.X.Y|YYYY-MM-DD — v0.X.Y]]`.
 - Only create a new note, append to the current version's note, or add it to that list.

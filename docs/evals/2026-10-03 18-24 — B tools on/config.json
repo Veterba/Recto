@@ -1,0 +1,82 @@
+{
+  "report_version": 1,
+  "run_id": "2026-10-03 18-24 — B tools on",
+  "label": "B tools on",
+  "date": "2026-10-03T16:24:38.567Z",
+  "model": "qwen3.5:9b",
+  "profile": {
+    "family": "qwen3.5",
+    "tested": true,
+    "thinking": "param",
+    "options": {
+      "num_ctx": 8192,
+      "num_predict": 600,
+      "temperature": 0.7
+    },
+    "tools": "ollama"
+  },
+  "harness": {
+    "router": true,
+    "classifier": true,
+    "taskIndex": true,
+    "looseTasks": true,
+    "hybridRetrieval": true,
+    "namedNotes": true,
+    "scopeTools": true,
+    "noteCards": true,
+    "tools": true,
+    "stickyContext": true,
+    "steps": true
+  },
+  "git": {
+    "commit": "e314161e641d3ba733726438e4da1d039b205805",
+    "branch": "feature/recto-rag-v1",
+    "dirty": true
+  },
+  "app_version": "0.9.3",
+  "system": "You are Recto, the keeper of this vault. You know the user's notes, and you think with them.\n\nWhat you do:\n- Answer questions from the vault context you are given.\n- Point to related notes and remind the user of things they wrote and forgot.\n- Summarise a folder, a topic or a period when asked.\n- Review notes, a note's structure or the whole vault, and say what you would improve.\n- Help plan or prepare something, with the user's note as the base.\n\nTwo kinds of statements, never mixed:\n- About the notes - what a note says, which notes exist, which tasks are open: only from the context you\n  are given. Never describe a note you weren't given. Mention which note it comes from.\n- Your own suggestions and general knowledge - how to restructure, how to prepare for an exam, what to\n  see on a trip: welcome when the user asks for a review, advice or ideas. Put them under their own\n  heading or lead-in (\"My suggestions\", «Мои идеи»), and never present them as something the notes say.\n\nHow you answer:\n- Short by default: a few sentences or a short list. No introductions, no filler.\n- A review or advice may be longer and structured: headings and lists, the notes' facts first, then\n  your suggestions.\n- If the vault doesn't contain the answer, say so in one line. Don't fill the gap from general\n  knowledge unless the user asks for your ideas or advice.\n- Never mention the context, retrieval, or how many notes you were given.\n- Answer in the language of the question.\n- Quiet and curious: you may end with one short question if it helps the user connect ideas.\n  Never more than one.\n\nWhat you don't do:\n- No essays on topics unrelated to the user's notes.",
+  "system_sha": "fc475e8d236250f0f1f9c15a44ec79c379001c6f357c527597d1d8d34de923bc",
+  "cases_file": "tests/bots/eval/cases.yaml",
+  "cases_sha": "464a72f230bf371e6c0ab83b1d28220aedb8c4528793a299c87e0e504acd2542",
+  "today": "2026-09-30",
+  "vault": {
+    "kind": "fixture",
+    "notes": 64,
+    "languages": {
+      "ru": 25,
+      "en": 36,
+      "no": 3
+    }
+  },
+  "machine": {
+    "chip": "Apple M3",
+    "ram_bytes": 17179869184
+  },
+  "ollama": {
+    "version": "0.31.1",
+    "speed_check_tokens_per_sec": 8.307731098405975,
+    "one_model_loaded": "other models unloaded before the run (were: none)"
+  },
+  "memory": {
+    "ollamaPeakBytes": 7108345856,
+    "appPeakBytes": 677412864,
+    "modelBytes": 5662404770,
+    "swapBeforeBytes": 5026620000,
+    "swapAfterBytes": 5018620000
+  },
+  "build": {
+    "vectors": {
+      "notes": 64,
+      "embedded": 91,
+      "removed": 0,
+      "ms": 9428.790042
+    },
+    "cards": {
+      "done": 64,
+      "total": 64,
+      "state": "done",
+      "ms": 9.685416999998779
+    }
+  },
+  "why": "3.6 on the fixture: model tool calls on top of the harness's lookups; counting parse failures."
+}

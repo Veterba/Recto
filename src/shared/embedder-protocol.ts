@@ -18,6 +18,12 @@ export type StateRow = {
 /** A topic centroid, cached with a key of its membership so a change invalidates it. */
 export type CentroidRow = { id: string; members: string; vector: number[] }
 
+/** A bot search piece (main/bots/chunks.ts): `input` is what is embedded, `text` what is read. */
+export type BotPiece = { idx: number; hash: string; heading: string; text: string; input: string }
+
+/** A piece found by its vector, best first. */
+export type BotHit = { path: string; idx: number; heading: string; text: string; score: number }
+
 export type EmbedRequest =
   | { kind: 'open'; dbPath: string; modelDir: string }
   | { kind: 'embed'; path: string; pieces: Piece[] }
@@ -34,6 +40,15 @@ export type EmbedRequest =
   /** Replaces the whole cache. */
   | { kind: 'centroids-put'; rows: CentroidRow[] }
   | { kind: 'stats' }
+  /** Bring one note's bot pieces to exactly `pieces`, embedding only new ones. */
+  | { kind: 'bot-embed'; path: string; mtime: number; pieces: BotPiece[] }
+  | { kind: 'bot-forget'; paths: string[] }
+  /** Every note with bot pieces, and the mtime it was cut at. */
+  | { kind: 'bot-mtimes' }
+  /** The `k` pieces nearest a question, outside `exclude` (folder prefixes). */
+  | { kind: 'bot-search'; query: string; k: number; exclude: string[]; only?: string[] }
+  /** Plain vectors for texts, with one of the encoder's prompts ('classify' for the router). */
+  | { kind: 'embed-texts'; texts: string[]; prompt: 'classify' | 'query' }
 
 export type EmbedResponse =
   | { kind: 'ok' }
@@ -44,4 +59,8 @@ export type EmbedResponse =
   | { kind: 'term-vectors'; vectors: number[][] }
   | { kind: 'centroids'; rows: CentroidRow[] }
   | { kind: 'stats'; notes: number; chunks: number; rss: number }
+  | { kind: 'bot-embedded'; computed: number }
+  | { kind: 'bot-mtimes'; mtimes: Record<string, number> }
+  | { kind: 'bot-hits'; hits: BotHit[] }
+  | { kind: 'vectors'; vectors: number[][] }
   | { kind: 'error'; message: string }

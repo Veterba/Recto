@@ -258,3 +258,34 @@ export function renderTaskAnswer(found: Found, question: string, terms: readonly
   }
   return result()
 }
+
+/** One group of a grouped task list: a project, a topic or a note, and its open items. */
+export type TaskGroupOut = { label: string; items: { text: string; where: string; path: string; title: string }[] }
+
+const GROUPED = {
+  en: { head: (n: number, g: number) => `Still open: ${n} tasks in ${g} groups.`, done: (n: number) => `Done in this period: ${n}.` },
+  ru: { head: (n: number, g: number) => `Не доделано: ${n} — по ${g} темам.`, done: (n: number) => `Сделано за этот период: ${n}.` },
+  no: { head: (n: number, g: number) => `Fortsatt åpent: ${n} oppgaver i ${g} grupper.`, done: (n: number) => `Gjort i perioden: ${n}.` },
+} as const
+
+/**
+ * The open tasks grouped by project or topic (or note), every item with the
+ * note it is in - the whole list, never cut: "all my tasks" means all.
+ */
+export function renderGroupedTasks(groups: readonly TaskGroupOut[], question: string, doneCount: number | null): TaskAnswer {
+  const lang = langOf(question)
+  const total = groups.reduce((n, g) => n + g.items.length, 0)
+  if (total === 0) return { text: L[lang].noneOpen, notes: [] }
+  const lines: string[] = [GROUPED[lang].head(total, groups.length)]
+  const named: { path: string; title: string }[] = []
+  const where = (w: string): string => (/^\d{4}-\d{2}-\d{2}$/.test(w) ? dayName(w, lang) : w)
+  for (const g of groups) {
+    lines.push('', `**${where(g.label)}**`)
+    for (const item of g.items) {
+      lines.push(`• ${item.text} — ${where(item.where)}`)
+      if (!named.some((n) => n.path === item.path)) named.push({ path: item.path, title: item.title })
+    }
+  }
+  if (doneCount !== null && doneCount > 0) lines.push('', GROUPED[lang].done(doneCount))
+  return { text: lines.join('\n'), notes: named }
+}

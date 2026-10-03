@@ -4,7 +4,7 @@ import path from 'node:path'
 import { getSnapshot, listSnapshots, pruneSnapshots, takeSnapshot } from './snapshots'
 import { parseNote, pathsByName, resolveLink } from '../../shared/parse'
 import { extractTasks, normaliseTask, noteDate } from '../../shared/tasks'
-import type { IndexRequest, IndexResponse, PeriodNote, TaskRowData } from '../../shared/indexer-protocol'
+import type { CatalogNote, IndexRequest, IndexResponse, PeriodNote, StoredCard, TaskRowData } from '../../shared/indexer-protocol'
 import { isHidden } from '../../shared/vault'
 import { vaultRoot, requireDb, open, closeDb } from './db'
 import { search, backlinks, resolveOne, unresolved, graph, board, boards, context, vaultUsage } from './queries'
@@ -242,6 +242,56 @@ function notesInPeriod(from: string, to: string): PeriodNote[] {
   })
 }
 
+/** Every note with what the scope tools count: links both ways, aliases and topics, task rows, headings. */
+function botCatalog(): CatalogNote[] {
+  const handle = requireDb()
+  const notes = handle
+    .prepare(
+      `SELECT n.path, n.name, n.mtime, n.size, n.note_date,
+              (SELECT COUNT(*) FROM links l WHERE l.source_path = n.path AND (l.property IS NULL OR l.property <> 'topics')) AS links_out,
+              (SELECT COUNT(*) FROM links l WHERE l.target_path = n.path AND l.source_path <> n.path) AS links_in,
+              (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'aliases') AS aliases,
+              (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'topics') AS topics,
+              (SELECT COUNT(*) FROM tasks t WHERE t.path = n.path) AS tasks
+         FROM notes n ORDER BY n.path`,
+    )
+    .all() as {
+    path: string
+    name: string
+    mtime: number
+    size: number
+    note_date: string | null
+    links_out: number
+    links_in: number
+    aliases: string | null
+    topics: string | null
+    tasks: number
+  }[]
+  const headings = new Map<string, { text: string; level: number }[]>()
+  for (const h of handle.prepare('SELECT path, text, level FROM headings ORDER BY path, line').all() as {
+    path: string
+    text: string
+    level: number
+  }[]) {
+    const list = headings.get(h.path) ?? []
+    list.push({ text: h.text, level: h.level })
+    headings.set(h.path, list)
+  }
+  return notes.map((n) => ({
+    path: n.path,
+    title: n.name.replace(/\.md$/i, ''),
+    mtime: n.mtime,
+    size: n.size,
+    noteDate: n.note_date,
+    linksOut: n.links_out,
+    linksIn: n.links_in,
+    aliases: n.aliases,
+    topics: n.topics,
+    tasks: n.tasks,
+    headings: headings.get(n.path) ?? [],
+  }))
+}
+
 function removeNote(relative: string): void {
   const handle = requireDb()
   // Child tables cascade from notes; FTS is a virtual table and does not.
@@ -443,6 +493,38 @@ function handle(request: IndexRequest): IndexResponse {
         .prepare('INSERT OR REPLACE INTO inferred_tasks (hash, path, items, created) VALUES (?, ?, ?, ?)')
         .run(request.hash, request.path, JSON.stringify(request.items), Date.now())
       return { kind: 'inferred-result', items: request.items }
+    case 'bot-catalog':
+      return { kind: 'bot-catalog-result', notes: botCatalog() }
+    case 'cards-get':
+      return {
+        kind: 'cards-result',
+        cards: requireDb().prepare('SELECT hash, model, path, card FROM note_cards WHERE model = ?').all(request.model) as StoredCard[],
+      }
+    case 'card-put':
+      requireDb()
+        .prepare('INSERT OR REPLACE INTO note_cards (hash, model, path, card, created) VALUES (?, ?, ?, ?, ?)')
+        .run(request.card.hash, request.card.model, request.card.path, request.card.card, Date.now())
+      return { kind: 'ok' }
+    case 'model-cache-export': {
+      const handleDb = requireDb()
+      return {
+        kind: 'model-cache',
+        cards: handleDb.prepare('SELECT hash, model, path, card FROM note_cards').all() as StoredCard[],
+        inferred: (
+          handleDb.prepare('SELECT hash, path, items FROM inferred_tasks').all() as { hash: string; path: string; items: string }[]
+        ).map((r) => ({ ...r, items: JSON.parse(r.items) as string[] })),
+      }
+    }
+    case 'model-cache-import': {
+      const handleDb = requireDb()
+      handleDb.transaction(() => {
+        const card = handleDb.prepare('INSERT OR IGNORE INTO note_cards (hash, model, path, card, created) VALUES (?, ?, ?, ?, ?)')
+        for (const c of request.cards) card.run(c.hash, c.model, c.path, c.card, Date.now())
+        const inferred = handleDb.prepare('INSERT OR IGNORE INTO inferred_tasks (hash, path, items, created) VALUES (?, ?, ?, ?)')
+        for (const i of request.inferred) inferred.run(i.hash, i.path, JSON.stringify(i.items), Date.now())
+      })()
+      return { kind: 'ok' }
+    }
     case 'close':
       closeDb()
       return { kind: 'closed' }

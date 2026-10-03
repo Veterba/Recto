@@ -1,12 +1,8 @@
 import { BrowserWindow } from 'electron'
-import path from 'node:path'
 import type { AiMessage } from '../../shared/ai'
 import {
-  BOTS_FOLDER,
-  CHATS_FOLDER,
   DEFAULT_BOT_MODEL,
   DEFAULT_HARNESS,
-  type BotHarness,
   type Bot,
   type BotModelStatus,
   type BotSettings,
@@ -16,27 +12,16 @@ import {
 import { IPC_EVENT, type IpcEvents } from '../../shared/ipc'
 import { botsMock } from '../config'
 import { sendEvent } from '../events'
-import { send as indexer } from '../index-client'
 import { readState, writeState } from '../store'
 import { currentVault } from '../vault'
-import * as vaultFs from '../vault-fs'
-import { buildSystem, estimateTokens, fitHistory, rankNotes, selectChunks, splitSections, type Chunk } from './context'
 import { cleanTitle } from '../../shared/chat-topics'
 import { listBots, writeBotModel } from './definitions'
-import {
-  AnthropicProvider,
-  CONTEXT_TOKENS,
-  MockProvider,
-  OllamaProvider,
-  isApiModel,
-  type BotModelProvider,
-  type LocalModels,
-} from './provider'
+import { AnthropicProvider, MockProvider, OllamaProvider, isApiModel, type BotModelProvider, type LocalModels } from './provider'
 import { localChoices } from './models/catalog'
-import { route, routedTerms, type Route } from './router'
-import { isoDate } from './period'
-import { notesTool, tasksTool } from './tools'
 import { switchPlan } from './models/switch'
+import { prepare } from './prepare'
+import { answerWithTools } from './model-tools'
+import { cardsStatus, startBackground as startJobs, yieldToAnswer } from './background'
 import os from 'node:os'
 import { readKey } from '../secrets'
 
@@ -51,13 +36,6 @@ const api: BotModelProvider = botsMock() ? new MockProvider() : new AnthropicPro
 
 /** The model's provider: an Anthropic model when it is one of the API models, otherwise Ollama on this Mac. */
 export const providerFor = (model: string): BotModelProvider => (isApiModel(model) ? api : local)
-
-/** Notes ranked per question, and the most of them read from disk for sections. */
-const NOTES_TO_READ = 8
-/** Room left in the context window for the answer itself. */
-const ANSWER_TOKENS = 1024
-/** The context's share of the window: the notes, in characters. */
-const CONTEXT_CHARS = 6000
 
 export function settings(): BotSettings {
   const state = readState()
@@ -174,143 +152,30 @@ function pushPull(progress: Parameters<IpcEvents[typeof IPC_EVENT.botsPullProgre
   if (window !== undefined && !window.isDestroyed()) sendEvent(window, IPC_EVENT.botsPullProgress, progress)
 }
 
-/**
- * The vault's best parts for a question, within budget, skipping chats and the
- * bot's excluded folders. Null when the message asks nothing of the vault -
- * small talk, no words worth searching for - so nothing is read at all.
- */
-async function findContext(terms: readonly string[], bot: Bot): Promise<{ chunks: Chunk[]; scores: Map<string, number> } | null> {
-  if (terms.length === 0) return null
-  const hitsByTerm = await Promise.all(
-    terms.map(async (term) => {
-      const response = await indexer({ kind: 'search', query: term, limit: 12 }, 15_000).catch(() => null)
-      return response?.kind === 'search-result' ? response.hits : []
-    }),
-  )
-  // Never its own threads, nor the app's state: a bot citing its last answer is not a source.
-  const exclude = [CHATS_FOLDER, path.dirname(BOTS_FOLDER), ...(bot.exclude ?? [])]
-  const ranked = rankNotes(hitsByTerm, exclude).slice(0, NOTES_TO_READ)
-  const notes = await Promise.all(
-    ranked.map(async ({ path: notePath, score }) => {
-      const read = await vaultFs.readFile(notePath)
-      if (!read.ok) return null
-      const title = /^#\s+(.+)$/m.exec(read.content)?.[1]?.trim() ?? path.basename(notePath).replace(/\.md$/i, '')
-      return { path: notePath, title, score, sections: splitSections(read.content) }
-    }),
-  )
-  const chunks = selectChunks(
-    notes.filter((n) => n !== null),
-    terms,
-    { max: 6, budget: CONTEXT_CHARS },
-  )
-  return { chunks, scores: new Map(ranked.map((r) => [r.path, r.score])) }
-}
-
-/** A note the bot read for an answer, as the evals report it: which part, and how well its note ranked. */
-export type ContextNote = { path: string; title: string; heading: string | null; score: number }
-
-/**
- * Everything the model is given for one answer: the system prompt with the
- * notes found, and the conversation cut to fit. The chat and the evals both
- * go through this, so an eval measures what the chat does.
- */
-/** A tool call made for an answer - by the harness itself, or (from 3.6) asked for by the model. */
-export type ToolCall = {
-  name: string
-  args: Record<string, unknown>
-  by: 'harness' | 'model'
-  summary: string
-  notes: string[]
-  /** What it returned, as the model saw it (kept in eval results, not in reports). */
-  result: string
-}
-
-export type Prepared = {
-  system: string
-  history: AiMessage[]
-  chunks: Chunk[] | null
-  /** Everything the answer was given to read, for the evals. */
-  context: ContextNote[]
-  route: Route | null
-  toolCalls: ToolCall[]
-  /** The notes to show under the answer. */
-  sources: ContextNote[]
-  /** Text the harness wrote itself, shown first; the model's reply follows it. */
-  preface: string | null
-}
-
-/** What `prepare` may be told besides the conversation: the evals pin the date and switch parts off; the chat hears progress. */
-export type PrepareOptions = { harness?: BotHarness; today?: Date; onProgress?: (text: string) => void }
-
-export async function prepare(bot: Bot, messages: readonly AiMessage[], options: PrepareOptions = {}): Promise<Prepared> {
-  const harness = options.harness ?? settings().harness
-  const today = options.today ?? new Date()
-  const model = modelOf(bot)
-  const question = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
-  const routed = harness.router ? await route(providerFor(model), model, messages, today) : null
-  // Small talk and questions about Recto itself ask nothing of the vault: no search, no sources.
-  const skip = routed !== null && (routed.kind === 'smalltalk' || routed.kind === 'self')
-  const provider = providerFor(model)
-  const toolOptions = {
-    bot,
-    question,
-    provider,
-    model,
-    today: isoDate(today),
-    looseTasks: harness.looseTasks,
-    ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
-  }
-  const toolCalls: ToolCall[] = []
-
-  // Tasks and "what did I do" questions: the harness looks them up itself, for the period they name.
-  if (routed !== null && harness.taskIndex && (routed.kind === 'tasks' || routed.kind === 'recent')) {
-    const kind = routed.kind
-    const period = routed.period ?? { from: isoDate(addDays(today, kind === 'tasks' ? -13 : -6)), to: isoDate(today) }
-    options.onProgress?.(kind === 'tasks' ? 'Checking your tasks…' : 'Going through the notes of the period…')
-    const result =
-      kind === 'tasks'
-        ? await tasksTool(period, 'all', routedTerms(question, routed), toolOptions)
-        : await notesTool(period, [...routed.keywordsEn, ...routed.keywordsRu], toolOptions)
-    toolCalls.push({
-      name: kind === 'tasks' ? 'tasks_in_period' : 'notes_in_period',
-      args: { from: period.from, to: period.to },
-      by: 'harness',
-      summary: result.summary,
-      notes: result.notes.map((n) => n.title),
-      result: result.text,
-    })
-    if (result.answer !== undefined) {
-      // A task list a small model would drop items from: the harness shows it as it is, and the
-      // model only adds one line of its own after it.
-      const system = `${bot.system.trim()}\n\n## What the user was just shown, in answer to their message\n\n${result.answer}\n\nWrite ONE short sentence to follow it, in the language of the user's message - a remark or an offer. Don't repeat or change the list.`
-      const history = fitHistory(messages, CONTEXT_TOKENS - ANSWER_TOKENS - estimateTokens(system))
-      return {
-        system,
-        history,
-        chunks: null,
-        context: result.notes,
-        route: routed,
-        toolCalls,
-        sources: result.notes,
-        preface: result.answer,
-      }
-    }
-    const system = `${bot.system.trim()}\n\n${result.text}`
-    const history = fitHistory(messages, CONTEXT_TOKENS - ANSWER_TOKENS - estimateTokens(system))
-    return { system, history, chunks: null, context: result.notes, route: routed, toolCalls, sources: result.notes, preface: null }
-  }
-
-  const found = skip ? null : await findContext(routedTerms(question, routed), bot)
-  const chunks = found?.chunks ?? null
-  const system = buildSystem(bot.system, chunks)
-  const history = fitHistory(messages, CONTEXT_TOKENS - ANSWER_TOKENS - estimateTokens(system))
-  const context = (chunks ?? []).map((c) => ({ path: c.path, title: c.title, heading: c.heading, score: found?.scores.get(c.path) ?? 0 }))
-  return { system, history, chunks, context, route: routed, toolCalls, sources: context, preface: null }
-}
-
-const addDays = (d: Date, n: number): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
+export { prepare, type ContextNote, type Prepared, type ToolCall } from './prepare'
 
 const running = new Map<string, AbortController>()
+
+export { cardsStatus }
+
+/**
+ * Keep the open vault's chunk vectors and note cards up to date in the
+ * background (bots/background.ts), on the default model.
+ */
+export function startBackground(): void {
+  if (botsMock()) return
+  startJobs({
+    provider: () => providerFor(settings().defaultModel),
+    model: () => settings().defaultModel,
+    exclude: () => list().flatMap((b) => b.exclude ?? []),
+    enabled: () => ({
+      vectors: settings().harness.hybridRetrieval,
+      cards: settings().harness.noteCards && !isApiModel(settings().defaultModel),
+    }),
+    busy: () => running.size > 0,
+    ready: async () => (await providerFor(settings().defaultModel).status(settings().defaultModel)).state === 'ready',
+  })
+}
 
 function push<
   C extends typeof IPC_EVENT.botsDelta | typeof IPC_EVENT.botsDone | typeof IPC_EVENT.botsError | typeof IPC_EVENT.botsProgress,
@@ -324,6 +189,7 @@ export async function ask(request: {
   id: string
   botId: string
   messages: AiMessage[]
+  sticky?: BotSource[]
 }): Promise<{ ok: true; sources: BotSource[] } | { ok: false; error: string; status?: BotModelStatus }> {
   const bot = list().find((b) => b.id === request.botId)
   if (bot === undefined) return { ok: false, error: 'That bot no longer exists.' }
@@ -334,7 +200,13 @@ export async function ask(request: {
   const ready = await provider.status(model)
   if (ready.state !== 'ready') return { ok: false, error: 'The model is not available.', status: ready }
 
-  const { system, history, sources, preface } = await prepare(bot, request.messages, {
+  const harness = settings().harness
+  yieldToAnswer()
+  const { system, history, sources, preface, maxTokens, advisor, toolContext } = await prepare(bot, request.messages, {
+    harness,
+    provider,
+    model,
+    ...(request.sticky === undefined ? {} : { sticky: request.sticky }),
     onProgress: (text) => push(IPC_EVENT.botsProgress, { id: request.id, text }),
   })
 
@@ -346,7 +218,17 @@ export async function ask(request: {
     try {
       if (preface !== null) push(IPC_EVENT.botsDelta, { id: request.id, text: preface })
       let first = true
-      for await (const text of provider.stream(history, system, { model, signal: controller.signal })) {
+      const options = { model, signal: controller.signal, maxTokens }
+      const reply =
+        harness.tools && toolContext !== null
+          ? answerWithTools(provider, history, system, {
+              ...options,
+              advisor,
+              context: toolContext,
+              result: { calls: [], parseFailures: 0 },
+            })
+          : provider.stream(history, system, options)
+      for await (const text of reply) {
         push(IPC_EVENT.botsDelta, { id: request.id, text: preface !== null && first ? `\n\n${text.trimStart()}` : text })
         first = false
       }

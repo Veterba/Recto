@@ -64,6 +64,13 @@ export function periodFrom(text: string, today: Date): Period | null {
   // Relative spans.
   const lastN = /(?:last|past|последн\S*|за)\s+(\d{1,2})\s+(?:days?|дн\S*|dager|dagene)/i.exec(t)
   if (lastN !== null) return { from: iso(addDays(day, -(Number(lastN[1]) - 1))), to: iso(day) }
+  // "This and last week" / «на этой и прошлой неделе»: from last week's Monday to today.
+  if (
+    /\bthis and (last|previous) week|\b(last|previous) and this week|эт\S* и прошл\S* недел|прошл\S* и эт\S* недел|\bdenne og forrige uke/i.test(
+      t,
+    )
+  )
+    return { from: iso(addDays(monday(day), -7)), to: iso(day) }
   if (/\b(last|previous) week\b|прошл\S* недел|предыдущ\S* недел|\bforrige uke/i.test(t)) {
     const start = addDays(monday(day), -7)
     // "Wednesday last week" / «в среду на прошлой неделе»: that day of last week.

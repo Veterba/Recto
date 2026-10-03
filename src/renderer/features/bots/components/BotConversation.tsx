@@ -188,11 +188,17 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   const ask = useCallback(
     async (path: string) => {
       // The model sees this topic and nothing before it.
-      const messages = (model.loaded.get(path)?.messages ?? []).map(({ role, content }) => ({ role, content }))
+      const thread = model.loaded.get(path)?.messages ?? []
+      const messages = thread.map(({ role, content }) => ({ role, content }))
+      // What the last two answers read stays in reach for the next question.
+      const sticky = thread
+        .filter((m) => m.role === 'assistant')
+        .slice(-2)
+        .flatMap((m) => m.sources ?? [])
       streamPath.current = path
       timing.current = { sent: performance.now(), first: 0 }
       setStream({ text: '', steps: [], sources: [], face: 'riffle', at: createdStamp(new Date()) })
-      const started = await api.invoke(IPC.botsSend, { id: path, botId: bot.id, messages })
+      const started = await api.invoke(IPC.botsSend, { id: path, botId: bot.id, messages, sticky })
       if (started.ok) {
         if (pendingRef.current !== null) setStream({ ...pendingRef.current, sources: started.sources })
         return

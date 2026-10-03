@@ -265,6 +265,39 @@ export const MIGRATIONS: readonly Migration[] = [
       UPDATE notes SET mtime = -1;
     `,
   },
+  {
+    version: 11,
+    name: 'bot-chunks-and-cards',
+    sql: `
+      -- The bots' search pieces (main/bots/chunks.ts) and their vectors.
+      -- Written by the embedder, like autolink_chunks; a different cut and a
+      -- different prompt (retrieval), so a table of its own. \`heading\` is the
+      -- heading path joined with " > "; \`mtime\` is the note's when it was cut.
+      CREATE TABLE bot_chunks (
+        path    TEXT NOT NULL,
+        idx     INTEGER NOT NULL,
+        hash    TEXT NOT NULL,
+        heading TEXT NOT NULL,
+        text    TEXT NOT NULL,
+        mtime   REAL NOT NULL,
+        vec     BLOB NOT NULL,
+        PRIMARY KEY (path, idx)
+      );
+
+      -- A short card per note, written by the local model in the background:
+      -- summary, language, kind, main headings. Keyed by the note's content
+      -- hash and the model, so only changed notes are read again.
+      CREATE TABLE note_cards (
+        hash    TEXT NOT NULL,
+        model   TEXT NOT NULL,
+        path    TEXT NOT NULL,
+        card    TEXT NOT NULL,
+        created REAL NOT NULL,
+        PRIMARY KEY (hash, model)
+      );
+      CREATE INDEX idx_note_cards_path ON note_cards(path);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

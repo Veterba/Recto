@@ -49,6 +49,7 @@ function rewatch(): void {
   // Topics reads the index, so it starts once the index is open.
   void openIndexForVault()
     .then(() => topics.start())
+    .then(() => bots.startBackground())
     .catch((err: unknown) => console.error('[indexer]', err))
   // Retention is enforced on open rather than on a timer: the app may not be
   // running on the day something expires, and a check at open always catches up.
@@ -323,6 +324,7 @@ export function registerIpc(): void {
   handle(IPC.botsModels, () => bots.models())
   handle(IPC.botsPull, (name) => bots.pull(name))
   handle(IPC.botsPullCancel, () => bots.cancelPull())
+  handle(IPC.botsCards, () => bots.cardsStatus())
 
   handle(IPC.indexSearch, async (query, limit) => {
     const response = await send({ kind: 'search', query, ...(limit === undefined ? {} : { limit }) }, 15_000)

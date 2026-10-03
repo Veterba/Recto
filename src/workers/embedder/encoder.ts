@@ -22,7 +22,14 @@ export const DIMS = 256
  */
 const PROMPT = 'task: sentence similarity | query: '
 
-export type Encoder = (texts: string[]) => Promise<Float32Array[]>
+/** EmbeddingGemma's retrieval prompts: a search query, and a document ("title: … | text: …", written by the caller). */
+export const QUERY_PROMPT = 'task: search result | query: '
+export const DOCUMENT_PROMPT = ''
+/** For sorting a question into a kind (the router), on both sides. */
+export const CLASSIFY_PROMPT = 'task: classification | query: '
+
+/** Texts to vectors; `prompt` goes in front of each (the similarity prompt unless told otherwise). */
+export type Encoder = (texts: string[], prompt?: string) => Promise<Float32Array[]>
 
 /**
  * A full collection, obtained at runtime. A utilityProcess does not pass
@@ -64,11 +71,11 @@ export async function createEncoder(modelDir: string): Promise<Encoder> {
   })
   gc()
 
-  return async (texts) => {
+  return async (texts, prompt = PROMPT) => {
     const out: Float32Array[] = []
     // One at a time: a batch costs more memory and saves nothing on CPU.
     for (const text of texts) {
-      const enc = (await tokenizer([PROMPT + text], { truncation: true, max_length: 512 })) as {
+      const enc = (await tokenizer([prompt + text], { truncation: true, max_length: 512 })) as {
         input_ids: { data: BigInt64Array; dims: number[] }
         attention_mask: { data: BigInt64Array; dims: number[] }
       }

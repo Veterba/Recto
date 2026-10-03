@@ -1,7 +1,5 @@
 import type { AiMessage } from '../../shared/ai'
 import type { BotSource } from '../../shared/bots'
-import { CODE_FENCE } from '../../shared/parse'
-import { frontmatterClose } from '../../shared/frontmatter'
 
 /**
  * What a bot reads before it answers: the parts of the vault that best match
@@ -25,7 +23,9 @@ const STOPWORDS = new Set(
   hi hey hei hello hallo hej yo thanks thank thx please cool nice great good morning evening night bye
   okay yeah yep nope sure
   привет приветик здравствуй здравствуйте спасибо пожалуйста пока хорошо отлично ок окей ага угу ладно
-  доброе добрый утро вечер ночи`.split(/\s+/),
+  доброе добрый утро вечер ночи
+  note notes help try itself based use using future currently current suggest improve would could should give tell
+  заметка заметки заметок заметках заметку помоги дай расскажи посмотри исходя опираясь`.split(/\s+/),
 )
 
 const WORD = /[\p{L}\p{N}]+/gu
@@ -76,52 +76,6 @@ export function rankNotes(
 
 export type Section = { heading: string | null; text: string }
 
-/** Longest a section is allowed to be before it is cut into paragraphs-sized pieces. */
-const PIECE_CHARS = 1200
-
-/**
- * A note in heading sections, frontmatter dropped. Headings inside code
- * fences are text. A long section comes back as several pieces, each keeping
- * its heading.
- */
-export function splitSections(markdown: string): Section[] {
-  const lines = markdown.split(/\r?\n/)
-  const close = frontmatterClose(lines)
-  const body = close === -1 ? lines : lines.slice(close + 1)
-  const sections: Section[] = []
-  let heading: string | null = null
-  let buffer: string[] = []
-  let inFence = false
-
-  const flush = (): void => {
-    const text = buffer.join('\n').trim()
-    buffer = []
-    if (text === '') return
-    let piece = ''
-    for (const paragraph of text.split(/\n\s*\n/)) {
-      if (piece !== '' && piece.length + paragraph.length > PIECE_CHARS) {
-        sections.push({ heading, text: piece })
-        piece = ''
-      }
-      piece = piece === '' ? paragraph : `${piece}\n\n${paragraph}`
-    }
-    if (piece !== '') sections.push({ heading, text: piece.length > PIECE_CHARS * 2 ? piece.slice(0, PIECE_CHARS * 2) : piece })
-  }
-
-  for (const line of body) {
-    if (CODE_FENCE.test(line)) inFence = !inFence
-    const h = inFence ? null : /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line)
-    if (h !== null) {
-      flush()
-      heading = h[1]!.trim()
-      continue
-    }
-    buffer.push(line)
-  }
-  flush()
-  return sections
-}
-
 /**
  * How well a section matches: each term in its text counts, more if it comes
  * up often; a term in its heading adds a little. Text outweighs headings on
@@ -169,56 +123,8 @@ export function enoughTerms(section: Section, terms: readonly string[], title = 
   return found >= Math.min(2, terms.length)
 }
 
-const readable = (section: Section, terms: readonly string[], title = ''): boolean =>
-  scoreSection(section, terms) >= MIN_SECTION_SCORE && enoughTerms(section, terms, title)
-
-export type Chunk = BotSource & { text: string; title: string }
-
-/**
- * What the bot reads, at most `max` sections and `budget` characters, in two
- * passes. First each ranked note's opening section, in rank order, whenever it
- * matches: a note says what it is about - in a log, what was decided - at the
- * top, and a later section can outscore it just by mentioning the words in
- * passing. Then the best other sections fill what is left, at most two from
- * one note so a long note cannot crowd out the rest. A note that matched only
- * Only sections that hold one of the question's words are read; a note that
- * matched the search by its title alone gives nothing.
- */
-export function selectChunks(
-  notes: readonly { path: string; title: string; score: number; sections: readonly Section[] }[],
-  terms: readonly string[],
-  { max = 6, budget = 6000 }: { max?: number; budget?: number } = {},
-): Chunk[] {
-  const openings: Chunk[] = []
-  const others: (Chunk & { score: number })[] = []
-  for (const note of notes) {
-    const [opening, ...rest] = note.sections
-    if (opening === undefined) continue
-    const chunk = (section: Section): Chunk => ({ path: note.path, heading: section.heading, title: note.title, text: section.text })
-    const best = rest
-      .map((section) => ({ section, score: scoreSection(section, terms) }))
-      .filter((s) => readable(s.section, terms, note.title))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 2)
-    if (readable(opening, terms, note.title)) openings.push(chunk(opening))
-    for (const { section, score } of best) others.push({ ...chunk(section), score: score + note.score })
-  }
-  others.sort((a, b) => b.score - a.score)
-
-  // Openings take at most two thirds of the places, so the best sections elsewhere still get in.
-  const ordered: Chunk[] = [...openings.slice(0, Math.ceil((max * 2) / 3)), ...others.map(({ score: _score, ...chunk }) => chunk)]
-  const chosen: Chunk[] = []
-  let used = 0
-  for (const chunk of ordered) {
-    if (chosen.length === max) break
-    const room = budget - used
-    if (room < 200) break
-    const text = chunk.text.length > room ? `${chunk.text.slice(0, room - 1).trimEnd()}…` : chunk.text
-    chosen.push({ ...chunk, text })
-    used += text.length
-  }
-  return chosen
-}
+/** A piece of a note given to the model. `idx`: its place among the note's search pieces (chunks.ts), when it is one. */
+export type Chunk = BotSource & { text: string; title: string; idx?: number }
 
 /** The bot's own instructions, then what it found in the vault - or a plain statement that it found nothing. */
 export function buildSystem(botSystem: string, chunks: readonly Chunk[] | null): string {
@@ -227,7 +133,7 @@ export function buildSystem(botSystem: string, chunks: readonly Chunk[] | null):
   if (chunks === null) return botSystem.trim()
   const notes =
     chunks.length === 0
-      ? 'No notes in the vault matched this question.'
+      ? "No notes in the vault matched this question. Say so in one line, and don't answer it from general knowledge - the user asked about their notes."
       : chunks.map((c) => `### ${c.title} (${c.path}${c.heading === null ? '' : ` › ${c.heading}`})\n${c.text}`).join('\n\n')
   return `${botSystem.trim()}\n\n## Notes from the vault\n\n${notes}`
 }

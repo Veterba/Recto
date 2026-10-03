@@ -115,6 +115,27 @@ export type PeriodNote = {
   content: string
 }
 
+/** One note as the bots' scope tools see it (main/bots/scope-tools.ts). */
+export type CatalogNote = {
+  path: string
+  /** The file name without .md. */
+  title: string
+  mtime: number
+  size: number
+  noteDate: string | null
+  /** The user's own links out (the topics property not counted), and links in. */
+  linksOut: number
+  linksIn: number
+  /** Raw frontmatter values, as the index keeps them. */
+  aliases: string | null
+  topics: string | null
+  tasks: number
+  headings: { text: string; level: number }[]
+}
+
+/** A note card (main/bots/cards.ts), as stored: the card is JSON. */
+export type StoredCard = { hash: string; model: string; path: string; card: string }
+
 export type IndexRequest =
   | { kind: 'open'; vaultPath: string; dbPath: string }
   | { kind: 'reindex'; force?: boolean }
@@ -143,6 +164,12 @@ export type IndexRequest =
   | { kind: 'notes-in-period'; from: string; to: string }
   | { kind: 'inferred-get'; hash: string }
   | { kind: 'inferred-put'; hash: string; path: string; items: string[] }
+  | { kind: 'bot-catalog' }
+  | { kind: 'cards-get'; model: string }
+  | { kind: 'card-put'; card: StoredCard }
+  /** Cards and loose-task readings, for carrying them from one eval run to the next (same notes, same model). */
+  | { kind: 'model-cache-export' }
+  | { kind: 'model-cache-import'; cards: StoredCard[]; inferred: { hash: string; path: string; items: string[] }[] }
   | { kind: 'close' }
 
 export type IndexResponse =
@@ -168,5 +195,9 @@ export type IndexResponse =
   | { kind: 'task-rows-result'; rows: TaskRowData[] }
   | { kind: 'notes-in-period-result'; notes: PeriodNote[] }
   | { kind: 'inferred-result'; items: string[] | null }
+  | { kind: 'bot-catalog-result'; notes: CatalogNote[] }
+  | { kind: 'cards-result'; cards: StoredCard[] }
+  | { kind: 'model-cache'; cards: StoredCard[]; inferred: { hash: string; path: string; items: string[] }[] }
+  | { kind: 'ok' }
   | { kind: 'closed' }
   | { kind: 'error'; message: string }

@@ -41,6 +41,11 @@ export type RunConfig = {
   machine: { chip: string; ram_bytes: number }
   ollama: { version: string | null; speed_check_tokens_per_sec?: number | null; one_model_loaded: string }
   memory: Memory
+  /** What was built before the first case: chunk vectors and note cards, with how long each took. */
+  build?: {
+    vectors: { notes: number; embedded: number; removed: number; ms: number } | null
+    cards: { done: number; total: number; state: string; ms: number } | null
+  } | null
   /** Why it was run, for the eval log. */
   why: string | null
 }
@@ -58,8 +63,10 @@ export type ResultLine = {
   expectNoSources: boolean
   expectItems?: string[]
   forbidNotes?: string[]
+  rubric?: string[]
   router: unknown
   steps: unknown
+  preface?: string | null
   toolCalls: unknown
   context: Answered['context']
   answer: string
@@ -87,8 +94,10 @@ export function resultLine(row: Scored): ResultLine {
     expectNoSources: c.expectNoSources,
     expectItems: c.expectItems,
     forbidNotes: c.forbidNotes,
+    ...(c.rubric === undefined ? {} : { rubric: c.rubric }),
     router: a.router ?? null,
     steps: a.steps ?? null,
+    preface: a.preface ?? null,
     toolCalls: a.toolCalls ?? null,
     context: a.context,
     answer: a.answer,
@@ -118,6 +127,7 @@ export function fromLine(line: ResultLine): Scored {
       expectNoSources: line.expectNoSources,
       expectItems: line.expectItems ?? [],
       forbidNotes: line.forbidNotes ?? [],
+      ...(line.rubric === undefined ? {} : { rubric: line.rubric }),
     },
     answered: {
       id: line.id,
@@ -127,6 +137,7 @@ export function fromLine(line: ResultLine): Scored {
       ttftMs: line.timings.ttftMs,
       totalMs: line.timings.totalMs,
       prepareMs: line.timings.prepareMs,
+      preface: line.preface ?? null,
       stats:
         line.timings.evalTokens !== null && line.timings.tokensPerSec !== null && line.timings.tokensPerSec > 0
           ? {
@@ -271,13 +282,22 @@ type RouterTrace = {
   period?: { from: string; to: string } | null
   parseFailed?: boolean
   ms?: number
+  by?: string
+  scope?: string | null
+  classified?: { kind: string; score: number; margin: number }
 }
 
 /** The router's output on one line: kind, query, keywords, named notes, period. */
 function routerLine(raw: unknown): string {
   if (raw == null) return '—'
   const r = raw as RouterTrace
-  const parts = [`**${r.kind ?? '?'}**${r.parseFailed === true ? ' (reply unreadable: defaults)' : ''}`, `“${r.query ?? ''}”`]
+  const parts = [
+    `**${r.kind ?? '?'}**${r.by === undefined ? '' : ` by ${r.by}`}${r.parseFailed === true ? ' (reply unreadable: defaults)' : ''}`,
+    `“${r.query ?? ''}”`,
+  ]
+  if (r.classified !== undefined)
+    parts.push(`classifier: ${r.classified.kind} ${r.classified.score.toFixed(2)} (margin ${r.classified.margin.toFixed(2)})`)
+  if (r.scope != null) parts.push(`scope: ${r.scope}`)
   if ((r.keywordsEn ?? []).length > 0) parts.push(`en: ${r.keywordsEn!.join(', ')}`)
   if ((r.keywordsRu ?? []).length > 0) parts.push(`ru: ${r.keywordsRu!.join(', ')}`)
   if ((r.notes ?? []).length > 0) parts.push(`named: ${r.notes!.join(', ')}`)
@@ -376,6 +396,13 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
       .map(([l, n]) => `${l} ${n}`)
       .join(', ')}); today = ${config.today ?? 'the run date'}`,
   )
+  if (config.build != null) {
+    const v = config.build.vectors
+    const c = config.build.cards
+    out.push(
+      `- Built before the run: ${v === null ? 'no chunk vectors' : `chunk vectors for ${v.notes} notes (${v.embedded} pieces embedded) in ${secs(v.ms)}`}; ${c === null ? 'no note cards' : `note cards ${c.done}/${c.total} in ${secs(c.ms)} (cached cards reused)`}`,
+    )
+  }
   out.push(`- Cases: ${config.cases_file} (sha256 \`${config.cases_sha.slice(0, 12)}\`)`)
   out.push(`- Machine: ${config.machine.chip}, ${Math.round(config.machine.ram_bytes / 2 ** 30)} GB RAM`)
   out.push(
@@ -413,11 +440,12 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
     `- **items**: ${pct(s.items)}. For tasks and recent cases, the share of the expected items the answer names (either wording); under 75% fails the case.`,
   )
   out.push(
-    `- **router accuracy**: ${pct(s.routerAccuracy)}. The router's kind matches the case's (notes / recent / tasks / smalltalk / self); — before the router exists.`,
+    `- **router accuracy**: ${pct(s.routerAccuracy)}. The router's kind matches the case's (notes / recent / tasks / smalltalk / self / review / advice); — before the router exists. Decided by rules ${s.routerBy.rules}, by the example questions ${s.routerBy.embedding}, by the model ${s.routerBy.model}.`,
   )
   out.push(
-    `- **ungrounded claims**: ${s.ungrounded}. Notes the answer names or links that were not in its context (not retrieved, not read by a tool). Must be 0; each is listed under Error analysis.`,
+    `- **ungrounded claims**: ${s.ungrounded}. Notes the answer names or links that were not in its context (not retrieved, not read by a tool). Judged on the model's own words, not on a list the harness wrote; a quoted phrase that is also in the notes it was given is a quote, not a claim. Must be 0; each is listed under Error analysis.`,
   )
+  out.push(`- **model tool calls**: ${s.modelToolCalls}, and ${s.toolParseFailures} written as text instead of called (parse failures).`)
   out.push('- **decoys**: a note listed as forbidden for a case (the math notes full of «задачи») in its context fails the case.')
   const graded = previous === null ? [] : [...previous.grades.values()]
   out.push(
@@ -503,7 +531,10 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
     out.push('')
     out.push(`**Router:** ${routerLine(a.router)}`)
     out.push('')
-    out.push(`**Steps:** ${a.steps == null ? '—' : `\`${JSON.stringify(a.steps)}\``}`)
+    const stepList = (a.steps ?? []) as { action: string; result: string; state: string }[]
+    out.push(
+      `**Steps:** ${stepList.length === 0 ? '—' : stepList.map((st) => `${st.action}${st.result === '' ? '' : ` → ${st.result}`}${st.state === 'failed' ? ' ✗' : ''}`).join(' · ')}`,
+    )
     out.push('')
     out.push(`**Tool calls:** ${toolLines(a.toolCalls)}`)
     out.push('')
@@ -530,6 +561,11 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
       `**Expected:** notes ${c.expectNotes.length === 0 ? '—' : c.expectNotes.join(', ')}${c.expectNoSources ? ' (no sources)' : ''}${c.expectItems.length === 0 ? '' : `; items ${c.expectItems.join(', ')}`}${c.forbidNotes.length === 0 ? '' : `; never ${c.forbidNotes.join(', ')}`}; answer ${c.expectAnswer ?? '—'}`,
     )
     out.push('')
+    if (c.rubric !== undefined && c.rubric.length > 0) {
+      out.push('**Rubric** (a good answer):')
+      for (const b of c.rubric) out.push(`- ${b}`)
+      out.push('')
+    }
     out.push(
       `**Scores:** recall@4 ${pct(r.scores.recall4)}, named in answer ${r.scores.namedInAnswer ?? '—'}, sources correct ${r.scores.sourcesCorrect ?? '—'}, honest ${r.scores.honest ?? '—'}, language ${r.scores.languageOk ? 'ok' : 'wrong'}${r.scores.reasons.length === 0 ? '' : ` — ${r.scores.reasons.join(', ')}`}`,
     )
