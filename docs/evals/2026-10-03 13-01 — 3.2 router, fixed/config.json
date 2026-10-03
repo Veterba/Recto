@@ -1,0 +1,65 @@
+{
+  "report_version": 1,
+  "run_id": "2026-10-03 13-01 — 3.2 router, fixed",
+  "label": "3.2 router, fixed",
+  "date": "2026-10-03T11:01:48.431Z",
+  "model": "qwen3.5:9b",
+  "profile": {
+    "family": "qwen3.5",
+    "tested": true,
+    "thinking": "param",
+    "options": {
+      "num_ctx": 8192,
+      "num_predict": 600,
+      "temperature": 0.7
+    },
+    "tools": "ollama"
+  },
+  "harness": {
+    "router": true,
+    "taskIndex": false,
+    "looseTasks": false,
+    "hybridRetrieval": false,
+    "namedNotes": false,
+    "tools": false,
+    "stickyContext": false,
+    "steps": false
+  },
+  "git": {
+    "commit": "0bca99b915e9a3dfc839443408b15f07e079418f",
+    "branch": "feature/recto-rag-v1",
+    "dirty": true
+  },
+  "app_version": "0.9.3",
+  "system": "You are Recto, the keeper of this vault. You know the user's notes, not the world.\n\nWhat you do:\n- Answer questions using only the vault context you are given.\n- Point to related notes and remind the user of things they wrote and forgot.\n- Summarise a folder, a topic or a period when asked.\n\nHow you answer:\n- Short: a few sentences or a short list. No introductions, no filler.\n- Every claim comes from the notes in the context. Mention which note it comes from.\n- If the vault doesn't contain the answer, say so in one line. Don't fill the gap from general\n  knowledge unless the user explicitly asks you to.\n- Never mention the context, retrieval, or how many notes you were given.\n- Answer in the language of the question.\n- Quiet and curious: you may end with one short question if it helps the user connect ideas.\n  Never more than one.\n\nWhat you don't do:\n- No essays on general topics, no critique of reasoning, no writing notes for the user.",
+  "system_sha": "70c6d0884cf042200f645903e020308897aa21c30161d76c71e8d3ce64ab5d50",
+  "cases_file": "tests/bots/eval/cases.yaml",
+  "cases_sha": "464a72f230bf371e6c0ab83b1d28220aedb8c4528793a299c87e0e504acd2542",
+  "today": "2026-09-30",
+  "vault": {
+    "kind": "fixture",
+    "notes": 64,
+    "languages": {
+      "ru": 25,
+      "en": 36,
+      "no": 3
+    }
+  },
+  "machine": {
+    "chip": "Apple M3",
+    "ram_bytes": 17179869184
+  },
+  "ollama": {
+    "version": "0.31.1",
+    "speed_check_tokens_per_sec": 11.223527206671713,
+    "one_model_loaded": "other models unloaded before the run (were: none)"
+  },
+  "memory": {
+    "ollamaPeakBytes": 7366180864,
+    "appPeakBytes": 368361472,
+    "modelBytes": 5662404770,
+    "swapBeforeBytes": 7115250000,
+    "swapAfterBytes": 6987250000
+  },
+  "why": "3.2 again after it made things worse: the model may no longer route to tasks/recent (rules do that), keywords are translated EN<->RU explicitly, 'recent' needs time words, and a note's title counts toward a section's search words."
+}

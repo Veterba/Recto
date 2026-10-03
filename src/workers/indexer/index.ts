@@ -3,7 +3,8 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { getSnapshot, listSnapshots, pruneSnapshots, takeSnapshot } from './snapshots'
 import { parseNote, pathsByName, resolveLink } from '../../shared/parse'
-import type { IndexRequest, IndexResponse } from '../../shared/indexer-protocol'
+import { extractTasks, normaliseTask, noteDate } from '../../shared/tasks'
+import type { IndexRequest, IndexResponse, PeriodNote, TaskRowData } from '../../shared/indexer-protocol'
 import { isHidden } from '../../shared/vault'
 import { vaultRoot, requireDb, open, closeDb } from './db'
 import { search, backlinks, resolveOne, unresolved, graph, board, boards, context, vaultUsage } from './queries'
@@ -64,6 +65,9 @@ export function writeNote(relative: string, content: string, mtime: number, size
          mtime = excluded.mtime, size = excluded.size, indexed_at = excluded.indexed_at`,
     )
     .run(relative, name, parsed.title, mtime, size, Date.now())
+  const date = noteDate(relative, parsed.frontmatter, mtime)
+  handle.prepare('UPDATE notes SET note_date = ? WHERE path = ?').run(date, relative)
+  writeTasks(relative, parsed, date, name.replace(/\.md$/i, ''))
 
   // Child rows are rewritten wholesale rather than diffed: a note is small, and
   // a diff here would be a source of drift for no measurable gain.
@@ -97,6 +101,145 @@ export function writeNote(relative: string, content: string, mtime: number, size
   handle
     .prepare('INSERT INTO notes_fts (path, name, title, headings, body) VALUES (?, ?, ?, ?, ?)')
     .run(relative, name, parsed.title ?? '', parsed.headings.map((h) => h.text).join(' '), parsed.body)
+}
+
+/**
+ * A note's task rows, rewritten. What the index already knew about a task -
+ * when it first appeared, when it was checked - is kept across the rewrite;
+ * a task checked before the index ever saw it gets its check date from the
+ * note's snapshots, if they go back far enough.
+ */
+function writeTasks(relative: string, parsed: ReturnType<typeof parseNote>, date: string, name: string): void {
+  const handle = requireDb()
+  const before = new Map(
+    (
+      handle.prepare('SELECT norm, done, first_seen, done_at FROM tasks WHERE path = ?').all(relative) as {
+        norm: string
+        done: number
+        first_seen: number
+        done_at: number | null
+      }[]
+    ).map((r) => [r.norm, r]),
+  )
+  handle.prepare('DELETE FROM tasks WHERE path = ?').run(relative)
+  const tasks = extractTasks(relative, parsed.body, parsed.frontmatter, parsed.title ?? name)
+  if (tasks.length === 0) return
+  const now = Date.now()
+  const insert = handle.prepare(
+    'INSERT INTO tasks (path, line, heading, text, norm, done, status, source, note_date, first_seen, done_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  )
+  let snapshots: { content: string; ts: number }[] | null = null
+  for (const task of tasks) {
+    const norm = normaliseTask(task.text)
+    const old = before.get(norm)
+    let doneAt: number | null = null
+    if (task.done) {
+      if (old !== undefined) doneAt = old.done === 1 ? old.done_at : now
+      else {
+        // First time the index sees it, already checked: the earliest snapshot with it checked.
+        snapshots ??= handle.prepare('SELECT content, ts FROM snapshots WHERE path = ? ORDER BY ts').all(relative) as {
+          content: string
+          ts: number
+        }[]
+        const checked = new RegExp(`\\[[xX]\\]\\s*${task.text.slice(0, 40).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)
+        doneAt = snapshots.find((s) => checked.test(s.content))?.ts ?? null
+      }
+    }
+    insert.run(
+      relative,
+      task.line,
+      task.heading,
+      task.text,
+      norm,
+      task.done ? 1 : 0,
+      task.status,
+      task.source,
+      date,
+      old?.first_seen ?? now,
+      doneAt,
+    )
+  }
+}
+
+/** Task rows of notes dated `since`..`to`, and every card (a card is open until moved to done, whatever its date). */
+function taskRows(since: string, to: string): TaskRowData[] {
+  const rows = requireDb()
+    .prepare(
+      `SELECT t.path, coalesce(n.title, n.name) AS title, t.text, t.norm, t.done, t.source, t.status, t.note_date, t.done_at,
+              (SELECT value FROM properties p WHERE p.path = t.path AND p.key = 'due') AS due,
+              (SELECT value FROM properties p WHERE p.path = t.path AND p.key = 'board') AS board
+         FROM tasks t JOIN notes n ON n.path = t.path
+        WHERE (t.note_date >= ? AND t.note_date <= ?) OR t.source = 'card'
+        ORDER BY t.note_date, t.path, t.line`,
+    )
+    .all(since, to) as {
+    path: string
+    title: string
+    text: string
+    norm: string
+    done: number
+    source: TaskRowData['source']
+    status: string | null
+    note_date: string
+    done_at: number | null
+    due: string | null
+    board: string | null
+  }[]
+  return rows.map((r) => ({
+    path: r.path,
+    title: r.title.replace(/\.md$/i, ''),
+    text: r.text,
+    norm: r.norm,
+    done: r.done === 1,
+    source: r.source,
+    status: r.status,
+    noteDate: r.note_date,
+    doneAt: r.done_at,
+    due: r.due === null ? null : (/\d{4}-\d{2}-\d{2}/.exec(r.due)?.[0] ?? null),
+    board: r.board,
+  }))
+}
+
+/**
+ * Notes dated in the period or edited in it, each with what it gained in the
+ * period: the lines added since its last snapshot from before the period
+ * started, or - with no such snapshot - its opening lines.
+ */
+function notesInPeriod(from: string, to: string): PeriodNote[] {
+  const handle = requireDb()
+  const start = new Date(`${from}T00:00:00`).getTime()
+  const end = new Date(`${to}T00:00:00`).getTime() + 86_400_000
+  const rows = handle
+    .prepare(
+      `SELECT n.path, coalesce(n.title, n.name) AS title, n.note_date, n.mtime,
+              (SELECT COUNT(*) FROM links l WHERE l.source_path = n.path) AS links,
+              (SELECT COUNT(*) FROM tasks t WHERE t.path = n.path) AS tasks
+         FROM notes n
+        WHERE (n.note_date >= ? AND n.note_date <= ?) OR (n.mtime >= ? AND n.mtime < ?)`,
+    )
+    .all(from, to, start, end) as { path: string; title: string; note_date: string | null; mtime: number; links: number; tasks: number }[]
+  const before = handle.prepare('SELECT content FROM snapshots WHERE path = ? AND ts < ? ORDER BY ts DESC LIMIT 1')
+  return rows.flatMap((r) => {
+    let content: string
+    try {
+      content = fs.readFileSync(path.join(vaultRoot, r.path), 'utf8')
+    } catch {
+      return []
+    }
+    const body = parseNote(content).body
+    const old = before.get(r.path, start) as { content: string } | undefined
+    const lines = body
+      .split('\n')
+      .map((l) => l.trimEnd())
+      .filter((l) => l.trim() !== '' && !/^#\s/.test(l))
+    const added = old === undefined ? lines : lines.filter((l) => !old.content.includes(l))
+    const changed = added.join('\n').slice(0, 600)
+    const d = new Date(r.mtime)
+    const date = r.note_date ?? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return [
+      { path: r.path, title: r.title.replace(/\.md$/i, ''), date, links: r.links, tasks: r.tasks, changed, content: body.slice(0, 6000) },
+    ]
+  })
 }
 
 function removeNote(relative: string): void {
@@ -287,6 +430,19 @@ function handle(request: IndexRequest): IndexResponse {
         },
       }
     }
+    case 'task-rows':
+      return { kind: 'task-rows-result', rows: taskRows(request.since, request.to) }
+    case 'notes-in-period':
+      return { kind: 'notes-in-period-result', notes: notesInPeriod(request.from, request.to) }
+    case 'inferred-get': {
+      const row = requireDb().prepare('SELECT items FROM inferred_tasks WHERE hash = ?').get(request.hash) as { items: string } | undefined
+      return { kind: 'inferred-result', items: row === undefined ? null : (JSON.parse(row.items) as string[]) }
+    }
+    case 'inferred-put':
+      requireDb()
+        .prepare('INSERT OR REPLACE INTO inferred_tasks (hash, path, items, created) VALUES (?, ?, ?, ?)')
+        .run(request.hash, request.path, JSON.stringify(request.items), Date.now())
+      return { kind: 'inferred-result', items: request.items }
     case 'close':
       closeDb()
       return { kind: 'closed' }

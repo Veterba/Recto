@@ -144,6 +144,7 @@ export const IPC_EVENT = {
   botsDone: 'bots:done',
   botsError: 'bots:error',
   botsPullProgress: 'bots:pull-progress',
+  botsProgress: 'bots:progress',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -184,6 +185,8 @@ export type IpcEvents = Exhaustive<
     [IPC_EVENT.botsError]: (error: { id: string; message: string }) => void
     /** A model download: progress, then one event with `done` (success, cancelled or error). */
     [IPC_EVENT.botsPullProgress]: (progress: PullProgress & { done: boolean; error?: string }) => void
+    /** What a bot is doing before it answers ("Checking your tasks…"), for the status line; the steps card from 3.8. */
+    [IPC_EVENT.botsProgress]: (progress: { id: string; text: string }) => void
   }
 >
 

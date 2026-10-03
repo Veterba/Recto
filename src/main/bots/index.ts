@@ -5,6 +5,8 @@ import {
   BOTS_FOLDER,
   CHATS_FOLDER,
   DEFAULT_BOT_MODEL,
+  DEFAULT_HARNESS,
+  type BotHarness,
   type Bot,
   type BotModelStatus,
   type BotSettings,
@@ -18,7 +20,7 @@ import { send as indexer } from '../index-client'
 import { readState, writeState } from '../store'
 import { currentVault } from '../vault'
 import * as vaultFs from '../vault-fs'
-import { buildSystem, estimateTokens, fitHistory, queryTerms, rankNotes, selectChunks, splitSections, type Chunk } from './context'
+import { buildSystem, estimateTokens, fitHistory, rankNotes, selectChunks, splitSections, type Chunk } from './context'
 import { cleanTitle } from '../../shared/chat-topics'
 import { listBots, writeBotModel } from './definitions'
 import {
@@ -31,6 +33,9 @@ import {
   type LocalModels,
 } from './provider'
 import { localChoices } from './models/catalog'
+import { route, routedTerms, type Route } from './router'
+import { isoDate } from './period'
+import { notesTool, tasksTool } from './tools'
 import { switchPlan } from './models/switch'
 import os from 'node:os'
 import { readKey } from '../secrets'
@@ -55,12 +60,14 @@ const ANSWER_TOKENS = 1024
 const CONTEXT_CHARS = 6000
 
 export function settings(): BotSettings {
-  return { defaultModel: readState().botDefaultModel ?? DEFAULT_BOT_MODEL }
+  const state = readState()
+  return { defaultModel: state.botDefaultModel ?? DEFAULT_BOT_MODEL, harness: { ...DEFAULT_HARNESS, ...state.botHarness } }
 }
 
 export function setSettings(patch: Partial<BotSettings>): BotSettings {
   const model = patch.defaultModel?.trim()
   if (model !== undefined) writeState({ botDefaultModel: model === '' ? undefined : model })
+  if (patch.harness !== undefined) writeState({ botHarness: { ...readState().botHarness, ...patch.harness } })
   return settings()
 }
 
@@ -83,7 +90,22 @@ export async function status(model?: string): Promise<BotModelStatus> {
   return result
 }
 
-/** A bot's model, changed from its chat: an API model id, an Ollama model, or null for the local default. */
+/**
+ * On app start: load the default model if Ollama is up, so the first question
+ * doesn't wait for it. On quit: take whatever local model is loaded back out
+ * of memory - it was kept there for as long as the app is open.
+ */
+export function warmOnStart(): void {
+  void status()
+}
+
+export async function unloadOnQuit(): Promise<void> {
+  const model = settings().defaultModel
+  const bots = list()
+  const models = new Set([model, ...bots.map((b) => modelOf(b))].filter((m) => !isApiModel(m)))
+  await Promise.all([...models].map((m) => local.unload(m)))
+}
+
 /**
  * A bot's model, changed from its chat. On this Mac only one local model fits
  * in memory at a time, so the one it used is unloaded and the new one loaded
@@ -157,8 +179,7 @@ function pushPull(progress: Parameters<IpcEvents[typeof IPC_EVENT.botsPullProgre
  * bot's excluded folders. Null when the message asks nothing of the vault -
  * small talk, no words worth searching for - so nothing is read at all.
  */
-async function findContext(question: string, bot: Bot): Promise<{ chunks: Chunk[]; scores: Map<string, number> } | null> {
-  const terms = queryTerms(question)
+async function findContext(terms: readonly string[], bot: Bot): Promise<{ chunks: Chunk[]; scores: Map<string, number> } | null> {
   if (terms.length === 0) return null
   const hitsByTerm = await Promise.all(
     terms.map(async (term) => {
@@ -193,25 +214,107 @@ export type ContextNote = { path: string; title: string; heading: string | null;
  * notes found, and the conversation cut to fit. The chat and the evals both
  * go through this, so an eval measures what the chat does.
  */
-export async function prepare(
-  bot: Bot,
-  messages: readonly AiMessage[],
-): Promise<{ system: string; history: AiMessage[]; chunks: Chunk[] | null; context: ContextNote[] }> {
+/** A tool call made for an answer - by the harness itself, or (from 3.6) asked for by the model. */
+export type ToolCall = {
+  name: string
+  args: Record<string, unknown>
+  by: 'harness' | 'model'
+  summary: string
+  notes: string[]
+  /** What it returned, as the model saw it (kept in eval results, not in reports). */
+  result: string
+}
+
+export type Prepared = {
+  system: string
+  history: AiMessage[]
+  chunks: Chunk[] | null
+  /** Everything the answer was given to read, for the evals. */
+  context: ContextNote[]
+  route: Route | null
+  toolCalls: ToolCall[]
+  /** The notes to show under the answer. */
+  sources: ContextNote[]
+  /** Text the harness wrote itself, shown first; the model's reply follows it. */
+  preface: string | null
+}
+
+/** What `prepare` may be told besides the conversation: the evals pin the date and switch parts off; the chat hears progress. */
+export type PrepareOptions = { harness?: BotHarness; today?: Date; onProgress?: (text: string) => void }
+
+export async function prepare(bot: Bot, messages: readonly AiMessage[], options: PrepareOptions = {}): Promise<Prepared> {
+  const harness = options.harness ?? settings().harness
+  const today = options.today ?? new Date()
+  const model = modelOf(bot)
   const question = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
-  const found = await findContext(question, bot)
+  const routed = harness.router ? await route(providerFor(model), model, messages, today) : null
+  // Small talk and questions about Recto itself ask nothing of the vault: no search, no sources.
+  const skip = routed !== null && (routed.kind === 'smalltalk' || routed.kind === 'self')
+  const provider = providerFor(model)
+  const toolOptions = {
+    bot,
+    question,
+    provider,
+    model,
+    today: isoDate(today),
+    looseTasks: harness.looseTasks,
+    ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
+  }
+  const toolCalls: ToolCall[] = []
+
+  // Tasks and "what did I do" questions: the harness looks them up itself, for the period they name.
+  if (routed !== null && harness.taskIndex && (routed.kind === 'tasks' || routed.kind === 'recent')) {
+    const kind = routed.kind
+    const period = routed.period ?? { from: isoDate(addDays(today, kind === 'tasks' ? -13 : -6)), to: isoDate(today) }
+    options.onProgress?.(kind === 'tasks' ? 'Checking your tasks…' : 'Going through the notes of the period…')
+    const result =
+      kind === 'tasks'
+        ? await tasksTool(period, 'all', routedTerms(question, routed), toolOptions)
+        : await notesTool(period, [...routed.keywordsEn, ...routed.keywordsRu], toolOptions)
+    toolCalls.push({
+      name: kind === 'tasks' ? 'tasks_in_period' : 'notes_in_period',
+      args: { from: period.from, to: period.to },
+      by: 'harness',
+      summary: result.summary,
+      notes: result.notes.map((n) => n.title),
+      result: result.text,
+    })
+    if (result.answer !== undefined) {
+      // A task list a small model would drop items from: the harness shows it as it is, and the
+      // model only adds one line of its own after it.
+      const system = `${bot.system.trim()}\n\n## What the user was just shown, in answer to their message\n\n${result.answer}\n\nWrite ONE short sentence to follow it, in the language of the user's message - a remark or an offer. Don't repeat or change the list.`
+      const history = fitHistory(messages, CONTEXT_TOKENS - ANSWER_TOKENS - estimateTokens(system))
+      return {
+        system,
+        history,
+        chunks: null,
+        context: result.notes,
+        route: routed,
+        toolCalls,
+        sources: result.notes,
+        preface: result.answer,
+      }
+    }
+    const system = `${bot.system.trim()}\n\n${result.text}`
+    const history = fitHistory(messages, CONTEXT_TOKENS - ANSWER_TOKENS - estimateTokens(system))
+    return { system, history, chunks: null, context: result.notes, route: routed, toolCalls, sources: result.notes, preface: null }
+  }
+
+  const found = skip ? null : await findContext(routedTerms(question, routed), bot)
   const chunks = found?.chunks ?? null
   const system = buildSystem(bot.system, chunks)
   const history = fitHistory(messages, CONTEXT_TOKENS - ANSWER_TOKENS - estimateTokens(system))
   const context = (chunks ?? []).map((c) => ({ path: c.path, title: c.title, heading: c.heading, score: found?.scores.get(c.path) ?? 0 }))
-  return { system, history, chunks, context }
+  return { system, history, chunks, context, route: routed, toolCalls, sources: context, preface: null }
 }
+
+const addDays = (d: Date, n: number): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
 
 const running = new Map<string, AbortController>()
 
-function push<C extends typeof IPC_EVENT.botsDelta | typeof IPC_EVENT.botsDone | typeof IPC_EVENT.botsError>(
-  channel: C,
-  ...args: Parameters<IpcEvents[C]>
-): void {
+function push<
+  C extends typeof IPC_EVENT.botsDelta | typeof IPC_EVENT.botsDone | typeof IPC_EVENT.botsError | typeof IPC_EVENT.botsProgress,
+>(channel: C, ...args: Parameters<IpcEvents[C]>): void {
   const window = BrowserWindow.getAllWindows()[0]
   if (window === undefined || window.isDestroyed()) return
   sendEvent(window, channel, ...args)
@@ -231,7 +334,9 @@ export async function ask(request: {
   const ready = await provider.status(model)
   if (ready.state !== 'ready') return { ok: false, error: 'The model is not available.', status: ready }
 
-  const { system, history, chunks } = await prepare(bot, request.messages)
+  const { system, history, sources, preface } = await prepare(bot, request.messages, {
+    onProgress: (text) => push(IPC_EVENT.botsProgress, { id: request.id, text }),
+  })
 
   const controller = new AbortController()
   running.set(request.id, controller)
@@ -239,8 +344,11 @@ export async function ask(request: {
   // reply arrives on the push channels.
   void (async () => {
     try {
+      if (preface !== null) push(IPC_EVENT.botsDelta, { id: request.id, text: preface })
+      let first = true
       for await (const text of provider.stream(history, system, { model, signal: controller.signal })) {
-        push(IPC_EVENT.botsDelta, { id: request.id, text })
+        push(IPC_EVENT.botsDelta, { id: request.id, text: preface !== null && first ? `\n\n${text.trimStart()}` : text })
+        first = false
       }
       push(IPC_EVENT.botsDone, { id: request.id })
     } catch (err) {
@@ -251,7 +359,7 @@ export async function ask(request: {
     }
   })()
 
-  return { ok: true, sources: (chunks ?? []).map(({ path: p, heading }) => ({ path: p, heading })) }
+  return { ok: true, sources: sources.map(({ path: p, heading }) => ({ path: p, heading })) }
 }
 
 export function cancel(id: string): { ok: boolean } {

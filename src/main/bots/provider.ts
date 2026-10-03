@@ -20,9 +20,14 @@ export type StreamStats = { promptTokens: number; promptMs: number; evalTokens: 
 
 export type StreamOptions = { model: string; signal: AbortSignal; onStats?: (stats: StreamStats) => void }
 
+/** A short call that is not shown to anyone: the router, extracting tasks. Greedy, short, optionally JSON. */
+export type CompleteOptions = { model: string; signal: AbortSignal; json?: boolean; maxTokens: number }
+
 export interface BotModelProvider {
   /** The reply, token by token. Throws when the model cannot run; stops when `signal` aborts. */
   stream(messages: AiMessage[], system: string, options: StreamOptions): AsyncIterable<string>
+  /** The whole reply at once, at temperature 0. Throws when the model cannot run. */
+  complete(messages: AiMessage[], system: string, options: CompleteOptions): Promise<string>
   status(model: string): Promise<BotModelStatus>
   /** Load the model ahead of the first question, so it is not the user's wait. */
   warm(model: string): void
@@ -32,11 +37,11 @@ export interface BotModelProvider {
 export const CONTEXT_TOKENS = 8192
 
 /**
- * How long Ollama keeps the model in memory after the last request. Its own
- * default is five minutes, after which the next question pays ten seconds of
- * loading again; a quarter of an hour covers a conversation with pauses.
+ * How long Ollama keeps the model in memory after the last request: for as
+ * long as the app is open (-1), so no question pays ten seconds of loading.
+ * The app unloads it when it quits (`unloadOnQuit` in bots/index.ts).
  */
-const KEEP_ALIVE = '15m'
+const KEEP_ALIVE = -1
 
 /** Localhost only - the one address this module ever connects to. */
 const OLLAMA = 'http://127.0.0.1:11434'
@@ -163,6 +168,27 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
     }
   }
 
+  async complete(messages: AiMessage[], system: string, { model, signal, json = false, maxTokens }: CompleteOptions): Promise<string> {
+    const fields = requestFields(model, this.capabilities.get(model) ?? null)
+    const response = await fetch(`${OLLAMA}/api/chat`, {
+      method: 'POST',
+      signal,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        stream: false,
+        keep_alive: KEEP_ALIVE,
+        ...fields,
+        ...(json ? { format: 'json' } : {}),
+        options: { ...fields.options, temperature: 0, num_predict: maxTokens },
+        messages: [{ role: 'system', content: system }, ...messages],
+      }),
+    })
+    if (!response.ok) throw new Error(`Ollama answered ${response.status}`)
+    const body = (await response.json()) as { message?: { content?: unknown } }
+    return typeof body.message?.content === 'string' ? body.message.content : ''
+  }
+
   async *stream(messages: AiMessage[], system: string, { model, signal, onStats }: StreamOptions): AsyncIterable<string> {
     const response = await fetch(`${OLLAMA}/api/chat`, {
       method: 'POST',
@@ -245,6 +271,13 @@ export class AnthropicProvider implements BotModelProvider {
 
   warm(): void {}
 
+  async complete(messages: AiMessage[], system: string, { model, signal, json = false }: CompleteOptions): Promise<string> {
+    let text = ''
+    const instruction = json ? `${system}\n\nReply with the JSON object only.` : system
+    for await (const piece of this.stream(messages, instruction, { model, signal })) text += piece
+    return text
+  }
+
   async *stream(messages: AiMessage[], system: string, { model, signal }: StreamOptions): AsyncIterable<string> {
     const key = this.key()
     if (key === null) throw new Error('No API key saved. Add one in Settings → AI.')
@@ -312,6 +345,13 @@ export class MockProvider implements BotModelProvider, LocalModels {
 
   async status(model: string): Promise<BotModelStatus> {
     return { state: 'ready', model }
+  }
+
+  /** The router's answer for the snapshot run: every question is about the notes. */
+  async complete(messages: AiMessage[]): Promise<string> {
+    const content = messages.at(-1)?.content ?? ''
+    const question = content.slice(content.lastIndexOf('Message: ') + 'Message: '.length)
+    return JSON.stringify({ kind: 'notes', query: question, keywords_en: [], keywords_ru: [], notes: [], when: null })
   }
 
   async *stream(_messages: AiMessage[], system: string, { signal }: { model: string; signal: AbortSignal }): AsyncIterable<string> {

@@ -1,0 +1,10 @@
+# {{date}}
+
+## Tasks
+
+- [ ] 
+- [ ] 
+
+### Option tasks
+
+- [ ] 

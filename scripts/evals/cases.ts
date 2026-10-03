@@ -32,6 +32,10 @@ export type Case = {
   expectNotes: string[]
   expectAnswer: string | null
   expectNoSources: boolean
+  /** Things the answer must name, each "a|b" for either wording. */
+  expectItems: string[]
+  /** Notes that must never be in the context. */
+  forbidNotes: string[]
 }
 
 export type CaseFile = { today: string | null; cases: Case[] }
@@ -77,6 +81,8 @@ function normalise(raw: unknown, index: number, prefix: string): Case | null {
     ),
     expectAnswer: text(r['expectAnswer'] ?? r['answer'] ?? r['a']),
     expectNoSources,
+    expectItems: list(r['expectItems'] ?? r['items']),
+    forbidNotes: list(r['forbidNotes']).map((n) => n.replace(/^\[\[|\]\]$/g, '').replace(/\.md$/i, '')),
   }
 }
 

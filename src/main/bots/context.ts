@@ -162,14 +162,15 @@ export const MIN_SECTION_SCORE = 1
  * "capital of France" found "capitalise" in a log - and a bot answering "your
  * vault doesn't cover it" should not list notes under it.
  */
-export function enoughTerms(section: Section, terms: readonly string[]): boolean {
-  const text = section.text.toLowerCase()
+export function enoughTerms(section: Section, terms: readonly string[], title = ''): boolean {
+  // The note's title counts: "where did we eat?" about the note «Тбилиси» names the city only in its title.
+  const text = `${title}\n${section.text}`.toLowerCase()
   const found = terms.filter((term) => termPattern(term).test(text)).length
   return found >= Math.min(2, terms.length)
 }
 
-const readable = (section: Section, terms: readonly string[]): boolean =>
-  scoreSection(section, terms) >= MIN_SECTION_SCORE && enoughTerms(section, terms)
+const readable = (section: Section, terms: readonly string[], title = ''): boolean =>
+  scoreSection(section, terms) >= MIN_SECTION_SCORE && enoughTerms(section, terms, title)
 
 export type Chunk = BotSource & { text: string; title: string }
 
@@ -196,10 +197,10 @@ export function selectChunks(
     const chunk = (section: Section): Chunk => ({ path: note.path, heading: section.heading, title: note.title, text: section.text })
     const best = rest
       .map((section) => ({ section, score: scoreSection(section, terms) }))
-      .filter((s) => readable(s.section, terms))
+      .filter((s) => readable(s.section, terms, note.title))
       .sort((a, b) => b.score - a.score)
       .slice(0, 2)
-    if (readable(opening, terms)) openings.push(chunk(opening))
+    if (readable(opening, terms, note.title)) openings.push(chunk(opening))
     for (const { section, score } of best) others.push({ ...chunk(section), score: score + note.score })
   }
   others.sort((a, b) => b.score - a.score)

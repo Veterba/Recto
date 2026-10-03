@@ -61,6 +61,8 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   const [keyPresent, setKeyPresent] = useState(false)
   const [defaultModel, setDefaultModel] = useState('')
   const [pull, setPull] = useState<(PullProgress & { error?: string }) | null>(null)
+  /** What the bot is doing before its first word ("Checking your tasks…"). */
+  const [progress, setProgress] = useState<string | null>(null)
   const { status, recheck } = useBotStatus(bot.model)
   const root = useRef<HTMLDivElement | null>(null)
   const scroller = useRef<HTMLDivElement | null>(null)
@@ -118,6 +120,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
     const path = streamPath.current
     setStream(null)
     streamPath.current = null
+    setProgress(null)
     const reply = (answer?.text ?? '').trim()
     if (answer === null || reply === '' || path === null) return
     if (model.current !== path) await model.select(path)
@@ -143,6 +146,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
       const now = pendingRef.current
       if (delta.id !== streamPath.current || now === null) return
       if (now.text === '') {
+        setProgress(null)
         // The first token: the face's "found it" beat, then it reads the answer out.
         timing.current.first = performance.now()
         window.clearTimeout(found)
@@ -151,6 +155,9 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
         }, FOUND_MS)
         setStream({ ...now, text: delta.text, face: 'found' })
       } else setStream({ ...now, text: now.text + delta.text })
+    })
+    const offProgress = api.on(IPC_EVENT.botsProgress, (event) => {
+      if (event.id === streamPath.current && pendingRef.current?.text === '') setProgress(event.text)
     })
     const offDone = api.on(IPC_EVENT.botsDone, (done) => {
       if (done.id === streamPath.current) void land()
@@ -163,6 +170,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
     return () => {
       window.clearTimeout(found)
       offDelta()
+      offProgress()
       offDone()
       offError()
     }
@@ -326,6 +334,10 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
         >
           {pull.error === undefined ? 'Cancel' : 'Dismiss'}
         </button>
+      </p>
+    ) : progress !== null && pending !== null ? (
+      <p className="composer__status" aria-live="polite">
+        {progress}
       </p>
     ) : status !== null && !ready ? (
       <BotStatusLine status={status} onRecheck={recheck} compact />

@@ -34,14 +34,24 @@ export const REASONS = [
   'language',
   'hallucination',
   'unneeded retrieval',
+  'missing items',
+  'decoy in context',
+  'ungrounded claim',
+  'wrong route',
   'too slow',
   'error',
 ] as const
 export type Reason = (typeof REASONS)[number]
 
 export type Scores = {
-  /** Expected notes among the first four distinct notes read, as a share; null when the case expects none. */
+  /** Expected notes among the first four distinct notes read, out of at most four; null when the case expects none. */
   recall4: number | null
+  /** expectItems the answer names, as a share; null when the case lists none. */
+  items?: number | null
+  /** The router sent it where its kind says; null before there is a router. */
+  routerOk?: boolean | null
+  /** Notes the answer names or links that were not in its context. */
+  ungrounded?: string[]
   /** The answer names one of the expected notes. */
   namedInAnswer: boolean | null
   /** Notes read when they should be, none when they shouldn't. */
@@ -99,12 +109,60 @@ export function notesRead(context: readonly ContextNote[]): string[] {
   return out
 }
 
-export function score(c: Case, a: Answered): Scores {
+/** Where the router should send a case of each kind. */
+export const ROUTE: Record<Case['kind'], string> = {
+  'same-language': 'notes',
+  'cross-language': 'notes',
+  'named-note': 'notes',
+  'follow-up': 'notes',
+  'not-in-vault': 'notes',
+  private: 'notes',
+  recent: 'recent',
+  tasks: 'tasks',
+  'small-talk': 'smalltalk',
+  self: 'self',
+}
+
+/** "a|b": does the answer say either? Case-insensitive. */
+const mentions = (answer: string, item: string): boolean => item.split('|').some((alt) => fold(answer).includes(fold(alt)))
+
+/**
+ * Notes the answer refers to without having had them: a [[link]] to anything
+ * not in its context, or a vault note's title set off as a reference - in
+ * quotes, «», bold or brackets. Titles of notes it did have are taken out of
+ * the text first ("2026-09-28" inside "2026-09-28 — v0.9" is not a claim), and
+ * a title merely used as words in a sentence ("weekly goals") is not one either.
+ */
+export function ungroundedClaims(answer: string, context: readonly ContextNote[], vaultTitles: readonly string[]): string[] {
+  const had = [...new Set(context.flatMap((c) => [fold(noteName(c.path)), fold(c.title)]))].sort((a, b) => b.length - a.length)
+  let text = fold(answer)
+  for (const h of had) if (h !== '') text = text.split(h).join(' ')
+  const titles = new Map(vaultTitles.map((t) => [fold(t), t]))
+  const out = new Set<string>()
+  for (const m of text.matchAll(/\[\[([^\]|#]+)/g)) {
+    const t = m[1]!.trim()
+    if (t !== '') out.add(titles.get(t) ?? t)
+  }
+  const quoted = /[«“"„]([^»”"\n]{2,80})[»”"]|\*\*([^*\n]{2,80})\*\*|\*([^*\n]{2,80})\*|\(([^)\n]{2,80})\)/g
+  for (const m of text.matchAll(quoted)) {
+    const inner = (m[1] ?? m[2] ?? m[3] ?? m[4] ?? '').trim().replace(/\.md$/, '')
+    const title = titles.get(inner)
+    if (title !== undefined) out.add(title)
+  }
+  return [...out]
+}
+
+export function score(c: Case, a: Answered, vaultTitles: readonly string[] = []): Scores {
   const read = notesRead(a.context).map(fold)
   const top4 = read.slice(0, 4)
   const expected = c.expectNotes.map(fold)
   const noSources = c.expectNoSources || c.kind === 'small-talk' || c.kind === 'self'
-  const recall4 = expected.length === 0 ? null : expected.filter((n) => top4.includes(n)).length / expected.length
+  const recall4 = expected.length === 0 ? null : expected.filter((n) => top4.includes(n)).length / Math.min(4, expected.length)
+  const items = c.expectItems.length === 0 ? null : c.expectItems.filter((i) => mentions(a.answer, i)).length / c.expectItems.length
+  const routed = (a.router as { kind?: unknown } | null | undefined)?.kind
+  const routerOk = typeof routed === 'string' ? routed === ROUTE[c.kind] : null
+  const decoys = c.forbidNotes.map(fold).filter((n) => read.includes(n))
+  const ungrounded = ungroundedClaims(a.answer, a.context, vaultTitles)
   const namedInAnswer = expected.length === 0 ? null : expected.some((n) => fold(a.answer).includes(n))
   const sourcesCorrect = noSources ? read.length === 0 : expected.length > 0 ? expected.some((n) => read.includes(n)) : null
   const honest = c.kind === 'not-in-vault' ? saysNotFound(a.answer) : null
@@ -117,9 +175,13 @@ export function score(c: Case, a: Answered): Scores {
   if (noSources && read.length > 0) reasons.push('unneeded retrieval')
   if (honest === false) reasons.push('hallucination')
   if (!languageOk) reasons.push('language')
+  if (items !== null && items < 0.75) reasons.push('missing items')
+  if (decoys.length > 0) reasons.push('decoy in context')
+  if (ungrounded.length > 0) reasons.push('ungrounded claim')
+  if (routerOk === false) reasons.push('wrong route')
   const pass = reasons.length === 0
   if (a.totalMs > SLOW_MS && !reasons.includes('too slow')) reasons.push('too slow')
-  return { recall4, namedInAnswer, sourcesCorrect, honest, languageOk, pass, reasons }
+  return { recall4, items, routerOk, ungrounded, namedInAnswer, sourcesCorrect, honest, languageOk, pass, reasons }
 }
 
 /** The p-th percentile (0–100) by nearest rank; null for no values. */
@@ -145,6 +207,11 @@ export type Summary = {
   namedInAnswer: number | null
   sourcesCorrect: number | null
   honest: number | null
+  items: number | null
+  routerAccuracy: number | null
+  ungrounded: number
+  /** Router replies that could not be read as JSON. */
+  routerParseFailures: number
   ttftP50: number | null
   ttftP90: number | null
   totalP50: number | null
@@ -167,6 +234,11 @@ export function summarise(rows: readonly Scored[]): Summary {
     namedInAnswer: share(rows.map((r) => r.scores.namedInAnswer)),
     sourcesCorrect: share(rows.map((r) => r.scores.sourcesCorrect)),
     honest: share(rows.map((r) => r.scores.honest)),
+    items: mean(rows.flatMap((r) => (r.scores.items == null ? [] : [r.scores.items]))),
+    routerAccuracy: share(rows.map((r) => r.scores.routerOk ?? null)),
+    ungrounded: rows.reduce((n, r) => n + (r.scores.ungrounded?.length ?? 0), 0),
+    routerParseFailures: rows.filter((r) => (r.answered.router as { parseFailed?: boolean } | null | undefined)?.parseFailed === true)
+      .length,
     ttftP50: percentile(ttft, 50),
     ttftP90: percentile(ttft, 90),
     totalP50: percentile(total, 50),

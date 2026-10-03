@@ -223,6 +223,48 @@ export const MIGRATIONS: readonly Migration[] = [
       SELECT 1;
     `,
   },
+  {
+    version: 10,
+    name: 'tasks',
+    sql: `
+      -- One row per task: a checkbox anywhere, a plain item under a Tasks /
+      -- Задачи / TODO heading, or a card in tasks/ (shared/tasks.ts). A daily
+      -- note copies yesterday's open tasks, so one task has rows in many notes;
+      -- the bots group them back into one with a history. first_seen and
+      -- done_at survive a note being rewritten: they are carried over from the
+      -- note's previous rows (and done_at read from its snapshots when the box
+      -- was checked before the index knew it).
+      CREATE TABLE tasks (
+        path       TEXT NOT NULL REFERENCES notes(path) ON DELETE CASCADE,
+        line       INTEGER NOT NULL,
+        heading    TEXT,
+        text       TEXT NOT NULL,
+        norm       TEXT NOT NULL,
+        done       INTEGER NOT NULL,
+        status     TEXT,
+        source     TEXT NOT NULL,
+        note_date  TEXT NOT NULL,
+        first_seen REAL NOT NULL,
+        done_at    REAL
+      );
+      CREATE INDEX idx_tasks_path ON tasks(path);
+      CREATE INDEX idx_tasks_date ON tasks(note_date);
+
+      -- The day a note is about: a daily's date, else its frontmatter date, else its mtime.
+      ALTER TABLE notes ADD COLUMN note_date TEXT;
+
+      -- Tasks a model read out of a note written in plain text, keyed by the
+      -- note's content hash, so a note is read once until it changes.
+      CREATE TABLE inferred_tasks (
+        hash    TEXT PRIMARY KEY,
+        path    TEXT NOT NULL,
+        items   TEXT NOT NULL,
+        created REAL NOT NULL
+      );
+
+      UPDATE notes SET mtime = -1;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

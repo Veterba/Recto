@@ -26,6 +26,8 @@ const caseOf = (over: Partial<Case>): Case => ({
   expectNotes: [],
   expectAnswer: null,
   expectNoSources: false,
+  expectItems: [],
+  forbidNotes: [],
   ...over,
 })
 
@@ -52,6 +54,8 @@ describe('cases', () => {
         expectNotes: ['Recto plan', 'Ideas'],
         expectAnswer: 'In Recto plan',
         expectNoSources: false,
+        expectItems: [],
+        forbidNotes: [],
       },
       {
         id: 'mine-02',
@@ -61,6 +65,8 @@ describe('cases', () => {
         expectNotes: [],
         expectAnswer: null,
         expectNoSources: false,
+        expectItems: [],
+        forbidNotes: [],
       },
     ])
     const mapping = readCases('What is in Later?: [Later]\nКто такой Игорь?: Ремонт кухни\n', 'm')
@@ -146,6 +152,30 @@ const config = (): RunConfig => ({
   ollama: { version: '0.31.1', one_model_loaded: 'yes' },
   memory: { ollamaPeakBytes: null, appPeakBytes: null, modelBytes: null, swapBeforeBytes: null, swapAfterBytes: null },
   why: null,
+})
+
+describe('the new checks', () => {
+  it('items, decoys and ungrounded claims', () => {
+    const c = caseOf({ kind: 'tasks', expectItems: ['privacy policy|политик', 'dentist|стоматолог'], forbidNotes: ['Линейные уравнения'] })
+    const a = answered({
+      context: ctx('Daily/2026-09-23.md', 'Учёба/Линейные уравнения.md', 'Log/2026-09-28 — v0.9.md'),
+      answer: 'Open: privacy policy (2026-09-23). See [[Recto plan]], «Lark plan» and 2026-09-28 — v0.9; weekly goals next.',
+    })
+    const s = score(c, a, ['Recto plan', 'Lark plan', 'Weekly goals', '2026-09-28', 'Daily'])
+    expect(s.items).toBe(0.5)
+    expect(s.ungrounded).toEqual(['Recto plan', 'Lark plan'])
+    expect(s.reasons).toEqual(expect.arrayContaining(['missing items', 'decoy in context', 'ungrounded claim']))
+  })
+
+  it('recall@4 is out of at most four expected notes', () => {
+    const c = caseOf({ kind: 'recent', expectNotes: ['a', 'b', 'c', 'd', 'e', 'f'] })
+    expect(score(c, answered({ context: ctx('a.md', 'b.md', 'c.md', 'd.md') })).recall4).toBe(1)
+  })
+
+  it('router accuracy compares the routed kind with the case kind', () => {
+    expect(score(caseOf({ kind: 'small-talk', question: 'hi' }), answered({ router: { kind: 'smalltalk' } })).routerOk).toBe(true)
+    expect(score(caseOf({ kind: 'tasks' }), answered({ router: { kind: 'notes' } })).reasons).toContain('wrong route')
+  })
 })
 
 describe('report', () => {

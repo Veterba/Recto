@@ -4,6 +4,9 @@
 # the notes an answer should come from (expectNotes: note titles, as file names
 # without .md), the answer in one line (expectAnswer, for whoever grades it),
 # and expectNoSources for messages that should not touch the vault at all.
+# Tasks and recent cases may also list expectItems - things the answer must
+# name, "a|b" for either wording - and forbidNotes, notes that must never be in
+# the context (the math notes full of the word «задачи»).
 #
 # `today` is the date the fixture lives in: its log covers the three weeks
 # before it, so "last week" and "on Wednesday" have one right answer.
@@ -163,6 +166,7 @@ cases:
     kind: tasks
     question: Which Lark tasks are done?
     expectNotes: [Fix widget crash on iOS 17, VoiceOver labels]
+    expectItems: [widget crash, VoiceOver]
     expectAnswer: Fix widget crash on iOS 17, VoiceOver labels.
 
   - id: tasks-ru-overdue
@@ -170,6 +174,45 @@ cases:
     question: Какие задачи у меня просрочены?
     expectNotes: [Write privacy policy]
     expectAnswer: Write privacy policy - срок был 26 сентября.
+
+  - id: tasks-real-ru-last-week
+    kind: tasks
+    question: что я не доделал с прошлой недели, посмотри все задачи, а не только одну специфику
+    expectNotes: ['2026-09-21', '2026-09-23', '2026-09-24', '2026-09-25']
+    expectItems: [privacy policy|политик, стоматолог|dentist, отчёт по расходам|expense report, fibre|интернет]
+    forbidNotes: [Линейные уравнения, Квадратные уравнения]
+    expectAnswer: 'Открыто: Write Lark privacy policy, записаться к стоматологу, отправить отчёт по расходам, Order fibre internet (+ фото из Лиссабона, интервалы, карточки App Store screenshots и Localise into Norwegian). Сделано: подарок Ане, документ Марии, пробежка 16 км.'
+
+  - id: tasks-open-wednesday
+    kind: tasks
+    question: What's still open from Wednesday?
+    expectNotes: ['2026-09-23']
+    expectItems: [privacy policy, dentist|стоматолог]
+    forbidNotes: [Линейные уравнения, Квадратные уравнения]
+    expectAnswer: From last Wednesday (23 Sep) still open - Write Lark privacy policy, Записаться к стоматологу (and the optional photo sorting and interval session).
+
+  - id: tasks-en-finished-last-week
+    kind: tasks
+    question: Which tasks did I finish last week?
+    expectNotes: ['2026-09-24', '2026-09-25', '2026-09-27']
+    expectItems: [gift|подар, Maria|Мари, 16 km|long run]
+    forbidNotes: [Линейные уравнения, Квадратные уравнения]
+    expectAnswer: The gift for Anna (25 Sep), Maria's payments doc (24 Sep), the 16 km long run (27 Sep), VoiceOver labels.
+
+  - id: tasks-loose-export
+    kind: tasks
+    question: Что мне ещё осталось доделать по экспорту?
+    expectNotes: [Экспорт]
+    expectItems: [JSON]
+    forbidNotes: [Линейные уравнения, Квадратные уравнения]
+    expectAnswer: Доделать экспорт в JSON до релиза 20 октября (сейчас без истории отметок) и проверить часовые пояса - это не чекбокс, а текст в заметке «Экспорт».
+
+  - id: recent-what-did-i-do
+    kind: recent
+    question: What did I do last week?
+    expectNotes: ['2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-27']
+    expectItems: [onboarding, dark mode|VoiceOver, TestFlight|beta, 16 km|long run]
+    expectAnswer: Onboarding redesign, dark mode and VoiceOver, the TestFlight beta, 1-1 with Maria, the gift for Anna, a 16 km long run.
 
   # ---------------- not in the vault ----------------
   - id: notin-australia

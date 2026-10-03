@@ -10,7 +10,7 @@ import { REASONS, notesRead, percentile, summarise, type Answered, type Reason, 
 
 export const REPORT_VERSION = 1
 
-export type Harness = { router: boolean; hybridRetrieval: boolean; namedNotes: boolean; tools: boolean; stickyContext: boolean }
+export type Harness = Record<string, boolean>
 
 export type Memory = {
   /** Peak resident memory of Ollama's processes, and of the app's, sampled every second. */
@@ -56,6 +56,8 @@ export type ResultLine = {
   expectNotes: string[]
   expectAnswer: string | null
   expectNoSources: boolean
+  expectItems?: string[]
+  forbidNotes?: string[]
   router: unknown
   steps: unknown
   toolCalls: unknown
@@ -83,6 +85,8 @@ export function resultLine(row: Scored): ResultLine {
     expectNotes: c.expectNotes,
     expectAnswer: c.expectAnswer,
     expectNoSources: c.expectNoSources,
+    expectItems: c.expectItems,
+    forbidNotes: c.forbidNotes,
     router: a.router ?? null,
     steps: a.steps ?? null,
     toolCalls: a.toolCalls ?? null,
@@ -112,6 +116,8 @@ export function fromLine(line: ResultLine): Scored {
       expectNotes: line.expectNotes,
       expectAnswer: line.expectAnswer,
       expectNoSources: line.expectNoSources,
+      expectItems: line.expectItems ?? [],
+      forbidNotes: line.forbidNotes ?? [],
     },
     answered: {
       id: line.id,
@@ -180,9 +186,14 @@ function delta(now: number | null, before: number | null, kind: 'share' | 'ms' |
 const kindsIn = (rows: readonly Scored[]): Kind[] => KINDS.filter((k) => rows.some((r) => r.case.kind === k))
 
 function resultsTable(rows: readonly Scored[], before: readonly Scored[] | null): string[] {
-  const lines = ['| Kind | Cases | Pass | recall@4 | Named in answer | Sources correct | Honest |', '|---|---|---|---|---|---|---|']
+  const lines = [
+    '| Kind | Cases | Pass | recall@4 | Items | Router | Named in answer | Sources correct | Honest | Ungrounded |',
+    '|---|---|---|---|---|---|---|---|---|---|',
+  ]
+  const d = (now: number | null, was: Summary | null, pick: (s: Summary) => number | null): string =>
+    was === null ? '' : delta(now, pick(was), 'share')
   const row = (label: string, now: Summary, was: Summary | null): string =>
-    `| ${label} | ${now.cases} | ${now.passed}/${now.cases} (${pct(now.passRate)})${was === null ? '' : delta(now.passRate, was.passRate, 'share')} | ${pct(now.recall4)}${was === null ? '' : delta(now.recall4, was.recall4, 'share')} | ${pct(now.namedInAnswer)}${was === null ? '' : delta(now.namedInAnswer, was.namedInAnswer, 'share')} | ${pct(now.sourcesCorrect)}${was === null ? '' : delta(now.sourcesCorrect, was.sourcesCorrect, 'share')} | ${pct(now.honest)}${was === null ? '' : delta(now.honest, was.honest, 'share')} |`
+    `| ${label} | ${now.cases} | ${now.passed}/${now.cases} (${pct(now.passRate)})${d(now.passRate, was, (s) => s.passRate)} | ${pct(now.recall4)}${d(now.recall4, was, (s) => s.recall4)} | ${pct(now.items)}${d(now.items, was, (s) => s.items)} | ${pct(now.routerAccuracy)} | ${pct(now.namedInAnswer)} | ${pct(now.sourcesCorrect)}${d(now.sourcesCorrect, was, (s) => s.sourcesCorrect)} | ${pct(now.honest)} | ${now.ungrounded}${was === null ? '' : ` (was ${was.ungrounded})`} |`
   for (const kind of kindsIn(rows)) {
     const now = summarise(rows.filter((r) => r.case.kind === kind))
     const prev = before?.filter((r) => r.case.kind === kind) ?? []
@@ -236,9 +247,55 @@ function why(r: Scored): string {
     else if (reason === 'hallucination') parts.push('hallucination: answered as if the notes had it')
     else if (reason === 'language') parts.push('language: answered in another language than the question')
     else if (reason === 'too slow') parts.push(`too slow: ${secs(r.answered.totalMs)}`)
+    else if (reason === 'missing items') parts.push(`missing items: named ${pct(r.scores.items ?? 0)} of ${r.case.expectItems.join(', ')}`)
+    else if (reason === 'decoy in context')
+      parts.push(
+        `decoy in context: ${r.case.forbidNotes.filter((n) => read.map((x) => x.toLowerCase()).includes(n.toLowerCase())).join(', ')}`,
+      )
+    else if (reason === 'ungrounded claim')
+      parts.push(`ungrounded claim: named ${(r.scores.ungrounded ?? []).map((t) => `“${t}”`).join(', ')} without having it`)
+    else if (reason === 'wrong route')
+      parts.push(`wrong route: router said ${String((r.answered.router as { kind?: unknown } | null)?.kind)}`)
     else parts.push(`error: ${r.answered.error ?? ''}`)
   }
   return parts.join('; ')
+}
+
+type RouterTrace = {
+  kind?: string
+  query?: string
+  keywordsEn?: string[]
+  keywordsRu?: string[]
+  notes?: string[]
+  when?: string | null
+  period?: { from: string; to: string } | null
+  parseFailed?: boolean
+  ms?: number
+}
+
+/** The router's output on one line: kind, query, keywords, named notes, period. */
+function routerLine(raw: unknown): string {
+  if (raw == null) return '—'
+  const r = raw as RouterTrace
+  const parts = [`**${r.kind ?? '?'}**${r.parseFailed === true ? ' (reply unreadable: defaults)' : ''}`, `“${r.query ?? ''}”`]
+  if ((r.keywordsEn ?? []).length > 0) parts.push(`en: ${r.keywordsEn!.join(', ')}`)
+  if ((r.keywordsRu ?? []).length > 0) parts.push(`ru: ${r.keywordsRu!.join(', ')}`)
+  if ((r.notes ?? []).length > 0) parts.push(`named: ${r.notes!.join(', ')}`)
+  if (r.period != null) parts.push(`period ${r.period.from}..${r.period.to}${r.when == null ? '' : ` (“${r.when}”)`}`)
+  if (r.ms !== undefined) parts.push(`${(r.ms / 1000).toFixed(1)} s`)
+  return parts.join(' · ')
+}
+
+type ToolTrace = { name: string; args: Record<string, unknown>; by: string; summary: string; notes: string[] }
+
+function toolLines(raw: unknown): string {
+  if (raw == null || (Array.isArray(raw) && raw.length === 0)) return '—'
+  return (raw as ToolTrace[])
+    .map(
+      (t) =>
+        `\n- \`${t.name}(${Object.values(t.args).join(', ')})\` by the ${t.by} → ${t.summary}${t.notes.length === 0 ? '' : `: ${t.notes.slice(0, 8).join(', ')}${t.notes.length > 8 ? ` +${t.notes.length - 8}` : ''}`}`,
+    )
+    .join('')
 }
 
 export type Previous = { config: RunConfig; rows: Scored[]; grades: Map<string, Grade> }
@@ -306,8 +363,11 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
     )
   out.push(`- Profile: \`${JSON.stringify(config.profile)}\``)
   out.push(
-    `- Harness: router ${onOff(config.harness.router)}, hybrid retrieval ${onOff(config.harness.hybridRetrieval)}, named notes ${onOff(config.harness.namedNotes)}, tools ${onOff(config.harness.tools)}, sticky context ${onOff(config.harness.stickyContext)}`,
+    `- Harness: ${Object.entries(config.harness)
+      .map(([k, v]) => `${k} ${onOff(v)}`)
+      .join(', ')}`,
   )
+
   out.push(`- SYSTEM.md: sha256 \`${config.system_sha.slice(0, 12)}\` (full text in config.json)`)
   out.push(
     `- Vault: ${config.vault.kind === 'fixture' ? 'fixture vault' : 'copy of the real vault'}, ${config.vault.notes ?? '?'} notes (${Object.entries(
@@ -349,6 +409,16 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
     `- **sources-correct**: ${pct(s.sourcesCorrect)}. Small-talk, self and no-sources cases read no notes; cases with expected notes read at least one of them.`,
   )
   out.push(`- **not-in-vault honesty**: ${pct(s.honest)}. Not-in-vault answers say the notes don't have it (pattern match, EN/RU/NO).`)
+  out.push(
+    `- **items**: ${pct(s.items)}. For tasks and recent cases, the share of the expected items the answer names (either wording); under 75% fails the case.`,
+  )
+  out.push(
+    `- **router accuracy**: ${pct(s.routerAccuracy)}. The router's kind matches the case's (notes / recent / tasks / smalltalk / self); — before the router exists.`,
+  )
+  out.push(
+    `- **ungrounded claims**: ${s.ungrounded}. Notes the answer names or links that were not in its context (not retrieved, not read by a tool). Must be 0; each is listed under Error analysis.`,
+  )
+  out.push('- **decoys**: a note listed as forbidden for a case (the math notes full of «задачи») in its context fails the case.')
   const graded = previous === null ? [] : [...previous.grades.values()]
   out.push(
     `- **my grade**: ${graded.length === 0 ? '— (nothing graded yet)' : `${pct(graded.filter((g) => g.grade === 'good').length / graded.length)} good of ${graded.length} graded`} — boxes ticked in the compared run's report (this run's are graded after it is read).`,
@@ -431,11 +501,11 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
     if (c.messages.length > 0) out.push('')
     out.push(`**Question:** ${one(c.question)}`)
     out.push('')
-    out.push(`**Router:** ${a.router == null ? '—' : `\`${JSON.stringify(a.router)}\``}`)
+    out.push(`**Router:** ${routerLine(a.router)}`)
     out.push('')
     out.push(`**Steps:** ${a.steps == null ? '—' : `\`${JSON.stringify(a.steps)}\``}`)
     out.push('')
-    out.push(`**Tool calls:** ${a.toolCalls == null ? '—' : `\`${JSON.stringify(a.toolCalls)}\``}`)
+    out.push(`**Tool calls:** ${toolLines(a.toolCalls)}`)
     out.push('')
     out.push('**Notes in context:**')
     if (a.context.length === 0) out.push('- none')
@@ -457,7 +527,7 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
     )
     out.push('')
     out.push(
-      `**Expected:** notes ${c.expectNotes.length === 0 ? '—' : c.expectNotes.join(', ')}${c.expectNoSources ? ' (no sources)' : ''}; answer ${c.expectAnswer ?? '—'}`,
+      `**Expected:** notes ${c.expectNotes.length === 0 ? '—' : c.expectNotes.join(', ')}${c.expectNoSources ? ' (no sources)' : ''}${c.expectItems.length === 0 ? '' : `; items ${c.expectItems.join(', ')}`}${c.forbidNotes.length === 0 ? '' : `; never ${c.forbidNotes.join(', ')}`}; answer ${c.expectAnswer ?? '—'}`,
     )
     out.push('')
     out.push(

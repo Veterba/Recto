@@ -88,9 +88,40 @@ export type ModelChoice = {
 /** A model download in progress. */
 export type PullProgress = { name: string; status: string; completed: number; total: number }
 
+/**
+ * The parts of a bot's answer pipeline, each one switchable, so an eval can
+ * say what was on - and a part that turns out worse can be turned off.
+ */
+export type BotHarness = {
+  /** One short call first: what kind of message, what to search for, which period (router.ts). */
+  router: boolean
+  /** Tasks and "what did I do" questions answered from the task index and the period's notes. */
+  taskIndex: boolean
+  /** Tasks written as plain text, read out of the period's notes by the model (cached). */
+  looseTasks: boolean
+  hybridRetrieval: boolean
+  namedNotes: boolean
+  /** The model may call search_notes / read_note / tasks_in_period / notes_in_period itself. */
+  tools: boolean
+  stickyContext: boolean
+  steps: boolean
+}
+
+export const DEFAULT_HARNESS: BotHarness = {
+  router: true,
+  taskIndex: true,
+  looseTasks: true,
+  hybridRetrieval: false,
+  namedNotes: false,
+  tools: false,
+  stickyContext: false,
+  steps: false,
+}
+
 export type BotSettings = {
   /** The model a bot uses when its definition names none. */
   defaultModel: string
+  harness: BotHarness
 }
 
 /** The model proposed for a 16 GB Apple silicon Mac: Qwen 3.5, 9B, 4-bit - about 6 GB in memory. */

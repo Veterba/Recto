@@ -15,6 +15,8 @@ type AppState = {
    * vault: it is whatever this Mac has downloaded and can run.
    */
   botDefaultModel?: string
+  /** Bot pipeline switches that differ from the defaults (shared/bots.ts DEFAULT_HARNESS). */
+  botHarness?: Partial<import('../shared/bots').BotHarness>
 }
 
 const file = () => path.join(app.getPath('userData'), 'app-state.json')

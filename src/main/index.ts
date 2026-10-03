@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import { runEvalJob } from './bots/eval-mode'
+import * as bots from './bots'
 import { evalJob } from './config'
 import { isolateDevState } from './dev-guard'
 import { registerIpc } from './ipc'
@@ -43,10 +44,21 @@ if (job !== undefined) {
     handleVaultScheme()
     registerIpc()
     createWindow()
+    // The default model, loaded while the window opens (if Ollama is up).
+    bots.warmOnStart()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })
+  })
+
+  // The model is kept loaded while the app is open; it goes when the app does.
+  let unloaded = false
+  app.on('before-quit', (event) => {
+    if (unloaded) return
+    event.preventDefault()
+    unloaded = true
+    void Promise.race([bots.unloadOnQuit(), new Promise((resolve) => setTimeout(resolve, 1500))]).finally(() => app.quit())
   })
 
   app.on('window-all-closed', () => {

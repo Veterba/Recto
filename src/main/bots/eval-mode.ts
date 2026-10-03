@@ -3,9 +3,11 @@ import os from 'node:os'
 import type { AiMessage } from '../../shared/ai'
 import { send as indexer, openIndexForVault } from '../index-client'
 import { openVault } from '../vault'
-import { list, prepare, providerFor, type ContextNote } from './index'
+import { list, prepare, providerFor, type ContextNote, type ToolCall } from './index'
 import { profileFor } from './models/profiles'
 import type { StreamStats } from './provider'
+import type { Route } from './router'
+import { DEFAULT_HARNESS, type BotHarness } from '../../shared/bots'
 
 /**
  * The evals' way into the app (`npm run bots:eval`): with RECTO_EVAL_JOB set,
@@ -22,6 +24,10 @@ export type EvalJob = {
   /** JSON lines out: a `run` line first, then one `case` line per case. */
   out: string
   cases: { id: string; messages: AiMessage[] }[]
+  /** The date the vault lives in (the fixture's 2026-09-30); the real date when absent. */
+  today?: string
+  /** Pipeline parts switched on or off for this run, over the defaults. */
+  harness?: Partial<BotHarness>
 }
 
 export type EvalCaseResult = {
@@ -36,6 +42,8 @@ export type EvalCaseResult = {
   /** Retrieval and prompt building, before the model is asked. */
   prepareMs: number
   stats: StreamStats | null
+  router: Route | null
+  toolCalls: ToolCall[]
 }
 
 /** No case may take longer than this: a stuck model fails the case, not the run. */
@@ -52,6 +60,9 @@ export async function runEvalJob(jobPath: string): Promise<void> {
   const recto = list().find((b) => b.id === 'recto')
   if (recto === undefined) throw new Error('The eval vault has no Recto bot.')
   const bot = { ...recto, model: job.model }
+  const harness: BotHarness = { ...DEFAULT_HARNESS, ...job.harness }
+  // Noon, so no time zone turns the fixture's day into the one before.
+  const today = job.today === undefined ? new Date() : new Date(`${job.today}T12:00:00`)
   const provider = providerFor(job.model)
   const status = await provider.status(job.model)
   if (status.state !== 'ready') throw new Error(`Model ${job.model} is not ready: ${status.state}`)
@@ -61,8 +72,7 @@ export async function runEvalJob(jobPath: string): Promise<void> {
     type: 'run',
     system: bot.system,
     profile: profileFor(job.model),
-    // The harness parts the bots have; each becomes a setting when it is built.
-    harness: { router: false, hybridRetrieval: false, namedNotes: false, tools: false, stickyContext: false },
+    harness,
     notes: stats.kind === 'stats-result' ? stats.notes : null,
     cpu: os.cpus()[0]?.model ?? '',
     ramBytes: os.totalmem(),
@@ -80,11 +90,19 @@ export async function runEvalJob(jobPath: string): Promise<void> {
       totalMs: 0,
       prepareMs: 0,
       stats: null,
+      router: null,
+      toolCalls: [],
     }
     try {
-      const prepared = await prepare(bot, item.messages)
+      const prepared = await prepare(bot, item.messages, { harness, today })
       result.context = prepared.context
+      result.router = prepared.route
+      result.toolCalls = prepared.toolCalls
       result.prepareMs = performance.now() - started
+      if (prepared.preface !== null) {
+        result.ttftMs = performance.now() - started
+        result.answer = `${prepared.preface}\n\n`
+      }
       const signal = AbortSignal.timeout(CASE_TIMEOUT_MS)
       for await (const text of provider.stream(prepared.history, prepared.system, {
         model: job.model,

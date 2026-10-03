@@ -84,6 +84,37 @@ export type TopicsGraph = {
   tags: { path: string; tag: string }[]
 }
 
+/** A task row for the bots (shared/tasks.ts TaskRow, minus what main works out). */
+export type TaskRowData = {
+  path: string
+  title: string
+  text: string
+  norm: string
+  done: boolean
+  source: 'checkbox' | 'list' | 'card'
+  status: string | null
+  noteDate: string
+  doneAt: number | null
+  due: string | null
+  /** A card's board. */
+  board: string | null
+}
+
+/** A note written or edited in a period, for "what did I do". */
+export type PeriodNote = {
+  path: string
+  title: string
+  date: string
+  /** Links out of it: an index note links to many. */
+  links: number
+  /** Task rows it holds. */
+  tasks: number
+  /** What it gained in the period (lines added since the last snapshot before it), or its opening lines. */
+  changed: string
+  /** The whole note, for reading the tasks a plain-text note implies. */
+  content: string
+}
+
 export type IndexRequest =
   | { kind: 'open'; vaultPath: string; dbPath: string }
   | { kind: 'reindex'; force?: boolean }
@@ -106,6 +137,12 @@ export type IndexRequest =
   | { kind: 'topics-graph' }
   /** Notes carrying a link written as `target`, resolved or not - a topic link never resolves. */
   | { kind: 'link-sources'; target: string }
+  /** Task rows from notes dated `since`..`to`, and every card. */
+  | { kind: 'task-rows'; since: string; to: string }
+  /** Notes dated or edited in `from`..`to`. */
+  | { kind: 'notes-in-period'; from: string; to: string }
+  | { kind: 'inferred-get'; hash: string }
+  | { kind: 'inferred-put'; hash: string; path: string; items: string[] }
   | { kind: 'close' }
 
 export type IndexResponse =
@@ -128,5 +165,8 @@ export type IndexResponse =
   | { kind: 'vault-usage-result'; usage: VaultUsage }
   | { kind: 'topics-graph-result'; graph: TopicsGraph }
   | { kind: 'link-sources-result'; paths: string[] }
+  | { kind: 'task-rows-result'; rows: TaskRowData[] }
+  | { kind: 'notes-in-period-result'; notes: PeriodNote[] }
+  | { kind: 'inferred-result'; items: string[] | null }
   | { kind: 'closed' }
   | { kind: 'error'; message: string }

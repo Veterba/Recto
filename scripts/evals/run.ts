@@ -44,8 +44,10 @@ const FIXTURE_CASES = path.join(ROOT, 'tests/bots/eval/cases.yaml')
 const PRIVATE_CASES = path.join(ROOT, 'tests/bots/eval/private')
 /** Below this many tokens/s on the speed check, the Mac is throttling. */
 const MIN_SPEED = 5
-/** The harness parts this code has. Each becomes a setting when it is built (stage 3); all off for now. */
-const HARNESS: Harness = { router: false, hybridRetrieval: false, namedNotes: false, tools: false, stickyContext: false }
+/** Below this battery level, unless charging, the run does not start. */
+const MIN_BATTERY = 20
+/** Before the app reported its harness parts (stage 2 runs): none. */
+const HARNESS: Harness = {}
 
 const args = process.argv.slice(2)
 const flag = (name: string): string | undefined => {
@@ -130,6 +132,32 @@ function copyVault(source: string, into: string, fixture: boolean): void {
   walk(into)
 }
 
+/** Every note's name in the vault, for spotting notes an answer names without having read them. */
+function titlesOf(vault: string): string[] {
+  const out: string[] = []
+  const walk = (dir: string): void => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith('.')) continue
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) walk(full)
+      else if (e.name.endsWith('.md')) out.push(e.name.replace(/\.md$/i, ''))
+    }
+  }
+  walk(vault)
+  return out
+}
+
+/** On battery and nearly empty, macOS slows everything down: the numbers would be wrong. Null when there is no battery. */
+function batteryTooLow(): string | null {
+  // "38%; charging; …", "2%; AC attached; not charging; …", "80%; discharging; …"
+  const m = /(\d+)%;\s*([^;]+);(?:\s*([^;]+);)?/.exec(sh('pmset', ['-g', 'batt']))
+  if (m === null) return null
+  const level = Number(m[1])
+  const state = `${m[2] ?? ''} ${m[3] ?? ''}`
+  const charging = /\bcharging\b|charged|finishing/i.test(state) && !/not charging|discharging/i.test(state)
+  return level < MIN_BATTERY && !charging ? `The battery is at ${level}% and not charging.` : null
+}
+
 /** How many notes in each language, by the language of their text. */
 function languagesOf(vault: string): Record<string, number> {
   const counts: Record<string, number> = {}
@@ -189,6 +217,8 @@ async function main(): Promise<void> {
   if (!fixture && path.resolve(vaultArg).startsWith(path.resolve(ROOT))) throw new Error('--vault must be a vault outside the repo.')
 
   const evalsDir = flag('--evals-dir') ?? findEvalsFolder()
+  const battery = batteryTooLow()
+  if (battery !== null && !args.includes('--force')) throw new Error(`${battery} Timings would be wrong; charge first, or pass --force.`)
 
   // The model: installed, and alone in memory - every other model is unloaded first.
   const version = (await ollama<{ version: string }>('/api/version'))?.version ?? null
@@ -222,7 +252,27 @@ async function main(): Promise<void> {
   copyVault(fixture ? FIXTURE : path.resolve(vaultArg), vault, fixture)
   const out = path.join(scratch, 'results.jsonl')
   const jobPath = path.join(scratch, 'job.json')
-  fs.writeFileSync(jobPath, JSON.stringify({ vault, model, out, cases: cases.map((c) => ({ id: c.id, messages: conversationOf(c) })) }))
+  // --harness router=off,tools=on: switch pipeline parts for this run only.
+  const harness = Object.fromEntries(
+    (flag('--harness') ?? '')
+      .split(',')
+      .filter((p) => p.includes('='))
+      .map((p) => {
+        const [k, v] = p.split('=')
+        return [k!.trim(), v!.trim() === 'on' || v!.trim() === 'true']
+      }),
+  )
+  fs.writeFileSync(
+    jobPath,
+    JSON.stringify({
+      vault,
+      model,
+      out,
+      ...(loaded.today === null ? {} : { today: loaded.today }),
+      harness,
+      cases: cases.map((c) => ({ id: c.id, messages: conversationOf(c) })),
+    }),
+  )
 
   const swapBefore = swapUsed()
   const require = createRequire(import.meta.url)
@@ -271,6 +321,7 @@ async function main(): Promise<void> {
   if (code !== 0 || run === undefined)
     throw new Error(`The app's eval run failed (exit ${code}); ${answered.size} of ${cases.length} cases answered.`)
 
+  const titles = titlesOf(vault)
   const rows: Scored[] = cases.map((c) => {
     const a = answered.get(c.id) ?? {
       id: c.id,
@@ -282,7 +333,7 @@ async function main(): Promise<void> {
       prepareMs: 0,
       stats: null,
     }
-    return { case: c, answered: a, scores: score(c, a) }
+    return { case: c, answered: a, scores: score(c, a, titles) }
   })
 
   const base = fixture ? REPO_RUNS : path.join(evalsDir, modelSlug(model))
