@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { FocusUnit } from './focus-range'
+import { focusModeChanging } from './scroll-keeper'
 
 /**
  * iA Writer's writing tools, as one settings object: focus mode, syntax
@@ -131,7 +132,11 @@ export function loadWriting(raw: unknown, persist: (next: WritingSettings) => vo
 }
 
 export function updateWriting(patch: (settings: WritingSettings) => WritingSettings): void {
+  const before = current
   current = patch(current)
+  // Before anything reacts to it - the editors turn typewriter scrolling on with
+  // it, which moves them - so every pane's scroll is read as it really was.
+  if (current.focus !== before.focus) focusModeChanging(current.focus)
   for (const listener of listeners) listener()
   save?.(current)
 }

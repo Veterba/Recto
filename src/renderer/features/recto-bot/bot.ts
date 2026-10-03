@@ -43,8 +43,15 @@ const RIFFLE_CYCLE_S = 0.9
 /** The found beat: how long the eyes stay wide, and the hop, in real pixels whatever the bot's size. */
 const FOUND_S = 0.3
 const FOUND_HOP_PX = 2.5
-/** The bob while riffling, at most this many pixels. */
+/** The bob while riffling, at most this many pixels; while answering, a much smaller one. */
 const BOB_PX = 2
+const READ_BOB_PX = 0.6
+/**
+ * Answering: the eyes read - a slow sweep along a line, a quick jump back,
+ * the next line a little lower; four lines, then from the top. One line, in seconds.
+ */
+const READ_LINE_S = 2.4
+const READ_LINES = 4
 
 /** How long an error keeps the bot squinting before it goes back to its own business. */
 export const ERROR_MS = 2000
@@ -85,6 +92,8 @@ const springs = () => ({
   sheetOut: new Spring(0, 260, 30),
   sheetA: new Spring(0, 280, 20),
   sheetB: new Spring(0, 280, 20),
+  // The found beat's hop, in real pixels whatever size the face is drawn at.
+  foundHop: new Spring(0, 240, 16),
 })
 
 /** What the bot sees this frame. Distances are px from the bot's centre. */
@@ -99,6 +108,28 @@ export type EyeFrame = { rect: { x: number; y: number; width: number; height: nu
 
 /** One riffle sheet: its angle in degrees, and how far out from behind the page (0..1). */
 export type SheetFrame = { angle: number; out: number }
+
+/**
+ * Everything a bot's face is doing this frame, at no particular size. Every
+ * face of one bot - the sidebar row, the chat header, a message group - is
+ * this one pose drawn at its own size (`render`).
+ */
+export type Pose = {
+  gx: number
+  gy: number
+  wide: number
+  blink: number
+  lids: { upper: number; lower: number; slant: number }
+  rotateX: number
+  rotateY: number
+  /** The squash after breathing: scaleY, and 2 - it for scaleX. */
+  squash: number
+  /** The hop of behaviours, in the 120-unit space (scales with the face). */
+  hopUnits: number
+  /** Pixels that do not scale: the found hop and the bob. ≤ 0: up. */
+  liftPx: number
+  sheets: [SheetFrame, SheetFrame]
+}
 
 export type Frame = {
   /** px, ≤ 0: up. */
@@ -129,7 +160,10 @@ export type BotOptions = {
 }
 
 export type Bot = {
+  /** One frame at the bot's own size: `render(pose(now, input), size)`. */
   step: (now: number, input: BotInput) => Frame
+  /** One frame of the pose, at no size; step the bot once per frame however many faces draw it. */
+  pose: (now: number, input: BotInput) => Pose
   setState: (state: BotState, now: number) => void
   click: (now: number) => void
   readonly behaviour: ActiveBehaviour
@@ -137,12 +171,29 @@ export type Bot = {
 
 const NO_INPUT: BotInput = { pointer: null, focus: null }
 
+/** A pose drawn at one size: eye shapes for that size (small faces get bigger eyes), hops in its pixels. */
+export function render(pose: Pose, size: number, look: BotLook = RECTO.look): Frame {
+  const small = size < SMALL_PX
+  const eye = (side: -1 | 1): EyeFrame => {
+    const shape = projectEye({ side, gx: pose.gx, gy: pose.gy, wide: pose.wide, blink: pose.blink, small, eyes: look.eyes })
+    return { rect: shape.rect, clip: lidPolygon(shape, side, pose.lids) }
+  }
+  return {
+    hop: (Math.min(0, pose.hopUnits) * size) / 120 + pose.liftPx,
+    sheets: pose.sheets,
+    rotateX: pose.rotateX,
+    rotateY: pose.rotateY,
+    scaleX: 2 - pose.squash,
+    scaleY: pose.squash,
+    eyes: [eye(-1), eye(1)],
+  }
+}
+
 export function createBot(options: BotOptions): Bot {
   const { size, mode, random, reducedMotion } = options
   const look = options.look ?? RECTO.look
   const personality = options.personality ?? RECTO.personality
   const forced = mode === 'forced'
-  const small = size < SMALL_PX
   const S = springs()
 
   let last = options.now
@@ -160,6 +211,18 @@ export function createBot(options: BotOptions): Bot {
   let stateMemo: Record<string, unknown> = {}
   /** The state before the current one: an error after a riffle waits for the sheets to go back. */
   let previous: BotState = 'idle'
+  /** When reading began (found's beat ending, or answering): the reading loop runs from here, unbroken. */
+  let readingFrom = 0
+
+  /** The reading loop's gaze at `now`: along a line, back, the next line down. */
+  const reading = (now: number): Face => {
+    const s = Math.max(0, (now - readingFrom) / 1000)
+    const phase = (s % READ_LINE_S) / READ_LINE_S
+    const line = Math.floor(s / READ_LINE_S) % READ_LINES
+    // 85% of the line sweeping right, the rest jumping back.
+    const x = phase < 0.85 ? -0.55 + (phase / 0.85) * 1.1 : 0.55 - ((phase - 0.85) / 0.15) * 1.1
+    return { target: { x, y: -0.12 + line * 0.1 }, upper: 0.1, lower: 0, slant: 0, wide: 1, squash: 1, hop: false }
+  }
 
   const begin = (next: ActiveBehaviour, now: number, ms: number): void => {
     behaviour = next
@@ -204,9 +267,9 @@ export function createBot(options: BotOptions): Bot {
       case 'found':
         // The beat: wide eyes and a hop, then reading as it answers.
         if (pt < FOUND_S) return { target: { x: 0, y: -0.15 }, upper: 0, lower: 0, slant: 0, wide: 1.2, squash: 1, hop: false }
-        return faceFor('scan', context)
+        return reading(now)
       case 'answering':
-        return faceFor('scan', context)
+        return reading(now)
       case 'error':
         // After a riffle the sheets go back first, then the squint.
         if (previous === 'riffle' && pt < 0.22)
@@ -217,12 +280,13 @@ export function createBot(options: BotOptions): Bot {
     }
   }
 
-  const step = (now: number, input: BotInput = NO_INPUT): Frame => {
+  const pose = (now: number, input: BotInput = NO_INPUT): Pose => {
     const dt = Math.min(0.033, Math.max(0, (now - last) / 1000))
     last = now
     const t = now / 1000
     const pointer = input.pointer
     const distance = pointer === null ? Infinity : Math.hypot(pointer.dx, pointer.dy)
+    // Near, for a face of the bot's own size: one brain answers for every face of the bot.
     const near = isNear(distance, size)
     const movingNearby = pointer !== null && pointer.moving && near
     const towards = (p: { dx: number; dy: number } | null): Point =>
@@ -263,6 +327,7 @@ export function createBot(options: BotOptions): Bot {
     S.wide.target = face.wide
     S.squash.target = face.squash
     S.hop.target = 0
+    S.foundHop.target = 0
 
     // The riffle's sheets: out and fanned while the bot works, flicking one
     // after the other; back behind the page otherwise.
@@ -305,40 +370,51 @@ export function createBot(options: BotOptions): Bot {
     const blink = now - clickAt < CLICK_BLINK_MS ? 1 : sinceBlink >= 0 && sinceBlink < 1 ? Math.sin(sinceBlink * Math.PI) : 0
 
     const breath = reducedMotion ? 1 : 1 + Math.sin(t * 2) * 0.01
-    const squash = S.squash.value * breath
-    const lids = { upper: S.upper.value, lower: S.lower.value, slant: S.slant.value }
-    const eye = (side: -1 | 1): EyeFrame => {
-      const shape = projectEye({ side, gx: S.gx.value, gy: S.gy.value, wide: S.wide.value, blink, small, eyes: look.eyes })
-      return { rect: shape.rect, clip: lidPolygon(shape, side, lids) }
-    }
-    const bob = riffling && !reducedMotion ? -Math.abs(Math.sin(t * Math.PI * 2.2)) * BOB_PX : 0
+    const reads = state === 'answering' || (state === 'found' && now - stateAt >= FOUND_S * 1000)
+    const bob = reducedMotion
+      ? 0
+      : riffling
+        ? -Math.abs(Math.sin(t * Math.PI * 2.2)) * BOB_PX
+        : reads
+          ? Math.sin(t * Math.PI * 0.8) * READ_BOB_PX
+          : 0
     return {
-      hop: (Math.min(0, S.hop.value) * size) / 120 + bob,
+      gx: S.gx.value,
+      gy: S.gy.value,
+      wide: S.wide.value,
+      blink,
+      lids: { upper: S.upper.value, lower: S.lower.value, slant: S.slant.value },
+      rotateX: S.rx.value,
+      rotateY: S.ry.value,
+      squash: S.squash.value * breath,
+      hopUnits: S.hop.value,
+      liftPx: Math.min(0, S.foundHop.value) + bob,
       sheets: [
         { angle: S.sheetA.value, out: S.sheetOut.value },
         { angle: S.sheetB.value, out: S.sheetOut.value },
       ],
-      rotateX: S.rx.value,
-      rotateY: S.ry.value,
-      scaleX: 2 - squash,
-      scaleY: squash,
-      eyes: [eye(-1), eye(1)],
     }
   }
 
+  const step = (now: number, input: BotInput = NO_INPUT): Frame => render(pose(now, input), size, look)
+
   return {
     step,
+    pose,
     setState(next, now) {
       if (next === state) return
       // With reduced motion there is no beat: found is answering at once.
       const target = reducedMotion && next === 'found' ? 'answering' : next
+      // Reading runs on from found's beat into answering, unbroken.
+      if (target === 'found') readingFrom = now + FOUND_S * 1000
+      else if (target === 'answering' && state !== 'found') readingFrom = now
       previous = state
       state = target
       stateAt = now
       stateMemo = {}
       if (target === 'found') {
-        // The hop, sized in pixels: the spring's impulse for a peak of about 2.5 px at this size.
-        S.hop.velocity -= ((FOUND_HOP_PX * 120) / size) * 29
+        // The hop, in pixels at every size: the impulse for a peak of about 2.5 px.
+        S.foundHop.velocity -= FOUND_HOP_PX * 29
       }
     },
     click(now) {

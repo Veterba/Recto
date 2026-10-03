@@ -88,10 +88,14 @@ describe.skipIf(!RUN)('renaming from the file tree', () => {
     fs.writeFileSync(path.join(userData, 'app-state.json'), JSON.stringify({ lastVaultPath: vault }))
     fs.mkdirSync(path.join(vault, '.recto'))
     fs.writeFileSync(path.join(vault, '.recto', 'topics-settings.json'), JSON.stringify({ enabled: false }))
-    app = spawn(ELECTRON, [ROOT, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`], {
-      stdio: 'ignore',
-      env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
-    })
+    app = spawn(
+      ELECTRON,
+      ['-r', path.join(ROOT, 'scripts/snapshot-isolate.cjs'), ROOT, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`],
+      {
+        stdio: 'ignore',
+        env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
+      },
+    )
     cdp = await connect()
     await sleep(2500)
     // Open "Sources" so "summary" (collapsed) sits right above index and notes.

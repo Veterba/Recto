@@ -85,7 +85,7 @@ function BotRow({
   return (
     <button className={`bot-row${active ? ' is-active' : ''}`} onClick={() => onOpen(bot)}>
       <span className="bot-face bot-face--row">
-        <RectoBot size={48} look={bot.look} personality={bot.personality} />
+        <RectoBot id={bot.id} size={48} look={bot.look} personality={bot.personality} />
       </span>
       <span className="bot-row__text">
         <span className="bot-row__top">
