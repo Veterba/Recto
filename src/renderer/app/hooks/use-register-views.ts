@@ -41,5 +41,8 @@ export function useRegisterViews(refs: {
   registerUnresolvedView((p) => refs.openFile.current(p))
   registerGraphView((p) => refs.openFile.current(p))
   registerBoardView((p) => refs.openBoardCard.current(p))
-  registerBotView((p, heading) => refs.openFile.current(p, heading ?? null))
+  registerBotView(
+    (p, heading) => refs.openFile.current(p, heading ?? null),
+    () => refs.linkCandidates.current,
+  )
 }

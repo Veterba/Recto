@@ -320,6 +320,9 @@ export function registerIpc(): void {
   handle(IPC.botsCancel, (id) => bots.cancel(id))
   handle(IPC.botsSetModel, (botId, model) => bots.setModel(botId, model))
   handle(IPC.botsTitle, (request) => bots.title(request))
+  handle(IPC.botsModels, () => bots.models())
+  handle(IPC.botsPull, (name) => bots.pull(name))
+  handle(IPC.botsPullCancel, () => bots.cancelPull())
 
   handle(IPC.indexSearch, async (query, limit) => {
     const response = await send({ kind: 'search', query, ...(limit === undefined ? {} : { limit }) }, 15_000)

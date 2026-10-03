@@ -3,12 +3,56 @@ import type { BotModelStatus } from '@shared/bots'
 import { Icon } from '../../../ui/Icon'
 import { describeStatus } from '../hooks/use-bots'
 
-/** Whether the local model can run, and when it cannot, the one thing to do about it. */
-export function BotStatusLine({ status, onRecheck }: { status: BotModelStatus | null; onRecheck?: () => void }): React.ReactElement {
+/**
+ * Whether the local model can run, and when it cannot, the one thing to do
+ * about it. `compact` is the chat's one muted line above the composer: the
+ * command to run, without the sentence around it.
+ */
+export function BotStatusLine({
+  status,
+  onRecheck,
+  compact = false,
+}: {
+  status: BotModelStatus | null
+  onRecheck?: () => void
+  compact?: boolean
+}): React.ReactElement {
   const [copied, setCopied] = useState(false)
   if (status === null) return <p className="bot-status">Checking the local model…</p>
   const { label, fix, command } = describeStatus(status)
   const ready = status.state === 'ready'
+  if (compact) {
+    return (
+      <p className={`composer__status is-${status.state}`}>
+        <span className="composer__dot" aria-hidden="true" />
+        {label}
+        {command !== null ? (
+          <>
+            {' · '}
+            <button
+              className="composer__command"
+              title="Copy"
+              onClick={() => {
+                void navigator.clipboard.writeText(command).then(() => {
+                  setCopied(true)
+                  window.setTimeout(() => setCopied(false), 1200)
+                })
+              }}
+            >
+              {copied ? 'Copied' : command}
+            </button>
+          </>
+        ) : (
+          fix !== null && <> · {fix}</>
+        )}
+        {onRecheck !== undefined && status.state !== 'loading' && (
+          <button className="composer__link" onClick={onRecheck}>
+            Check again
+          </button>
+        )}
+      </p>
+    )
+  }
   return (
     <div className={`bot-status${ready ? ' is-ready' : ' is-down'}`}>
       <p className="bot-status__label">
@@ -25,7 +69,7 @@ export function BotStatusLine({ status, onRecheck }: { status: BotModelStatus | 
         <div className="bot-status__command">
           <code>{command}</code>
           <button
-            className={`chat__copy${copied ? ' is-done' : ''}`}
+            className={`bot-status__copy${copied ? ' is-done' : ''}`}
             onClick={() => {
               void navigator.clipboard.writeText(command).then(() => {
                 setCopied(true)

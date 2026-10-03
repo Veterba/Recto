@@ -1,6 +1,7 @@
 import { isAiModel, type AiMessage } from '../../shared/ai'
-import type { BotModelStatus } from '../../shared/bots'
+import type { BotModelStatus, PullProgress } from '../../shared/bots'
 import { DirectProvider } from '../ai/provider'
+import { requestFields } from './models/profiles'
 
 /**
  * The model behind the bots, behind one small interface.
@@ -41,29 +42,120 @@ export function hasModel(installed: readonly string[], model: string): boolean {
   return installed.includes(want)
 }
 
-export class OllamaProvider implements BotModelProvider {
-  warm(model: string): void {
-    // A generate request with no prompt only loads the model; nothing is written.
-    void fetch(`${OLLAMA}/api/generate`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      // The same context size as a real request: loaded with any other, the
-      // model would be loaded again for the first question.
-      body: JSON.stringify({ model, keep_alive: KEEP_ALIVE, options: { num_ctx: CONTEXT_TOKENS } }),
-    }).catch(() => undefined)
+/** What can be done with local models besides talking to them: list, download, load and unload. */
+export interface LocalModels {
+  /** Installed models that can chat, with their size on disk; null when Ollama is not running. */
+  installed(): Promise<{ name: string; bytes: number }[] | null>
+  /** Download a model, reporting progress; stops when `signal` aborts. */
+  pull(model: string, onProgress: (progress: PullProgress) => void, signal: AbortSignal): Promise<void>
+  /** Load a model into memory now, so the first question does not wait for it. */
+  preload(model: string): Promise<void>
+  /** Take a model out of memory: on a 16 GB Mac only one fits at a time. */
+  unload(model: string): Promise<void>
+}
+
+export class OllamaProvider implements BotModelProvider, LocalModels {
+  /** What each installed model says it can do ("completion", "thinking", "tools"...), from the last listing. */
+  private readonly capabilities = new Map<string, string[]>()
+  /** Models being loaded into memory right now: their status says so. */
+  private readonly loading = new Set<string>()
+
+  private async tags(): Promise<{ name: string; size: number; capabilities: string[] }[] | null> {
+    try {
+      const response = await fetch(`${OLLAMA}/api/tags`, { signal: AbortSignal.timeout(2000) })
+      if (!response.ok) return null
+      const body = (await response.json()) as { models?: { name?: unknown; size?: unknown; capabilities?: unknown }[] }
+      const models = (body.models ?? [])
+        .filter((m): m is { name: string; size?: unknown; capabilities?: unknown } => typeof m.name === 'string')
+        .map((m) => ({
+          name: m.name,
+          size: typeof m.size === 'number' ? m.size : 0,
+          capabilities: Array.isArray(m.capabilities) ? m.capabilities.filter((c): c is string => typeof c === 'string') : ['completion'],
+        }))
+      for (const m of models) this.capabilities.set(m.name, m.capabilities)
+      return models
+    } catch {
+      return null
+    }
+  }
+
+  async installed(): Promise<{ name: string; bytes: number }[] | null> {
+    const models = await this.tags()
+    // An embedding model is installed too, but cannot hold a conversation.
+    return models === null
+      ? null
+      : models.filter((m) => m.capabilities.includes('completion')).map((m) => ({ name: m.name, bytes: m.size }))
   }
 
   async status(model: string): Promise<BotModelStatus> {
-    let installed: string[]
+    const models = await this.tags()
+    if (models === null) return { state: 'not-running', model }
+    const names = models.map((m) => m.name)
+    if (!hasModel(names, model)) return { state: 'no-model', model, installed: names }
+    return this.loading.has(model) ? { state: 'loading', model } : { state: 'ready', model }
+  }
+
+  async preload(model: string): Promise<void> {
+    this.loading.add(model)
     try {
-      const response = await fetch(`${OLLAMA}/api/tags`, { signal: AbortSignal.timeout(2000) })
-      if (!response.ok) return { state: 'not-running', model }
-      const body = (await response.json()) as { models?: { name?: unknown }[] }
-      installed = (body.models ?? []).map((m) => m.name).filter((name): name is string => typeof name === 'string')
+      // A generate request with no prompt only loads the model; nothing is written. Loaded with
+      // the same options as a real request, or the first question would load it again.
+      await fetch(`${OLLAMA}/api/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          keep_alive: KEEP_ALIVE,
+          options: requestFields(model, this.capabilities.get(model) ?? null).options,
+        }),
+      })
     } catch {
-      return { state: 'not-running', model }
+      // Not running, or the model went away: the status says so on the next look.
+    } finally {
+      this.loading.delete(model)
     }
-    return hasModel(installed, model) ? { state: 'ready', model } : { state: 'no-model', model, installed }
+  }
+
+  warm(model: string): void {
+    if (!this.loading.has(model)) void this.preload(model)
+  }
+
+  async unload(model: string): Promise<void> {
+    await fetch(`${OLLAMA}/api/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model, keep_alive: 0 }),
+    }).catch(() => undefined)
+  }
+
+  async pull(model: string, onProgress: (progress: PullProgress) => void, signal: AbortSignal): Promise<void> {
+    const response = await fetch(`${OLLAMA}/api/pull`, {
+      method: 'POST',
+      signal,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model, stream: true }),
+    })
+    if (!response.ok || response.body === null) throw new Error(`Ollama answered ${response.status}`)
+    const decoder = new TextDecoder()
+    let pending = ''
+    for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+      pending += decoder.decode(chunk, { stream: true })
+      let newline = pending.indexOf('\n')
+      while (newline !== -1) {
+        const line = pending.slice(0, newline).trim()
+        pending = pending.slice(newline + 1)
+        newline = pending.indexOf('\n')
+        if (line === '') continue
+        const event = JSON.parse(line) as { status?: unknown; total?: unknown; completed?: unknown; error?: unknown }
+        if (typeof event.error === 'string') throw new Error(event.error)
+        onProgress({
+          name: model,
+          status: typeof event.status === 'string' ? event.status : '',
+          completed: typeof event.completed === 'number' ? event.completed : 0,
+          total: typeof event.total === 'number' ? event.total : 0,
+        })
+      }
+    }
   }
 
   async *stream(messages: AiMessage[], system: string, { model, signal }: { model: string; signal: AbortSignal }): AsyncIterable<string> {
@@ -74,11 +166,9 @@ export class OllamaProvider implements BotModelProvider {
       body: JSON.stringify({
         model,
         stream: true,
-        // Qwen 3 thinks out loud first unless told not to: for a short answer
-        // from notes that is a long wait for nothing the user sees.
-        think: false,
         keep_alive: KEEP_ALIVE,
-        options: { num_ctx: CONTEXT_TOKENS },
+        // How thinking is turned off, the context size, the answer's length: the model's profile.
+        ...requestFields(model, this.capabilities.get(model) ?? null),
         messages: [{ role: 'system', content: system }, ...messages],
       }),
     })
@@ -181,8 +271,20 @@ export const isApiModel = (model: string): boolean => isAiModel(model)
  * always the same reply, so screenshots of a bot chat need no Ollama and come
  * out identical every time.
  */
-export class MockProvider implements BotModelProvider {
+export class MockProvider implements BotModelProvider, LocalModels {
   warm(): void {}
+
+  async installed(): Promise<{ name: string; bytes: number }[]> {
+    return [{ name: 'qwen3.5:9b', bytes: 6_590_000_000 }]
+  }
+
+  async pull(model: string, onProgress: (progress: PullProgress) => void): Promise<void> {
+    onProgress({ name: model, status: 'success', completed: 1, total: 1 })
+  }
+
+  async preload(): Promise<void> {}
+
+  async unload(): Promise<void> {}
 
   async status(model: string): Promise<BotModelStatus> {
     return { state: 'ready', model }

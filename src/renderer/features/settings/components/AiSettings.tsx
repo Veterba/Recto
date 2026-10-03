@@ -4,7 +4,7 @@ import { api } from '../../../app/api'
 import { IPC } from '@shared/ipc'
 import { SettingRow } from '../../../ui/SettingRow'
 import { Icon } from '../../../ui/Icon'
-import { AI_MODELS } from '@shared/ai'
+import { UTILITY_MODEL } from '@shared/ai'
 
 /**
  * The API key, and what the app will do with it.
@@ -15,7 +15,7 @@ import { AI_MODELS } from '@shared/ai'
  * a vault is a folder people push to git, and a secret in one is a secret
  * published.
  */
-export function AiSettings({ appearance, update }: SettingsDeps): React.ReactElement {
+export function AiSettings(_: SettingsDeps): React.ReactElement {
   const [status, setStatus] = useState<{ present: boolean; hint: string | null; available: boolean } | null>(null)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
@@ -39,7 +39,7 @@ export function AiSettings({ appearance, update }: SettingsDeps): React.ReactEle
     refresh()
     // Saving and then finding out it was wrong an hour later is the failure
     // this avoids: one token, one round trip, an answer now.
-    const tested = await api.invoke(IPC.aiTest, appearance.aiModel)
+    const tested = await api.invoke(IPC.aiTest, UTILITY_MODEL)
     setResult(
       tested.ok ? { ok: true, text: 'Saved and working.' } : { ok: false, text: tested.error ?? 'The key was saved but the test failed.' },
     )
@@ -67,7 +67,7 @@ export function AiSettings({ appearance, update }: SettingsDeps): React.ReactEle
               disabled={busy}
               onClick={() => {
                 setBusy(true)
-                void api.invoke(IPC.aiTest, appearance.aiModel).then((tested) => {
+                void api.invoke(IPC.aiTest, UTILITY_MODEL).then((tested) => {
                   setResult(tested.ok ? { ok: true, text: 'Working.' } : { ok: false, text: tested.error ?? 'Failed.' })
                   setBusy(false)
                 })
@@ -117,20 +117,6 @@ export function AiSettings({ appearance, update }: SettingsDeps): React.ReactEle
           {result.text}
         </p>
       )}
-
-      <SettingRow label="Model" hint={AI_MODELS.find((model) => model.id === appearance.aiModel)?.blurb ?? ''}>
-        <div className="segmented segmented--inline">
-          {AI_MODELS.map((model) => (
-            <button
-              key={model.id}
-              className={`segmented__tab${appearance.aiModel === model.id ? ' is-active' : ''}`}
-              onClick={() => update({ aiModel: model.id })}
-            >
-              <span>{model.label}</span>
-            </button>
-          ))}
-        </div>
-      </SettingRow>
 
       <p className="setting__note">
         <Icon name="sparkles" size={13} />

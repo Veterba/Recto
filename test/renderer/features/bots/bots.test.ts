@@ -29,7 +29,7 @@ describe('chat topics', () => {
   })
 
   it('keeps sources out of the answer as a comment that `--` cannot close early, and not as links', () => {
-    const comment = /<!-- recto:sources (.*) -->/.exec(file)![1]!
+    const comment = /<!-- recto:meta (.*) -->/.exec(file)![1]!
     expect(comment).not.toContain('--')
     expect(file).not.toContain('[[')
   })

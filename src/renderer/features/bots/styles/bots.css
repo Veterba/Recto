@@ -133,42 +133,6 @@
   font-size: var(--font-size-12);
   color: var(--text-muted);
 }
-.bot-chat .chat__thread {
-  padding-top: var(--size-4);
-}
-
-/* Under an answer: the notes it was read from, each one a way back to the note. */
-.bot-sources {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--size-1);
-  margin-top: var(--size-2);
-}
-.bot-sources__label {
-  margin-right: var(--size-1);
-  font-size: var(--font-size-11);
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.bot-sources__note {
-  all: unset;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: var(--font-size-12);
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-.bot-sources__note:hover {
-  border-color: var(--border-strong);
-  color: var(--text-primary);
-}
-.bot-sources__note:focus-visible {
-  outline: 2px solid var(--accent);
-}
 
 /* Whether the local model can run - and, when it cannot, the one thing to do. */
 .bot-status {
@@ -296,43 +260,10 @@
 .chat-topic {
   display: flex;
   flex-direction: column;
-  gap: var(--size-6);
 }
 .chat-topic.is-past {
   opacity: 0.55;
 }
-.chat-topic__divider {
-  display: flex;
-  align-items: center;
-  gap: var(--size-3);
-  font-size: var(--font-size-11);
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.chat-topic__divider::before,
-.chat-topic__divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-.chat-topic__divider span {
-  max-width: 70%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bot-chat__status {
-  flex: none;
-  width: 100%;
-  max-width: 760px;
-  box-sizing: border-box;
-  margin: 0 auto;
-  padding: var(--size-2) var(--size-6) 0;
-}
-
 .chat-topic__top {
   height: 1px;
 }
@@ -460,4 +391,23 @@
 }
 .bot-undo button:hover {
   background: color-mix(in srgb, var(--on-ink) 14%, transparent);
+}
+
+.bot-status__copy {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-1);
+  padding: 2px 6px;
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-11);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.bot-status__copy:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.bot-status__copy.is-done {
+  color: var(--accent);
 }

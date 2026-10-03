@@ -15,6 +15,9 @@ export const AI_MODELS = [
 
 export type AiModelId = (typeof AI_MODELS)[number]['id']
 
+/** What the app asks the API for on its own - a note's summary, the key test: small jobs, the cheapest model. */
+export const UTILITY_MODEL: AiModelId = 'claude-haiku-4-5-20251001'
+
 export const isAiModel = (value: unknown): value is AiModelId => typeof value === 'string' && AI_MODELS.some((model) => model.id === value)
 
 /** One turn. The content is plain markdown - the same text the note holds. */

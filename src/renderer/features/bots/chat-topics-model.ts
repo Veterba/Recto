@@ -88,12 +88,41 @@ export class ChatTopics {
 
   /** Read the list of topics again (on open, and after a change made elsewhere). */
   async refresh(): Promise<void> {
-    this.files = topicPaths(await api.invoke(IPC.fsTree), this.bot.id)
+    this.files = await this.inOrder(topicPaths(await api.invoke(IPC.fsTree), this.bot.id))
     if (!this.ready) this.current = this.files[0] ?? null
     else if (this.current !== null && !this.files.includes(this.current)) this.current = this.files[0] ?? null
     this.ready = true
     await Promise.all(this.visible().map((path) => this.load(path)))
     this.emit()
+  }
+
+  /**
+   * Newest first, by when each topic began. A file name only says the minute,
+   * so topics that share one are read and ordered by their `created`, which
+   * has seconds; a topic without seconds keeps its place by name.
+   */
+  private async inOrder(paths: string[]): Promise<string[]> {
+    const minute = (path: string): string => basename(path).slice(0, 16)
+    const shared = paths.filter((p) => paths.some((o) => o !== p && minute(o) === minute(p)))
+    if (shared.length === 0) return paths
+    const created = new Map<string, string>()
+    for (const path of shared) {
+      const topic = await this.load(path)
+      if (topic !== null && topic.meta.created.length > 16) created.set(path, topic.meta.created)
+    }
+    // Groups of one minute, in the order they came; within a group, newest second first.
+    const groups: string[][] = []
+    for (const path of paths) {
+      const last = groups.at(-1)
+      if (last !== undefined && minute(last[0]!) === minute(path)) last.push(path)
+      else groups.push([path])
+    }
+    const bySecond = (a: string, b: string): number => {
+      const ca = created.get(a)
+      const cb = created.get(b)
+      return ca !== undefined && cb !== undefined ? cb.localeCompare(ca) : 0
+    }
+    return groups.flatMap((group) => [...group].sort(bySecond))
   }
 
   /** The topics in the scroll, oldest first: the newest `shown`, and the current one wherever it is. */
@@ -170,12 +199,21 @@ export class ChatTopics {
       this.files = [topic.path, ...this.files]
       this.current = topic.path
     }
-    topic.body = appendTurns(topic.body, [turn], this.bot.name)
-    topic.messages = [...topic.messages, turn]
-    await api.invoke(IPC.fsWrite, topic.path, topicFile(topic.meta, topic.extra, topic.body))
+    // Every turn says when it was written: for grouping, and the time shown on hover.
+    const stamped: BotMessage = turn.at === undefined ? { ...turn, at: createdStamp(new Date()) } : turn
+    await this.save(topic, appendTurns(topic.body, [stamped], this.bot.name))
+    return topic.path
+  }
+
+  /** Write a topic's new body, and read the body and messages back from the file text. */
+  private async save(topic: LoadedTopic, body: string): Promise<void> {
+    const text = topicFile(topic.meta, topic.extra, body)
+    const parsed = parseTopic(text, this.assistants)
+    topic.body = parsed.body
+    topic.messages = parsed.messages
+    await api.invoke(IPC.fsWrite, topic.path, text)
     noteIndexChanged()
     this.emit()
-    return topic.path
   }
 
   /** A new title: in the frontmatter and in the file name, which is renamed to match. */

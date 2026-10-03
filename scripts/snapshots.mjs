@@ -382,35 +382,90 @@ async function screens(page, dir, vault) {
   await page.keyboard.press('Escape')
   await page.waitForSelector('.find', { state: 'detached' })
 
-  // The AI section: Recto, the main chat, with one earlier topic. The topic
-  // arrives only now - as a note it would change every screen above - begun at
-  // 09:30 by the run's clock: written aside, dated, then moved in, so the
-  // watcher sees it whole.
+  // The AI section: Recto, the main chat - first with nothing said yet.
+  await key(page, 'Mod+2')
+  await page.waitForSelector('.bot-chat .chat__welcome')
+  await page.waitForSelector('.bot-chat .composer__capsule')
+  await shoot(page, dir, '21b-chat-empty')
+  await key(page, 'Mod+1')
+  await page.waitForSelector('[role=treeitem]')
+
+  // Then with one earlier topic, written the way the chat writes them: grouped
+  // messages, and an answer with its steps and sources. It arrives only now -
+  // as a note it would change every screen above - begun at 09:30 by the run's
+  // clock: written aside, dated, then moved in, so the watcher sees it whole.
   const folder = path.join(vault, 'chats', 'recto')
   fs.mkdirSync(folder, { recursive: true })
   const aside = path.join(vault, 'chats', '.topic.tmp')
+  const meta = (fields) => `<!-- recto:meta ${JSON.stringify(fields)} -->`
+  const sources = ['Garden/Soil.md', 'Garden/Beds/Raised beds.md', 'Garden/Tomatoes.md', 'Garden/Basil.md', 'Handbook.md', 'Ideas.md'].map(
+    (p) => ({ path: p, heading: null }),
+  )
   fs.writeFileSync(
     aside,
-    '---\nbot: recto\ncreated: 2026-09-20T09:30\ntitle: Soil mix\n---\n\n## You\n\nWhat goes in the soil mix?\n\n## Recto\n\nCompost, loam and grit.\n',
+    [
+      '---\nbot: recto\ncreated: 2026-09-20T09:30:02\ntitle: Soil mix\n---\n',
+      '## You\n\nWhat goes in the soil mix?\n',
+      meta({ at: '2026-09-20T09:30:02' }) + '\n',
+      '## You\n\nFor the [[Raised beds]] by the fence\n',
+      meta({ at: '2026-09-20T09:30:20' }) + '\n',
+      '## Recto\n\nYour notes in Soil say **compost, loam and grit** in equal parts:\n\n- compost for food\n- loam to hold water\n- grit so the roots can breathe\n',
+      meta({
+        at: '2026-09-20T09:30:41',
+        model: 'qwen3.5:9b',
+        sources,
+        steps: [
+          { action: 'Opened', result: 'Raised beds', state: 'done' },
+          { action: 'Searching notes', result: '“soil mix” · 3 notes', state: 'done' },
+        ],
+      }) + '\n',
+      '## Recto\n\nWant the ratios for pots too?\n',
+      meta({ at: '2026-09-20T09:30:44', model: 'qwen3.5:9b' }) + '\n',
+    ].join('\n'),
   )
   const earlier = new Date(NOW.getTime() - 30 * 60_000)
   fs.utimesSync(aside, earlier, earlier)
   fs.renameSync(aside, path.join(folder, '2026-09-20 09-30 — Soil mix.md'))
   await key(page, 'Mod+2')
   await page.waitForFunction(() => document.querySelector('.bot-row__time')?.textContent === '09:30')
-  await page.waitForSelector('.bot-chat .chat__turn')
+  await page.waitForSelector('.bot-chat .msg--bot')
   await shoot(page, dir, '22-ai-sidebar')
 
   // A question in the current topic, answered with its sources.
-  await page.locator('.bot-chat .chat__input').click()
+  await page.locator('.bot-chat .composer__input').click()
   await page.keyboard.type('How do I mix soil for raised beds?')
   await page.keyboard.press('Enter')
-  await page.waitForFunction(() => document.querySelectorAll('.bot-chat .chat__turn--assistant').length === 2)
-  await page.waitForSelector('.bot-chat .chat__turn--assistant:last-of-type .bot-sources')
+  await page.waitForFunction(() => document.querySelectorAll('.bot-chat .msg--bot').length === 3)
+  await page.waitForSelector('.bot-chat .msg-group--bot:last-of-type .msg-sources')
   await page.waitForFunction(() => document.querySelector('.bot-row__time')?.textContent === '10:00')
+  await page.mouse.move(0, 0)
   await shoot(page, dir, '23-bot-chat')
 
+  // The steps behind the first answer, unfolded.
+  await page.locator('.bot-chat .bot-steps--folded').first().click()
+  await page.waitForSelector('.bot-chat .bot-steps__row')
+  await page.locator('.bot-chat .bot-steps').first().scrollIntoViewIfNeeded()
+  await page.mouse.move(0, 0)
+  await shoot(page, dir, '23b-steps-open')
+  await page.locator('.bot-chat .bot-steps').first().click()
+  await page.waitForSelector('.bot-chat .bot-steps__row', { state: 'detached' })
+
+  // The model menu, and the + menu.
+  await page.locator('.bot-chat .composer__chip').click()
+  await page.waitForFunction(() => document.querySelectorAll('.model-menu .glass-menu__item').length >= 4)
+  await page.mouse.move(0, 0)
+  await shoot(page, dir, '23c-model-menu')
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('.model-menu', { state: 'detached' })
+  await page.locator('.bot-chat .composer__plus').click()
+  await page.waitForSelector('.plus-menu')
+  await page.mouse.move(0, 0)
+  await shoot(page, dir, '23d-plus-menu')
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('.plus-menu', { state: 'detached' })
+
   // ⌘N: a new topic under its own divider; the one before sits back.
+  await page.locator('.bot-chat .composer__input').click()
   await key(page, 'Mod+N')
   await page.keyboard.type('Which beds need the most sun?')
   await page.keyboard.press('Enter')
@@ -418,8 +473,9 @@ async function screens(page, dir, vault) {
     () =>
       document.querySelectorAll('.chat-topic.is-past').length === 1 &&
       [...document.querySelectorAll('.chat-topic__divider')].map((d) => d.textContent).join() ===
-        'New topic · Soil mix,New topic · Soil mix',
+        'New topic · Soil mix · 09:30,New topic · Soil mix · 10:00',
   )
+  await page.mouse.move(0, 0)
   await shoot(page, dir, '24-topic-divider')
 
   // History: the topics, newest first.

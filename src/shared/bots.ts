@@ -34,8 +34,30 @@ export type Bot = BotDefinition & { system: string }
 /** A part of a note the bot was given to answer from. */
 export type BotSource = { path: string; heading: string | null }
 
-/** A turn in a bot's thread: the main chat's message, plus what the bot read for it. */
-export type BotMessage = AiMessage & { sources?: BotSource[] }
+/** One thing the bot did while working on an answer, as the steps card shows it: "Searching notes → “Recto plan”". */
+export type BotStep = { action: string; result: string; state: 'running' | 'done' | 'failed' }
+
+/**
+ * What is known about a message besides its text, kept with it in the topic
+ * file (`<!-- recto:meta {...} -->`). Every field is optional and only the
+ * ones that exist are written.
+ */
+export type MessageMeta = {
+  /** When it was written: local ISO time, to the second. */
+  at?: string
+  /** The model that wrote an answer. */
+  model?: string
+  /** What the bot read for an answer. */
+  sources?: BotSource[]
+  /** What the bot did on the way to an answer. */
+  steps?: BotStep[]
+  /** Milliseconds to the first token, and to the end. */
+  ttftMs?: number
+  totalMs?: number
+}
+
+/** A turn in a bot's thread: the text, and what is known about it. */
+export type BotMessage = AiMessage & MessageMeta
 
 /**
  * Whether a bot's model can run, each state with its own fix: Ollama not
@@ -47,6 +69,24 @@ export type BotModelStatus =
   | { state: 'not-running'; model: string }
   | { state: 'no-model'; model: string; installed: string[] }
   | { state: 'no-key'; model: string }
+  /** Being loaded into memory (after a switch, or on opening the chat): Send waits for it. */
+  | { state: 'loading'; model: string }
+
+/** A local model in the picker: installed or recommended, its size on disk, and what it means on this Mac. */
+export type ModelChoice = {
+  name: string
+  bytes: number
+  installed: boolean
+  /** "Recommended", "Too big for this Mac", "Better languages, slower, tight on 16 GB"... */
+  hint: string
+  /** False when it would not fit this Mac's memory: shown, not selectable. */
+  fits: boolean
+  /** No profile was written for its family. */
+  untested: boolean
+}
+
+/** A model download in progress. */
+export type PullProgress = { name: string; status: string; completed: number; total: number }
 
 export type BotSettings = {
   /** The model a bot uses when its definition names none. */

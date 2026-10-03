@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { AI_MODELS, isAiModel } from '@shared/ai'
-import type { Bot, BotSource } from '@shared/bots'
-import { fallbackTitle, type TopicMessage } from '@shared/chat-topics'
+import type { Bot, BotMessage, BotSource, PullProgress } from '@shared/bots'
+import { createdStamp, fallbackTitle } from '@shared/chat-topics'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { registerView } from '../../../app/view-registry'
@@ -9,17 +8,21 @@ import { ConfirmDialog } from '../../../ui/ConfirmDialog'
 import { ContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
-import { ChatComposer, ChatMessages } from '../../ai'
 import { RectoBot, type BotState } from '../../recto-bot'
-import { ChatTopics, UNTITLED, type LoadedTopic } from '../chat-topics-model'
+import { ChatTopics, UNTITLED } from '../chat-topics-model'
 import { onNewTopicRequest } from '../new-topic'
 import { reloadBots, useBotStatus, useBots } from '../hooks/use-bots'
+import { markRead, markUnread } from '../unread'
 import { BotStatusLine } from './BotStatusLine'
+import { Composer, type NoteCandidate } from './Composer'
 import { HistoryPanel } from './HistoryPanel'
+import { TopicBlock, TopicDivider, type MessageActions, type Pending } from './Messages'
+import { ModelMenu, modelLabel } from './ModelMenu'
 
 /**
- * A bot's conversation: one scroll, split into chat topics. Recto's is the app's
- * main chat - the main chat's own turns and composer, rewired.
+ * A bot's conversation: one scroll, split into chat topics, read like a
+ * messenger - with a floating composer over its bottom. Recto's is the app's
+ * main chat.
  *
  * The model only ever sees the current topic (and what the vault search finds
  * for the question); earlier topics stay above, greyed, each under a divider
@@ -33,26 +36,10 @@ export const MAIN_BOT = 'recto'
 
 /** How long a deleted topic can be brought back. */
 const UNDO_MS = 6000
+/** How long the face's "found it" beat lasts before it reads the answer out. */
+const FOUND_MS = 400
 
-function Sources({ sources, onOpen }: { sources: readonly BotSource[]; onOpen: OpenFile }): React.ReactElement | null {
-  const notes = sources.filter((s, i) => sources.findIndex((o) => o.path === s.path) === i)
-  if (notes.length === 0) return null
-  return (
-    <div className="bot-sources">
-      <span className="bot-sources__label">Sources</span>
-      {notes.map((source) => (
-        <button
-          key={source.path}
-          className="bot-sources__note"
-          title={source.heading === null ? source.path : `${source.path} › ${source.heading}`}
-          onClick={() => onOpen(source.path, source.heading)}
-        >
-          {source.path.slice(source.path.lastIndexOf('/') + 1).replace(/\.md$/i, '')}
-        </button>
-      ))}
-    </div>
-  )
-}
+const noteTitle = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
 
 function useTopics(model: ChatTopics): number {
   return useSyncExternalStore(
@@ -61,76 +48,12 @@ function useTopics(model: ChatTopics): number {
   )
 }
 
-/** Local on this Mac always; the API models only while a key is saved. */
-function ModelPicker({ bot, defaultModel, keyPresent }: { bot: Bot; defaultModel: string; keyPresent: boolean }): React.ReactElement {
-  const chosen = bot.model ?? null
-  const api_ = chosen !== null && isAiModel(chosen)
-  const localModel = chosen !== null && !api_ ? chosen : defaultModel
-  return (
-    <select
-      className="chat__model"
-      aria-label="Model"
-      value={api_ && keyPresent ? chosen : 'local'}
-      onChange={(event) => {
-        const value = event.target.value
-        void api.invoke(IPC.botsSetModel, bot.id, value === 'local' ? (api_ ? null : chosen) : value).then(() => reloadBots())
-      }}
-    >
-      <option value="local">Local · {localModel}</option>
-      {keyPresent &&
-        AI_MODELS.map((entry) => (
-          <option key={entry.id} value={entry.id}>
-            {entry.label}
-          </option>
-        ))}
-    </select>
-  )
-}
-
-function TopicBlock({
-  topic,
-  past,
-  bot,
-  pending,
-  error,
-  onDismissError,
-  onOpen,
-}: {
-  topic: LoadedTopic
-  past: boolean
-  bot: Bot
-  pending: string | null
-  error: string | null
-  onDismissError: () => void
-  onOpen: OpenFile
-}): React.ReactElement {
-  return (
-    <section className={`chat-topic${past ? ' is-past' : ''}`} data-topic={topic.path}>
-      <div className="chat-topic__divider" role="separator">
-        <span>New topic · {topic.meta.title}</span>
-      </div>
-      <ChatMessages<TopicMessage>
-        messages={topic.messages}
-        pending={pending}
-        error={error}
-        onDismissError={onDismissError}
-        assistant={bot.name}
-        labelOf={(message) => message.label}
-        after={(message) =>
-          message.role === 'assistant' && message.sources !== undefined ? <Sources sources={message.sources} onOpen={onOpen} /> : null
-        }
-      />
-    </section>
-  )
-}
-
-function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.ReactElement {
+function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; notes: () => readonly NoteCandidate[] }): React.ReactElement {
   const model = useMemo(() => new ChatTopics(bot, bot.id === MAIN_BOT ? [bot.name, 'Claude'] : [bot.name]), [bot.id, bot.name])
   useTopics(model)
   const [draft, setDraft] = useState('')
-  const [pending, setPending] = useState<string | null>(null)
+  const [pending, setPending] = useState<Pending | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [failed, setFailed] = useState(false)
   const [typing, setTyping] = useState(false)
   const [history, setHistory] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
@@ -138,19 +61,25 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
   const [undo, setUndo] = useState<{ title: string; run: () => Promise<void> } | null>(null)
   const [keyPresent, setKeyPresent] = useState(false)
   const [defaultModel, setDefaultModel] = useState('')
+  const [pull, setPull] = useState<(PullProgress & { error?: string }) | null>(null)
   const { status, recheck } = useBotStatus(bot.model)
+  const root = useRef<HTMLDivElement | null>(null)
   const scroller = useRef<HTMLDivElement | null>(null)
   const top = useRef<HTMLDivElement | null>(null)
   const composer = useRef<HTMLTextAreaElement | null>(null)
+  const seen = useRef(true)
 
-  /** The reply being streamed, and the topic it belongs to: refs, read by the stream's handlers directly. */
-  const pendingRef = useRef<string | null>(null)
+  /** The answer being streamed, and the topic it belongs to: refs, read by the stream's handlers directly. */
+  const pendingRef = useRef<Pending | null>(null)
   const streamPath = useRef<string | null>(null)
-  const sources = useRef<BotSource[]>([])
-  const setStream = useCallback((next: string | null) => {
+  const timing = useRef({ sent: 0, first: 0 })
+  const setStream = useCallback((next: Pending | null) => {
     pendingRef.current = next
     setPending(next)
   }, [])
+
+  /** The model this bot answers with now. */
+  const current = bot.model !== undefined && bot.model !== '' ? bot.model : defaultModel
 
   useEffect(() => {
     void model.refresh()
@@ -159,6 +88,18 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
   }, [model])
 
   useEffect(() => onNewTopicRequest(bot.id, () => model.startNew()), [bot.id, model])
+
+  // Seen or not: an answer that lands out of sight puts a dot on the bot's row.
+  useEffect(() => {
+    const element = root.current
+    if (element === null) return
+    const observer = new IntersectionObserver((entries) => {
+      seen.current = entries.some((e) => e.isIntersecting)
+      if (seen.current) markRead(bot.id)
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [bot.id])
 
   /** After a topic's first exchange, the model names it (or its first question does). */
   const nameTopic = useCallback(
@@ -173,21 +114,45 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
     [model, bot.id],
   )
 
-  /** The stream ended: whatever arrived becomes one answer in its topic, saved once. */
+  /** The stream ended: whatever arrived becomes one answer in its topic, saved once, with what is known about it. */
   const land = useCallback(async () => {
-    const reply = (pendingRef.current ?? '').trim()
+    const answer = pendingRef.current
     const path = streamPath.current
     setStream(null)
     streamPath.current = null
-    if (reply === '' || path === null) return
+    const reply = (answer?.text ?? '').trim()
+    if (answer === null || reply === '' || path === null) return
     if (model.current !== path) await model.select(path)
-    await model.append({ role: 'assistant', content: reply, sources: sources.current })
+    const { sent, first } = timing.current
+    const turn: BotMessage = {
+      role: 'assistant',
+      content: reply,
+      at: answer.at,
+      model: current,
+      sources: answer.sources,
+      ...(answer.steps.length > 0 ? { steps: answer.steps } : {}),
+      ...(first > 0 ? { ttftMs: Math.round(first - sent) } : {}),
+      totalMs: Math.round(performance.now() - sent),
+    }
+    await model.append(turn)
+    if (!seen.current || document.visibilityState !== 'visible') markUnread(bot.id)
     await nameTopic(path)
-  }, [model, nameTopic, setStream])
+  }, [model, nameTopic, setStream, current, bot.id])
 
   useEffect(() => {
+    let found = 0
     const offDelta = api.on(IPC_EVENT.botsDelta, (delta) => {
-      if (delta.id === streamPath.current) setStream((pendingRef.current ?? '') + delta.text)
+      const now = pendingRef.current
+      if (delta.id !== streamPath.current || now === null) return
+      if (now.text === '') {
+        // The first token: the face's "found it" beat, then it reads the answer out.
+        timing.current.first = performance.now()
+        window.clearTimeout(found)
+        found = window.setTimeout(() => {
+          if (pendingRef.current !== null) setStream({ ...pendingRef.current, face: 'answering' })
+        }, FOUND_MS)
+        setStream({ ...now, text: delta.text, face: 'found' })
+      } else setStream({ ...now, text: now.text + delta.text })
     })
     const offDone = api.on(IPC_EVENT.botsDone, (done) => {
       if (done.id === streamPath.current) void land()
@@ -196,9 +161,9 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
       if (failure.id !== streamPath.current) return
       void land()
       setError(failure.message)
-      setFailed(true)
     })
     return () => {
+      window.clearTimeout(found)
       offDelta()
       offDone()
       offError()
@@ -213,34 +178,73 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
     if (ready && model.ready && model.current !== null) void nameTopic(model.current)
   }, [ready, model, model.ready, model.current, nameTopic])
 
+  /** Ask for an answer to the current topic as it stands. */
+  const ask = useCallback(
+    async (path: string) => {
+      // The model sees this topic and nothing before it.
+      const messages = (model.loaded.get(path)?.messages ?? []).map(({ role, content }) => ({ role, content }))
+      streamPath.current = path
+      timing.current = { sent: performance.now(), first: 0 }
+      setStream({ text: '', steps: [], sources: [], face: 'riffle', at: createdStamp(new Date()) })
+      const started = await api.invoke(IPC.botsSend, { id: path, botId: bot.id, messages })
+      if (started.ok) {
+        if (pendingRef.current !== null) setStream({ ...pendingRef.current, sources: started.sources })
+        return
+      }
+      streamPath.current = null
+      setStream(null)
+      if (started.status !== undefined) recheck()
+      else setError(started.error)
+    },
+    [model, bot.id, recheck, setStream],
+  )
+
   const send = useCallback(async () => {
     const text = draft.trim()
     if (text === '' || pendingRef.current !== null || !ready) return
     setError(null)
-    setFailed(false)
     setDraft('')
     const path = await model.append({ role: 'user', content: text })
-    if (path === null) return
-    // The model sees this topic and nothing before it.
-    const messages = (model.loaded.get(path)?.messages ?? []).map(({ role, content }) => ({ role, content }))
-    sources.current = []
-    streamPath.current = path
-    setStream('')
-    const started = await api.invoke(IPC.botsSend, { id: path, botId: bot.id, messages })
-    if (started.ok) {
-      sources.current = started.sources
-      return
-    }
-    streamPath.current = null
-    setStream(null)
-    setFailed(true)
-    if (started.status !== undefined) recheck()
-    else setError(started.error)
-  }, [draft, ready, model, bot.id, recheck, setStream])
+    if (path !== null) await ask(path)
+  }, [draft, ready, model, ask])
 
   const stop = useCallback(() => {
     if (streamPath.current !== null) void api.invoke(IPC.botsCancel, streamPath.current)
   }, [])
+
+  const actions: MessageActions = {
+    onOpen,
+    onOpenNote: (title: string, sources: readonly BotSource[]) => {
+      const source = sources.find((s) => noteTitle(s.path).toLowerCase() === title.toLowerCase())
+      if (source !== undefined) onOpen(source.path, source.heading)
+      else
+        void api.invoke(IPC.indexResolveLink, title).then((resolved) => {
+          if (resolved !== null) onOpen(resolved)
+        })
+    },
+  }
+
+  // Model downloads: progress in the status line; a finished one becomes the bot's model.
+  const pick = useCallback(
+    (name: string) => {
+      void api.invoke(IPC.botsSetModel, bot.id, name).then(() => {
+        reloadBots()
+        recheck()
+      })
+    },
+    [bot.id, recheck],
+  )
+  useEffect(
+    () =>
+      api.on(IPC_EVENT.botsPullProgress, (progress) => {
+        if (!progress.done) setPull(progress)
+        else if (progress.status === 'success') {
+          setPull(null)
+          pick(progress.name)
+        } else setPull(progress.error === undefined ? null : progress)
+      }),
+    [pick],
+  )
 
   // A conversation opens at its latest message; after that, the newest text
   // stays in view unless the user has scrolled up to read.
@@ -294,19 +298,23 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
     return () => window.clearTimeout(timer)
   }, [undo])
 
+  const newTopic = (): void => {
+    model.startNew()
+    composer.current?.focus()
+  }
+
   const face: BotState = !ready
     ? 'idle'
-    : pending === ''
-      ? 'thinking'
-      : pending !== null
-        ? 'answering'
-        : failed
-          ? 'error'
-          : typing && draft.trim() !== ''
-            ? 'listening'
-            : 'idle'
+    : pending !== null
+      ? pending.face
+      : error !== null
+        ? 'error'
+        : typing && draft.trim() !== ''
+          ? 'listening'
+          : 'idle'
 
   const visible = model.visible()
+  const currentTitle = model.currentTopic()?.meta.title
   const menuItems: MenuItem[] = [
     {
       kind: 'item',
@@ -318,16 +326,38 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
     },
   ]
 
+  // One muted line above the composer: a download, or why Send is off.
+  const statusLine =
+    pull !== null ? (
+      <p className={`composer__status${pull.error !== undefined ? ' is-error' : ''}`}>
+        <span className="composer__dot" aria-hidden="true" />
+        {pull.error !== undefined
+          ? `Couldn’t download ${modelLabel(pull.name)}: ${pull.error}`
+          : `Downloading ${modelLabel(pull.name)}${pull.total > 0 ? ` · ${Math.floor((pull.completed / pull.total) * 100)}%` : '…'}`}
+        <button
+          className="composer__link"
+          onClick={() => {
+            if (pull.error === undefined) void api.invoke(IPC.botsPullCancel)
+            setPull(null)
+          }}
+        >
+          {pull.error === undefined ? 'Cancel' : 'Dismiss'}
+        </button>
+      </p>
+    ) : status !== null && !ready ? (
+      <BotStatusLine status={status} onRecheck={recheck} compact />
+    ) : null
+
   return (
     <div
+      ref={root}
       className="chat bot-chat"
       onKeyDownCapture={(event) => {
         // ⌘N in a chat is a new topic, typed in the composer or not.
         if (event.metaKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'n') {
           event.preventDefault()
           event.stopPropagation()
-          model.startNew()
-          composer.current?.focus()
+          newTopic()
         }
       }}
     >
@@ -337,17 +367,14 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
         </span>
         <div className="bot-chat__who">
           <span className="bot-chat__name">{bot.name}</span>
-          <span className="bot-chat__specialty">{bot.specialty}</span>
+          <span className="bot-chat__specialty">
+            {currentTitle !== undefined && currentTitle !== UNTITLED ? currentTitle : bot.specialty.replace(/\.$/, '')}
+            {current !== '' && <> · {modelLabel(current)}</>}
+          </span>
         </div>
         <div className="bot-chat__actions">
           <Tip label="New topic" hint="⌘N">
-            <button
-              className="bot-chat__action"
-              onClick={() => {
-                model.startNew()
-                composer.current?.focus()
-              }}
-            >
+            <button className="bot-chat__action" onClick={newTopic}>
               <Icon name="plus" size={14} />
               <span>New topic</span>
             </button>
@@ -402,15 +429,14 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
                 pending={isCurrent && streamPath.current === path ? pending : null}
                 error={isCurrent ? error : null}
                 onDismissError={() => setError(null)}
-                onOpen={onOpen}
+                actions={actions}
+                face={isCurrent ? face : null}
               />
             )
           })}
           {model.ready && model.current === null && (
             <section className="chat-topic">
-              <div className="chat-topic__divider" role="separator">
-                <span>New topic</span>
-              </div>
+              <TopicDivider title={null} />
               {ready && model.files.length === 0 && (
                 <div className="chat__welcome">
                   <h2>Ask {bot.name}</h2>
@@ -429,28 +455,41 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
         </div>
       </div>
 
-      {/* Above the composer, not in the scroll: why Send is off must be in view however far down the conversation is. */}
-      {status !== null && !ready && (
-        <div className="bot-chat__status">
-          <BotStatusLine status={status} onRecheck={recheck} />
-        </div>
-      )}
-
-      <ChatComposer
+      <Composer
         inputRef={composer}
         draft={draft}
         onDraft={(text) => {
           setDraft(text)
-          setFailed(false)
+          if (error !== null && pending === null) setError(null)
         }}
-        pending={pending !== null}
+        placeholder={`Ask ${bot.name}…`}
+        busy={pending !== null}
+        canSend={ready}
         onSend={() => void send()}
         onStop={stop}
-        disabled={!ready}
-        placeholder={ready ? `Ask ${bot.name}…` : `${bot.name} needs its model to answer`}
+        onNewTopic={newTopic}
+        status={statusLine}
+        model={current}
+        notes={notes}
+        modelMenu={(close) => (
+          <ModelMenu
+            current={current}
+            keyPresent={keyPresent}
+            pulling={pull !== null && pull.error === undefined ? pull.name : null}
+            onPick={(name) => {
+              close()
+              if (name !== current) pick(name)
+            }}
+            onDownload={(name) => {
+              void api.invoke(IPC.botsPull, name).then((started) => {
+                if (!started.ok) setPull({ name, status: 'error', completed: 0, total: 0, error: started.error ?? 'failed' })
+              })
+            }}
+            onClose={close}
+          />
+        )}
         onFocus={() => setTyping(true)}
         onBlur={() => setTyping(false)}
-        tools={bot.id === MAIN_BOT ? <ModelPicker bot={bot} defaultModel={defaultModel} keyPresent={keyPresent} /> : undefined}
       />
 
       {undo !== null && (
@@ -491,9 +530,9 @@ function Conversation({ bot, onOpen }: { bot: Bot; onOpen: OpenFile }): React.Re
 }
 
 /** The view: one bot's conversation. Recto's is the main chat; the old `chat` view opens it too. */
-export function registerBotView(openFile: OpenFile): () => void {
+export function registerBotView(openFile: OpenFile, notes: () => readonly NoteCandidate[]): () => void {
   const render = ({ state }: { state: Record<string, unknown> }): React.ReactElement => (
-    <BotHost botId={typeof state['bot'] === 'string' ? state['bot'] : MAIN_BOT} openFile={openFile} />
+    <BotHost botId={typeof state['bot'] === 'string' ? state['bot'] : MAIN_BOT} openFile={openFile} notes={notes} />
   )
   const offBot = registerView({ type: 'bot', title: 'Recto', icon: 'message-square', getTitle: (state) => botTitle(state), render })
   // Layouts saved before Recto became the main chat have `chat` tabs; they open Recto.
@@ -509,7 +548,15 @@ const botTitle = (state: Record<string, unknown>): string => {
   return typeof id === 'string' && id !== MAIN_BOT ? id : 'Recto'
 }
 
-function BotHost({ botId, openFile }: { botId: string; openFile: OpenFile }): React.ReactElement {
+function BotHost({
+  botId,
+  openFile,
+  notes,
+}: {
+  botId: string
+  openFile: OpenFile
+  notes: () => readonly NoteCandidate[]
+}): React.ReactElement {
   const bots = useBots()
   const bot = bots?.find((b) => b.id === botId)
   if (bots === null) return <div className="pane-empty" />
@@ -520,5 +567,5 @@ function BotHost({ botId, openFile }: { botId: string; openFile: OpenFile }): Re
       </div>
     )
   }
-  return <Conversation key={bot.id} bot={bot} onOpen={openFile} />
+  return <Conversation key={bot.id} bot={bot} onOpen={openFile} notes={notes} />
 }

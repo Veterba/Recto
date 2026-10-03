@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recto chat mock</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#dcdad4;--bg:#f6f5f2;--side:#efeeea;--line:#e3e1dc;--ink:#18181b;--paper:#fbfbfa;--muted:#8a8a90;--soft:#5d5d63;
+  --me:#e6e5e0;--meText:#18181b;--bot:#ffffff;--botLine:#e8e6e1;--chip:#efeee9;--hover:#e9e8e3;
+  --glass:rgba(255,255,255,.72);--glassLine:rgba(0,0,0,.07);--glassShadow:0 10px 34px rgba(20,20,30,.10),0 1px 2px rgba(20,20,30,.06);
+  --send:#18181b;--sendIcon:#fbfbfa;--accent:#18181b;
+}
+:root[data-theme="dark"]{
+  --desk:#09090b;--bg:#141318;--side:#18171d;--line:#26252d;--ink:#ecebf2;--paper:#1b1a20;--muted:#8b8996;--soft:#b4b2bd;
+  --me:#e9e8ef;--meText:#141318;--bot:#211f27;--botLine:#2b2932;--chip:#25232b;--hover:#24222a;
+  --glass:rgba(36,34,42,.72);--glassLine:rgba(255,255,255,.08);--glassShadow:0 12px 36px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.3);
+  --send:#ecebf2;--sendIcon:#141318;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --desk:#09090b;--bg:#141318;--side:#18171d;--line:#26252d;--ink:#ecebf2;--paper:#1b1a20;--muted:#8b8996;--soft:#b4b2bd;
+  --me:#e9e8ef;--meText:#141318;--bot:#211f27;--botLine:#2b2932;--chip:#25232b;--hover:#24222a;
+  --glass:rgba(36,34,42,.72);--glassLine:rgba(255,255,255,.08);--glassShadow:0 12px 36px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.3);
+  --send:#ecebf2;--sendIcon:#141318;
+  color-scheme:dark;}}
+:root[data-pal="neutral"]{--desk:#e9e9eb;--bg:#ffffff;--side:#f7f7f8;--line:#ececee;--ink:#111113;--paper:#ffffff;--muted:#8e8e93;--soft:#55555b;--me:#f0f0f2;--meText:#111113;--bot:#ffffff;--botLine:#ececee;--chip:#f2f2f4;--hover:#f0f0f2;--glass:rgba(255,255,255,.78);--send:#111113;--sendIcon:#fff;}
+:root[data-pal="neutral"][data-theme="dark"]{--desk:#000;--bg:#0e0e10;--side:#141416;--line:#232326;--ink:#f2f2f4;--paper:#0e0e10;--muted:#8e8e95;--soft:#b9b9c0;--me:#2a2a2e;--meText:#f2f2f4;--bot:#0e0e10;--botLine:#26262a;--chip:#1e1e21;--hover:#1c1c1f;--glass:rgba(32,32,35,.78);--send:#f2f2f4;--sendIcon:#0e0e10;color-scheme:dark}
+@media (prefers-color-scheme:dark){:root[data-pal="neutral"]:not([data-theme="light"]){--desk:#000;--bg:#0e0e10;--side:#141416;--line:#232326;--ink:#f2f2f4;--paper:#0e0e10;--muted:#8e8e95;--soft:#b9b9c0;--me:#2a2a2e;--meText:#f2f2f4;--bot:#0e0e10;--botLine:#26262a;--chip:#1e1e21;--hover:#1c1c1f;--glass:rgba(32,32,35,.78);--send:#f2f2f4;--sendIcon:#0e0e10;color-scheme:dark}}
+:root[data-pal="ink"]{--desk:#e4e4e2;--bg:#fafaf9;--side:#f2f2f0;--line:#e7e6e3;--ink:#161618;--paper:#fafaf9;--muted:#8b8b8f;--soft:#56565b;--me:#161618;--meText:#fafaf9;--bot:#efefed;--botLine:transparent;--chip:#e6e6e3;--hover:#ebebe8;--glass:rgba(255,255,255,.74);--send:#161618;--sendIcon:#fafaf9;}
+:root[data-pal="ink"][data-theme="dark"]{--desk:#000;--bg:#0b0b0c;--side:#111113;--line:#202023;--ink:#f3f3f1;--paper:#0b0b0c;--muted:#8d8d92;--soft:#b8b8bd;--me:#f3f3f1;--meText:#0b0b0c;--bot:#1b1b1e;--botLine:transparent;--chip:#232327;--hover:#19191c;--glass:rgba(30,30,33,.76);--send:#f3f3f1;--sendIcon:#0b0b0c;color-scheme:dark}
+@media (prefers-color-scheme:dark){:root[data-pal="ink"]:not([data-theme="light"]){--desk:#000;--bg:#0b0b0c;--side:#111113;--line:#202023;--ink:#f3f3f1;--paper:#0b0b0c;--muted:#8d8d92;--soft:#b8b8bd;--me:#f3f3f1;--meText:#0b0b0c;--bot:#1b1b1e;--botLine:transparent;--chip:#232327;--hover:#19191c;--glass:rgba(30,30,33,.76);--send:#f3f3f1;--sendIcon:#0b0b0c;color-scheme:dark}}
+:root[data-pal="graphite"]{--desk:#dfe2e7;--bg:#f5f6f8;--side:#eef0f3;--line:#e1e4e9;--ink:#15171c;--paper:#f5f6f8;--muted:#878c96;--soft:#525865;--me:#dde2ea;--meText:#15171c;--bot:#ffffff;--botLine:#e4e7ec;--chip:#e9ecf0;--hover:#e7eaef;--glass:rgba(255,255,255,.74);--send:#15171c;--sendIcon:#f5f6f8;}
+:root[data-pal="graphite"][data-theme="dark"]{--desk:#07080a;--bg:#111317;--side:#15181d;--line:#22262d;--ink:#e8ebf0;--paper:#111317;--muted:#868c97;--soft:#b3b9c4;--me:#e6e9ef;--meText:#111317;--bot:#1b1e24;--botLine:#252930;--chip:#21252c;--hover:#1c1f25;--glass:rgba(30,33,39,.76);--send:#e8ebf0;--sendIcon:#111317;color-scheme:dark}
+@media (prefers-color-scheme:dark){:root[data-pal="graphite"]:not([data-theme="light"]){--desk:#07080a;--bg:#111317;--side:#15181d;--line:#22262d;--ink:#e8ebf0;--paper:#111317;--muted:#868c97;--soft:#b3b9c4;--me:#e6e9ef;--meText:#111317;--bot:#1b1e24;--botLine:#252930;--chip:#21252c;--hover:#1c1f25;--glass:rgba(30,33,39,.76);--send:#e8ebf0;--sendIcon:#111317;color-scheme:dark}}
+.pal{display:flex;gap:2px;border:1px solid var(--line);border-radius:9px;padding:2px;background:var(--bg)}
+.bar .pal button{border:0;padding:5px 9px;border-radius:7px}
+.bar .pal button.on{background:var(--ink);color:var(--bg)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+html,body{height:100%}
+body{background:var(--desk);color:var(--ink);font:400 14.5px/1.5 Geist,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:18px 16px 28px;gap:12px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.bar{width:min(1180px,100%);display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.bar .t{font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.bar .btns{display:flex;gap:8px;flex-wrap:wrap}
+.bar button{font:500 11px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 11px}
+.app{width:min(1180px,100%);height:min(780px,calc(100vh - 90px));min-height:560px;display:flex;background:var(--bg);border-radius:14px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.18);border:1px solid var(--line)}
+
+/* sidebar */
+.side{width:260px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 10px}
+.side .lights{display:flex;gap:7px;padding:2px 6px 14px}
+.side .lights i{width:11px;height:11px;border-radius:50%;background:#e2e0da;display:block}
+:root[data-theme=dark] .side .lights i{background:#2c2a33}
+.search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:7px 10px;color:var(--muted);font-size:13px;margin:0 2px 10px}
+.sect{font:500 10.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:10px 8px 6px}
+.row{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;cursor:pointer}
+.row.on{background:var(--hover)}
+.row .txt{min-width:0;flex:1}
+.row .top{display:flex;justify-content:space-between;gap:6px}
+.row .name{font-weight:500}
+.row .time{font-size:12px;color:var(--muted)}
+.row .prev{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.dim{opacity:.45;cursor:default}
+.side .grow{flex:1}
+
+/* chat */
+.chat{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+.head{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--line)}
+.head .who{flex:1;min-width:0}
+.head .n{font-weight:600}
+.head .s{font-size:12.5px;color:var(--muted)}
+.ib{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--soft)}
+.ib:hover{background:var(--hover)}
+.scroll{flex:1;overflow-y:auto;scroll-behavior:smooth}
+.col{max-width:760px;margin:0 auto;padding:22px 20px 150px;display:flex;flex-direction:column}
+
+.divider{align-self:center;font-size:12.5px;color:var(--muted);margin:14px 0 14px;display:flex;gap:6px;align-items:center}
+.divider b{font-weight:500;color:var(--soft)}
+
+.group{display:flex;flex-direction:column;gap:3px;margin:8px 0}
+.group.me{align-items:flex-end}
+.group.bot{padding-left:34px;position:relative}
+.group.bot .gface{position:absolute;left:-34px;bottom:0}
+.msg{position:relative;max-width:72%;padding:9px 14px;border-radius:20px;word-wrap:break-word}
+.me .msg{background:var(--me);color:var(--meText);border-bottom-right-radius:7px}
+.me .msg:not(:last-child){border-bottom-right-radius:20px}
+.bot .msg{background:var(--bot);border:1px solid var(--botLine);border-bottom-left-radius:7px}
+.bot .msg:not(:last-of-type){border-bottom-left-radius:20px}
+.msg p{margin:0 0 6px}.msg p:last-child{margin:0}
+.msg ul{margin:4px 0 2px;padding-left:18px}
+.msg .note{display:inline-flex;align-items:center;gap:4px;background:var(--chip);border-radius:6px;padding:0 6px;font-size:13.5px;font-weight:500;white-space:nowrap}
+.me .msg .note{background:rgba(0,0,0,.07)}
+.msg .note::before{content:"";width:9px;height:11px;border-radius:2px;border:1.5px solid currentColor;opacity:.55}
+.msg .when{position:absolute;top:50%;transform:translateY(-50%);font-size:11.5px;color:var(--muted);opacity:0;transition:opacity .15s;white-space:nowrap;pointer-events:none}
+.me .msg .when{right:calc(100% + 10px)}
+.bot .msg .when{left:calc(100% + 10px)}
+.msg:hover .when{opacity:1}
+
+.react{position:absolute;bottom:-12px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:13px;background:var(--glass);backdrop-filter:blur(16px) saturate(1.6);-webkit-backdrop-filter:blur(16px) saturate(1.6);border:1px solid var(--glassLine);box-shadow:var(--glassShadow);animation:pop .35s cubic-bezier(.3,1.6,.5,1)}
+.me .react{left:-10px}
+.bot .react{right:-10px}
+.msg.hasReact{margin-bottom:12px}
+@keyframes pop{from{transform:scale(.3);opacity:0}}
+
+.tools{position:absolute;top:-16px;right:8px;display:none;gap:1px;padding:3px;border-radius:10px;background:var(--glass);backdrop-filter:blur(16px) saturate(1.6);-webkit-backdrop-filter:blur(16px) saturate(1.6);border:1px solid var(--glassLine);box-shadow:var(--glassShadow);z-index:3}
+.me .tools{right:auto;left:8px}
+.msg:hover .tools,.tools.keep{display:flex}
+.tools button{width:28px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--soft)}
+.tools button:hover{background:var(--hover)}
+.emo{position:absolute;top:-52px;right:0;display:flex;gap:2px;padding:5px;border-radius:14px;background:var(--glass);backdrop-filter:blur(18px) saturate(1.6);-webkit-backdrop-filter:blur(18px) saturate(1.6);border:1px solid var(--glassLine);box-shadow:var(--glassShadow);z-index:4}
+.emo button{width:34px;height:34px;border-radius:9px;font-size:18px}
+.emo button:hover{background:var(--hover);transform:scale(1.1)}
+
+.sources{display:flex;flex-wrap:wrap;gap:5px;margin:5px 0 2px;max-width:72%}
+.src{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--soft);background:var(--chip);border-radius:7px;padding:2px 8px}
+.src::before{content:"";width:8px;height:10px;border-radius:2px;border:1.4px solid currentColor;opacity:.5}
+
+.steps{align-self:flex-start;max-width:72%;font-size:13px;color:var(--soft);border:1px solid var(--botLine);background:var(--bot);border-radius:14px;padding:8px 12px;margin-bottom:3px}
+.steps .st{display:flex;gap:8px;align-items:center;padding:2px 0;animation:fade .25s ease}
+.steps .st b{font-weight:600;color:var(--ink)}
+.steps .ic{width:14px;flex:none;text-align:center;color:var(--ink)}
+.steps .run{width:7px;height:7px;border-radius:50%;background:var(--ink);display:inline-block;animation:pulse 1s ease-in-out infinite}
+.steps.collapsed{cursor:pointer;padding:5px 12px;background:transparent;border-style:dashed}
+.steps.collapsed .st{display:none}
+.steps .sum{display:none;color:var(--muted)}
+.steps.collapsed .sum{display:block}
+@keyframes pulse{50%{opacity:.25;transform:scale(.7)}}
+@keyframes fade{from{opacity:0;transform:translateY(3px)}}
+
+.caret{display:inline-block;width:7px;height:15px;background:var(--ink);vertical-align:-2px;margin-left:2px;animation:blink 1s steps(1) infinite;border-radius:1px}
+@keyframes blink{50%{opacity:0}}
+
+/* composer */
+.cwrap{position:absolute;left:0;right:0;bottom:0;padding:34px 20px 18px;pointer-events:none;background:linear-gradient(to top,var(--bg) 62%,transparent)}
+.cin{max-width:760px;margin:0 auto;pointer-events:auto;position:relative}
+.status{font-size:12.5px;color:var(--muted);padding:0 14px 7px;display:flex;gap:7px;align-items:center;min-height:24px}
+.status .dot{width:6px;height:6px;border-radius:50%;background:#3fae6a}
+.cap{display:flex;align-items:flex-end;gap:6px;padding:7px;border-radius:28px;background:var(--glass);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);border:1px solid var(--glassLine);box-shadow:var(--glassShadow);transition:border-radius .2s}
+.cap.multi{border-radius:20px}
+.plus{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;color:var(--soft)}
+.plus:hover,.chipm:hover{background:var(--hover)}
+textarea{flex:1;resize:none;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:15px;line-height:22px;padding:8px 4px;max-height:176px;min-height:38px}
+textarea::placeholder{color:var(--muted)}
+.chipm{height:38px;flex:none;display:flex;align-items:center;gap:6px;padding:0 10px 0 12px;border-radius:19px;color:var(--soft);font-size:13.5px;white-space:nowrap}
+.chipm .m{font-weight:500;color:var(--ink)}
+.send{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--send);color:var(--sendIcon);transition:opacity .15s,transform .1s}
+.send:disabled{opacity:.22;cursor:default}
+.send:not(:disabled):active{transform:scale(.94)}
+
+.menu{position:absolute;bottom:calc(100% - 14px);border-radius:16px;padding:6px;background:var(--glass);backdrop-filter:blur(24px) saturate(1.7);-webkit-backdrop-filter:blur(24px) saturate(1.7);border:1px solid var(--glassLine);box-shadow:var(--glassShadow);display:none;z-index:10;animation:fade .15s ease}
+.menu.open{display:block}
+.menu .h{font:500 10.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:8px 10px 4px}
+.mi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;border-radius:10px}
+.mi:hover,.mi.kb{background:var(--hover)}
+.mi .ck{width:14px;flex:none;font-weight:600}
+.mi .l{flex:1;min-width:0}
+.mi .l b{font-weight:500;display:block}
+.mi .l span{font-size:12px;color:var(--muted)}
+.mi .r{font-size:12px;color:var(--muted);white-space:nowrap}
+.mi .r.dl{color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:2px 7px}
+.mi.off{opacity:.45;cursor:default}
+.mi .kbd{font:500 11px 'Geist Mono',monospace;color:var(--muted)}
+.sep{height:1px;background:var(--line);margin:4px 8px}
+#modelMenu{right:46px;width:330px}
+#plusMenu{left:0;width:230px}
+
+svg{overflow:visible;display:block}
+.notes{width:min(1180px,100%);color:var(--muted);font-size:12.5px;line-height:1.6}
+@media (max-width:760px){.side{display:none}.msg,.sources,.steps{max-width:88%}#modelMenu{right:0;width:min(330px,100%)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head><body>
+
+<div class="bar">
+  <span class="t">Recto · chat mock</span>
+  <div class="btns"><div class="pal" id="pal"><button data-p="paper">Paper</button><button data-p="neutral">Neutral</button><button data-p="ink">Ink</button><button data-p="graphite">Graphite</button></div>
+    <button id="sim">Simulate answer</button>
+    <button id="theme">Dark</button>
+  </div>
+</div>
+
+<div class="app">
+  <aside class="side">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search chats</div>
+    <div class="row on"><span data-face="32"></span><div class="txt"><div class="top"><span class="name">Recto</span><span class="time" id="sideTime">14:06</span></div><div class="prev" id="sidePrev">Да, подсказка появляется только после 50 заметок.</div></div></div>
+    <div class="sect">Specialists · soon</div>
+    <div class="row dim"><span data-face="32" data-still="1"></span><div class="txt"><div class="top"><span class="name">Critic</span></div><div class="prev">Margin notes on your drafts</div></div></div>
+    <div class="grow"></div>
+  </aside>
+
+  <main class="chat">
+    <div class="head">
+      <span data-face="40" id="headFace"></span>
+      <div class="who"><div class="n">Recto</div><div class="s" id="headSub">Правила тем · qwen3.5 · 9b</div></div>
+      <button class="ib" title="History"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></button>
+      <button class="ib" title="New topic ⌘N"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+      <button class="ib" title="More"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+    </div>
+
+    <div class="scroll" id="scroll"><div class="col" id="col"></div></div>
+
+    <div class="cwrap"><div class="cin">
+      <div class="status" id="status"><span class="dot"></span>qwen3.5:9b загружена · локально</div>
+      <div class="menu" id="plusMenu">
+        <button class="mi"><span class="ck">[[</span><span class="l"><b>Link a note</b></span></button>
+        <button class="mi"><span class="ck">+</span><span class="l"><b>New topic</b></span><span class="kbd">⌘N</span></button>
+      </div>
+      <div class="menu" id="modelMenu">
+        <div class="h">On this Mac · 16 GB</div>
+        <button class="mi"><span class="ck">✓</span><span class="l"><b>qwen3.5 · 9b</b><span>Recommended</span></span><span class="r">6.6 GB</span></button>
+        <button class="mi"><span class="ck"></span><span class="l"><b>gemma4 · 12b</b><span>Better languages, slower, tight on 16 GB</span></span><span class="r dl">Download · 8 GB</span></button>
+        <button class="mi"><span class="ck"></span><span class="l"><b>gemma4 · e4b</b><span>Fastest, simpler answers</span></span><span class="r dl">Download</span></button>
+        <button class="mi off"><span class="ck"></span><span class="l"><b>gemma4 · 26b</b><span>Too big for this Mac</span></span><span class="r">18 GB</span></button>
+        <div class="sep"></div>
+        <div class="h">API</div>
+        <button class="mi off"><span class="ck"></span><span class="l"><b>Claude</b><span>Notes go to Anthropic · needs a key</span></span><span class="r">Settings</span></button>
+      </div>
+      <div class="cap" id="cap">
+        <button class="plus" id="plusBtn" title="Add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+        <textarea id="ta" rows="1" placeholder="Ask Recto…"></textarea>
+        <button class="chipm" id="chip"><span class="m">qwen3.5</span>· 9b<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg></button>
+        <button class="send" id="send" disabled title="Send · Enter&#10;New line · Shift+Enter"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+      </div>
+    </div></div>
+  </main>
+</div>
+
+<div class="notes">Наведи на сообщение: время, панель действий, реакции. Нажми на чип модели и на «+». «Simulate answer» или Enter в поле — Recto ищет (riffle + шаги), «found» на первом токене, потом стрим. Рисованный макет, данные выдуманы.</div>
+
+<script>
+/* ---------- face ---------- */
+const PAGE='M-27 -30 Q-27 -36 -21 -36 L16 -36 L27 -25 L27 30 Q27 36 21 36 L-21 36 Q-27 36 -27 30 Z';
+const faces=[];
+function makeFace(host,size,still){
+  host.innerHTML=`<svg width="${size}" height="${size}" viewBox="-46 -46 92 92">
+    <g class="body">
+      <g class="sh2"><path d="${PAGE}" transform="scale(.9)" fill="var(--ink)" opacity=".35"/></g>
+      <g class="sh1"><path d="${PAGE}" transform="scale(.93)" fill="var(--ink)" opacity=".55"/></g>
+      <path d="${PAGE}" fill="var(--ink)"/>
+      <path d="M16 -36 L27 -25 L16 -25 Z" fill="var(--paper)" opacity=".22"/>
+      <g class="eyes"><rect class="e1" x="-10.8" width="4.6" rx="2.3" fill="var(--paper)"/><rect class="e2" x="6.2" width="4.6" rx="2.3" fill="var(--paper)"/></g>
+    </g></svg>`;
+  const f={el:host,still,body:host.querySelector('.body'),s1:host.querySelector('.sh1'),s2:host.querySelector('.sh2'),
+    eyes:host.querySelector('.eyes'),e:[host.querySelector('.e1'),host.querySelector('.e2')],
+    state:'idle',out:0,lid:1,lidT:1,gx:0,gy:0,tx:0,ty:0,hop:0,nextBlink:performance.now()+1500+Math.random()*3000,blinkT:-1,nextDart:0,nextGaze:0,foundT:-1};
+  faces.push(f);return f;
+}
+function setState(f,s){if(s==='found'){f.foundT=performance.now();f.state='answering';return}f.state=s}
+function tick(now){
+  for(const f of faces){
+    if(f.still){draw(f,now);continue}
+    const riff=f.state==='riffle';
+    f.out+=((riff?1:0)-f.out)*(riff?.12:.2);
+    // gaze
+    if(riff){if(now>f.nextDart){f.tx=(Math.random()*2-1)*4.2;f.ty=Math.random()*3.2;f.nextDart=now+120+Math.random()*130}}
+    else if(now>f.nextGaze){const r=Math.random();f.tx=r<.5?0:(Math.random()*2-1)*3.2;f.ty=r<.5?0:(Math.random()*2-1)*1.6;f.nextGaze=now+1200+Math.random()*2600}
+    f.gx+=(f.tx-f.gx)*(riff?.45:.15);f.gy+=(f.ty-f.gy)*(riff?.45:.15);
+    // lids
+    let target=riff?.85:1;
+    if(f.foundT>0){const d=now-f.foundT;if(d<300){target=1.2}else if(d>700)f.foundT=-1}
+    f.lid+=(target-f.lid)*.25;
+    // blink
+    let bl=1;if(now>f.nextBlink){f.blinkT=now;f.nextBlink=now+2400+Math.random()*4200}
+    if(f.blinkT>0){const d=now-f.blinkT;if(d<160){bl=1-Math.sin(d/160*Math.PI)*.85}else f.blinkT=-1}
+    f.lidNow=f.lid*bl;
+    // hop
+    let hop=0;if(f.foundT>0){const d=now-f.foundT;hop=d<380?-Math.sin(d/380*Math.PI)*3:0}
+    f.hop=hop;
+    draw(f,now);
+  }
+  requestAnimationFrame(tick);
+}
+function draw(f,now){
+  const h=11*(f.lidNow??1),y=-8-h/2+(f.gy||0);
+  f.e.forEach(e=>{e.setAttribute('y',y.toFixed(2));e.setAttribute('height',Math.max(2.2,h).toFixed(2))});
+  f.eyes.setAttribute('transform',`translate(${(f.gx||0).toFixed(2)} 0)`);
+  const o=f.out||0,t=now/1000;
+  const bob=o*Math.sin(t*5.2)*1.6+(f.hop||0);
+  f.body.setAttribute('transform',`translate(0 ${bob.toFixed(2)})`);
+  // riffle: sheets fan out from behind and flick one after the other
+  const c1=Math.max(0,Math.sin(t*7)),c2=Math.max(0,Math.sin(t*7-1.6));
+  const a1=o*(12+c1*7),a2=-o*(11+c2*7);
+  f.s1.setAttribute('transform',`translate(0 36) rotate(${a1.toFixed(2)}) translate(${(o*3).toFixed(2)} -36)`);
+  f.s2.setAttribute('transform',`translate(0 36) rotate(${a2.toFixed(2)}) translate(${(-o*3).toFixed(2)} -36)`);
+  f.s1.style.opacity=f.s2.style.opacity=Math.min(1,o*1.6);
+}
+document.querySelectorAll('[data-face]').forEach(h=>{const f=makeFace(h,+h.dataset.face,h.dataset.still);if(h.id==='headFace')window.headFace=f});
+requestAnimationFrame(tick);
+
+/* ---------- chat ---------- */
+const col=document.getElementById('col'),scroll=document.getElementById('scroll');
+const N=t=>`<span class="note">${t}</span>`;
+const ICON={copy:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
+  react:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5s1.3 1.8 3.5 1.8 3.5-1.8 3.5-1.8"/><path d="M9 9.5h.01M15 9.5h.01" stroke-width="2.6" stroke-linecap="round"/></svg>',
+  retry:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+  edit:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>'};
+
+let lastSide=null,lastGroup=null;
+function group(side){
+  if(lastSide===side&&lastGroup)return lastGroup;
+  const g=document.createElement('div');g.className='group '+side;col.appendChild(g);
+  if(side==='bot'){
+    const fh=document.createElement('span');fh.className='gface';g._fobj=makeFace(fh,26);g._face=fh;
+  }
+  lastSide=side;lastGroup=g;return g;
+}
+function divider(html){const d=document.createElement('div');d.className='divider';d.innerHTML=html;col.appendChild(d);lastSide=null;lastGroup=null}
+function msg(side,html,time,opt={}){
+  const g=group(side);const m=document.createElement('div');m.className='msg';
+  m.innerHTML=html+`<span class="when">${time}</span><div class="tools">${side==='bot'?`<button data-a="copy" title="Copy">${ICON.copy}</button><button data-a="react" title="React">${ICON.react}</button><button data-a="retry" title="Retry">${ICON.retry}</button>`:`<button data-a="copy" title="Copy">${ICON.copy}</button><button data-a="edit" title="Edit &amp; resend">${ICON.edit}</button>`}</div>`;
+  g.appendChild(m);if(side==='bot')m.appendChild(g._face);
+  if(opt.react)setReact(m,opt.react);
+  if(opt.sources)sources(g,opt.sources);
+  return m;
+}
+function sources(g,list){const s=document.createElement('div');s.className='sources';const shown=list.slice(0,4);
+  s.innerHTML=shown.map(t=>`<span class="src">${t}</span>`).join('')+(list.length>4?`<span class="src">+${list.length-4}</span>`:'');
+  g.appendChild(s)}
+function setReact(m,e){let r=m.querySelector('.react');if(!e){r&&r.remove();m.classList.remove('hasReact');return}
+  if(!r){r=document.createElement('span');r.className='react';m.appendChild(r)}r.textContent=e;m.classList.add('hasReact')}
+function stepsCard(g){const s=document.createElement('div');s.className='steps';s.innerHTML='<div class="sum"></div>';g.appendChild(s);s.appendChild(g._face);s.style.position='relative';
+  s.onclick=()=>{if(s.classList.contains('collapsed'))s.classList.remove('collapsed');else if(s.dataset.done)s.classList.add('collapsed')};return s}
+function addStep(card,html,running){const d=document.createElement('div');d.className='st';d.innerHTML=`<span class="ic">${running?'<span class="run"></span>':'✓'}</span><span>${html}</span>`;card.appendChild(d);return d}
+function doneStep(d){d.querySelector('.ic').textContent='✓'}
+
+/* seed conversation */
+divider('Новая тема · <b>Правила тем</b> · 14:02');
+msg('me','привет','14:02');
+msg('bot','<p>Привет! О чём спросишь?</p>','14:02');
+const q=msg('me',`что я решил про языки в темах? посмотри в ${N('Recto plan')}`,'14:03',{react:'👀'});
+{const g=group('bot');const c=stepsCard(g);
+ addStep(c,'<b>Открыл</b> → Recto plan');addStep(c,'<b>Ищу в заметках</b> → «topic language»');addStep(c,'<b>Нашёл</b> → 3 заметки');
+ c.dataset.done=1;c.classList.add('collapsed');c.querySelector('.sum').textContent='Просмотрел 3 заметки ▸';}
+msg('bot',`<p>В ${N('Recto plan')} ты решил так: все темы на одном языке, на том, где больше всего заметок. Если другой язык обгоняет его больше чем на 5 заметок, темы переименовываются целиком.</p><p>Названия не «съедаются», а пишутся на самом сильном языке.</p>`,'14:03',{react:'👍',sources:['Recto plan','2026-09-24 — v0.36.0','Topics']});
+msg('me','а порог в 50 заметок там же?','14:06');
+msg('bot','<p>Да, подсказка появляется только после 50 заметок. До этого темы выключены.</p>','14:06',{sources:['Recto plan']});
+
+/* hover tools + reactions */
+col.addEventListener('click',e=>{
+  const b=e.target.closest('.tools button');
+  if(e.target.closest('.emo button')){const em=e.target.closest('.emo button').textContent;const m=e.target.closest('.msg');
+    setReact(m,m.querySelector('.react')?.textContent===em?null:em);closeEmo();return}
+  if(!b)return;const m=b.closest('.msg');
+  if(b.dataset.a==='react'){closeEmo();const p=document.createElement('div');p.className='emo';
+    p.innerHTML=['👍','👎','❤️','😂','🤔','👀'].map(x=>`<button>${x}</button>`).join('');m.appendChild(p);m.querySelector('.tools').classList.add('keep')}
+  if(b.dataset.a==='copy'){b.innerHTML='✓';setTimeout(()=>b.innerHTML=ICON.copy,900)}
+});
+function closeEmo(){document.querySelectorAll('.emo').forEach(x=>x.remove());document.querySelectorAll('.tools.keep').forEach(x=>x.classList.remove('keep'))}
+document.addEventListener('click',e=>{if(!e.target.closest('.msg'))closeEmo()});
+
+/* composer */
+const ta=document.getElementById('ta'),send=document.getElementById('send'),cap=document.getElementById('cap');
+function fit(){ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,176)+'px';cap.classList.toggle('multi',ta.scrollHeight>44);send.disabled=!ta.value.trim()&&!busy}
+ta.addEventListener('input',fit);
+ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(ta.value.trim()&&!busy)ask(ta.value.trim())}});
+send.onclick=()=>{if(busy){stop=true;return}if(ta.value.trim())ask(ta.value.trim())};
+const menus={plusBtn:'plusMenu',chip:'modelMenu'};
+for(const [b,m] of Object.entries(menus)){document.getElementById(b).onclick=e=>{e.stopPropagation();const el=document.getElementById(m);const open=!el.classList.contains('open');document.querySelectorAll('.menu').forEach(x=>x.classList.remove('open'));el.classList.toggle('open',open)}}
+document.addEventListener('click',e=>{if(!e.target.closest('.menu'))document.querySelectorAll('.menu').forEach(x=>x.classList.remove('open'))});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.menu').forEach(x=>x.classList.remove('open'))});
+
+/* simulate */
+let busy=false,stop=false;
+const STOP='<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>';
+const UP=send.innerHTML;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const now=()=>new Date().toTimeString().slice(0,5);
+const bottom=()=>scroll.scrollTop=scroll.scrollHeight;
+async function ask(text){
+  busy=true;stop=false;ta.value='';fit();send.disabled=false;send.innerHTML=STOP;
+  const t=now();const mine=msg('me',text.replace(/\[\[(.+?)\]\]/g,(_,x)=>N(x)),t);bottom();
+  const status=document.getElementById('status');status.innerHTML='<span class="dot"></span>Recto ищет…';
+  await wait(450);setReact(mine,'🤔');
+  const g=group('bot');const f=g._fobj;setState(f,'riffle');setState(headFace,'riffle');
+  const c=stepsCard(g);bottom();
+  const steps=[['<b>Задачи</b> → прошлая неделя',700,'<b>Задачи</b> → 4 открыты с прошлой недели'],['<b>Ищу в заметках</b> → «refactor week»',800,'<b>Ищу в заметках</b> → «refactor week» · 3'],['<b>Недавнее</b> → с понедельника',650,'<b>Недавнее</b> → 9 заметок с понедельника']];
+  for(const [run,ms,done] of steps){if(stop)break;const d=addStep(c,run,true);bottom();await wait(ms);d.querySelector('span:last-child').innerHTML=done;doneStep(d)}
+  await wait(500);
+  setState(f,'found');setState(headFace,'found');
+  c.dataset.done=1;c.classList.add('collapsed');c.querySelector('.sum').textContent='Просмотрел 7 заметок ▸';
+  const m=msg('bot','<p></p>',now());const p=m.querySelector('p');
+  const ans='С прошлой недели висят 4 задачи: разнести app.css по фичам, тест на split-drag, тёмная палитра главной и подпись приложения. Сделано: find bar, плавающие окна заметок и ремонт снапшотов. Начать с app.css?';
+  status.innerHTML='<span class="dot"></span>Recto отвечает…';
+  for(let i=0;i<ans.length&&!stop;i+=3){p.innerHTML=ans.slice(0,i+3)+'<span class="caret"></span>';if(i%12===0)bottom();await wait(28)}
+  p.innerHTML=stop?p.innerHTML.replace('<span class="caret"></span>',' …'):ans;
+  sources(g,['Refactor week','2026-10-01 — v0.40.0','2026-10-02 — v0.41.1','Later','Recto log']);bottom();
+  setState(f,'idle');setState(headFace,'idle');
+  document.getElementById('sidePrev').textContent=ans;document.getElementById('sideTime').textContent=now();
+  status.innerHTML='<span class="dot"></span>qwen3.5:9b загружена · локально';
+  busy=false;send.innerHTML=UP;fit();
+}
+document.getElementById('sim').onclick=()=>{if(!busy)ask('что осталось недоделанным с прошлой недели?')};
+const tb=document.getElementById('theme');const isDark=()=>document.documentElement.dataset.theme?document.documentElement.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
+tb.textContent=isDark()?'Light':'Dark';
+tb.onclick=()=>{const dark=!isDark();document.documentElement.dataset.theme=dark?'dark':'light';tb.textContent=dark?'Light':'Dark'};
+const pal=document.getElementById('pal');function setPal(k){if(k==='paper')delete document.documentElement.dataset.pal;else document.documentElement.dataset.pal=k;pal.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.p===k))}
+pal.onclick=e=>{const b=e.target.closest('button');if(b)setPal(b.dataset.p)};setPal('neutral');
+setTimeout(bottom,50);
+</script>
+
+</body></html>

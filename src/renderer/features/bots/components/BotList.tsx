@@ -9,6 +9,7 @@ import { fuzzyMatch } from '../../../ui/fuzzy'
 import { RectoBot } from '../../recto-bot'
 import { topicPaths } from '../chat-topics-model'
 import { useBots } from '../hooks/use-bots'
+import { useUnread } from '../unread'
 import { previewOf, shortTime } from '../threads'
 import { MAIN_BOT } from './BotConversation'
 
@@ -76,6 +77,7 @@ function BotRow({
     }
   }, [newest?.path, newest?.mtime, bot.name, revision])
 
+  const unread = useUnread(bot.id)
   const preview = previewOf(last.messages)
   // When it was last written: the moment this row saw it change, when it did;
   // otherwise the file's own time (as on opening the app).
@@ -90,7 +92,10 @@ function BotRow({
           <span className="bot-row__name">{bot.name}</span>
           {at > 0 && last.messages.length > 0 && <span className="bot-row__time">{shortTime(at)}</span>}
         </span>
-        <span className="bot-row__preview">{preview === '' ? bot.specialty : preview}</span>
+        <span className="bot-row__bottom">
+          <span className="bot-row__preview">{preview === '' ? bot.specialty : preview}</span>
+          {unread && !active && <span className="bot-row__unread" aria-label="New answer" />}
+        </span>
       </span>
     </button>
   )

@@ -215,6 +215,15 @@ describe('tabs that outlive their notes', () => {
     expect(workspace.leaves().map((leaf) => leaf.type)).toEqual(['graph'])
   })
 
+  it('drops tabs of a view type that no longer exists', () => {
+    const workspace = new Workspace()
+    workspace.openView('settings')
+    workspace.openView('bot', { bot: 'recto' })
+    expect(workspace.pruneUnknown((type) => type !== 'settings')).toBe(1)
+    expect(workspace.leaves().map((leaf) => leaf.type)).toEqual(['bot'])
+    expect(workspace.activeLeaf?.type).toBe('bot')
+  })
+
   it('clears every tab at once', () => {
     const workspace = withNotes(['a.md', 'b.md', 'c.md'])
     workspace.closeAll()

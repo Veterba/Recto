@@ -9,5 +9,6 @@ test/fixtures/
 resources/
 # Prose is written by hand
 *.md
-# The approved bot prototype, kept exactly as it was handed over.
+# The approved prototypes, kept exactly as they were handed over.
 docs/design/recto-bot-reference.html
+docs/design/recto-chat-reference.html

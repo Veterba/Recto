@@ -35,6 +35,7 @@ export function useBots(): Bot[] | null {
 
 /** How often to look again while the model is not available: starting Ollama should be noticed without a click. */
 const RECHECK_MS = 5000
+const LOADING_RECHECK_MS = 1000
 
 /**
  * Whether a bot's model can run right now. Checked on mount, when the window
@@ -57,7 +58,9 @@ export function useBotStatus(model: string | undefined): { status: BotModelStatu
   useEffect(() => {
     const again = (): void => setTick((t) => t + 1)
     window.addEventListener('focus', again)
-    const timer = status !== null && status.state !== 'ready' ? window.setInterval(again, RECHECK_MS) : 0
+    // A model being loaded is done in seconds: Send should come on when it is.
+    const every = status?.state === 'loading' ? LOADING_RECHECK_MS : RECHECK_MS
+    const timer = status !== null && status.state !== 'ready' ? window.setInterval(again, every) : 0
     return () => {
       window.removeEventListener('focus', again)
       window.clearInterval(timer)
@@ -74,6 +77,8 @@ export function describeStatus(status: BotModelStatus): { label: string; fix: st
       return { label: 'Ollama running · model ready', fix: null, command: null }
     case 'not-running':
       return { label: 'Ollama not running', fix: 'Open the Ollama app, or run this in a terminal:', command: 'ollama serve' }
+    case 'loading':
+      return { label: `Loading ${status.model}…`, fix: null, command: null }
     case 'no-key':
       return { label: 'No API key', fix: 'Add your Anthropic key in Settings → AI, or pick the local model.', command: null }
     case 'no-model':

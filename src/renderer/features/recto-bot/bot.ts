@@ -26,10 +26,25 @@ import {
   type Random,
 } from './behaviours'
 import { SMALL_PX, clamp, lidPolygon, projectEye } from './face'
+
 import { RECTO, type BotLook, type BotPersonality } from './presets'
 
 export type BotMode = 'auto' | 'forced'
-export type BotState = 'idle' | 'listening' | 'thinking' | 'answering' | 'error'
+/**
+ * What the app needs the bot to show. `riffle`: working on an answer (sheets
+ * riffling out from behind the page, eyes darting). `found`: the first token
+ * arrived - a beat of wide eyes and a hop, then answering.
+ */
+export type BotState = 'idle' | 'listening' | 'thinking' | 'riffle' | 'found' | 'answering' | 'error'
+
+/** The riffle: how far each sheet fans out (degrees, its base varies per cycle), and one cycle's length. */
+const FAN_DEG = [10, 14] as const
+const RIFFLE_CYCLE_S = 0.9
+/** The found beat: how long the eyes stay wide, and the hop, in real pixels whatever the bot's size. */
+const FOUND_S = 0.3
+const FOUND_HOP_PX = 2.5
+/** The bob while riffling, at most this many pixels. */
+const BOB_PX = 2
 
 /** How long an error keeps the bot squinting before it goes back to its own business. */
 export const ERROR_MS = 2000
@@ -65,6 +80,11 @@ const springs = () => ({
   lower: new Spring(0, 160, 18),
   slant: new Spring(0, 120, 14),
   wide: new Spring(1, 200, 16),
+  // The riffle's sheets: how far out (0 hidden behind the page, 1 fanned) and
+  // each one's angle. Out is near-critically damped: back in about 220 ms.
+  sheetOut: new Spring(0, 260, 30),
+  sheetA: new Spring(0, 280, 20),
+  sheetB: new Spring(0, 280, 20),
 })
 
 /** What the bot sees this frame. Distances are px from the bot's centre. */
@@ -77,9 +97,14 @@ export type BotInput = {
 
 export type EyeFrame = { rect: { x: number; y: number; width: number; height: number; rx: number }; clip: string }
 
+/** One riffle sheet: its angle in degrees, and how far out from behind the page (0..1). */
+export type SheetFrame = { angle: number; out: number }
+
 export type Frame = {
   /** px, ≤ 0: up. */
   hop: number
+  /** The two sheets behind the page; both at rest (0, 0) unless the bot riffles. */
+  sheets: [SheetFrame, SheetFrame]
   rotateX: number
   rotateY: number
   scaleX: number
@@ -133,6 +158,8 @@ export function createBot(options: BotOptions): Bot {
   let state: BotState = 'idle'
   let stateAt = options.now
   let stateMemo: Record<string, unknown> = {}
+  /** The state before the current one: an error after a riffle waits for the sheets to go back. */
+  let previous: BotState = 'idle'
 
   const begin = (next: ActiveBehaviour, now: number, ms: number): void => {
     behaviour = next
@@ -156,9 +183,34 @@ export function createBot(options: BotOptions): Bot {
         return { ...faceFor('watch', { ...context, cursor: focus }), upper: 0.1 }
       case 'thinking':
         return { ...faceFor('daydream', context), upper: 0.25 }
+      case 'riffle': {
+        // Quick darts - left, right, down - each held 120-250 ms, lids a little low.
+        const until = (stateMemo['dartUntil'] as number | undefined) ?? 0
+        if (now >= until) {
+          const darts: Point[] = [
+            { x: -0.75, y: 0.1 },
+            { x: 0.75, y: 0.1 },
+            { x: rnd(random, -0.3, 0.3), y: 0.65 },
+          ]
+          // Never the same dart twice running: a dart that does not move is a stare.
+          let index = Math.floor(random() * darts.length)
+          if (index === stateMemo['dartIndex']) index = (index + 1) % darts.length
+          stateMemo['dartIndex'] = index
+          stateMemo['dart'] = darts[index]
+          stateMemo['dartUntil'] = now + rnd(random, 120, 250)
+        }
+        return { target: stateMemo['dart'] as Point, upper: 0.15, lower: 0, slant: 0, wide: 1, squash: 1, hop: false }
+      }
+      case 'found':
+        // The beat: wide eyes and a hop, then reading as it answers.
+        if (pt < FOUND_S) return { target: { x: 0, y: -0.15 }, upper: 0, lower: 0, slant: 0, wide: 1.2, squash: 1, hop: false }
+        return faceFor('scan', context)
       case 'answering':
         return faceFor('scan', context)
       case 'error':
+        // After a riffle the sheets go back first, then the squint.
+        if (previous === 'riffle' && pt < 0.22)
+          return { target: { x: 0, y: 0 }, upper: 0, lower: 0, slant: 0, wide: 1, squash: 1, hop: false }
         return now - stateAt < ERROR_MS ? faceFor('squint', context) : null
       default:
         return null
@@ -211,6 +263,38 @@ export function createBot(options: BotOptions): Bot {
     S.wide.target = face.wide
     S.squash.target = face.squash
     S.hop.target = 0
+
+    // The riffle's sheets: out and fanned while the bot works, flicking one
+    // after the other; back behind the page otherwise.
+    const riffling = state === 'riffle'
+    S.sheetOut.target = riffling ? 1 : 0
+    if (riffling) {
+      const cycleStart = (stateMemo['cycleStart'] as number | undefined) ?? now
+      let cycle = (stateMemo['cycle'] as { length: number; a: number; b: number } | undefined) ?? null
+      if (cycle === null || now - cycleStart >= cycle.length * 1000) {
+        cycle = {
+          length: RIFFLE_CYCLE_S * rnd(random, 0.85, 1.15),
+          a: rnd(random, FAN_DEG[0], FAN_DEG[1]),
+          b: rnd(random, FAN_DEG[0], FAN_DEG[1]),
+        }
+        stateMemo['cycle'] = cycle
+        stateMemo['cycleStart'] = now
+      }
+      const p = (now - ((stateMemo['cycleStart'] as number | undefined) ?? now)) / (cycle.length * 1000)
+      // Each sheet flicks in towards the page and springs back out, the second just after the first.
+      S.sheetA.target = p > 0.1 && p < 0.32 ? -cycle.a * 0.3 : -cycle.a
+      S.sheetB.target = p > 0.42 && p < 0.64 ? cycle.b * 0.3 : cycle.b
+    } else {
+      S.sheetA.target = 0
+      S.sheetB.target = 0
+    }
+    if (reducedMotion) {
+      // A still frame: fanned and holding, or put away - no flicks.
+      S.sheetOut.value = S.sheetOut.target
+      S.sheetA.value = riffling ? -12 : 0
+      S.sheetB.value = riffling ? 12 : 0
+    }
+
     for (const spring of Object.values(S)) spring.step(dt)
 
     if (options.blinks !== false && now > nextBlink) {
@@ -227,8 +311,13 @@ export function createBot(options: BotOptions): Bot {
       const shape = projectEye({ side, gx: S.gx.value, gy: S.gy.value, wide: S.wide.value, blink, small, eyes: look.eyes })
       return { rect: shape.rect, clip: lidPolygon(shape, side, lids) }
     }
+    const bob = riffling && !reducedMotion ? -Math.abs(Math.sin(t * Math.PI * 2.2)) * BOB_PX : 0
     return {
-      hop: (Math.min(0, S.hop.value) * size) / 120,
+      hop: (Math.min(0, S.hop.value) * size) / 120 + bob,
+      sheets: [
+        { angle: S.sheetA.value, out: S.sheetOut.value },
+        { angle: S.sheetB.value, out: S.sheetOut.value },
+      ],
       rotateX: S.rx.value,
       rotateY: S.ry.value,
       scaleX: 2 - squash,
@@ -241,9 +330,16 @@ export function createBot(options: BotOptions): Bot {
     step,
     setState(next, now) {
       if (next === state) return
-      state = next
+      // With reduced motion there is no beat: found is answering at once.
+      const target = reducedMotion && next === 'found' ? 'answering' : next
+      previous = state
+      state = target
       stateAt = now
       stateMemo = {}
+      if (target === 'found') {
+        // The hop, sized in pixels: the spring's impulse for a peak of about 2.5 px at this size.
+        S.hop.velocity -= ((FOUND_HOP_PX * 120) / size) * 29
+      }
     },
     click(now) {
       clickAt = now
@@ -270,12 +366,15 @@ export function stillFrame({
   size,
   random,
   look,
+  script,
 }: {
   behaviour: BehaviourId | 'rest'
   ms: number
   size: number
   random: Random
   look?: BotLook
+  /** App states to enter on the way, each at its moment: riffle, then found. */
+  script?: readonly (readonly [at: number, state: BotState])[]
 }): Frame {
   const rest = behaviour === 'rest'
   const bot = createBot({
@@ -283,12 +382,17 @@ export function stillFrame({
     ...(look === undefined ? {} : { look }),
     mode: 'forced',
     ...(rest ? {} : { behaviour }),
-    reducedMotion: rest,
+    // At rest the face holds still - unless it is acting out a script.
+    reducedMotion: rest && script === undefined,
     random,
     now: 0,
     blinks: false,
   })
+  const queue = [...(script ?? [])]
   let frame = bot.step(0, NO_INPUT)
-  for (let now = 1000 / 60; now <= ms; now += 1000 / 60) frame = bot.step(now, NO_INPUT)
+  for (let now = 1000 / 60; now <= ms; now += 1000 / 60) {
+    while (queue.length > 0 && queue[0]![0] <= now) bot.setState(queue.shift()![1], now)
+    frame = bot.step(now, NO_INPUT)
+  }
   return frame
 }

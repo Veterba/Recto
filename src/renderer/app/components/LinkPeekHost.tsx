@@ -5,13 +5,11 @@ import { closeLinkPeek, holdLinkPeek, linkPeekSnapshot, releaseLinkPeek, setLink
 /** The card for the link under the pointer (see link-peek.ts), put away by anything you do. */
 export function LinkPeekHost({
   delayMs,
-  model,
   mtimeOf,
   onOpen,
   onPin,
 }: {
   delayMs: number
-  model: string
   /** When the note was last written, for the card's "edited" line. */
   mtimeOf: (path: string) => number | undefined
   onOpen: (path: string) => void
@@ -39,7 +37,6 @@ export function LinkPeekHost({
       path={peek.path}
       anchor={peek.anchor}
       mtime={mtimeOf(peek.path)}
-      model={model}
       onOpen={(path) => {
         closeLinkPeek()
         onOpen(path)

@@ -217,6 +217,17 @@ export class Workspace extends Events<WorkspaceEvents> {
     return gone.length
   }
 
+  /**
+   * Drop tabs whose view type no longer exists - a Settings tab from before
+   * Settings was a window, say. A restored layout would otherwise keep a dead
+   * "Unknown" tab forever. Returns how many went.
+   */
+  pruneUnknown(known: (type: string) => boolean): number {
+    const gone = this.leaves().filter((leaf) => !known(leaf.type))
+    for (const leaf of gone) this.closeLeaf(leaf.id)
+    return gone.length
+  }
+
   /** Every tabs group in the tree. */
   allTabs(node: WorkspaceNode = this.root): TabsNode[] {
     if (node.kind === 'tabs') return [node]

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api'
-import { isAiModel, type AiModelId } from '@shared/ai'
 import { IPC, IPC_EVENT, type VibrancyMaterial } from '@shared/ipc'
 import { coerceSidebarTheme, NO_THEME, type SidebarTheme } from './sidebar-theme'
 import { grainLevels, tintCss } from '../ui/tint'
@@ -61,14 +60,6 @@ export type Appearance = {
    */
   sidebarTheme: SidebarTheme
   /**
-   * Which model new messages go to.
-   *
-   * Here rather than per conversation because it is a preference, not a
-   * property of a chat - though a conversation records the model it was last
-   * answered by, so reopening an old one picks its model back up.
-   */
-  aiModel: AiModelId
-  /**
    * macOS vibrancy: the desktop, blurred, through the sidebar.
    *
    * One switch and nothing else. It used to carry a transparency slider and a
@@ -107,7 +98,6 @@ const DEFAULT_APPEARANCE: Appearance = {
   sidebarContrast: 70,
   previewDelay: 2,
   sidebarTheme: NO_THEME,
-  aiModel: 'claude-sonnet-5',
   translucent: true,
 }
 
@@ -291,7 +281,6 @@ function coerce(value: unknown): Appearance {
       typeof v.previewDelay === 'number' && Number.isFinite(v.previewDelay)
         ? Math.min(PREVIEW_DELAY_MAX, Math.max(PREVIEW_DELAY_MIN, v.previewDelay))
         : DEFAULT_APPEARANCE.previewDelay,
-    aiModel: isAiModel(v.aiModel) ? v.aiModel : DEFAULT_APPEARANCE.aiModel,
     translucent: typeof v.translucent === 'boolean' ? v.translucent : DEFAULT_APPEARANCE.translucent,
     editorFont:
       v.editorFont === 'mono' || v.editorFont === 'sans' || v.editorFont === 'serif' ? v.editorFont : DEFAULT_APPEARANCE.editorFont,

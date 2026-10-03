@@ -9,6 +9,7 @@ import {
   type BotModelStatus,
   type BotSettings,
   type BotSource,
+  type ModelChoice,
 } from '../../shared/bots'
 import { IPC_EVENT, type IpcEvents } from '../../shared/ipc'
 import { botsMock } from '../config'
@@ -20,7 +21,18 @@ import * as vaultFs from '../vault-fs'
 import { buildSystem, estimateTokens, fitHistory, queryTerms, rankNotes, selectChunks, splitSections } from './context'
 import { cleanTitle } from '../../shared/chat-topics'
 import { listBots, writeBotModel } from './definitions'
-import { AnthropicProvider, CONTEXT_TOKENS, MockProvider, OllamaProvider, isApiModel, type BotModelProvider } from './provider'
+import {
+  AnthropicProvider,
+  CONTEXT_TOKENS,
+  MockProvider,
+  OllamaProvider,
+  isApiModel,
+  type BotModelProvider,
+  type LocalModels,
+} from './provider'
+import { localChoices } from './models/catalog'
+import { switchPlan } from './models/switch'
+import os from 'node:os'
 import { readKey } from '../secrets'
 
 /**
@@ -29,7 +41,7 @@ import { readKey } from '../secrets'
  * search, the prompt and the connection to the model all happen here.
  */
 
-const local: BotModelProvider = botsMock() ? new MockProvider() : new OllamaProvider()
+const local: BotModelProvider & LocalModels = botsMock() ? new MockProvider() : new OllamaProvider()
 const api: BotModelProvider = botsMock() ? new MockProvider() : new AnthropicProvider(readKey)
 
 /** The model's provider: an Anthropic model when it is one of the API models, otherwise Ollama on this Mac. */
@@ -72,10 +84,72 @@ export async function status(model?: string): Promise<BotModelStatus> {
 }
 
 /** A bot's model, changed from its chat: an API model id, an Ollama model, or null for the local default. */
+/**
+ * A bot's model, changed from its chat. On this Mac only one local model fits
+ * in memory at a time, so the one it used is unloaded and the new one loaded
+ * straight away - the chat shows "Loading…" until it is in, then Send is on.
+ */
 export function setModel(botId: string, model: string | null): Bot[] {
   const vault = currentVault()
-  if (vault !== null) writeBotModel(vault.path, botId, model)
+  if (vault === null) return []
+  const before = modelOf(list().find((b) => b.id === botId))
+  writeBotModel(vault.path, botId, model)
+  const after = modelOf(list().find((b) => b.id === botId))
+  const plan = switchPlan(before, after)
+  void (async () => {
+    if (plan.unload !== null) await local.unload(plan.unload)
+    if (plan.preload !== null) await local.preload(plan.preload)
+  })()
   return list()
+}
+
+/** The picker's local models: installed ones that can chat, then the recommended ones to download. */
+export async function models(): Promise<{ local: ModelChoice[]; running: boolean; ramBytes: number }> {
+  const installed = await local.installed()
+  // The snapshot run pretends to be the 16 GB Mac the hints are written for.
+  const ramBytes = botsMock() ? 16 * 2 ** 30 : os.totalmem()
+  return { local: localChoices(installed ?? [], ramBytes), running: installed !== null, ramBytes }
+}
+
+/** The download running now, if any: one at a time, and it can be stopped. */
+let pulling: { name: string; controller: AbortController } | null = null
+
+/**
+ * Download a model through Ollama - only ever because the user picked it and
+ * confirmed. Progress, the end and any failure arrive on `bots:pull-progress`.
+ */
+export function pull(name: string): { ok: boolean; error?: string } {
+  if (pulling !== null) return { ok: false, error: `Already downloading ${pulling.name}.` }
+  const controller = new AbortController()
+  pulling = { name, controller }
+  void (async () => {
+    try {
+      await local.pull(name, (progress) => pushPull({ ...progress, done: false }), controller.signal)
+      pushPull({ name, status: 'success', completed: 1, total: 1, done: true })
+    } catch (err) {
+      pushPull({
+        name,
+        status: controller.signal.aborted ? 'cancelled' : 'error',
+        completed: 0,
+        total: 0,
+        done: true,
+        ...(controller.signal.aborted ? {} : { error: err instanceof Error ? err.message : String(err) }),
+      })
+    } finally {
+      pulling = null
+    }
+  })()
+  return { ok: true }
+}
+
+export function cancelPull(): { ok: boolean } {
+  pulling?.controller.abort()
+  return { ok: pulling !== null }
+}
+
+function pushPull(progress: Parameters<IpcEvents[typeof IPC_EVENT.botsPullProgress]>[0]): void {
+  const window = BrowserWindow.getAllWindows()[0]
+  if (window !== undefined && !window.isDestroyed()) sendEvent(window, IPC_EVENT.botsPullProgress, progress)
 }
 
 /**

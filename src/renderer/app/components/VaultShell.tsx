@@ -437,7 +437,6 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
                 onCreateIn={(parent, kind) => void createAt(parent, kind)}
                 vaultPath={vault.path}
                 templateFolder={templates.settings.folder}
-                aiModel={appearance.aiModel}
                 previewDelayMs={appearance.previewDelay * 1000}
                 onPinNote={pinNote}
               />
@@ -513,7 +512,6 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       <QuickSwitcher open={switcherOpen} roots={tree.roots} onClose={() => setSwitcherOpen(false)} onOpen={openFile} />
       <LinkPeekHost
         delayMs={appearance.previewDelay * 1000}
-        model={appearance.aiModel}
         mtimeOf={(path) => tree.byPath.get(path)?.mtime}
         onOpen={(path) => openFile(path)}
         onPin={pinNote}

@@ -1,4 +1,4 @@
-import type { BotMessage, BotSource } from './bots'
+import type { BotMessage, BotSource, MessageMeta } from './bots'
 import { frontmatterClose } from './frontmatter'
 import { CODE_FENCE } from './parse'
 
@@ -22,12 +22,14 @@ import { CODE_FENCE } from './parse'
  *
  *   Compost, loam and grit.
  *
- *   <!-- recto:sources [...] -->
+ *   <!-- recto:meta {"at":"2026-10-02T15:30:12","model":"qwen3.5:9b","sources":[...]} -->
  *
  * The title lives in the frontmatter and the file name, nowhere else. The body
  * is kept as the text it is: a new turn is appended to it, never rewritten, so
  * an old conversation stays byte for byte what it was - including one migrated
- * from the main chat, whose turns say `## Claude`.
+ * from the main chat, whose turns say `## Claude`. What is known about a
+ * message besides its text is one HTML comment after it (older files have a
+ * `recto:sources` comment instead, still read).
  *
  * Shared because main writes topics (the migration) and the renderer reads and
  * appends to them.
@@ -35,7 +37,11 @@ import { CODE_FENCE } from './parse'
 
 export type ChatTopicMeta = { bot: string; created: string; title: string }
 
-/** A turn as read back: its role, its text, what the bot read for it, and the heading it was written under. */
+/**
+ * A turn as read back: its role, its text, its meta, the heading it was written
+ * under, and where it sits in the body (`[start, end)`), so it can be rewritten
+ * alone.
+ */
 export type TopicMessage = BotMessage & { label?: string }
 
 export type ParsedTopic = {
@@ -47,25 +53,65 @@ export type ParsedTopic = {
   messages: TopicMessage[]
 }
 
-const SOURCES = /\n*<!-- recto:sources (.*) -->\s*$/
+/** The comment after a message, either kind: `recto:meta {...}`, or the older `recto:sources [...]`. */
+const TRAILER = /\n*<!-- recto:(meta|sources) (.*) -->\s*$/
 
-/** Sources as a comment: JSON, with `--` escaped so it cannot close the comment early. */
-export const sourcesComment = (sources: readonly BotSource[]): string =>
-  `<!-- recto:sources ${JSON.stringify(sources).replace(/--/g, '-\\u002d')} -->`
+/** JSON inside an HTML comment, with `--` escaped so it cannot close the comment early. */
+const commentJson = (value: unknown): string => JSON.stringify(value).replace(/--/g, '-\\u002d')
 
-function sourcesFrom(json: string): BotSource[] {
-  try {
-    const parsed = JSON.parse(json) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .filter(
-        (s): s is { path: string; heading?: unknown } =>
-          typeof s === 'object' && s !== null && typeof (s as { path?: unknown }).path === 'string',
-      )
-      .map((s) => ({ path: s.path, heading: typeof s.heading === 'string' ? s.heading : null }))
-  } catch {
-    return []
+const META_FIELDS = ['at', 'model', 'sources', 'steps', 'ttftMs', 'totalMs'] as const
+
+/** A message's meta as its comment; empty when there is nothing to say. */
+export function metaComment(message: MessageMeta): string {
+  const meta: Record<string, unknown> = {}
+  for (const key of META_FIELDS) {
+    const value = message[key]
+    if (value === undefined || (Array.isArray(value) && value.length === 0)) continue
+    meta[key] = value
   }
+  return Object.keys(meta).length === 0 ? '' : `<!-- recto:meta ${commentJson(meta)} -->`
+}
+
+/** What a comment holds, whichever kind it is. Anything malformed is dropped, never thrown. */
+export function metaFrom(kind: string, json: string): MessageMeta {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(json)
+  } catch {
+    return {}
+  }
+  if (kind === 'sources') return Array.isArray(parsed) ? { sources: sourcesFrom(parsed) } : {}
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {}
+  const raw = parsed as Record<string, unknown>
+  const meta: MessageMeta = {}
+  const text = (key: 'at' | 'model'): void => {
+    if (typeof raw[key] === 'string') meta[key] = raw[key]
+  }
+  text('at')
+  text('model')
+  if (typeof raw['ttftMs'] === 'number') meta.ttftMs = raw['ttftMs']
+  if (typeof raw['totalMs'] === 'number') meta.totalMs = raw['totalMs']
+  if (Array.isArray(raw['sources'])) meta.sources = sourcesFrom(raw['sources'])
+  if (Array.isArray(raw['steps'])) {
+    meta.steps = raw['steps']
+      .filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)
+      .filter((s) => typeof s['action'] === 'string' && typeof s['result'] === 'string')
+      .map((s) => ({
+        action: s['action'] as string,
+        result: s['result'] as string,
+        state: s['state'] === 'failed' ? 'failed' : s['state'] === 'running' ? 'running' : 'done',
+      }))
+  }
+  return meta
+}
+
+function sourcesFrom(parsed: unknown[]): BotSource[] {
+  return parsed
+    .filter(
+      (s): s is { path: string; heading?: unknown } =>
+        typeof s === 'object' && s !== null && typeof (s as { path?: unknown }).path === 'string',
+    )
+    .map((s) => ({ path: s.path, heading: typeof s.heading === 'string' ? s.heading : null }))
 }
 
 const META_KEYS = ['bot', 'created', 'title'] as const
@@ -100,17 +146,17 @@ export function parseTopic(text: string, assistants: readonly string[]): ParsedT
   const flush = (): void => {
     if (current === null) return
     let content = current.lines.join('\n').trim()
-    let sources: BotSource[] | undefined
-    const match = current.role === 'assistant' ? SOURCES.exec(content) : null
+    let trailer: MessageMeta = {}
+    const match = TRAILER.exec(content)
     if (match !== null) {
-      sources = sourcesFrom(match[1]!)
+      trailer = metaFrom(match[1]!, match[2]!)
       content = content.slice(0, match.index).trimEnd()
     }
     if (content !== '') {
       messages.push({
         role: current.role,
         content,
-        ...(sources === undefined ? {} : { sources }),
+        ...trailer,
         ...(current.role === 'assistant' ? { label: current.label } : {}),
       })
     }
@@ -121,9 +167,9 @@ export function parseTopic(text: string, assistants: readonly string[]): ParsedT
     if (role !== undefined) {
       flush()
       current = { role, label: line.trim().slice(3), lines: [] }
-      continue
+    } else {
+      current?.lines.push(line)
     }
-    current?.lines.push(line)
   }
   flush()
   return { meta, extra, body, messages }
@@ -144,14 +190,11 @@ export function topicFile(meta: ChatTopicMeta, extra: readonly string[], body: s
   return `${frontmatterOf(meta, extra)}\n${rest === '' ? '' : rest.endsWith('\n') ? rest : `${rest}\n`}`
 }
 
-/** One turn as text, to append to a body. */
-export function turnText(message: BotMessage, botName: string): string {
-  const heading = message.role === 'user' ? '## You' : `## ${botName}`
-  const sources =
-    message.role === 'assistant' && message.sources !== undefined && message.sources.length > 0
-      ? `\n\n${sourcesComment(message.sources)}`
-      : ''
-  return `${heading}\n\n${message.content.trim()}${sources}\n`
+/** One turn as text: its heading, its text, and its meta comment if it has any. `label` overrides the heading's name. */
+export function turnText(message: BotMessage & { label?: string }, botName: string): string {
+  const heading = message.role === 'user' ? '## You' : `## ${message.label ?? botName}`
+  const comment = metaComment(message)
+  return `${heading}\n\n${message.content.trim()}${comment === '' ? '' : `\n\n${comment}`}\n`
 }
 
 /** A body with turns added at the end; what was there is left untouched. */
@@ -161,10 +204,15 @@ export function appendTurns(body: string, turns: readonly BotMessage[], botName:
   return base === '' ? added : `${base}\n\n${added}`
 }
 
-/** `2026-10-02T15:30` - minutes are enough, and it sorts as text. */
-export function createdStamp(date: Date): string {
+/**
+ * `2026-10-02T15:30:12`: local time, to the second, so topics begun in the
+ * same minute still sort (file names only go to the minute). `withSeconds:
+ * false` gives the minute alone, for names and for older topics.
+ */
+export function createdStamp(date: Date, withSeconds = true): string {
   const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const minute = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  return withSeconds ? `${minute}:${pad(date.getSeconds())}` : minute
 }
 
 /** A title made safe as part of a file name: no path separators or characters macOS and Windows refuse. */

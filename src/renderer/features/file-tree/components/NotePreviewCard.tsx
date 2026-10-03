@@ -1,3 +1,4 @@
+import { UTILITY_MODEL } from '@shared/ai'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../../../app/api'
@@ -24,7 +25,6 @@ type Props = {
   /** The hovered row's rectangle, in viewport coordinates. */
   anchor: { top: number; right: number; bottom: number }
   mtime: number | undefined
-  model: string
   onOpen: (path: string) => void
   /** Pin the note as a floating window, where the card is now. */
   onPin?: (path: string, rect: DOMRect) => void
@@ -37,7 +37,7 @@ const GAP = 10
 /** Enough for a gist, and a bound on what one click sends to the API. */
 const SUMMARY_INPUT_CHARS = 24_000
 
-export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPin, onPointerEnter, onPointerLeave }: Props): React.ReactElement {
+export function NotePreviewCard({ path, anchor, mtime, onOpen, onPin, onPointerEnter, onPointerLeave }: Props): React.ReactElement {
   const card = useRef<HTMLDivElement | null>(null)
   const [text, setText] = useState<string | null>(null)
   const [preview, setPreview] = useState<NotePreview | null>(null)
@@ -113,7 +113,7 @@ export function NotePreviewCard({ path, anchor, mtime, model, onOpen, onPin, onP
     void api
       .invoke(IPC.aiSend, {
         id: streamId,
-        model,
+        model: UTILITY_MODEL,
         system:
           "Summarise the user's note in two or three plain sentences: what it is about and what matters in it. " +
           'No preamble, no bullet points, no markdown.',

@@ -34,6 +34,17 @@
   fill: var(--ink);
 }
 
+/* The riffle's sheets: the page's ink, fainter, behind it. */
+.recto-bot__sheet {
+  fill: var(--ink);
+}
+.recto-bot__sheet--near {
+  opacity: 0.55;
+}
+.recto-bot__sheet--far {
+  opacity: 0.35;
+}
+
 .recto-bot__corner {
   fill: var(--on-ink);
   opacity: 0.2;

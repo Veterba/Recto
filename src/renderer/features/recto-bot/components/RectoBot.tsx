@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { createBot, stillFrame, type Bot, type BotMode, type BotState, type EyeFrame, type Frame } from '../bot'
+import { createBot, stillFrame, type Bot, type BotMode, type BotState, type EyeFrame, type Frame, type SheetFrame } from '../bot'
 import type { ActiveBehaviour, BehaviourId } from '../behaviours'
 import { CORNER_PATH, LINE_PATHS, PAGE_PATH, SMALL_PX } from '../face'
 import { join } from '../loop'
@@ -18,10 +18,11 @@ import { RECTO, type BotLook, type BotPersonality } from '../presets'
  */
 
 /** Layer depths, in the SVG's 120-unit space (scaled to the bot's size). */
-const DEPTH = { page: 0, lines: 2, eyes: 6 } as const
+const DEPTH = { sheets: -3, page: 0, lines: 2, eyes: 6 } as const
 
 type Nodes = {
   rig: HTMLDivElement | null
+  sheets: (SVGPathElement | null)[]
   balls: (SVGRectElement | null)[]
   clips: (SVGPolygonElement | null)[]
 }
@@ -37,8 +38,17 @@ const ballAttrs = (eye: EyeFrame): Record<'x' | 'y' | 'width' | 'height' | 'rx',
   rx: eye.rect.rx.toFixed(2),
 })
 
+/**
+ * A riffle sheet: the page's shape, a little smaller, turned about the page's
+ * bottom centre and lifted as it comes out - so its corners peek out at the
+ * sides. At rest it is hidden behind the page.
+ */
+const sheetTransform = (sheet: SheetFrame): string =>
+  `translate(0 ${(-3 * sheet.out).toFixed(2)}) rotate(${(sheet.angle * sheet.out).toFixed(2)} 0 34) scale(0.94)`
+
 function apply(nodes: Nodes, frame: Frame): void {
   if (nodes.rig !== null) nodes.rig.style.transform = rigTransform(frame)
+  frame.sheets.forEach((sheet, i) => nodes.sheets[i]?.setAttribute('transform', sheetTransform(sheet)))
   frame.eyes.forEach((eye, i) => {
     const ball = nodes.balls[i]
     if (ball) for (const [name, value] of Object.entries(ballAttrs(eye))) ball.setAttribute(name, value)
@@ -65,6 +75,21 @@ export function BotFigure({ size, frame, nodes }: { size: number; frame: Frame; 
         if (nodes) nodes.current.rig = el
       }}
     >
+      {layer(
+        DEPTH.sheets,
+        // The fainter one behind, so the darker one is the nearer sheet.
+        [1, 0].map((i) => (
+          <path
+            key={i}
+            className={`recto-bot__sheet recto-bot__sheet--${i === 0 ? 'near' : 'far'}`}
+            d={PAGE_PATH}
+            transform={sheetTransform(frame.sheets[i]!)}
+            ref={(el) => {
+              if (nodes) nodes.current.sheets[i] = el
+            }}
+          />
+        )),
+      )}
       {layer(
         DEPTH.page,
         <>
@@ -138,7 +163,7 @@ export function RectoBot({
   className,
 }: RectoBotProps): React.ReactElement {
   const host = useRef<HTMLDivElement | null>(null)
-  const nodes = useRef<Nodes>({ rig: null, balls: [], clips: [] })
+  const nodes = useRef<Nodes>({ rig: null, sheets: [], balls: [], clips: [] })
   const bot = useRef<Bot | null>(null)
   const live = useRef({ state, onBehaviour })
   live.current = { state, onBehaviour }

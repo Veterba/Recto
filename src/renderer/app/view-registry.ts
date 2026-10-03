@@ -3,8 +3,8 @@ import type { Component } from './component'
 /**
  * View types are looked up by string id, never imported directly by the
  * workspace. That is what makes `workspace.json` survive a view type that no
- * longer exists: the leaf deserialises, the lookup misses, and we render a
- * placeholder instead of throwing away the user's layout.
+ * longer exists: on restore, its tabs are dropped and the rest of the layout
+ * is kept (`Workspace.pruneUnknown`).
  */
 
 type ViewProps = {

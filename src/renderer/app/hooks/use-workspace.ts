@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { DEFAULT_SECTION, isSectionId, SECTIONS, type SectionId } from '../sections'
 import { clampGeometry, type WindowGeometry } from '../components/FloatingWindow'
+import { getView } from '../view-registry'
 import { Workspace, type WorkspaceLayout } from '../workspace'
 import { parseNoteWindows, serializeNoteWindows, type NoteWindowState } from '../note-windows'
 import { IPC } from '@shared/ipc'
@@ -117,6 +118,8 @@ export function useWorkspace(): WorkspaceApi {
       if (cancelled) return
       const { layouts, active, graphWindow: win, historyWindow: hist, noteWindows: notes } = parse(saved)
       const built = Object.fromEntries(SECTIONS.map((section) => [section.id, new Workspace(layouts[section.id])])) as Sections
+      // Every view registers on the shell's first render, before this read returns.
+      for (const section of SECTIONS) built[section.id].pruneUnknown((type) => getView(type) !== undefined)
       setSections(built)
       setActive(active)
       setWindow(win)

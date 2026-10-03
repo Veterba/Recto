@@ -8,7 +8,7 @@
 
 import type { AiDelta, AiDone, AiError, AiMessage } from './ai'
 import type { ArchiveState } from './archive'
-import type { Bot, BotModelStatus, BotSettings, BotSource } from './bots'
+import type { Bot, BotModelStatus, BotSettings, BotSource, ModelChoice, PullProgress } from './bots'
 import type {
   BacklinkResult,
   BoardCardInfo,
@@ -125,6 +125,9 @@ export const IPC = {
   botsCancel: 'bots:cancel',
   botsSetModel: 'bots:set-model',
   botsTitle: 'bots:title',
+  botsModels: 'bots:models',
+  botsPull: 'bots:pull',
+  botsPullCancel: 'bots:pull-cancel',
 } as const
 
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
@@ -140,6 +143,7 @@ export const IPC_EVENT = {
   botsDelta: 'bots:delta',
   botsDone: 'bots:done',
   botsError: 'bots:error',
+  botsPullProgress: 'bots:pull-progress',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -178,6 +182,8 @@ export type IpcEvents = Exhaustive<
     [IPC_EVENT.botsDelta]: (delta: { id: string; text: string }) => void
     [IPC_EVENT.botsDone]: (done: { id: string }) => void
     [IPC_EVENT.botsError]: (error: { id: string; message: string }) => void
+    /** A model download: progress, then one event with `done` (success, cancelled or error). */
+    [IPC_EVENT.botsPullProgress]: (progress: PullProgress & { done: boolean; error?: string }) => void
   }
 >
 
@@ -326,6 +332,11 @@ export type IpcApi = Exhaustive<
     [IPC.botsSetModel]: (botId: string, model: string | null) => Bot[]
     /** A 2-5 word title for a chat topic from its first exchange, by the bot's model; null when it cannot make one. */
     [IPC.botsTitle]: (request: { botId: string; messages: AiMessage[] }) => string | null
+    /** The local models for the picker, whether Ollama runs, and this Mac's memory. */
+    [IPC.botsModels]: () => { local: ModelChoice[]; running: boolean; ramBytes: number }
+    /** Download a model the user picked and confirmed; progress arrives on `bots:pull-progress`. */
+    [IPC.botsPull]: (name: string) => { ok: boolean; error?: string }
+    [IPC.botsPullCancel]: () => { ok: boolean }
   }
 >
 

@@ -41,8 +41,6 @@ type Props = {
   vaultPath: string
   /** The templates folder, which gets its own icon so it cannot pass for a normal one. */
   templateFolder: string
-  /** Which model the preview's "Summarize" button asks. */
-  aiModel: string
   /** Milliseconds the pointer rests on a note before its preview opens. */
   previewDelayMs: number
   /** A note's preview card was clicked: pin it as a floating window. */
@@ -67,7 +65,6 @@ export function FileTree({
   onCreateIn,
   vaultPath,
   templateFolder,
-  aiModel,
   previewDelayMs,
   onPinNote,
 }: Props): React.ReactElement {
@@ -419,7 +416,6 @@ export function FileTree({
           path={peek.node.path}
           anchor={peek.anchor}
           mtime={peek.node.mtime}
-          model={aiModel}
           onOpen={(path) => {
             cancelPeek()
             onOpenFile(path)
