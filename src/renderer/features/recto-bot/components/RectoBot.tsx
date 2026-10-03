@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { createBot, stillFrame, type Bot, type BotMode, type BotState, type EyeFrame, type Frame, type SheetFrame } from '../bot'
+import { createBot, render, stillFrame, type BotMode, type BotState, type EyeFrame, type Frame, type SheetFrame } from '../bot'
+import { acquire, currentPose, type Brain } from '../brains'
 import type { ActiveBehaviour, BehaviourId } from '../behaviours'
 import { CORNER_PATH, LINE_PATHS, PAGE_PATH, SMALL_PX } from '../face'
 import { join } from '../loop'
@@ -15,6 +16,9 @@ import { RECTO, type BotLook, type BotPersonality } from '../presets'
  *
  * React draws the structure once; after that the shared frame loop moves the
  * rig and the eyes directly, never through a render.
+ *
+ * Faces with the same `id` are one bot (brains.ts): one set of springs,
+ * blinks and states, each face drawing the same pose at its own size.
  */
 
 /** Layer depths, in the SVG's 120-unit space (scaled to the bot's size). */
@@ -136,6 +140,12 @@ export function BotFigure({ size, frame, nodes }: { size: number; frame: Frame; 
 export type RectoBotProps = {
   /** px, square. Below 60 the bot is drawn small: no text lines, bigger eyes. */
   size: number
+  /**
+   * Which bot this is a face of. Every face with the same id moves as one -
+   * the same blinks, gaze and working state. Without one, the face is a bot
+   * of its own.
+   */
+  id?: string
   /** Its face, from a preset (presets.ts). Keep the object stable: a new one starts a new bot. */
   look?: BotLook
   /** Its temperament, from a preset. Keep the object stable, as with `look`. */
@@ -152,6 +162,7 @@ export type RectoBotProps = {
 }
 
 export function RectoBot({
+  id,
   size,
   look = RECTO.look,
   personality = RECTO.personality,
@@ -164,42 +175,53 @@ export function RectoBot({
 }: RectoBotProps): React.ReactElement {
   const host = useRef<HTMLDivElement | null>(null)
   const nodes = useRef<Nodes>({ rig: null, sheets: [], balls: [], clips: [] })
-  const bot = useRef<Bot | null>(null)
+  const brain = useRef<{ brain: Brain; face: number } | null>(null)
   const live = useRef({ state, onBehaviour })
   live.current = { state, onBehaviour }
-  // The resting face, for the first paint; the loop takes over from the next frame.
-  const [first] = useState(() => stillFrame({ behaviour: 'rest', ms: 0, size, random: Math.random, look }))
+  const own = useId()
+  const key = `${id ?? own}|${mode}|${behaviour ?? ''}`
+  // The first paint: what the bot's other faces show right now, or its resting face.
+  const [first] = useState(() => {
+    const pose = currentPose(key)
+    return pose === null ? stillFrame({ behaviour: 'rest', ms: 0, size, random: Math.random, look }) : render(pose, size, look)
+  })
 
   useEffect(() => {
     const element = host.current
     if (element === null) return
     const now = performance.now()
-    const created = createBot({
-      size,
-      look,
-      personality,
-      mode,
-      ...(behaviour === undefined ? {} : { behaviour }),
-      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-      random: Math.random,
-      now,
-      onBehaviour: (b) => live.current.onBehaviour?.(b),
-    })
-    created.setState(live.current.state, now)
-    bot.current = created
+    const handle = acquire(key, () =>
+      createBot({
+        size,
+        look,
+        personality,
+        mode,
+        ...(behaviour === undefined ? {} : { behaviour }),
+        reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        random: Math.random,
+        now,
+        onBehaviour: (b) => live.current.onBehaviour?.(b),
+      }),
+    )
+    handle.brain.request(handle.face, live.current.state, now)
+    brain.current = handle
     const leave = join({
       element,
-      wantsFocus: () => live.current.state === 'listening',
-      draw: (time, seen) => apply(nodes.current, created.step(time, seen)),
+      group: key,
+      size,
+      wantsFocus: () => handle.brain.state === 'listening',
+      draw: (time, seen) => apply(nodes.current, render(handle.brain.poseAt(time, seen), size, look)),
     })
     return () => {
       leave()
-      bot.current = null
+      handle.release()
+      brain.current = null
     }
-  }, [size, look, personality, mode, behaviour])
+  }, [key, size, look, personality, mode, behaviour])
 
   useEffect(() => {
-    bot.current?.setState(state, performance.now())
+    const handle = brain.current
+    handle?.brain.request(handle.face, state, performance.now())
   }, [state])
 
   return (
@@ -211,7 +233,7 @@ export function RectoBot({
       aria-label="Recto"
       data-state={state}
       onClick={(event) => {
-        bot.current?.click(performance.now())
+        brain.current?.brain.bot.click(performance.now())
         onClick?.(event)
       }}
     >

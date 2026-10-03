@@ -171,7 +171,7 @@ export function RectoBotDesign(): React.ReactElement {
           <span className="bot-design__now">
             {state !== 'idle' ? state : now === 'watch' ? 'Watching you' : now ? BEHAVIOURS[now].label : ''}
           </span>
-          <RectoBot size={240} state={state} onBehaviour={setNow} />
+          <RectoBot id="design" size={240} state={state} onBehaviour={setNow} />
         </div>
         <div className="bot-design__side">
           <p>App states override the personality. Error squints for two seconds, then it goes back to idle on its own.</p>
@@ -194,10 +194,23 @@ export function RectoBotDesign(): React.ReactElement {
           >
             Simulate answer
           </button>
+          <button
+            className="bot-design__button"
+            onClick={() => {
+              // A long one, to look for cuts: riffling well past one cycle, reading well past one line.
+              setState('riffle')
+              window.setTimeout(() => setState('found'), 12_000)
+              window.setTimeout(() => setState('answering'), 12_400)
+              window.setTimeout(() => setState('idle'), 32_400)
+            }}
+          >
+            Long answer
+          </button>
           <input className="bot-design__field" placeholder="Listening looks at the field that has focus" />
+          <p>The same bot at the sizes the app uses it - the sidebar row, the chat header, a message - moving as one.</p>
           <div className="bot-design__sizes">
-            {[28, 32, 40].map((size) => (
-              <RectoBot key={size} size={size} state={state} />
+            {[32, 40, 24].map((size) => (
+              <RectoBot key={size} id="design" size={size} />
             ))}
           </div>
         </div>

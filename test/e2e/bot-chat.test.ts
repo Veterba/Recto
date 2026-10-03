@@ -29,7 +29,7 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
   let base = ''
   let vault = ''
 
-  const answersOnScreen = (): Promise<number> => page.evaluate(() => document.querySelectorAll('.bot-chat .chat__turn--assistant').length)
+  const answersOnScreen = (): Promise<number> => page.evaluate(() => document.querySelectorAll('.bot-chat .msg--bot').length)
   const answersInFile = (): number => {
     const folder = path.join(vault, 'chats', 'recto')
     const files = fs.readdirSync(folder).filter((f) => f.endsWith('.md'))
@@ -39,7 +39,7 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
   const openRecto = async (): Promise<void> => {
     await page.keyboard.press('Meta+2')
     await page.locator('.bot-row').first().click()
-    await page.waitForSelector('.bot-chat .chat__input')
+    await page.waitForSelector('.bot-chat .composer__input')
   }
 
   beforeAll(async () => {
@@ -75,10 +75,10 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
 
   it('one question, one answer - on screen and in the file', async () => {
     await openRecto()
-    await page.locator('.bot-chat .chat__input').click()
+    await page.locator('.bot-chat .composer__input').click()
     await page.keyboard.type('How do I mix soil?')
     await page.keyboard.press('Enter')
-    await page.waitForSelector('.bot-chat .chat__turn--assistant')
+    await page.waitForSelector('.bot-chat .msg--bot')
     // Long enough for a second copy, if there were one, to land and be saved.
     await page.waitForTimeout(1500)
     expect(await answersOnScreen()).toBe(1)
@@ -89,7 +89,7 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
     await page.reload()
     await page.waitForSelector('.segmented__tab')
     await openRecto()
-    await page.waitForSelector('.bot-chat .chat__turn--assistant')
+    await page.waitForSelector('.bot-chat .msg--bot')
     expect(await answersOnScreen()).toBe(1)
     expect(answersInFile()).toBe(1)
   }, 60_000)
@@ -101,10 +101,10 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
       .sort()
   const ask = async (question: string): Promise<void> => {
     const before = await answersOnScreen()
-    await page.locator('.bot-chat .chat__input').click()
+    await page.locator('.bot-chat .composer__input').click()
     await page.keyboard.type(question)
     await page.keyboard.press('Enter')
-    await page.waitForFunction((n) => document.querySelectorAll('.bot-chat .chat__turn--assistant').length > n, before)
+    await page.waitForFunction((n) => document.querySelectorAll('.bot-chat .msg--bot').length > n, before)
     // The title arrives after the answer, and renames the file.
     await page.waitForFunction(
       () => !document.querySelector('.chat-topic:last-of-type .chat-topic__divider')?.textContent?.includes('New topic · New topic'),
@@ -112,7 +112,7 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
   }
 
   it('⌘N starts a new topic: a file of its own, under its own divider, holding only its own turns', async () => {
-    await page.locator('.bot-chat .chat__input').click()
+    await page.locator('.bot-chat .composer__input').click()
     await page.keyboard.press('Meta+n')
     await ask('hei')
     const files = topicFiles()
@@ -128,7 +128,7 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
       ),
       'utf8',
     )
-    expect(newest).toMatch(/^---\nbot: recto\ncreated: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}\ntitle: Soil mix\n---/)
+    expect(newest).toMatch(/^---\nbot: recto\ncreated: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?\ntitle: Soil mix\n---/)
     expect(newest).toContain('hei')
     expect(newest).not.toContain('How do I mix soil?')
     expect(await page.locator('.chat-topic').count()).toBe(2)

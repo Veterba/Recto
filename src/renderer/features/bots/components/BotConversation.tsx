@@ -363,7 +363,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
     >
       <header className="bot-chat__head">
         <span className="bot-face bot-face--head">
-          <RectoBot size={64} look={bot.look} personality={bot.personality} state={face} />
+          <RectoBot id={bot.id} size={64} look={bot.look} personality={bot.personality} state={face} />
         </span>
         <div className="bot-chat__who">
           <span className="bot-chat__name">{bot.name}</span>

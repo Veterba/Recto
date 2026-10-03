@@ -87,11 +87,15 @@ describe.skipIf(!RUN)('closing a note it did not change', () => {
     // Topics off: this is about the editor alone.
     fs.mkdirSync(path.join(vault, '.recto'))
     fs.writeFileSync(path.join(vault, '.recto', 'topics-settings.json'), JSON.stringify({ enabled: false }))
-    app = spawn(ELECTRON, [ROOT, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`], {
-      stdio: 'ignore',
-      // The test vault is already a throwaway copy: open it as it is.
-      env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
-    })
+    app = spawn(
+      ELECTRON,
+      ['-r', path.join(ROOT, 'scripts/snapshot-isolate.cjs'), ROOT, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`],
+      {
+        stdio: 'ignore',
+        // The test vault is already a throwaway copy: open it as it is.
+        env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
+      },
+    )
     cdp = await connect()
     await sleep(2500)
   }, 60_000)

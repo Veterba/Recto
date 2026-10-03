@@ -103,10 +103,14 @@ describe.skipIf(!RUN)('floating note windows', () => {
     fs.writeFileSync(path.join(vault, '.recto', 'topics-settings.json'), JSON.stringify({ enabled: false }))
     // The shortest preview delay the setting allows.
     fs.writeFileSync(path.join(vault, '.recto', 'appearance.json'), JSON.stringify({ previewDelay: 0.5 }))
-    app = spawn(ELECTRON, [ROOT, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`], {
-      stdio: 'ignore',
-      env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
-    })
+    app = spawn(
+      ELECTRON,
+      ['-r', path.join(ROOT, 'scripts/snapshot-isolate.cjs'), ROOT, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`],
+      {
+        stdio: 'ignore',
+        env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
+      },
+    )
     cdp = await connect()
     await sleep(2500)
     const [x, y] = await center(

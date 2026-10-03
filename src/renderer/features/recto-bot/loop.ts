@@ -17,6 +17,12 @@ export type Member = {
   /** Wants the focused element's position this frame (a listening bot). */
   wantsFocus: () => boolean
   draw: (now: number, seen: Seen) => void
+  /**
+   * Faces of one bot share a group: they all see what its biggest visible face
+   * sees, so every face of the bot looks the same way.
+   */
+  group?: string
+  size?: number
 }
 
 /** A cursor that has not moved for this long is no longer "moving nearby". */
@@ -62,7 +68,14 @@ function tick(now: number): void {
       },
     })
   }
-  for (const { member, seen } of due) member.draw(now, seen)
+  // Each group sees through its biggest visible face.
+  const eyes = new Map<string, { size: number; seen: Seen }>()
+  for (const { member, seen } of due) {
+    if (member.group === undefined) continue
+    const current = eyes.get(member.group)
+    if (current === undefined || (member.size ?? 0) > current.size) eyes.set(member.group, { size: member.size ?? 0, seen })
+  }
+  for (const { member, seen } of due) member.draw(now, member.group === undefined ? seen : (eyes.get(member.group)?.seen ?? seen))
   start()
 }
 

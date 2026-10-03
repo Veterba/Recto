@@ -108,7 +108,7 @@ function Bubble({ message, actions }: { message: TopicMessage; actions: MessageA
 function GroupFace({ bot, state }: { bot: Bot; state: BotState }): React.ReactElement {
   return (
     <span className="bot-face bot-face--group" aria-hidden="true">
-      <RectoBot size={36} look={bot.look} personality={bot.personality} state={state} />
+      <RectoBot id={bot.id} size={36} look={bot.look} personality={bot.personality} state={state} />
     </span>
   )
 }

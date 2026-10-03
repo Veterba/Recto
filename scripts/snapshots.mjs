@@ -382,6 +382,31 @@ async function screens(page, dir, vault) {
   await page.keyboard.press('Escape')
   await page.waitForSelector('.find', { state: 'detached' })
 
+  // Focus mode from the right pane of a split: the same centred column as from
+  // a single pane, not the pane's half of the window. Then the split goes again.
+  await page.evaluate(() => {
+    document.querySelector('.cm-scroller')?.scrollTo(0, 0)
+    document.querySelector('.cm-content')?.focus()
+  })
+  await key(page, 'Mod+Alt+ArrowRight')
+  await page.waitForFunction(() => document.querySelectorAll('[data-tabs-id]').length === 2)
+  await page.evaluate(() => {
+    const right = document.querySelectorAll('.cm-content')[1]
+    right?.closest('.cm-editor')?.querySelector('.cm-scroller')?.scrollTo(0, 0)
+    right?.focus()
+  })
+  await key(page, 'Mod+Shift+Enter')
+  await page.waitForSelector(':root[data-focus="on"]')
+  // The caret blinks; focus mode and the active pane stay without it.
+  await sleep(600)
+  await page.evaluate(() => document.activeElement?.blur())
+  await shoot(page, dir, '20b-focus-from-split', 800)
+  await key(page, 'Mod+Shift+Enter')
+  await page.waitForFunction(() => !document.documentElement.hasAttribute('data-focus'))
+  await sleep(700)
+  await key(page, 'Mod+W')
+  await page.waitForFunction(() => document.querySelectorAll('[data-tabs-id]').length === 1)
+
   // The AI section: Recto, the main chat - first with nothing said yet.
   await key(page, 'Mod+2')
   await page.waitForSelector('.bot-chat .chat__welcome')

@@ -180,7 +180,12 @@
   border-width: 0;
   overflow: hidden;
 }
-/* Only the pane being written in stays; other splits fold away. */
+/* Only the pane being written in stays; other splits fold away, and it - with
+   every pane around it, in a split inside a split - takes the whole width, so
+   the text sits in the same centred column as focus mode from a single pane. */
+:root[data-focus='on'] .split__pane:has(.tabs.is-focused) {
+  flex-basis: 100% !important;
+}
 :root[data-focus='on'] .split__pane:not(:has(.tabs.is-focused)) {
   flex-basis: 0% !important;
   opacity: 0;
