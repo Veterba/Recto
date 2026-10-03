@@ -6,9 +6,9 @@ import { api } from '../../app/api'
 import { noteIndexChanged } from '../../app/note-bus'
 
 /**
- * A bot's conversation as chat topics: which topic files there are, which of
- * them are loaded into the scroll, and which one is current - the one new
- * messages go into, and the only one the model sees.
+ * A bot's conversation as chat topics: which topic files there are, and which
+ * one is current - the one on the page, the one new messages go into, and the
+ * only one the model sees.
  *
  * A plain object the view subscribes to, not React state: writing, renaming
  * and deleting files are async steps with side effects, and side effects do
@@ -26,9 +26,6 @@ export function fromFileName(name: string): { created: string; title: string } {
 
 /** The title a topic has until its first exchange is over. */
 export const UNTITLED = 'New topic'
-
-/** How many topics the scroll shows at first, and how many more each time it reaches the top. */
-const PAGE = 3
 
 const basename = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 
@@ -57,8 +54,6 @@ export class ChatTopics {
   /** Newest first. */
   files: string[] = []
   loaded = new Map<string, LoadedTopic>()
-  /** How many of the newest topics are in the scroll. */
-  shown = PAGE
   /** The topic new messages go into; null is a new topic, not written to disk until its first message. */
   current: string | null = null
   ready = false
@@ -125,14 +120,12 @@ export class ChatTopics {
     return groups.flatMap((group) => [...group].sort(bySecond))
   }
 
-  /** The topics in the scroll, oldest first: the newest `shown`, and the current one wherever it is. */
+  /**
+   * The topics in the scroll: the current one alone. A new topic is a clean
+   * page, like a new chat; the earlier ones are in History.
+   */
   visible(): string[] {
-    const index = this.current === null ? -1 : this.files.indexOf(this.current)
-    return this.files.slice(0, Math.max(this.shown, index + 1)).reverse()
-  }
-
-  hasOlder(): boolean {
-    return this.visible().length < this.files.length
+    return this.current === null ? [] : [this.current]
   }
 
   async load(path: string): Promise<LoadedTopic | null> {
@@ -161,12 +154,6 @@ export class ChatTopics {
   async loadAll(): Promise<LoadedTopic[]> {
     const all = await Promise.all(this.files.map((path) => this.load(path)))
     return all.filter((t): t is LoadedTopic => t !== null)
-  }
-
-  async loadOlder(): Promise<void> {
-    this.shown += PAGE
-    await Promise.all(this.visible().map((path) => this.load(path)))
-    this.emit()
   }
 
   /** ⌘N: the next message starts a topic of its own. Nothing is written until it is sent. */

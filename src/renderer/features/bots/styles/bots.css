@@ -253,19 +253,12 @@
 }
 
 /*
- * One scroll, split into chat topics. Each opens with a divider carrying its
- * title; the topics before the current one sit back, so the eye goes to the
- * one the conversation is in.
+ * The current topic: the page holds it alone, under a divider carrying its
+ * title. Earlier topics are in History.
  */
 .chat-topic {
   display: flex;
   flex-direction: column;
-}
-.chat-topic.is-past {
-  opacity: 0.55;
-}
-.chat-topic__top {
-  height: 1px;
 }
 
 /* History: a panel under the header, over the conversation. */

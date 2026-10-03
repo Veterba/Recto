@@ -20,13 +20,12 @@ import { TopicBlock, TopicDivider, type MessageActions, type Pending } from './M
 import { ModelMenu, modelLabel } from './ModelMenu'
 
 /**
- * A bot's conversation: one scroll, split into chat topics, read like a
- * messenger - with a floating composer over its bottom. Recto's is the app's
- * main chat.
+ * A bot's conversation, in chat topics, read like a messenger - with a
+ * floating composer over its bottom. Recto's is the app's main chat.
  *
- * The model only ever sees the current topic (and what the vault search finds
- * for the question); earlier topics stay above, greyed, each under a divider
- * with its title. ⌘N starts a new one. History lists them all.
+ * The page shows the current topic alone, and the model only ever sees it
+ * (and what the vault search finds for the question). ⌘N starts a new one on
+ * a clean page, like a new chat; History lists them all and opens any.
  */
 
 type OpenFile = (path: string, heading?: string | null) => void
@@ -65,7 +64,6 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   const { status, recheck } = useBotStatus(bot.model)
   const root = useRef<HTMLDivElement | null>(null)
   const scroller = useRef<HTMLDivElement | null>(null)
-  const top = useRef<HTMLDivElement | null>(null)
   const composer = useRef<HTMLTextAreaElement | null>(null)
   const seen = useRef(true)
 
@@ -257,28 +255,13 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
     if (element !== null && model.version > 0 && pinned.current) element.scrollTop = element.scrollHeight
   }, [model.version, pending, status])
 
-  // Older topics load when the top of the scroll comes into view; the reading position is kept.
-  useEffect(() => {
-    const element = top.current
-    const box = scroller.current
-    if (element === null || box === null) return
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((e) => e.isIntersecting) || !model.hasOlder()) return
-      const before = box.scrollHeight - box.scrollTop
-      void model.loadOlder().then(() => requestAnimationFrame(() => (box.scrollTop = box.scrollHeight - before)))
-    })
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [model, model.ready])
-
   const jumpTo = useCallback(
     async (path: string) => {
+      // The topic replaces the page, opened at its latest message.
+      pinned.current = true
       await model.select(path)
       setHistory(false)
-      requestAnimationFrame(() => {
-        scroller.current?.querySelector(`[data-topic="${CSS.escape(path)}"]`)?.scrollIntoView({ block: 'start' })
-        composer.current?.focus()
-      })
+      requestAnimationFrame(() => composer.current?.focus())
     },
     [model],
   )
@@ -379,7 +362,12 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
               <span>New topic</span>
             </button>
           </Tip>
-          <button className={`bot-chat__action${history ? ' is-on' : ''}`} aria-pressed={history} onClick={() => setHistory((on) => !on)}>
+          <button
+            className={`bot-chat__action${history ? ' is-on' : ''}`}
+            aria-pressed={history}
+            data-history-toggle=""
+            onClick={() => setHistory((on) => !on)}
+          >
             <Icon name="history" size={14} />
             <span>History</span>
           </button>
@@ -415,29 +403,26 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
         }}
       >
         <div className="chat__thread">
-          <div ref={top} className="chat-topic__top" aria-hidden="true" />
           {visible.map((path) => {
             const topic = model.loaded.get(path)
             if (topic === undefined) return null
-            const isCurrent = path === model.current
             return (
               <TopicBlock
                 key={path}
                 topic={topic}
-                past={!isCurrent}
                 bot={bot}
-                pending={isCurrent && streamPath.current === path ? pending : null}
-                error={isCurrent ? error : null}
+                pending={streamPath.current === path ? pending : null}
+                error={error}
                 onDismissError={() => setError(null)}
                 actions={actions}
-                face={isCurrent ? face : null}
+                face={face}
               />
             )
           })}
           {model.ready && model.current === null && (
             <section className="chat-topic">
               <TopicDivider title={null} />
-              {ready && model.files.length === 0 && (
+              {ready && (
                 <div className="chat__welcome">
                   <h2>Ask {bot.name}</h2>
                   <p>

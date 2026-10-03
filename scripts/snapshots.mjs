@@ -464,25 +464,27 @@ async function screens(page, dir, vault) {
   await page.keyboard.press('Escape')
   await page.waitForSelector('.plus-menu', { state: 'detached' })
 
-  // ⌘N: a new topic under its own divider; the one before sits back.
+  // ⌘N: a new topic is a clean page, like a new chat; the one before is in History.
   await page.locator('.bot-chat .composer__input').click()
   await key(page, 'Mod+N')
+  await page.waitForSelector('.bot-chat .chat__welcome')
   await page.keyboard.type('Which beds need the most sun?')
   await page.keyboard.press('Enter')
   await page.waitForFunction(
     () =>
-      document.querySelectorAll('.chat-topic.is-past').length === 1 &&
-      [...document.querySelectorAll('.chat-topic__divider')].map((d) => d.textContent).join() ===
-        'New topic · Soil mix · 09:30,New topic · Soil mix · 10:00',
+      document.querySelectorAll('.bot-chat .chat-topic').length === 1 &&
+      [...document.querySelectorAll('.chat-topic__divider')].map((d) => d.textContent).join() === 'New topic · Soil mix · 10:00' &&
+      document.querySelectorAll('.bot-chat .msg--bot').length === 1,
   )
   await page.mouse.move(0, 0)
   await shoot(page, dir, '24-topic-divider')
 
-  // History: the topics, newest first.
+  // History: the topics, newest first. A click elsewhere puts it away.
   await page.getByRole('button', { name: 'History' }).click()
   await page.waitForFunction(() => document.querySelectorAll('.bot-history__row').length === 2)
   await shoot(page, dir, '25-history')
-  await page.getByRole('button', { name: 'Close history' }).click()
+  await page.locator('.bot-chat .chat__thread').click({ position: { x: 5, y: 5 } })
+  await page.waitForSelector('.bot-history', { state: 'detached' })
 
   // Back to Data: the smoke test after the screens edits a note from the tree.
   // The composer keeps its keys to itself, so it lets go of the focus first.

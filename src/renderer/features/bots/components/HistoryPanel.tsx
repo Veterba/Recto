@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ConfirmDialog } from '../../../ui/ConfirmDialog'
 import { Icon } from '../../../ui/Icon'
 import { fromFileName, type ChatTopics, type LoadedTopic } from '../chat-topics-model'
@@ -63,12 +63,25 @@ export function HistoryPanel({
     [model.files, all],
   )
 
+  // A click anywhere else puts it away - except in its own confirm dialog, and
+  // on the History button, which toggles it itself.
+  const panel = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    const outside = (event: PointerEvent): void => {
+      const target = event.target as Element | null
+      if (panel.current?.contains(target) === true || target?.closest('.dialog__backdrop, [data-history-toggle]') != null) return
+      onClose()
+    }
+    document.addEventListener('pointerdown', outside)
+    return () => document.removeEventListener('pointerdown', outside)
+  }, [onClose])
+
   const needle = query.trim().toLowerCase()
   const shown =
     needle === '' ? rows : rows.filter((row) => row.title.toLowerCase().includes(needle) || row.text.toLowerCase().includes(needle))
 
   return (
-    <aside className="bot-history glass-surface" aria-label="History">
+    <aside ref={panel} className="bot-history glass-surface" aria-label="History">
       <div className="bot-history__head">
         <input
           className="bot-history__search"

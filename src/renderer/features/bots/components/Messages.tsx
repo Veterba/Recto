@@ -115,7 +115,6 @@ function GroupFace({ bot, state }: { bot: Bot; state: BotState }): React.ReactEl
 
 export function TopicBlock({
   topic,
-  past,
   bot,
   pending,
   error,
@@ -124,20 +123,19 @@ export function TopicBlock({
   face,
 }: {
   topic: LoadedTopic
-  past: boolean
   bot: Bot
   pending: Pending | null
   error: string | null
   onDismissError: () => void
   actions: MessageActions
-  /** The face's state, for the topic that has the latest answer; null elsewhere. */
-  face: BotState | null
+  /** The face's state, beside the latest answer. */
+  face: BotState
 }): React.ReactElement {
   const groups = groupMessages(topic.messages)
   // The face goes beside the latest answer: the one coming, or else the last one written.
   const lastBot = pending !== null ? -1 : groups.findLastIndex((g) => g.role === 'assistant')
   return (
-    <section className={`chat-topic${past ? ' is-past' : ''}`} data-topic={topic.path}>
+    <section className="chat-topic" data-topic={topic.path}>
       <TopicDivider title={topic.meta.title} at={topic.meta.created} />
       {groups.map((group, g) => (
         <div key={group.indexes[0]} className="msg-group-wrap">
@@ -157,7 +155,7 @@ export function TopicBlock({
                 </div>
               )
             })}
-            {face !== null && g === lastBot && <GroupFace bot={bot} state={face} />}
+            {g === lastBot && <GroupFace bot={bot} state={face} />}
           </div>
         </div>
       ))}
@@ -169,7 +167,7 @@ export function TopicBlock({
               <Bubble message={{ role: 'assistant', content: pending.text, sources: pending.sources }} actions={actions} />
             )}
           </div>
-          {face !== null && <GroupFace bot={bot} state={face} />}
+          <GroupFace bot={bot} state={face} />
         </div>
       )}
       {error !== null && (
