@@ -1,4 +1,6 @@
 import { app, BrowserWindow } from 'electron'
+import { runEvalJob } from './bots/eval-mode'
+import { evalJob } from './config'
 import { isolateDevState } from './dev-guard'
 import { registerIpc } from './ipc'
 import { handleVaultScheme, registerVaultScheme } from './vault-protocol'
@@ -12,8 +14,21 @@ isolateDevState()
 // image load fails as an opaque cross-origin request.
 registerVaultScheme()
 
-// One instance, one vault. A second launch focuses the existing window.
-if (!app.requestSingleInstanceLock()) {
+const job = evalJob()
+if (job !== undefined) {
+  // The bot evals: no window, no single-instance lock (its profile is a scratch
+  // one, beside whatever Recto is open), quit when the cases are answered.
+  void app.whenReady().then(() =>
+    runEvalJob(job).then(
+      () => app.quit(),
+      (err: unknown) => {
+        console.error('[eval]', err instanceof Error ? err.message : err)
+        app.exit(1)
+      },
+    ),
+  )
+} else if (!app.requestSingleInstanceLock()) {
+  // One instance, one vault. A second launch focuses the existing window.
   app.quit()
 } else {
   app.on('second-instance', () => {

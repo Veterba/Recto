@@ -18,6 +18,9 @@
  *   RECTO_BOTS_MOCK=1             Bots answer from a fixed stand-in instead of
  *                                 Ollama, and always report the model ready.
  *                                 The snapshot script sets it.
+ *   RECTO_EVAL_JOB=<job.json>     Open no window: run the bot evals described
+ *                                 in the job on its (scratch) vault, write the
+ *                                 results, quit. `npm run bots:eval` sets it.
  *
  * Read by the tests and scripts only, not by the app:
  *
@@ -34,6 +37,8 @@ export const anyPower = process.env['RECTO_TOPICS_ANY_POWER'] === '1'
 export const writeLog = process.env['RECTO_WRITE_LOG'] === '1'
 
 export const botsMock = (): boolean => process.env['RECTO_BOTS_MOCK'] === '1'
+
+export const evalJob = (): string | undefined => process.env['RECTO_EVAL_JOB']
 
 export const modelDir = (): string | undefined => process.env['RECTO_MODEL_DIR']
 

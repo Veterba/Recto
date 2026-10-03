@@ -35,9 +35,14 @@ Checks before saying something is done: `npm run typecheck`, `npm run lint`, `np
 ---
 
 ## Real vault
-Never run the app, tests or indexing against my real vault
+Never run the app, tests, indexing or evals against my real vault
 (/Users/veterba/Documents/Notes/Recto-vault). Use copies or the synthetic fixture vault.
-The only exception is the project log below.
+The only places in the vault that may be written: the project log below, and the evals folder.
+
+Evals folder: /Users/veterba/Documents/Notes/Recto-vault/Programming/Projects/Recto app/Evals Qwen
+(`npm run bots:eval` finds it by name). In it, write only new run folders (one subfolder per
+model, runs inside), `Evals.md`, `Eval log.md` and `graded.jsonl`. Never edit or delete an older
+run. Everything else in the vault stays untouched.
 
 ---
 

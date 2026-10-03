@@ -1,0 +1,223 @@
+# Recto's eval cases on the fixture vault (tests/bots/eval/fixture-vault).
+#
+# Each case: id, kind, question, and optionally the previous turns (messages),
+# the notes an answer should come from (expectNotes: note titles, as file names
+# without .md), the answer in one line (expectAnswer, for whoever grades it),
+# and expectNoSources for messages that should not touch the vault at all.
+#
+# `today` is the date the fixture lives in: its log covers the three weeks
+# before it, so "last week" and "on Wednesday" have one right answer.
+
+today: 2026-09-30
+
+cases:
+  # ---------------- same language ----------------
+  - id: same-sourdough-ratio
+    kind: same-language
+    question: What's the feeding ratio for my sourdough starter?
+    expectNotes: [Sourdough starter]
+    expectAnswer: '1:5:5 once a day (10 g starter, 50 g flour, 50 g water) - not the old 1:1:1.'
+
+  - id: same-half-marathon
+    kind: same-language
+    question: When is my half marathon, and what time am I aiming for?
+    expectNotes: [Running plan]
+    expectAnswer: Oslo half marathon on 8 November 2026, under 1:50.
+
+  - id: same-chain-wear
+    kind: same-language
+    question: What's the wear limit for my 11-speed chain?
+    expectNotes: [Bike maintenance manual]
+    expectAnswer: 0.5% elongation (0.75% for 8- and 9-speed).
+
+  - id: same-ru-emergency-fund
+    kind: same-language
+    question: Сколько мне нужно накопить на подушку безопасности?
+    expectNotes: [Подушка безопасности]
+    expectAnswer: 540 000 рублей (6 месяцев расходов по 90 000), сейчас 310 000.
+
+  - id: same-ru-sleep
+    kind: same-language
+    question: Во сколько мне лучше ложиться спать?
+    expectNotes: [Сон]
+    expectAnswer: До 23:30, вставать в 7:00.
+
+  - id: same-no-course
+    kind: same-language
+    question: Hvilke dager har jeg norskkurs?
+    expectNotes: [Norskkurs]
+    expectAnswer: Tirsdag og torsdag kl. 18.00–20.00.
+
+  # ---------------- cross-language ----------------
+  - id: cross-ru-en-notifications
+    kind: cross-language
+    question: Что я решил про уведомления в Lark?
+    expectNotes: [Lark plan]
+    expectAnswer: Не больше двух напоминаний в день и никогда после 21:00.
+
+  - id: cross-ru-en-sourdough
+    kind: cross-language
+    question: Какое соотношение при кормлении закваски я сейчас использую?
+    expectNotes: [Sourdough starter]
+    expectAnswer: 1:5:5 раз в день.
+
+  - id: cross-ru-en-marathon
+    kind: cross-language
+    question: Когда у меня полумарафон?
+    expectNotes: [Running plan]
+    expectAnswer: 8 ноября 2026, в Осло.
+
+  - id: cross-en-ru-borscht
+    kind: cross-language
+    question: How long do I bake the beets for borscht?
+    expectNotes: [Борщ]
+    expectAnswer: 40 minutes in foil at 200 °C.
+
+  - id: cross-en-ru-kitchen
+    kind: cross-language
+    question: Who is doing my kitchen renovation and what's the budget?
+    expectNotes: [Ремонт кухни]
+    expectAnswer: Igor's crew of three, 450,000 roubles, starting 3 November.
+
+  - id: cross-en-ru-monetisation
+    kind: cross-language
+    question: How did I decide to make money with Lark?
+    expectNotes: [Идеи по монетизации, Lark plan]
+    expectAnswer: No subscriptions or ads; a one-time €12 purchase for themes and widget styles.
+
+  # ---------------- named note ----------------
+  - id: named-beta-feedback
+    kind: named-note
+    question: Look in Beta feedback - what do testers ask for most?
+    expectNotes: [Beta feedback]
+    expectAnswer: Weekly goals (7 of 12 testers).
+
+  - id: named-ru-plan-platform
+    kind: named-note
+    question: Посмотри в Lark plan, какая платформа первая?
+    expectNotes: [Lark plan]
+    expectAnswer: iOS, на SwiftUI; Android только после 1.0.
+
+  - id: named-old-starter
+    kind: named-note
+    question: Check [[Sourdough starter (old)]] - what ratio did I use before?
+    expectNotes: [Sourdough starter (old)]
+    expectAnswer: 1:1:1, fed twice a day.
+
+  - id: named-deep-work
+    kind: named-note
+    question: In Deep Work, how many hours of deep work a day did I aim for?
+    expectNotes: [Deep Work]
+    expectAnswer: Four hours a day.
+
+  # ---------------- follow-up ----------------
+  - id: follow-notifications-where
+    kind: follow-up
+    messages:
+      - role: user
+        content: What did I decide about notifications in Lark?
+      - role: assistant
+        content: At most two reminders a day, and never after 21:00.
+    question: And where did I write that down?
+    expectNotes: [Lark plan]
+    expectAnswer: In Lark plan, under Notifications.
+
+  - id: follow-ru-tbilisi-food
+    kind: follow-up
+    messages:
+      - role: user
+        content: Расскажи про поездку в Тбилиси
+      - role: assistant
+        content: В мае 2026 вы были в Тбилиси пять дней, жили в хостеле «Фабрика», ходили в серные бани.
+    question: А где мы там ели?
+    expectNotes: [Тбилиси]
+    expectAnswer: Хинкали в «Зодиаке», хачапури в «Сакхачапуре №1», вино в «Вино Андеграунд».
+
+  # ---------------- recent ----------------
+  - id: recent-last-week
+    kind: recent
+    question: What did I work on in Lark last week?
+    expectNotes: ['2026-09-21 — v0.6', '2026-09-23 — v0.7', '2026-09-25 — v0.8']
+    expectAnswer: Onboarding redesign, dark mode and VoiceOver, the first TestFlight beta.
+
+  - id: recent-wednesday
+    kind: recent
+    question: What did I do on Wednesday last week?
+    expectNotes: ['2026-09-23 — v0.7']
+    expectAnswer: Dark mode palette and VoiceOver labels (v0.7).
+
+  - id: recent-ru-since-monday
+    kind: recent
+    question: Что нового в Lark с понедельника?
+    expectNotes: ['2026-09-28 — v0.9']
+    expectAnswer: Исправлен краш виджета на iOS 17, собраны отзывы бета-тестеров, начат текст политики конфиденциальности.
+
+  # ---------------- tasks ----------------
+  - id: tasks-open-last-week
+    kind: tasks
+    question: Which Lark tasks from last week are still open, and which are done?
+    expectNotes: [App Store screenshots, Localise into Norwegian, VoiceOver labels]
+    expectAnswer: Open - App Store screenshots (doing), Localise into Norwegian; done - VoiceOver labels.
+
+  - id: tasks-done
+    kind: tasks
+    question: Which Lark tasks are done?
+    expectNotes: [Fix widget crash on iOS 17, VoiceOver labels]
+    expectAnswer: Fix widget crash on iOS 17, VoiceOver labels.
+
+  - id: tasks-ru-overdue
+    kind: tasks
+    question: Какие задачи у меня просрочены?
+    expectNotes: [Write privacy policy]
+    expectAnswer: Write privacy policy - срок был 26 сентября.
+
+  # ---------------- not in the vault ----------------
+  - id: notin-australia
+    kind: not-in-vault
+    question: What's the capital of Australia?
+    expectAnswer: Says the notes don't cover it.
+
+  - id: notin-japan
+    kind: not-in-vault
+    question: What did I write about my trip to Japan?
+    expectAnswer: There is no note about a trip to Japan.
+
+  - id: notin-ru-netflix
+    kind: not-in-vault
+    question: Что я решил про подписку на Netflix?
+    expectAnswer: В заметках об этом ничего нет.
+
+  # ---------------- small talk ----------------
+  - id: talk-hi
+    kind: small-talk
+    question: hi!
+    expectNoSources: true
+
+  - id: talk-ru-thanks
+    kind: small-talk
+    question: Спасибо, очень помог!
+    expectNoSources: true
+
+  - id: talk-nice
+    kind: small-talk
+    question: haha nice
+    expectNoSources: true
+
+  # ---------------- about itself ----------------
+  - id: self-model
+    kind: self
+    question: What model are you?
+    expectNoSources: true
+    expectAnswer: Names the local model running in Ollama on this computer.
+
+  - id: self-ru-knowledge-year
+    kind: self
+    question: Из какого года твои знания?
+    expectNoSources: true
+    expectAnswer: Не знает точной даты; отвечает по заметкам, а не по своим знаниям.
+
+  - id: self-privacy
+    kind: self
+    question: Are my notes sent anywhere?
+    expectNoSources: true
+    expectAnswer: No - the model runs locally, nothing leaves the computer.

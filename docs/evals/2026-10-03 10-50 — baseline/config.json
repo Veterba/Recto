@@ -1,0 +1,62 @@
+{
+  "report_version": 1,
+  "run_id": "2026-10-03 10-50 — baseline",
+  "label": "baseline",
+  "date": "2026-10-03T08:50:32.677Z",
+  "model": "gemma4:12b",
+  "profile": {
+    "family": "gemma4",
+    "tested": true,
+    "thinking": "param",
+    "options": {
+      "num_ctx": 8192,
+      "num_predict": 600,
+      "temperature": 0.7
+    },
+    "tools": "ollama"
+  },
+  "harness": {
+    "router": false,
+    "hybridRetrieval": false,
+    "namedNotes": false,
+    "tools": false,
+    "stickyContext": false
+  },
+  "git": {
+    "commit": "b02b0ea1a6b15025cbb77a654d44e7f5e7aee87d",
+    "branch": "feature/recto-rag-v1",
+    "dirty": true
+  },
+  "app_version": "0.9.3",
+  "system": "You are Recto, the keeper of this vault. You know the user's notes, not the world.\n\nWhat you do:\n- Answer questions using only the vault context you are given.\n- Point to related notes and remind the user of things they wrote and forgot.\n- Summarise a folder, a topic or a period when asked.\n\nHow you answer:\n- Short: a few sentences or a short list. No introductions, no filler.\n- Every claim comes from the notes in the context. Mention which note it comes from.\n- If the vault doesn't contain the answer, say so in one line. Don't fill the gap from general\n  knowledge unless the user explicitly asks you to.\n- Never mention the context, retrieval, or how many notes you were given.\n- Answer in the language of the question.\n- Quiet and curious: you may end with one short question if it helps the user connect ideas.\n  Never more than one.\n\nWhat you don't do:\n- No essays on general topics, no critique of reasoning, no writing notes for the user.",
+  "system_sha": "70c6d0884cf042200f645903e020308897aa21c30161d76c71e8d3ce64ab5d50",
+  "cases_file": "tests/bots/eval/cases.yaml",
+  "cases_sha": "6990d39f8a68db5651d7cec64b7ce59dc0d822be7c5737b3814976e225602644",
+  "today": "2026-09-30",
+  "vault": {
+    "kind": "fixture",
+    "notes": 46,
+    "languages": {
+      "en": 31,
+      "no": 3,
+      "ru": 12
+    }
+  },
+  "machine": {
+    "chip": "Apple M3",
+    "ram_bytes": 17179869184
+  },
+  "ollama": {
+    "version": "0.31.1",
+    "speed_check_tokens_per_sec": 10.088068840981771,
+    "one_model_loaded": "other models unloaded before the run (were: qwen3.5:9b)"
+  },
+  "memory": {
+    "ollamaPeakBytes": 9381871616,
+    "appPeakBytes": 361381888,
+    "modelBytes": 1022088969,
+    "swapBeforeBytes": 6128940000,
+    "swapAfterBytes": 6602000000
+  },
+  "why": "Stage 2: baseline of the current pipeline (FTS5 words only), and the model comparison - qwen3.5:9b vs gemma4:12b vs gemma4:e4b on 16 GB."
+}

@@ -18,7 +18,7 @@ import { send as indexer } from '../index-client'
 import { readState, writeState } from '../store'
 import { currentVault } from '../vault'
 import * as vaultFs from '../vault-fs'
-import { buildSystem, estimateTokens, fitHistory, queryTerms, rankNotes, selectChunks, splitSections } from './context'
+import { buildSystem, estimateTokens, fitHistory, queryTerms, rankNotes, selectChunks, splitSections, type Chunk } from './context'
 import { cleanTitle } from '../../shared/chat-topics'
 import { listBots, writeBotModel } from './definitions'
 import {
@@ -45,7 +45,7 @@ const local: BotModelProvider & LocalModels = botsMock() ? new MockProvider() : 
 const api: BotModelProvider = botsMock() ? new MockProvider() : new AnthropicProvider(readKey)
 
 /** The model's provider: an Anthropic model when it is one of the API models, otherwise Ollama on this Mac. */
-const providerFor = (model: string): BotModelProvider => (isApiModel(model) ? api : local)
+export const providerFor = (model: string): BotModelProvider => (isApiModel(model) ? api : local)
 
 /** Notes ranked per question, and the most of them read from disk for sections. */
 const NOTES_TO_READ = 8
@@ -69,7 +69,7 @@ export function list(): Bot[] {
   return vault === null ? [] : listBots(vault.path)
 }
 
-const modelOf = (bot: Bot | undefined): string => bot?.model ?? settings().defaultModel
+export const modelOf = (bot: Bot | undefined): string => bot?.model ?? settings().defaultModel
 
 /**
  * Whether the model can run. A bot's chat asks this when it opens, which is
@@ -157,7 +157,7 @@ function pushPull(progress: Parameters<IpcEvents[typeof IPC_EVENT.botsPullProgre
  * bot's excluded folders. Null when the message asks nothing of the vault -
  * small talk, no words worth searching for - so nothing is read at all.
  */
-async function findContext(question: string, bot: Bot): Promise<ReturnType<typeof selectChunks> | null> {
+async function findContext(question: string, bot: Bot): Promise<{ chunks: Chunk[]; scores: Map<string, number> } | null> {
   const terms = queryTerms(question)
   if (terms.length === 0) return null
   const hitsByTerm = await Promise.all(
@@ -177,11 +177,33 @@ async function findContext(question: string, bot: Bot): Promise<ReturnType<typeo
       return { path: notePath, title, score, sections: splitSections(read.content) }
     }),
   )
-  return selectChunks(
+  const chunks = selectChunks(
     notes.filter((n) => n !== null),
     terms,
     { max: 6, budget: CONTEXT_CHARS },
   )
+  return { chunks, scores: new Map(ranked.map((r) => [r.path, r.score])) }
+}
+
+/** A note the bot read for an answer, as the evals report it: which part, and how well its note ranked. */
+export type ContextNote = { path: string; title: string; heading: string | null; score: number }
+
+/**
+ * Everything the model is given for one answer: the system prompt with the
+ * notes found, and the conversation cut to fit. The chat and the evals both
+ * go through this, so an eval measures what the chat does.
+ */
+export async function prepare(
+  bot: Bot,
+  messages: readonly AiMessage[],
+): Promise<{ system: string; history: AiMessage[]; chunks: Chunk[] | null; context: ContextNote[] }> {
+  const question = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+  const found = await findContext(question, bot)
+  const chunks = found?.chunks ?? null
+  const system = buildSystem(bot.system, chunks)
+  const history = fitHistory(messages, CONTEXT_TOKENS - ANSWER_TOKENS - estimateTokens(system))
+  const context = (chunks ?? []).map((c) => ({ path: c.path, title: c.title, heading: c.heading, score: found?.scores.get(c.path) ?? 0 }))
+  return { system, history, chunks, context }
 }
 
 const running = new Map<string, AbortController>()
@@ -203,16 +225,13 @@ export async function ask(request: {
   const bot = list().find((b) => b.id === request.botId)
   if (bot === undefined) return { ok: false, error: 'That bot no longer exists.' }
   if (running.has(request.id)) return { ok: false, error: 'This bot is already answering.' }
-  const question = [...request.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
 
   const model = modelOf(bot)
   const provider = providerFor(model)
   const ready = await provider.status(model)
   if (ready.state !== 'ready') return { ok: false, error: 'The model is not available.', status: ready }
 
-  const chunks = await findContext(question, bot)
-  const system = buildSystem(bot.system, chunks)
-  const history = fitHistory(request.messages, CONTEXT_TOKENS - ANSWER_TOKENS - estimateTokens(system))
+  const { system, history, chunks } = await prepare(bot, request.messages)
 
   const controller = new AbortController()
   running.set(request.id, controller)

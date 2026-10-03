@@ -21,7 +21,9 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3,onnxruntime-node",
     "rebuild": "electron-rebuild -f -w better-sqlite3,onnxruntime-node",
     "test:e2e": "electron-vite build && RECTO_E2E=1 vitest run test/e2e",
-    "snapshots": "electron-vite build && node scripts/snapshots.mjs"
+    "snapshots": "electron-vite build && node scripts/snapshots.mjs",
+    "bots:eval": "electron-vite build && node --disable-warning=ExperimentalWarning scripts/evals/run.ts",
+    "bots:eval:compare": "node --disable-warning=ExperimentalWarning scripts/evals/compare.ts"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
@@ -44,7 +46,8 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.70.1",
     "vite": "^5.4.11",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "yaml": "^2.9.1"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

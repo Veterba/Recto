@@ -1,0 +1,22 @@
+{
+  "boards": [
+    {
+      "id": "lark",
+      "name": "Lark",
+      "columns": [
+        {
+          "id": "todo",
+          "name": "To do"
+        },
+        {
+          "id": "doing",
+          "name": "Doing"
+        },
+        {
+          "id": "done",
+          "name": "Done"
+        }
+      ]
+    }
+  ]
+}

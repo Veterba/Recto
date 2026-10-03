@@ -15,9 +15,14 @@ import { requestFields } from './models/profiles'
  * TODO(bundled-model): later we replace Ollama with node-llama-cpp inside the
  * app, behind this same interface, so nothing has to be installed separately.
  */
+/** What the model reports about one answer when it is done (Ollama's last line). The evals read it. */
+export type StreamStats = { promptTokens: number; promptMs: number; evalTokens: number; evalMs: number; loadMs: number }
+
+export type StreamOptions = { model: string; signal: AbortSignal; onStats?: (stats: StreamStats) => void }
+
 export interface BotModelProvider {
   /** The reply, token by token. Throws when the model cannot run; stops when `signal` aborts. */
-  stream(messages: AiMessage[], system: string, options: { model: string; signal: AbortSignal }): AsyncIterable<string>
+  stream(messages: AiMessage[], system: string, options: StreamOptions): AsyncIterable<string>
   status(model: string): Promise<BotModelStatus>
   /** Load the model ahead of the first question, so it is not the user's wait. */
   warm(model: string): void
@@ -158,7 +163,7 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
     }
   }
 
-  async *stream(messages: AiMessage[], system: string, { model, signal }: { model: string; signal: AbortSignal }): AsyncIterable<string> {
+  async *stream(messages: AiMessage[], system: string, { model, signal, onStats }: StreamOptions): AsyncIterable<string> {
     const response = await fetch(`${OLLAMA}/api/chat`, {
       method: 'POST',
       signal,
@@ -182,12 +187,12 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
       }
       throw new Error(detail)
     }
-    yield* readLines(response.body)
+    yield* readLines(response.body, onStats)
   }
 }
 
 /** Ollama streams one JSON object per line; each carries the next piece of the message. */
-export async function* readLines(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
+export async function* readLines(body: ReadableStream<Uint8Array>, onStats?: (stats: StreamStats) => void): AsyncIterable<string> {
   const decoder = new TextDecoder()
   let pending = ''
   for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
@@ -198,11 +203,30 @@ export async function* readLines(body: ReadableStream<Uint8Array>): AsyncIterabl
       pending = pending.slice(newline + 1)
       newline = pending.indexOf('\n')
       if (line === '') continue
-      const event = JSON.parse(line) as { message?: { content?: unknown }; error?: unknown; done?: unknown }
+      const event = JSON.parse(line) as {
+        message?: { content?: unknown }
+        error?: unknown
+        done?: unknown
+        prompt_eval_count?: unknown
+        prompt_eval_duration?: unknown
+        eval_count?: unknown
+        eval_duration?: unknown
+        load_duration?: unknown
+      }
       if (typeof event.error === 'string') throw new Error(event.error)
       const text = event.message?.content
       if (typeof text === 'string' && text !== '') yield text
-      if (event.done === true) return
+      if (event.done === true) {
+        const n = (v: unknown): number => (typeof v === 'number' ? v : 0)
+        onStats?.({
+          promptTokens: n(event.prompt_eval_count),
+          promptMs: n(event.prompt_eval_duration) / 1e6,
+          evalTokens: n(event.eval_count),
+          evalMs: n(event.eval_duration) / 1e6,
+          loadMs: n(event.load_duration) / 1e6,
+        })
+        return
+      }
     }
   }
 }
@@ -221,7 +245,7 @@ export class AnthropicProvider implements BotModelProvider {
 
   warm(): void {}
 
-  async *stream(messages: AiMessage[], system: string, { model, signal }: { model: string; signal: AbortSignal }): AsyncIterable<string> {
+  async *stream(messages: AiMessage[], system: string, { model, signal }: StreamOptions): AsyncIterable<string> {
     const key = this.key()
     if (key === null) throw new Error('No API key saved. Add one in Settings → AI.')
     const queue: string[] = []
