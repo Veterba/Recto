@@ -1,5 +1,5 @@
 import { type Scene, createScene } from '../scene'
-import { useEffect } from 'react'
+import { useEffect, type RefObject } from 'react'
 import { readFlags } from '../scene-flags'
 import type { HeroLine } from '../scene-text'
 import { SLIDE_MS, ease } from '../slide'
@@ -27,22 +27,22 @@ export function useHomeScene({
   tweenRef,
   windowRef,
 }: {
-  canvasRef: import('/Users/veterba/Documents/workplace/code/Recto/node_modules/@types/react/index').RefObject<HTMLCanvasElement | null>
-  dragOffsetRef: import('/Users/veterba/Documents/workplace/code/Recto/node_modules/@types/react/index').RefObject<number | null>
-  heroRef: import('/Users/veterba/Documents/workplace/code/Recto/node_modules/@types/react/index').RefObject<HTMLDivElement | null>
+  canvasRef: RefObject<HTMLCanvasElement | null>
+  dragOffsetRef: RefObject<number | null>
+  heroRef: RefObject<HTMLDivElement | null>
   measureBlocks: () => void
   mounted: boolean
-  rasterRef: import('/Users/veterba/Documents/workplace/code/Recto/node_modules/@types/react/index').RefObject<(() => void) | null>
+  rasterRef: RefObject<(() => void) | null>
   reduced: boolean
-  reveal: import('/Users/veterba/Documents/workplace/code/Recto/node_modules/@types/react/index').RefObject<number>
-  sceneRef: import('/Users/veterba/Documents/workplace/code/Recto/node_modules/@types/react/index').RefObject<Scene | null>
-  trackRef: import('/Users/veterba/Documents/workplace/code/Recto/node_modules/@types/react/index').RefObject<HTMLDivElement | null>
-  tweenRef: import('/Users/veterba/Documents/workplace/code/Recto/node_modules/@types/react/index').RefObject<{
+  reveal: RefObject<number>
+  sceneRef: RefObject<Scene | null>
+  trackRef: RefObject<HTMLDivElement | null>
+  tweenRef: RefObject<{
     from: number
     to: number
     at: number
   } | null>
-  windowRef: import('/Users/veterba/Documents/workplace/code/Recto/node_modules/@types/react/index').RefObject<HTMLDivElement | null>
+  windowRef: RefObject<HTMLDivElement | null>
 }): void {
   // --- the one frame loop -------------------------------------------------
 

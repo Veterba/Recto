@@ -7,7 +7,7 @@ import type { GraphLook } from './look'
 import type { Palette } from './palette'
 import { worldToScreen, radiusIn } from './geometry'
 import { glowSprite } from './sprites'
-import type { RenderState } from './render-state'
+import type { Camera, GraphNodeView, RenderState } from './render-state'
 import { fitLabel } from './draw-labels'
 
 /** Arrowheads on the links, once zoomed in far enough to read them. */
@@ -31,7 +31,7 @@ export function drawArrows({
 }: {
   active: number
   bend: number
-  camera: import('/Users/veterba/Documents/workplace/code/Recto/src/renderer/features/graph/render-state').Camera
+  camera: Camera
   context: CanvasRenderingContext2D
   edgeColour: (a: number, b: number) => string
   edgeWidth: number
@@ -39,7 +39,7 @@ export function drawArrows({
   height: number
   highlighting: boolean
   look: GraphLook
-  nodes: readonly import('/Users/veterba/Documents/workplace/code/Recto/src/renderer/features/graph/render-state').GraphNodeView[]
+  nodes: readonly GraphNodeView[]
   palette: Palette
   positions: Float32Array<ArrayBufferLike>
   visibleEdges: number[]
@@ -109,13 +109,13 @@ export function drawGlow({
   zoomScale,
 }: {
   active: number
-  camera: import('/Users/veterba/Documents/workplace/code/Recto/src/renderer/features/graph/render-state').Camera
+  camera: Camera
   context: CanvasRenderingContext2D
   height: number
   hovered: number
   look: GraphLook
   nodeColours: string[]
-  nodes: readonly import('/Users/veterba/Documents/workplace/code/Recto/src/renderer/features/graph/render-state').GraphNodeView[]
+  nodes: readonly GraphNodeView[]
   positions: Float32Array<ArrayBufferLike>
   surface: { dark: boolean; edge: string; node: string; orphan: string; label: string }
   width: number
@@ -162,7 +162,7 @@ export function drawPulses({
   zoomScale,
 }: {
   bend: number
-  camera: import('/Users/veterba/Documents/workplace/code/Recto/src/renderer/features/graph/render-state').Camera
+  camera: Camera
   context: CanvasRenderingContext2D
   edgeColour: (a: number, b: number) => string
   edgeWidth: number
@@ -238,7 +238,7 @@ export function drawVeil({
 }: {
   active: number
   autoEdges: ReadonlySet<number> | undefined
-  camera: import('/Users/veterba/Documents/workplace/code/Recto/src/renderer/features/graph/render-state').Camera
+  camera: Camera
   context: CanvasRenderingContext2D
   edgeWidth: number
   edges: readonly [number, number][]
@@ -247,7 +247,7 @@ export function drawVeil({
   height: number
   look: GraphLook
   nodeColours: string[]
-  nodes: readonly import('/Users/veterba/Documents/workplace/code/Recto/src/renderer/features/graph/render-state').GraphNodeView[]
+  nodes: readonly GraphNodeView[]
   paint: (colour: string, coords: number[], alpha: number, hollow?: boolean) => void
   palette: Palette
   positions: Float32Array<ArrayBufferLike>
