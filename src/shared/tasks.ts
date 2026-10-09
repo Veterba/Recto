@@ -1,3 +1,5 @@
+import { isEvalsPath } from './bots'
+
 /**
  * Tasks, as the user writes them: checkboxes anywhere ("- [ ] call the bank"),
  * plain list items under a heading named Tasks / Задачи / TODO / Option tasks,
@@ -46,7 +48,7 @@ const clean = (text: string): string =>
  * the card's own text is its title.
  */
 export function extractTasks(path: string, body: string, frontmatter: Record<string, unknown>, title: string): ExtractedTask[] {
-  if (NO_TASK_FOLDERS.test(path)) return []
+  if (NO_TASK_FOLDERS.test(path) || isEvalsPath(path)) return []
   const out: ExtractedTask[] = []
   if (/^tasks\//i.test(path) && (frontmatter['status'] !== undefined || frontmatter['board'] !== undefined)) {
     out.push({

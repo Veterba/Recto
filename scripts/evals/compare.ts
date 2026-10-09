@@ -3,26 +3,28 @@ import path from 'node:path'
 import { KINDS } from './cases.ts'
 import { summarise, type Scored } from './metrics.ts'
 import { fromLine, gb, pct, secs } from './report.ts'
-import { REPO_RUNS, findEvalsFolder, gradesOf, guard, listRuns, type StoredRun } from './store.ts'
+import { REAL_VAULT, findEvalsFolder, gradesOf, guard, listRuns, modelSlug, runPaths, stamp, type StoredRun } from './store.ts'
 
 /**
  * npm run bots:eval:compare -- "<run id A>" "<run id B>" [more…]
  *
  * Runs side by side - two runs of one model, or the same cases on several
- * models - written as a standalone report into the newest run's folder.
+ * models - written as a note of its own ("Eval <time> — comparison …") beside
+ * the newest run's.
  */
 
 const ids = process.argv.slice(2).filter((a) => !a.startsWith('--'))
-const evalsFlag = process.argv.indexOf('--evals-dir')
-const evalsDir = evalsFlag >= 0 ? process.argv[evalsFlag + 1]! : findEvalsFolder()
+const vaultFlag = process.argv.indexOf('--evals-vault')
+const evalsVault = vaultFlag >= 0 ? process.argv[vaultFlag + 1]! : REAL_VAULT
+const evalsDir = findEvalsFolder(evalsVault)
 
 function main(): void {
   if (ids.length < 2) throw new Error('Give at least two run ids: npm run bots:eval:compare -- "<run id A>" "<run id B>"')
-  const all = [...listRuns(REPO_RUNS), ...listRuns(evalsDir)]
+  const all = listRuns(evalsVault)
   const runs: StoredRun[] = ids.map((id) => {
     const found = all.filter((r) => r.config.run_id === id)
     if (found.length !== 1)
-      throw new Error(found.length === 0 ? `No run "${id}".` : `More than one run "${id}": ${found.map((r) => r.dir).join(', ')}`)
+      throw new Error(found.length === 0 ? `No run "${id}".` : `More than one run "${id}": ${found.map((r) => r.note).join(', ')}`)
     return found[0]!
   })
   const rows = runs.map((r) => r.lines.map(fromLine) as Scored[])
@@ -78,7 +80,7 @@ function main(): void {
       : '— (no router or tools yet)',
   )
   metric('My grades (good of graded)', (r) => {
-    const g = [...gradesOf(r.dir).values()]
+    const g = [...gradesOf(r).values()]
     return g.length === 0 ? '—' : `${g.filter((x) => x.grade === 'good').length} of ${g.length}`
   })
   out.push('')
@@ -100,8 +102,12 @@ function main(): void {
   }
   out.push('')
 
-  const target = path.join(newest.dir, `comparison — ${runs.map((r) => r.config.model).join(' vs ')}.md`.replace(/[\\/:*?"<>|]/g, '-'))
-  if (path.relative(evalsDir, target).startsWith('..') === false) guard(target, evalsDir, newest.dir)
+  const id = `${stamp(new Date())} — comparison ${runs.map((r) => modelSlug(r.config.model)).join(' vs ')}`.replace(/[\\/:*?"<>|]/g, '-')
+  const where = runPaths(evalsVault, evalsDir, newest.config.model, id)
+  guard(where.note, evalsVault, evalsDir, where)
+  if (fs.existsSync(where.note)) throw new Error(`${where.note} exists already.`)
+  const target = where.note
+  fs.mkdirSync(path.dirname(target), { recursive: true })
   fs.writeFileSync(target, `${out.join('\n')}\n`)
   console.log(`Comparison: ${target}`)
 }

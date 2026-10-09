@@ -6,25 +6,27 @@ import type { Scored } from './metrics.ts'
 /**
  * Where eval runs are kept, and the files kept beside them.
  *
- * Fixture runs go to docs/evals/<run id>/ in the repo, listed in
- * docs/evals/README.md. Runs on a copy of the real vault, or with the private
- * cases, go to the vault's evals folder ("Evals Qwen", found by name), one
- * subfolder per model, listed in Evals.md there. The evals folder also holds
- * "Eval log.md" (every run, for reading in Recto) and graded.jsonl (every
- * graded answer: a future fine-tuning set, so never in the repo).
+ * Every run, fixture or private, is ONE note in the vault's evals folder
+ * ("Evals Qwen", found by name): `Evals Qwen/<model>/Eval <run id>.md`, a name
+ * unique in the whole vault so it can be linked as [[Eval <run id>]]. Its raw
+ * data (results.jsonl, config.json) goes to `<vault>/.recto/evals/<run id>/`:
+ * hidden from the tree, never in the repo - it holds the answers. The folder
+ * also holds "Recto evals.md" (the index), "Eval log.md" (every run, for
+ * reading in Recto); graded.jsonl (every graded answer) is raw data too.
  *
- * In the vault, only that folder is ever written, and in it only new run
- * folders, Evals.md, Eval log.md and graded.jsonl; an older run is never
- * changed. `guard` enforces it.
+ * Only those are ever written, an older run never. `guard` enforces it.
  */
 
 export const ROOT = path.resolve(import.meta.dirname, '../..')
-export const REPO_RUNS = path.join(ROOT, 'docs/evals')
-/** The real vault, to find the evals folder in. Read only to find it; nothing else in it is touched. */
+/** The real vault, whose evals folder the runs go to. Only that folder and .recto/evals are written. */
 export const REAL_VAULT = process.env['RECTO_EVALS_VAULT'] ?? '/Users/veterba/Documents/Notes/Recto-vault'
 const EVALS_FOLDER_NAME = 'evals qwen'
+/** The raw data of every run, inside the vault, hidden. */
+export const DATA_DIR = path.join('.recto', 'evals')
+export const INDEX_NOTE = 'Recto evals.md'
+export const LOG_NOTE = 'Eval log.md'
 
-/** The evals folder: the one folder named "Evals Qwen" (any case) outside .recto/. Throws unless there is exactly one. */
+/** The one folder named "Evals Qwen" (any case) outside .recto/. Throws unless there is exactly one. */
 export function findEvalsFolder(vault: string = REAL_VAULT): string {
   const found: string[] = []
   const walk = (dir: string, depth: number): void => {
@@ -46,20 +48,10 @@ export function findEvalsFolder(vault: string = REAL_VAULT): string {
   if (found.length !== 1)
     throw new Error(
       found.length === 0
-        ? `No folder named "Evals Qwen" in ${vault}. Make one, or tell the runner where with --evals-dir.`
-        : `More than one folder named "Evals Qwen": ${found.join(', ')}. Pass the right one with --evals-dir.`,
+        ? `No folder named "Evals Qwen" in ${vault}. Make one, or tell the runner where with --evals-vault.`
+        : `More than one folder named "Evals Qwen": ${found.join(', ')}.`,
     )
   return found[0]!
-}
-
-/** A path the runner may write in the vault: inside the evals folder, and an older run never. */
-export function guard(target: string, evalsDir: string, newRunDir: string | null): void {
-  const rel = path.relative(evalsDir, target)
-  if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`Refusing to write outside the evals folder: ${target}`)
-  const top = new Set(['Evals.md', 'Eval log.md', 'graded.jsonl'])
-  if (top.has(rel)) return
-  if (newRunDir !== null && (target === newRunDir || !path.relative(newRunDir, target).startsWith('..'))) return
-  throw new Error(`Refusing to write ${target}: only a new run folder, Evals.md, Eval log.md and graded.jsonl may be written.`)
 }
 
 /** "qwen3.5:9b" → "qwen3.5-9b", a folder name. */
@@ -69,118 +61,153 @@ const pad = (n: number): string => String(n).padStart(2, '0')
 export const stamp = (d: Date): string =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}-${pad(d.getMinutes())}`
 
-/** "2026-10-03 14-05 — baseline", numbered if that folder is taken. */
-export function newRunId(base: string, label: string, now: Date): string {
+/** A run's note name: "Eval 2026-10-03 17-53 — B final". */
+export const noteName = (runId: string): string => `Eval ${runId}`
+
+/** Every note name in the vault (file names without .md), lowercased, for the uniqueness rule. */
+export function noteNames(vault: string): Set<string> {
+  const out = new Set<string>()
+  const walk = (dir: string): void => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith('.')) continue
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) walk(full)
+      else if (e.name.toLowerCase().endsWith('.md')) out.add(e.name.slice(0, -3).normalize('NFC').toLowerCase())
+    }
+  }
+  walk(vault)
+  return out
+}
+
+/** "2026-10-03 14-05 — baseline", numbered when that name is taken anywhere in the vault. */
+export function newRunId(vault: string, label: string, now: Date): string {
   const clean = label.replace(/[\\/:*?"<>|]/g, '-').trim() || 'run'
   const id = `${stamp(now)} — ${clean}`
+  const taken = fs.existsSync(vault) ? noteNames(vault) : new Set<string>()
+  const free = (candidate: string): boolean =>
+    !taken.has(noteName(candidate).normalize('NFC').toLowerCase()) && !fs.existsSync(path.join(vault, DATA_DIR, candidate))
   let n = 1
   let candidate = id
-  while (fs.existsSync(path.join(base, candidate))) candidate = `${id} (${++n})`
+  while (!free(candidate)) candidate = `${id} (${++n})`
   return candidate
 }
 
-export type StoredRun = { dir: string; config: RunConfig; lines: ResultLine[] }
+/** Where a run is written: its note and its raw data folder. */
+export type RunPaths = { id: string; note: string; data: string }
 
-/** Every run under `base` (one level of run folders, or two with model folders), oldest first. */
-export function listRuns(base: string): StoredRun[] {
+export const runPaths = (vault: string, evalsDir: string, model: string, id: string): RunPaths => ({
+  id,
+  note: path.join(evalsDir, modelSlug(model), `${noteName(id)}.md`),
+  data: path.join(vault, DATA_DIR, id),
+})
+
+const inside = (dir: string, target: string): boolean => {
+  const rel = path.relative(dir, target)
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+}
+
+/**
+ * A path the runner may write: the index and the log in the evals folder,
+ * graded.jsonl in the data folder, and the new run's note and data. Anything
+ * else - an older run, a note elsewhere in the vault - throws.
+ */
+export function guard(target: string, vault: string, evalsDir: string, run: RunPaths | null): void {
+  const t = path.resolve(target)
+  if (t === path.resolve(evalsDir, INDEX_NOTE) || t === path.resolve(evalsDir, LOG_NOTE)) return
+  if (t === path.resolve(vault, DATA_DIR, 'graded.jsonl')) return
+  if (run !== null && (t === path.resolve(run.note) || inside(path.resolve(run.data), t))) return
+  throw new Error(
+    `Refusing to write ${target}: only a new run's note and data, ${INDEX_NOTE}, ${LOG_NOTE} and graded.jsonl may be written.`,
+  )
+}
+
+export type StoredRun = { data: string; note: string; config: RunConfig; lines: ResultLine[] }
+
+/** Every run in the vault's data folder, oldest first. */
+export function listRuns(vault: string): StoredRun[] {
+  const base = path.join(vault, DATA_DIR)
   const runs: StoredRun[] = []
-  const visit = (dir: string, depth: number): void => {
-    let entries: fs.Dirent[]
+  let entries: fs.Dirent[] = []
+  try {
+    entries = fs.readdirSync(base, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  for (const e of entries) {
+    if (!e.isDirectory()) continue
+    const dir = path.join(base, e.name)
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true })
+      const config = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8')) as RunConfig
+      runs.push({
+        data: dir,
+        note: path.join(vault, config.note ?? ''),
+        config,
+        lines: fs
+          .readFileSync(path.join(dir, 'results.jsonl'), 'utf8')
+          .split('\n')
+          .filter((l) => l.trim() !== '')
+          .map((l) => JSON.parse(l) as ResultLine),
+      })
     } catch {
-      return
-    }
-    for (const e of entries) {
-      if (!e.isDirectory()) continue
-      const full = path.join(dir, e.name)
-      const config = path.join(full, 'config.json')
-      if (fs.existsSync(config)) {
-        try {
-          runs.push({
-            dir: full,
-            config: JSON.parse(fs.readFileSync(config, 'utf8')) as RunConfig,
-            lines: fs
-              .readFileSync(path.join(full, 'results.jsonl'), 'utf8')
-              .split('\n')
-              .filter((l) => l.trim() !== '')
-              .map((l) => JSON.parse(l) as ResultLine),
-          })
-        } catch {
-          // A run folder half written by a crash: not a run.
-        }
-      } else if (depth < 1) visit(full, depth + 1)
+      // Half written by a crash: not a run.
     }
   }
-  visit(base, 0)
   return runs.sort((a, b) => a.config.date.localeCompare(b.config.date))
 }
 
-export function gradesOf(dir: string): Map<string, Grade> {
+/** The grades ticked in a run's note. */
+export function gradesOf(run: Pick<StoredRun, 'note'>): Map<string, Grade> {
   try {
-    return readGrades(fs.readFileSync(path.join(dir, 'report.md'), 'utf8'))
+    return readGrades(fs.readFileSync(run.note, 'utf8'))
   } catch {
     return new Map()
   }
 }
 
-/** The run this one is compared to: the newest earlier run of the same model in the same place. */
-export function previousRun(runs: readonly StoredRun[], model: string): Previous | null {
-  const same = runs.filter((r) => r.config.model === model)
-  const last = same.at(-1)
+/** The run this one is compared to: the newest earlier run of the same model on the same kind of vault. */
+export function previousRun(runs: readonly StoredRun[], model: string, vaultKind: 'fixture' | 'copy'): Previous | null {
+  const last = runs.filter((r) => r.config.model === model && r.config.vault.kind === vaultKind).at(-1)
   if (last === undefined) return null
-  return { config: last.config, rows: last.lines.map(fromLine), grades: gradesOf(last.dir) }
+  return { config: last.config, rows: last.lines.map(fromLine), grades: gradesOf(last) }
 }
 
-const rowFor = (run: StoredRun, link: string): string => {
+/** A link to a run's note: by its name, never its path. */
+export const runLink = (runId: string): string => `[[${noteName(runId)}]]`
+
+const TABLE_HEAD = [
+  '| Date | Model | Vault | Label | recall@4 | Pass | Graded good | TTFT p50 | Report |',
+  '|---|---|---|---|---|---|---|---|---|',
+]
+
+const rowFor = (run: StoredRun): string => {
   const rows: Scored[] = run.lines.map(fromLine)
   const h = headline(rows)
-  const grades = [...gradesOf(run.dir).values()]
+  const grades = [...gradesOf(run).values()]
   const share = grades.length === 0 ? '—' : `${pct(grades.filter((g) => g.grade === 'good').length / grades.length)} of ${grades.length}`
-  return `| ${run.config.run_id.slice(0, 16).replace(/(\d\d)-(\d\d)$/, '$1:$2')} | ${run.config.model} | ${run.config.label} | ${pct(h.recall4)} | ${pct(h.passRate)} | ${share} | ${secs(h.ttftP50)} | ${link} |`
+  return `| ${run.config.run_id.slice(0, 16).replace(/(\d\d)-(\d\d)$/, '$1:$2')} | ${run.config.model} | ${run.config.vault.kind} | ${run.config.label} | ${pct(h.recall4)} | ${pct(h.passRate)} | ${share} | ${secs(h.ttftP50)} | ${runLink(run.config.run_id)} |`
 }
 
-const TABLE_HEAD = ['| Date | Model | Label | recall@4 | Pass | Graded good | TTFT p50 | Report |', '|---|---|---|---|---|---|---|---|']
-
-export function writeRepoIndex(): void {
-  const runs = listRuns(REPO_RUNS).reverse()
+/** "Recto evals.md": every run, newest first. */
+export function writeVaultIndex(vault: string, evalsDir: string): void {
+  const runs = listRuns(vault).reverse()
+  const target = path.join(evalsDir, INDEX_NOTE)
+  guard(target, vault, evalsDir, null)
   const lines = [
-    '# Recto evals on the fixture vault',
+    '# Recto evals',
     '',
-    'Every `npm run bots:eval` on the fixture vault (`tests/bots/eval/fixture-vault`, cases in `tests/bots/eval/cases.yaml`), newest first. The runner rewrites this table; the format is described in each report ("Recto Eval Report v1").',
+    "Every `npm run bots:eval`, newest first: the fixture vault and copies of this vault. Written by the runner; tick good / bad in a run's note to grade it.",
     '',
     ...TABLE_HEAD,
-    ...runs.map((r) => rowFor(r, `[report](${encodeURI(`./${path.basename(r.dir)}/report.md`)})`)),
-    '',
-  ]
-  fs.mkdirSync(REPO_RUNS, { recursive: true })
-  fs.writeFileSync(path.join(REPO_RUNS, 'README.md'), lines.join('\n'))
-}
-
-/** A wikilink to a file in the vault, by its vault-relative path. */
-export const wikilink = (vault: string, file: string, label: string): string =>
-  `[[${path.relative(vault, file).split(path.sep).join('/').replace(/\.md$/i, '')}|${label}]]`
-
-export function writeVaultIndex(evalsDir: string, vault: string = REAL_VAULT): void {
-  const runs = listRuns(evalsDir).reverse()
-  const target = path.join(evalsDir, 'Evals.md')
-  guard(target, evalsDir, null)
-  const lines = [
-    '# Evals',
-    '',
-    'Recto eval runs on a copy of this vault and on the private cases, newest first, one folder per model. Written by `npm run bots:eval`; tick good / bad in a report to grade it.',
-    '',
-    ...TABLE_HEAD,
-    ...runs.map((r) => rowFor(r, wikilink(vault, path.join(r.dir, 'report.md'), 'report'))),
+    ...runs.map(rowFor),
     '',
   ]
   fs.writeFileSync(target, lines.join('\n'))
 }
 
 /** Add an entry to "Eval log.md", creating it with a title the first time. */
-export function appendEvalLog(evalsDir: string, entry: string): void {
-  const target = path.join(evalsDir, 'Eval log.md')
-  guard(target, evalsDir, null)
+export function appendEvalLog(vault: string, evalsDir: string, entry: string): void {
+  const target = path.join(evalsDir, LOG_NOTE)
+  guard(target, vault, evalsDir, null)
   if (!fs.existsSync(target))
     fs.writeFileSync(
       target,
@@ -204,13 +231,13 @@ export type GradedLine = {
 }
 
 /**
- * Every grade ticked in any report under `bases` and not yet in graded.jsonl,
+ * Every grade ticked in any run's note and not yet in graded.jsonl,
  * appended to it. Append-only: a grade already there is never rewritten.
  * Returns how many were added.
  */
-export function collectGrades(evalsDir: string, bases: readonly string[]): number {
-  const target = path.join(evalsDir, 'graded.jsonl')
-  guard(target, evalsDir, null)
+export function collectGrades(vault: string, evalsDir: string): number {
+  const target = path.join(vault, DATA_DIR, 'graded.jsonl')
+  guard(target, vault, evalsDir, null)
   const have = new Set<string>()
   if (fs.existsSync(target))
     for (const line of fs.readFileSync(target, 'utf8').split('\n')) {
@@ -223,9 +250,9 @@ export function collectGrades(evalsDir: string, bases: readonly string[]): numbe
       }
     }
   const added: string[] = []
-  for (const base of bases)
-    for (const run of listRuns(base)) {
-      const grades = gradesOf(run.dir)
+  {
+    for (const run of listRuns(vault)) {
+      const grades = gradesOf(run)
       for (const line of run.lines) {
         const g = grades.get(line.id)
         if (g === undefined || have.has(`${run.config.run_id}\u0000${line.id}`)) continue
@@ -245,6 +272,10 @@ export function collectGrades(evalsDir: string, bases: readonly string[]): numbe
         added.push(JSON.stringify(entry))
       }
     }
-  if (added.length > 0) fs.appendFileSync(target, `${added.join('\n')}\n`)
+  }
+  if (added.length > 0) {
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.appendFileSync(target, `${added.join('\n')}\n`)
+  }
   return added.length
 }

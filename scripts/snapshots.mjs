@@ -145,9 +145,9 @@ function assertProfileFree(dir) {
   }
 }
 
-function prepareVault(theme) {
+function prepareVault(theme, folder = theme) {
   // A fixed path, not a random one: Settings -> Vault shows it.
-  const base = path.join(SNAPSHOT_ROOT, theme)
+  const base = path.join(SNAPSHOT_ROOT, folder)
   fs.rmSync(base, { recursive: true, force: true })
   fs.mkdirSync(base, { recursive: true })
   const vault = path.join(base, 'Snapshot vault')
@@ -704,6 +704,48 @@ async function botStills(origin, dir, theme) {
  * looked at: each compare run takes the next number, and its files carry it.
  */
 const DIFFS = path.join(ROOT, 'snapshots/diffs')
+/**
+ * Tables, in their own run so no other screen changes: the snapshot vault
+ * plus an eval-runs table wider than the text column (test/fixtures/tables).
+ * Single pane, a split with the table scrolled sideways, and focus mode.
+ */
+async function tableShots(dir, theme) {
+  const { base, vault, userData } = prepareVault(theme, `${theme}-tables`)
+  fs.cpSync(path.join(ROOT, 'test/fixtures/tables'), vault, { recursive: true })
+  const { app, page } = await launch(userData)
+  try {
+    await key(page, 'Mod+O')
+    await page.keyboard.type('Eval runs')
+    await sleep(300)
+    await page.keyboard.press('Enter')
+    await page.waitForSelector('.cm-table')
+    await page.evaluate(() => document.activeElement?.blur())
+    await shoot(page, dir, '26-table', 1200)
+
+    await page.evaluate(() => document.querySelector('.cm-content')?.focus())
+    await key(page, 'Mod+Alt+ArrowRight')
+    await page.waitForFunction(() => document.querySelectorAll('[data-tabs-id]').length === 2)
+    await page.waitForFunction(() => document.querySelectorAll('.cm-table').length >= 2)
+    await page.evaluate(() => {
+      const scroll = document.querySelectorAll('.cm-table-scroll')[0]
+      scroll?.scrollTo(160, 0)
+      document.activeElement?.blur()
+    })
+    await shoot(page, dir, '26b-table-split-scrolled', 900)
+
+    await page.evaluate(() => document.querySelectorAll('.cm-content')[1]?.focus())
+    await key(page, 'Mod+Shift+Enter')
+    await page.waitForSelector(':root[data-focus="on"]')
+    await sleep(600)
+    await page.evaluate(() => document.activeElement?.blur())
+    await shoot(page, dir, '26c-table-focus', 900)
+    console.log('  26-table')
+  } finally {
+    await app.close()
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
 function nextRun() {
   const counter = path.join(DIFFS, 'last-run')
   const run = (fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) || 0 : 0) + 1
@@ -735,6 +777,7 @@ for (const theme of ['light', 'dark']) {
     }
     await smoke(page, vault)
     await botStills(renderer.origin, dir, theme)
+    await tableShots(dir, theme)
     if (COMPARE !== null) {
       for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.png'))) {
         const old = path.join(COMPARE, theme, name)

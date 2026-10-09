@@ -190,31 +190,85 @@
   font-size: 0.9em;
 }
 
-/* Tables, drawn like a document table rather than a spreadsheet. */
+/*
+ * Tables, drawn like a document table rather than a spreadsheet.
+ *
+ * The wrap is the text column; the scroll box inside it is as wide as the
+ * table wants, at least the column and at most the pane (--cm-pane-width,
+ * table-widget.ts), centred on the column. Past the pane it scrolls sideways
+ * inside itself, with a fade on the side that has more - the page never does.
+ */
 .cm-table-wrap {
   margin: var(--size-2) 0;
-  overflow-x: auto;
   cursor: text;
 }
+.cm-table-scroll {
+  position: relative;
+  left: 50%;
+  width: max-content;
+  min-width: 100%;
+  max-width: var(--cm-pane-width, 100%);
+  max-height: 70vh;
+  overflow: auto;
+  transform: translateX(-50%);
+  overscroll-behavior-x: contain;
+}
+.cm-table-scroll.is-more-right {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.cm-table-scroll.is-more-left {
+  mask-image: linear-gradient(to right, transparent, #000 28px);
+}
+.cm-table-scroll.is-more-left.is-more-right {
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
 .cm-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-family: var(--font-ui);
   font-size: 0.92em;
   line-height: 1.5;
+  /* Wrap at spaces only; a cell that may break mid-word says so itself. */
+  overflow-wrap: normal;
+  word-break: normal;
 }
 .cm-table th,
 .cm-table td {
   padding: 6px var(--size-3);
-  border: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
 }
-.cm-table th {
+.cm-table tr > :first-child {
+  border-left: 1px solid var(--border);
+}
+.cm-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-top: 1px solid var(--border);
   background: var(--bg-secondary);
-  font-weight: 600;
+  color: var(--text-primary);
+  font-weight: 650;
 }
 .cm-table tbody tr:nth-child(even) td {
   background: color-mix(in srgb, var(--bg-secondary) 45%, transparent);
+}
+.cm-table .cm-cell-nowrap,
+.cm-table .cm-cell-whole {
+  white-space: nowrap;
+}
+/* Text keeps a readable width: past the pane the table scrolls rather than squeezing it to a word a line. */
+.cm-table .cm-cell-text {
+  min-width: 14ch;
+}
+.cm-table .cm-cell-long {
+  min-width: min(280px, 40vw);
+  overflow-wrap: anywhere;
+}
+.cm-table .cm-cell-number {
+  font-variant-numeric: tabular-nums;
 }
 .cm-table code {
   padding: 1px var(--size-1);
@@ -222,6 +276,10 @@
   background: var(--code-bg);
   font-family: var(--font-mono);
   font-size: 0.9em;
+}
+.cm-table .cm-wikilink,
+.cm-table .cm-mdlink {
+  cursor: pointer;
 }
 
 /* Footnote markers: small, raised, in the accent. */

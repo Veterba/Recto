@@ -11,6 +11,16 @@ import type { BotLook, BotPersonality } from './bot-presets'
 /** Where conversations live, the main chat's and the bots'. A real folder, hidden from the file tree. */
 export const CHATS_FOLDER = 'chats'
 
+/**
+ * The eval runner's folder in the vault (found by this name anywhere) and its
+ * hidden raw data. Recto never reads its own old answers: both are out of bot
+ * retrieval, note cards, the task index and the vault map.
+ */
+export const EVALS_FOLDER_NAME = 'Evals Qwen'
+export const EVALS_DATA_FOLDER = '.recto/evals'
+export const isEvalsPath = (p: string): boolean =>
+  new RegExp(`(^|/)${EVALS_FOLDER_NAME}(/|$)`, 'i').test(p) || p.toLowerCase().startsWith(`${EVALS_DATA_FOLDER}/`)
+
 /** Where bot definitions live in the vault: one folder per bot. */
 export const BOTS_FOLDER = '.recto/bots'
 

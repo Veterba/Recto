@@ -69,7 +69,7 @@ function renderTex(tex: string, display: boolean): string {
 export function revealOnPress(dom: HTMLElement, view: EditorView): void {
   dom.addEventListener('mousedown', (event) => {
     // Links and inputs inside the widget keep their own behaviour.
-    if ((event.target as HTMLElement).closest('a, button, input') !== null) return
+    if ((event.target as HTMLElement).closest('a, button, input, .cm-wikilink, .cm-mdlink') !== null) return
     event.preventDefault()
     const pos = view.posAtDOM(dom)
     view.dispatch({ selection: { anchor: pos } })
@@ -114,7 +114,7 @@ export class MathWidget extends WidgetType {
  * KaTeX's own output, nothing a note contains is parsed as markup.
  */
 const INLINE =
-  /(\$\$[^$]+\$\$|\$[^$\s][^$]*?\$|`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_|==[^=]+==|~~[^~]+~~|\[\[[^\]]+\]\])/g
+  /(\$\$[^$]+\$\$|\$[^$\s][^$]*?\$|`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_|==[^=]+==|~~[^~]+~~|\[\[[^\]]+\]\]|\[[^\]]+\]\([^)\s]+\))/g
 
 export function renderInline(text: string, into: HTMLElement): void {
   let last = 0
@@ -155,7 +155,16 @@ export function renderInline(text: string, into: HTMLElement): void {
       const inner = token.slice(2, -2)
       const span = document.createElement('span')
       span.className = 'cm-wikilink'
+      // The label shows; the target goes with it, for the click.
+      span.dataset['target'] = inner.includes('|') ? inner.slice(0, inner.indexOf('|')) : inner
       span.textContent = inner.includes('|') ? inner.slice(inner.indexOf('|') + 1) : inner.replace(/#.*$/, '')
+      into.append(span)
+    } else if (token.startsWith('[')) {
+      const close = token.indexOf('](')
+      const span = document.createElement('span')
+      span.className = 'cm-mdlink'
+      span.dataset['href'] = token.slice(close + 2, -1)
+      renderInline(token.slice(1, close), span)
       into.append(span)
     } else {
       const em = document.createElement('em')

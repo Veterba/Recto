@@ -9,7 +9,6 @@ import { languageOf, score, summarise, type Answered, type Scored } from './metr
 import { REPORT_VERSION, gb, pct, renderReport, resultLine, secs, type Harness, type Memory, type RunConfig } from './report.ts'
 import {
   REAL_VAULT,
-  REPO_RUNS,
   ROOT,
   appendEvalLog,
   collectGrades,
@@ -18,9 +17,11 @@ import {
   listRuns,
   modelSlug,
   newRunId,
+  noteNames,
+  noteName,
   previousRun,
-  wikilink,
-  writeRepoIndex,
+  runLink,
+  runPaths,
   writeVaultIndex,
 } from './store.ts'
 
@@ -32,10 +33,12 @@ import {
  * and model profile as the chat (src/main/bots/eval-mode.ts) - with the real
  * local model, then scores the answers and writes the run's report.
  *
- * Without --vault it runs the fixture vault and its cases, and the run goes to
- * docs/evals/. With --vault (always copied first; the vault itself is never
- * opened) it runs the private cases, and the run goes to the vault's evals
- * folder. Either way the run is added to the eval log there.
+ * Without --vault it runs the fixture vault and its cases; with --vault (always
+ * copied first; the vault itself is never opened) the private cases. Either
+ * way the run becomes one note in the real vault's evals folder
+ * ("Eval <run id>", store.ts), its raw data goes to the vault's hidden
+ * .recto/evals/, and it is added to the index and the eval log there.
+ * --evals-vault <path> writes them to another vault (tests, a copy).
  */
 
 const OLLAMA = 'http://127.0.0.1:11434'
@@ -116,7 +119,7 @@ function copyVault(source: string, into: string, fixture: boolean): void {
     // The index is rebuilt from the notes; backups and trash are not notes. The evals folder is
     // the eval's own: its questions and earlier runs' answers would be found as notes.
     filter: (src) =>
-      !/[\\/]\.recto[\\/](index\.db.*|backups|archive)(?:$|[\\/])|[\\/]\.trash(?:$|[\\/])|[\\/]\.git(?:$|[\\/])/.test(src) &&
+      !/[\\/]\.recto[\\/](index\.db.*|backups|archive|evals)(?:$|[\\/])|[\\/]\.trash(?:$|[\\/])|[\\/]\.git(?:$|[\\/])/.test(src) &&
       !(src.split(/[\\/]/).at(-1)?.toLowerCase() === 'evals qwen'),
   })
   if (!fixture) return
@@ -219,7 +222,8 @@ async function main(): Promise<void> {
   if (cases.length === 0) throw new Error(`No cases${only === undefined ? '' : ` of kind ${only}`}.`)
   if (!fixture && path.resolve(vaultArg).startsWith(path.resolve(ROOT))) throw new Error('--vault must be a vault outside the repo.')
 
-  const evalsDir = flag('--evals-dir') ?? findEvalsFolder()
+  const evalsVault = path.resolve(flag('--evals-vault') ?? REAL_VAULT)
+  const evalsDir = findEvalsFolder(evalsVault)
   const battery = batteryTooLow()
   if (battery !== null && !args.includes('--force')) throw new Error(`${battery} Timings would be wrong; charge first, or pass --force.`)
 
@@ -362,11 +366,10 @@ async function main(): Promise<void> {
     return { case: c, answered: a, scores: score(c, a, titles) }
   })
 
-  const base = fixture ? REPO_RUNS : path.join(evalsDir, modelSlug(model))
   const now = new Date()
-  const runId = newRunId(base, label, now)
-  const runDir = path.join(base, runId)
-  const previous = previousRun(listRuns(base), model)
+  const runId = newRunId(evalsVault, label, now)
+  const where = runPaths(evalsVault, evalsDir, model, runId)
+  const previous = previousRun(listRuns(evalsVault), model, fixture ? 'fixture' : 'copy')
   const memory: Memory = {
     ollamaPeakBytes: peak.ollama || null,
     appPeakBytes: peak.app || null,
@@ -404,28 +407,33 @@ async function main(): Promise<void> {
     memory,
     build: run.build ?? null,
     why: flag('--why') ?? null,
+    note: path.relative(evalsVault, where.note).split(path.sep).join('/'),
   }
 
-  if (!fixture) guard(runDir, evalsDir, runDir)
-  fs.mkdirSync(runDir, { recursive: true })
-  fs.writeFileSync(path.join(runDir, 'report.md'), renderReport(config, rows, previous))
-  fs.writeFileSync(path.join(runDir, 'results.jsonl'), `${rows.map((r) => JSON.stringify(resultLine(r))).join('\n')}\n`)
-  fs.writeFileSync(path.join(runDir, 'config.json'), `${JSON.stringify(config, null, 2)}\n`)
+  // One note per run, with a name no other note in the vault has.
+  if (noteNames(evalsVault).has(noteName(runId).normalize('NFC').toLowerCase()))
+    throw new Error(`A note named "${noteName(runId)}" already exists in the vault; not writing over it.`)
+  for (const target of [where.note, path.join(where.data, 'results.jsonl'), path.join(where.data, 'config.json')])
+    guard(target, evalsVault, evalsDir, where)
+  fs.mkdirSync(path.dirname(where.note), { recursive: true })
+  fs.mkdirSync(where.data, { recursive: true })
+  fs.writeFileSync(where.note, renderReport(config, rows, previous))
+  fs.writeFileSync(path.join(where.data, 'results.jsonl'), `${rows.map((r) => JSON.stringify(resultLine(r))).join('\n')}\n`)
+  fs.writeFileSync(path.join(where.data, 'config.json'), `${JSON.stringify(config, null, 2)}\n`)
 
-  if (fixture) writeRepoIndex()
-  else writeVaultIndex(evalsDir)
-  const graded = collectGrades(evalsDir, [REPO_RUNS, evalsDir])
+  writeVaultIndex(evalsVault, evalsDir)
+  const graded = collectGrades(evalsVault, evalsDir)
 
   const s = summarise(rows)
-  const link = fixture ? `\`docs/evals/${runId}/report.md\` (repo)` : wikilink(REAL_VAULT, path.join(runDir, 'report.md'), 'report')
   appendEvalLog(
+    evalsVault,
     evalsDir,
     [
       `## ${runId.slice(0, 16).replace(/(\d\d)-(\d\d)$/, '$1:$2')} — ${label} · ${model} · ${fixture ? 'fixture' : 'vault copy'}`,
       '',
       `- Why: ${config.why ?? '—'}`,
       `- Result: ${s.passed}/${s.cases} pass (${pct(s.passRate)}), recall@4 ${pct(s.recall4)}, TTFT p50 ${secs(s.ttftP50)}, ${s.tokensPerSec?.toFixed(1) ?? '—'} tokens/s, peak Ollama ${gb(memory.ollamaPeakBytes)}`,
-      `- Report: ${link}${previous === null ? '' : ` · compared to "${previous.config.run_id}"`}`,
+      `- Report: ${runLink(runId)}${previous === null ? '' : ` · compared to ${runLink(previous.config.run_id)}`}`,
     ].join('\n'),
   )
 
@@ -433,7 +441,7 @@ async function main(): Promise<void> {
   console.log(
     `${s.passed}/${s.cases} pass, recall@4 ${pct(s.recall4)}, TTFT p50 ${secs(s.ttftP50)}.${graded > 0 ? ` ${graded} new grades collected.` : ''}`,
   )
-  console.log(`Report: ${path.join(runDir, 'report.md')}`)
+  console.log(`Report: ${where.note}`)
 }
 
 main().catch((err: unknown) => {

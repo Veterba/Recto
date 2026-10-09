@@ -1,10 +1,11 @@
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { readCases, type Case } from '../../scripts/evals/cases.ts'
 import { languageOf, percentile, saysNotFound, score, type Answered } from '../../scripts/evals/metrics.ts'
 import { readGrades, renderReport, type RunConfig } from '../../scripts/evals/report.ts'
-import { guard, newRunId } from '../../scripts/evals/store.ts'
+import { guard, newRunId, noteNames, runPaths } from '../../scripts/evals/store.ts'
 
 const answered = (over: Partial<Answered> = {}): Answered => ({
   id: 'x',
@@ -209,16 +210,37 @@ describe('report', () => {
 })
 
 describe('writing in the vault', () => {
-  const evals = path.join(os.tmpdir(), 'Evals Qwen')
-  const run = path.join(evals, 'qwen3.5-9b', '2026-10-03 10-00 — baseline')
-  it('allows the index, log, grades and the new run only', () => {
-    for (const f of ['Evals.md', 'Eval log.md', 'graded.jsonl']) expect(() => guard(path.join(evals, f), evals, null)).not.toThrow()
-    expect(() => guard(path.join(run, 'report.md'), evals, run)).not.toThrow()
-    expect(() => guard(path.join(evals, 'qwen3.5-9b', 'older run', 'report.md'), evals, run)).toThrow()
-    expect(() => guard(path.join(evals, '..', 'Recto plan.md'), evals, run)).toThrow()
+  const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-evals-vault-'))
+  const evals = path.join(vault, 'Projects', 'Evals Qwen')
+  fs.mkdirSync(path.join(evals, 'qwen3.5-9b'), { recursive: true })
+  fs.writeFileSync(path.join(evals, 'qwen3.5-9b', 'Eval 2026-10-03 09-05 — baseline.md'), '# old run\n')
+  fs.mkdirSync(path.join(vault, 'Other'), { recursive: true })
+  fs.writeFileSync(path.join(vault, 'Other', 'Eval 2026-10-03 09-06 — taken.md'), 'mine\n')
+  const run = runPaths(vault, evals, 'qwen3.5:9b', '2026-10-03 10-00 — baseline')
+
+  it('a run is one note in the evals folder, its data hidden in .recto/evals', () => {
+    expect(path.relative(vault, run.note)).toBe(path.join('Projects', 'Evals Qwen', 'qwen3.5-9b', 'Eval 2026-10-03 10-00 — baseline.md'))
+    expect(path.relative(vault, run.data)).toBe(path.join('.recto', 'evals', '2026-10-03 10-00 — baseline'))
   })
 
-  it('names runs by time and label', () => {
-    expect(newRunId(os.tmpdir(), 'baseline', new Date(2026, 9, 3, 9, 5))).toBe('2026-10-03 09-05 — baseline')
+  it('allows the index, the log, the grades and the new run only', () => {
+    for (const f of [
+      path.join(evals, 'Recto evals.md'),
+      path.join(evals, 'Eval log.md'),
+      path.join(vault, '.recto', 'evals', 'graded.jsonl'),
+    ])
+      expect(() => guard(f, vault, evals, null)).not.toThrow()
+    expect(() => guard(run.note, vault, evals, run)).not.toThrow()
+    expect(() => guard(path.join(run.data, 'results.jsonl'), vault, evals, run)).not.toThrow()
+    expect(() => guard(path.join(evals, 'qwen3.5-9b', 'Eval 2026-10-03 09-05 — baseline.md'), vault, evals, run)).toThrow()
+    expect(() => guard(path.join(vault, '.recto', 'evals', 'older run', 'config.json'), vault, evals, run)).toThrow()
+    expect(() => guard(path.join(vault, 'Recto plan.md'), vault, evals, run)).toThrow()
+  })
+
+  it('names runs by time and label, never with a name the vault already has', () => {
+    expect(newRunId(vault, 'baseline', new Date(2026, 9, 3, 10, 0))).toBe('2026-10-03 10-00 — baseline')
+    expect(newRunId(vault, 'baseline', new Date(2026, 9, 3, 9, 5))).toBe('2026-10-03 09-05 — baseline (2)')
+    expect(newRunId(vault, 'taken', new Date(2026, 9, 3, 9, 6))).toBe('2026-10-03 09-06 — taken (2)')
+    expect(noteNames(vault).has('eval 2026-10-03 09-05 — baseline')).toBe(true)
   })
 })

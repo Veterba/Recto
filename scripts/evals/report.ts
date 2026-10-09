@@ -48,6 +48,8 @@ export type RunConfig = {
   } | null
   /** Why it was run, for the eval log. */
   why: string | null
+  /** The run's note, vault-relative (from the vault layout on). */
+  note?: string
 }
 
 export type Grade = { grade: 'good' | 'bad'; note: string; question: string }

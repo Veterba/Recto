@@ -1,5 +1,5 @@
 import type { AiMessage } from '../../shared/ai'
-import type { BotSource } from '../../shared/bots'
+import { isEvalsPath, type BotSource } from '../../shared/bots'
 
 /**
  * What a bot reads before it answers: the parts of the vault that best match
@@ -47,8 +47,12 @@ export function queryTerms(question: string, max = 8): string[] {
   return terms
 }
 
-/** Is `path` inside one of `folders` (vault-relative, compared case-insensitively)? */
+/**
+ * Is `path` inside one of `folders` (vault-relative, compared case-insensitively)?
+ * The eval runner's reports always are: a bot never reads its own old answers.
+ */
 export function isExcluded(path: string, folders: readonly string[]): boolean {
+  if (isEvalsPath(path)) return true
   const lower = path.toLowerCase()
   return folders.some((folder) => {
     const f = folder.toLowerCase().replace(/^\/+|\/+$/g, '')

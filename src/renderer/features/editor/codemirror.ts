@@ -119,7 +119,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
    */
   const noteLinkOf = (element: HTMLElement): { target: string; heading: string | null } | null => {
     if (element.classList.contains('cm-wikilink')) {
-      const parsed = /^([^#|]+)(?:#([^|]+))?/.exec((element.textContent ?? '').trim())
+      const parsed = /^([^#|]+)(?:#([^|]+))?/.exec((element.dataset['target'] ?? element.textContent ?? '').trim())
       const name = parsed?.[1]?.trim()
       return name === undefined || name === '' ? null : { target: name, heading: parsed?.[2]?.trim() ?? null }
     }
@@ -160,8 +160,9 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       const target = event.target as HTMLElement | null
       if (target?.classList.contains('cm-wikilink') === true) {
         // The decoration spans the whole inside of the brackets, so the
-        // element's own text is the link - no need to re-scan the line.
-        const inner = target.textContent ?? ''
+        // element's own text is the link - no need to re-scan the line. A link
+        // drawn inside a widget (a table cell) shows its alias and carries its target.
+        const inner = target.dataset['target'] ?? target.textContent ?? ''
         const parsed = /^([^#|]+)(?:#([^|]+))?/.exec(inner.trim())
         const name = parsed?.[1]?.trim()
         if (name === undefined || name === '') return false

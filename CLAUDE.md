@@ -40,9 +40,12 @@ Never run the app, tests, indexing or evals against my real vault
 The only places in the vault that may be written: the project log below, and the evals folder.
 
 Evals folder: /Users/veterba/Documents/Notes/Recto-vault/Programming/Projects/Recto app/Evals Qwen
-(`npm run bots:eval` finds it by name). In it, write only new run folders (one subfolder per
-model, runs inside), `Evals.md`, `Eval log.md` and `graded.jsonl`. Never edit or delete an older
-run. Everything else in the vault stays untouched.
+(`npm run bots:eval` finds it by name). Every run is ONE note `Eval YYYY-MM-DD HH-mm — <label>.md` in
+`Evals Qwen/<model>/` (no folder per run); its raw `results.jsonl` and `config.json` go to the hidden
+`<vault>/.recto/evals/<run id>/` (never in the repo: they hold my answers), and so does `graded.jsonl`.
+In the vault, write only: a new run note, its new `.recto/evals/<run id>/` folder, `Recto evals.md` (the
+index), `Eval log.md` and `.recto/evals/graded.jsonl`. Never edit or delete an older run. Everything else
+in the vault stays untouched.
 
 ---
 
@@ -66,10 +69,15 @@ Write the log only to: /Users/veterba/Documents/Notes/Recto-vault/Programming/Pr
 - Format: frontmatter `tags: [log]`, then `## YYYY-MM-DD — <short title>`, then the entry.
 - Every log note ends with a section "## How it works (for vell)": in plain words, how the feature works end to end, which files do what (with paths), why this design was chosen over the alternatives, and which eval report or test shows it works.
   Write it for someone who knows programming basics but hasn't read this code.
-- Add every new note to the list at the end of `Recto log.md` in that folder:
-  `- [[Recto log/YYYY-MM-DD — v0.X.Y|YYYY-MM-DD — v0.X.Y]]`.
+- Add every new note to the list at the end of `Recto log.md` in that folder: `- [[YYYY-MM-DD — v0.X.Y]]`.
 - Only create a new note, append to the current version's note, or add it to that list.
   Never touch anything else in the vault.
+
+## Notes and links in the vault
+- Links are always `[[Note name]]`, never a path (`[[Recto log/…]]`, `[[Programming/…/report|report]]`).
+- Every note you create must have a name that is unique in the whole vault (Recto forbids duplicates):
+  check before writing. No generic names like `report`.
+- Machine data (json, jsonl) never goes in the visible tree: it lives under `.recto/`.
 
 ---
 
