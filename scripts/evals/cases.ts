@@ -40,9 +40,12 @@ export type Case = {
   forbidNotes: string[]
   /** What a good answer must contain or avoid, for whoever judges it (private cases). */
   rubric?: string[]
+  /** expectNotes proposed by Claude, waiting for the user to confirm: listed in the report. */
+  proposed?: boolean
 }
 
-export type CaseFile = { today: string | null; cases: Case[] }
+/** `snapshot`: the frozen vault the cases were written against (a folder in ~/Recto-eval-vaults). */
+export type CaseFile = { today: string | null; snapshot: string | null; cases: Case[] }
 
 const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null)
 
@@ -97,6 +100,7 @@ function normalise(raw: unknown, index: number, prefix: string): Case | null {
     expectItems: list(r['expectItems'] ?? r['items']),
     forbidNotes: list(r['forbidNotes']).map((n) => n.replace(/^\[\[|\]\]$/g, '').replace(/\.md$/i, '')),
     ...(Array.isArray(r['rubric']) ? { rubric: list(r['rubric']) } : {}),
+    ...(r['proposed'] === true ? { proposed: true } : {}),
   }
 }
 
@@ -108,14 +112,16 @@ export function readCases(yamlText: string, prefix = 'case'): CaseFile {
   const doc = parse(yamlText) as unknown
   let items: unknown[] = []
   let today: string | null = null
+  let snapshot: string | null = null
   if (Array.isArray(doc)) items = doc
   else if (typeof doc === 'object' && doc !== null) {
     const d = doc as Record<string, unknown>
     today = text(d['today'] instanceof Date ? (d['today'] as Date).toISOString().slice(0, 10) : d['today'])
+    snapshot = text(d['snapshot'])
     if (Array.isArray(d['cases'])) items = d['cases']
     else
       items = Object.entries(d)
-        .filter(([key]) => key !== 'today')
+        .filter(([key]) => key !== 'today' && key !== 'snapshot')
         .map(([question, notes]) =>
           typeof notes === 'object' && notes !== null && !Array.isArray(notes) ? { question, ...notes } : { question, notes },
         )
@@ -128,7 +134,7 @@ export function readCases(yamlText: string, prefix = 'case'): CaseFile {
     seen.set(c.id, n)
     if (n > 1) c.id = `${c.id}-${n}`
   }
-  return { today, cases }
+  return { today, snapshot, cases }
 }
 
 /** The conversation as the bot gets it: the earlier turns, then the question. */

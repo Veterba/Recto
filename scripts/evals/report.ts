@@ -37,7 +37,8 @@ export type RunConfig = {
   cases_file: string
   cases_sha: string
   today: string | null
-  vault: { kind: 'fixture' | 'copy'; notes: number | null; languages: Record<string, number> }
+  /** `snapshot`: the frozen vault a private run used (older runs have none: a live copy). */
+  vault: { kind: 'fixture' | 'copy'; snapshot?: string | null; notes: number | null; languages: Record<string, number> }
   machine: { chip: string; ram_bytes: number }
   ollama: { version: string | null; speed_check_tokens_per_sec?: number | null; one_model_loaded: string }
   memory: Memory
@@ -48,6 +49,8 @@ export type RunConfig = {
   } | null
   /** Why it was run, for the eval log. */
   why: string | null
+  /** Scored again from its stored prompts after a fix to the checks: when, and why. */
+  rescored?: string
   /** The run's note, vault-relative (from the vault layout on). */
   note?: string
 }
@@ -66,11 +69,14 @@ export type ResultLine = {
   expectItems?: string[]
   forbidNotes?: string[]
   rubric?: string[]
+  proposed?: boolean
   router: unknown
   steps: unknown
   preface?: string | null
   toolCalls: unknown
   context: Answered['context']
+  /** The prompt the model answered from, so a fixed check can score the run again (in the vault's hidden .recto/evals only). */
+  contextText?: string
   answer: string
   error: string | null
   timings: {
@@ -97,11 +103,13 @@ export function resultLine(row: Scored): ResultLine {
     expectItems: c.expectItems,
     forbidNotes: c.forbidNotes,
     ...(c.rubric === undefined ? {} : { rubric: c.rubric }),
+    ...(c.proposed === true ? { proposed: true } : {}),
     router: a.router ?? null,
     steps: a.steps ?? null,
     preface: a.preface ?? null,
     toolCalls: a.toolCalls ?? null,
     context: a.context,
+    ...(a.contextText === undefined ? {} : { contextText: a.contextText }),
     answer: a.answer,
     error: a.error,
     timings: {
@@ -130,6 +138,7 @@ export function fromLine(line: ResultLine): Scored {
       expectItems: line.expectItems ?? [],
       forbidNotes: line.forbidNotes ?? [],
       ...(line.rubric === undefined ? {} : { rubric: line.rubric }),
+      ...(line.proposed === true ? { proposed: true } : {}),
     },
     answered: {
       id: line.id,
@@ -140,6 +149,7 @@ export function fromLine(line: ResultLine): Scored {
       totalMs: line.timings.totalMs,
       prepareMs: line.timings.prepareMs,
       preface: line.preface ?? null,
+      ...(line.contextText === undefined ? {} : { contextText: line.contextText }),
       stats:
         line.timings.evalTokens !== null && line.timings.tokensPerSec !== null && line.timings.tokensPerSec > 0
           ? {
@@ -266,7 +276,9 @@ function why(r: Scored): string {
         `decoy in context: ${r.case.forbidNotes.filter((n) => read.map((x) => x.toLowerCase()).includes(n.toLowerCase())).join(', ')}`,
       )
     else if (reason === 'ungrounded claim')
-      parts.push(`ungrounded claim: named ${(r.scores.ungrounded ?? []).map((t) => `“${t}”`).join(', ')} without having it`)
+      parts.push(
+        `ungrounded claim: ${(r.scores.ungrounded ?? []).map((t) => (/^(number|description) /.test(t) ? t : `named “${t}”`)).join(', ')}, not in what it was given`,
+      )
     else if (reason === 'wrong route')
       parts.push(`wrong route: router said ${String((r.answered.router as { kind?: unknown } | null)?.kind)}`)
     else parts.push(`error: ${r.answered.error ?? ''}`)
@@ -322,6 +334,12 @@ function toolLines(raw: unknown): string {
 
 export type Previous = { config: RunConfig; rows: Scored[]; grades: Map<string, Grade> }
 
+/** A private run's vault: its snapshot's name, or "a live copy" from before snapshots. */
+export const snapshotName = (c: Pick<RunConfig, 'vault'>): string =>
+  c.vault.kind === 'fixture' ? 'fixture' : (c.vault.snapshot ?? 'a live copy of the vault')
+export const differentSnapshot = (a: Pick<RunConfig, 'vault'>, b: Pick<RunConfig, 'vault'>): boolean =>
+  a.vault.kind === 'copy' && b.vault.kind === 'copy' && (a.vault.snapshot ?? null) !== (b.vault.snapshot ?? null)
+
 function summaryText(config: RunConfig, rows: readonly Scored[], previous: Previous | null): string {
   const s = summarise(rows)
   const head = `${s.passed} of ${s.cases} cases pass (${pct(s.passRate)}), recall@4 ${pct(s.recall4)}, time to first token ${secs(s.ttftP50)} at the median (p90 ${secs(s.ttftP90)}), ${num(s.tokensPerSec, 1)} tokens/s.`
@@ -337,6 +355,8 @@ function summaryText(config: RunConfig, rows: readonly Scored[], previous: Previ
     )
   if (p.system_sha !== config.system_sha) changes.push('SYSTEM.md')
   if (p.cases_sha !== config.cases_sha) changes.push('the cases')
+  if (differentSnapshot(p, config))
+    changes.push(`a different snapshot (${snapshotName(p)} → ${snapshotName(config)}): not comparable case by case`)
   for (const [key, on] of Object.entries(config.harness))
     if ((p.harness as Record<string, boolean>)[key] !== on) changes.push(`${key} ${on ? 'on' : 'off'}`)
   const byKind = kindsIn(rows).map((k) => {
@@ -391,8 +411,9 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
   )
 
   out.push(`- SYSTEM.md: sha256 \`${config.system_sha.slice(0, 12)}\` (full text in config.json)`)
+  if (config.rescored !== undefined) out.push(`- Rescored: ${config.rescored}`)
   out.push(
-    `- Vault: ${config.vault.kind === 'fixture' ? 'fixture vault' : 'copy of the real vault'}, ${config.vault.notes ?? '?'} notes (${Object.entries(
+    `- Vault: ${config.vault.kind === 'fixture' ? 'fixture vault' : `snapshot ${snapshotName(config)}`}, ${config.vault.notes ?? '?'} notes (${Object.entries(
       config.vault.languages,
     )
       .map(([l, n]) => `${l} ${n}`)
@@ -445,7 +466,7 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
     `- **router accuracy**: ${pct(s.routerAccuracy)}. The router's kind matches the case's (notes / recent / tasks / smalltalk / self / review / advice); — before the router exists. Decided by rules ${s.routerBy.rules}, by the example questions ${s.routerBy.embedding}, by the model ${s.routerBy.model}.`,
   )
   out.push(
-    `- **ungrounded claims**: ${s.ungrounded}. Notes the answer names or links that were not in its context (not retrieved, not read by a tool). Judged on the model's own words, not on a list the harness wrote; a quoted phrase that is also in the notes it was given is a quote, not a claim. Must be 0; each is listed under Error analysis.`,
+    `- **ungrounded claims**: ${s.ungrounded}. Notes the answer names or links that were not in its context (not retrieved, not read by a tool); numbers it gives that its context doesn't have (two digits or more, or any number counting notes, tasks, days); and sentences describing a note or the project in words found nowhere in its context. Judged on the model's own words, not on a list the harness wrote; a quoted phrase that is also in the notes it was given is a quote, not a claim. Must be 0; each is listed under Error analysis.`,
   )
   out.push(`- **model tool calls**: ${s.modelToolCalls}, and ${s.toolParseFailures} written as text instead of called (parse failures).`)
   out.push('- **decoys**: a note listed as forbidden for a case (the math notes full of «задачи») in its context fails the case.')
@@ -468,11 +489,23 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
   out.push('')
   out.push(...resultsTable(rows, null))
   out.push('')
+  // The expected notes Claude proposed: the user corrects them here, then in the cases file.
+  const proposed = rows.filter((r) => r.case.proposed === true && r.case.expectNotes.length > 0)
+  if (proposed.length > 0) {
+    out.push('### Expected notes still proposed (to confirm)', '')
+    for (const r of proposed) out.push(`- \`${r.case.id}\`: ${r.case.expectNotes.map((n) => `[[${n}]]`).join(', ')}`)
+    out.push('')
+  }
 
   out.push(`## Compared to ${previous === null ? 'nothing (first run)' : previous.config.run_id}`)
   out.push('')
   if (previous === null) out.push('No earlier run to compare with.')
   else {
+    if (differentSnapshot(previous.config, config))
+      out.push(
+        `**Different snapshot**: that run used ${snapshotName(previous.config)}, this one ${snapshotName(config)}. The notes differ, so the numbers below show direction at best.`,
+        '',
+      )
     out.push(...resultsTable(rows, previous.rows))
     out.push('')
     const before = new Map(previous.rows.map((r) => [r.case.id, r]))

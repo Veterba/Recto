@@ -38,6 +38,47 @@ export function notesInScope<T extends CatalogNote>(scope: Scope, notes: readonl
   return notes.filter((n) => (n.topics ?? '').toLowerCase().includes(t))
 }
 
+/** Where a project's note was found, surest first. */
+export type ProjectTier = 'topic' | 'project' | 'folder' | 'linking'
+
+/**
+ * The notes of a project, for "tasks for my Recto app": first the notes the
+ * topics property puts in it (`[[topics/Recto]]`), then those whose `project:`
+ * property names it, then the scope's own notes (its folder, or its topic)
+ * and the notes that link to any of them. A daily is never in by a link - its
+ * items are about many things - so a daily's item comes in only as a guess,
+ * shown apart. The project's names: the scope's label and every topic named
+ * by one of its words ("Recto" for the folder "Recto app").
+ */
+export function projectNotes(scope: Scope, notes: readonly CatalogNote[], topics: readonly string[]): Map<string, ProjectTier> {
+  const out = new Map<string, ProjectTier>()
+  if (scope.kind === 'vault') return out
+  const label = (scope.kind === 'folder' ? scope.folder.slice(scope.folder.lastIndexOf('/') + 1) : scope.topic).toLowerCase()
+  const words = new Set(label.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 3))
+  const names = new Set([
+    label,
+    ...topics.map((t) => t.toLowerCase()).filter((t) => t === label || words.has(t) || t.split(/\s+/).includes(label)),
+  ])
+  const add = (path: string, tier: ProjectTier): void => {
+    if (!out.has(path)) out.set(path, tier)
+  }
+  for (const n of notes) {
+    const own = (n.topics ?? '').toLowerCase()
+    if ([...names].some((t) => new RegExp(`topics/${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=[\\]|"]|$)`).test(own)))
+      add(n.path, 'topic')
+  }
+  for (const n of notes) {
+    const project = (n.project ?? '').toLowerCase().replace(/\[\[|\]\]|["']/g, '')
+    // `project: Recto` is the folder "Recto app" too.
+    const named = (p: string): boolean => names.has(p) || (p.length >= 4 && words.has(p))
+    if (project.split(/[,|/]/).some((p) => named(p.trim()))) add(n.path, 'project')
+  }
+  for (const n of notesInScope(scope, notes)) add(n.path, 'folder')
+  const core = new Set(out.keys())
+  for (const n of notes) if (!isDaily(n.path) && (n.linksTo ?? []).some((p) => core.has(p))) add(n.path, 'linking')
+  return out
+}
+
 /**
  * vault_map: the vault's shape - folders with their note counts and kinds,
  * stubs, orphans, look-alike titles, how notes are named, the templates,

@@ -37,10 +37,13 @@ Checks before saying something is done: `npm run typecheck`, `npm run lint`, `np
 ## Real vault
 Never run the app, tests, indexing or evals against my real vault
 (/Users/veterba/Documents/Notes/Recto-vault). Use copies or the synthetic fixture vault.
+Private evals read a frozen snapshot, `~/Recto-eval-vaults/<snapshot>` (named by `snapshot:` in
+the private cases; `npm run bots:eval -- --private`). A new snapshot means re-checking the cases.
 The only places in the vault that may be written: the project log below, and the evals folder.
 
 Evals folder: /Users/veterba/Documents/Notes/Recto-vault/Programming/Projects/Recto app/Evals Qwen
-(`npm run bots:eval` finds it by name). Every run is ONE note `Eval YYYY-MM-DD HH-mm — <label>.md` in
+(`npm run bots:eval` finds it by name). Only private runs go there; fixture runs go to the repo,
+`docs/evals/<model>/Eval <run id>.md` with raw data in `docs/evals/data/<run id>/`. Every private run is ONE note `Eval YYYY-MM-DD HH-mm — <label>.md` in
 `Evals Qwen/<model>/` (no folder per run); its raw `results.jsonl` and `config.json` go to the hidden
 `<vault>/.recto/evals/<run id>/` (never in the repo: they hold my answers), and so does `graded.jsonl`.
 In the vault, write only: a new run note, its new `.recto/evals/<run id>/` folder, `Recto evals.md` (the

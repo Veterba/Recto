@@ -7,6 +7,7 @@ import type { LoadedTopic } from '../chat-topics-model'
 import { groupMessages } from '../grouping'
 import { Markdown } from './Markdown'
 import { modelLabel } from './ModelMenu'
+import { StatusText } from './BotStatus'
 import { StepsCard } from './StepsCard'
 
 /**
@@ -23,6 +24,8 @@ export type Pending = {
   sources: BotSource[]
   face: BotState
   at: string
+  /** What it is doing now ("Reading Tutta…"), beside the face; null once it is done. */
+  status: string | null
 }
 
 export type MessageActions = {
@@ -175,10 +178,11 @@ export function TopicBlock({
       {pending !== null && (
         <div className="msg-group msg-group--bot is-pending">
           <div className="msg-row">
-            <StepsCard steps={pending.steps} running={pending.text === ''} />
+            <StepsCard steps={pending.steps} running={pending.text === ''} fresh={pending.face === 'found'} />
             {pending.text !== '' && (
               <Bubble message={{ role: 'assistant', content: pending.text, sources: pending.sources }} actions={actions} />
             )}
+            {pending.status !== null && <StatusText text={pending.status} className="bot-doing--face" />}
           </div>
           <GroupFace bot={bot} state={face} />
         </div>

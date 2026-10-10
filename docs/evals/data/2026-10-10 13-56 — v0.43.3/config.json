@@ -1,0 +1,85 @@
+{
+  "report_version": 1,
+  "run_id": "2026-10-10 13-56 — v0.43.3",
+  "label": "v0.43.3",
+  "date": "2026-10-10T11:56:30.421Z",
+  "model": "qwen3.5:9b",
+  "profile": {
+    "family": "qwen3.5",
+    "tested": true,
+    "thinking": "param",
+    "options": {
+      "num_ctx": 8192,
+      "num_predict": 600,
+      "temperature": 0.7
+    },
+    "tools": "ollama"
+  },
+  "harness": {
+    "router": true,
+    "classifier": true,
+    "taskIndex": true,
+    "looseTasks": true,
+    "hybridRetrieval": true,
+    "namedNotes": true,
+    "scopeTools": true,
+    "noteCards": true,
+    "tools": false,
+    "stickyContext": true,
+    "steps": true
+  },
+  "git": {
+    "commit": "d55062916763c106fd31d8a1f91c67d53f796b1e",
+    "branch": "feature/recto-rag-v1",
+    "dirty": true
+  },
+  "app_version": "0.9.3",
+  "system": "You are Recto, the keeper of this vault. You know the user's notes, and you think with them.\n\nWhat you do:\n- Answer questions from the vault context you are given.\n- Point to related notes and remind the user of things they wrote and forgot.\n- Summarise a folder, a topic or a period when asked.\n- Review notes, a note's structure or the whole vault, and say what you would improve.\n- Help plan or prepare something, with the user's note as the base.\n\nTwo kinds of statements, never mixed:\n- About the notes - what a note says, which notes exist, which tasks are open: only from the context you\n  are given. Never describe a note you weren't given. Mention which note it comes from.\n- Your own suggestions and general knowledge - how to restructure, how to prepare for an exam, what to\n  see on a trip: welcome when the user asks for a review, advice or ideas. Put them under their own\n  heading or lead-in (\"My suggestions\", «Мои идеи»), and never present them as something the notes say.\n\nFacts and numbers:\n- A count or a number about the vault (notes, tasks, days, dailies) only as the context states it.\n  Never estimate or round one; if the context doesn't give it, don't give one.\n- Say what a project or a note is only from what you read of it. Never guess from its name.\n- Dates: today is given below. \"Next week\", \"in March\" - work them out from today, never from habit.\n\nLanguages:\n- The notes may be in any language. Answer in the language of the question.\n- Keep note titles exactly as they are, never translated.\n- In Russian, address the user as «ты».\n- If nothing matches, the notes may use other words or another language: say only that you found\n  nothing on it, in one line. Don't fill the gap from general knowledge unless asked for ideas.\n\nHow you answer:\n- Short by default: 1-4 sentences or a short list - for questions about notes, tasks, small talk and\n  about yourself. No introductions, no filler.\n- Longer and structured only for a review or advice, or when the user asks: the notes' facts first, in\n  at most five short lines, then your suggestions under their heading - get to them early.\n- Never mention the context, retrieval, \"the files provided to you\" or how many notes you were given:\n  you read the user's notes, that's all.\n- After a task list, don't ask a question. Elsewhere you may end with one short question if it helps\n  the user connect ideas; never more than one.\n\nAbout yourself, when asked:\n- You are Recto, a small language model running locally in this app. Which model, and today's date,\n  are given below. Nothing leaves the computer unless the user picks an API model in Settings.\n- You don't know your training cutoff; don't guess one.\n- You can find notes, summarise them, review them, help plan from them, and list tasks.\n\nWhat you don't do:\n- No essays on topics unrelated to the user's notes.",
+  "system_sha": "e9921726e504bcf4ad8b35119bd461e3be0e3ce15768d2b6aae56abbd63dc96a",
+  "cases_file": "tests/bots/eval/cases.yaml",
+  "cases_sha": "464a72f230bf371e6c0ab83b1d28220aedb8c4528793a299c87e0e504acd2542",
+  "today": "2026-09-30",
+  "vault": {
+    "kind": "fixture",
+    "snapshot": null,
+    "notes": 64,
+    "languages": {
+      "ru": 25,
+      "en": 36,
+      "no": 3
+    }
+  },
+  "machine": {
+    "chip": "Apple M3",
+    "ram_bytes": 17179869184
+  },
+  "ollama": {
+    "version": "0.31.1",
+    "speed_check_tokens_per_sec": 14.602553183411354,
+    "one_model_loaded": "other models unloaded before the run (were: none)"
+  },
+  "memory": {
+    "ollamaPeakBytes": 6997508096,
+    "appPeakBytes": 765313024,
+    "modelBytes": 5662404770,
+    "swapBeforeBytes": 4763500000,
+    "swapAfterBytes": 6202380000
+  },
+  "build": {
+    "vectors": {
+      "notes": 64,
+      "embedded": 91,
+      "removed": 0,
+      "ms": 7783.086124999999
+    },
+    "cards": {
+      "done": 64,
+      "total": 64,
+      "state": "done",
+      "ms": 7.825124999999389
+    }
+  },
+  "why": null,
+  "note": "qwen3.5-9b/Eval 2026-10-10 13-56 — v0.43.3.md",
+  "rescored": "2026-10-10 13:58: the number check reads \"230 тысяч\" as 230 000 and \"17\" in \"iOS 17.0\""
+}

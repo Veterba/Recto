@@ -9,12 +9,13 @@ import { languageOf, score, summarise, type Answered, type Scored } from './metr
 import { REPORT_VERSION, gb, pct, renderReport, resultLine, secs, type Harness, type Memory, type RunConfig } from './report.ts'
 import {
   REAL_VAULT,
+  REPO_STORE,
+  allRuns,
   ROOT,
   appendEvalLog,
   collectGrades,
   findEvalsFolder,
   guard,
-  listRuns,
   modelSlug,
   newRunId,
   noteNames,
@@ -182,48 +183,64 @@ function languagesOf(vault: string): Record<string, number> {
   return counts
 }
 
-function loadCases(): { file: string; text: string; today: string | null; cases: Case[] } {
+/** Frozen copies of the real vault for private runs, one folder each (`private-2026-10-10`), named by the cases. */
+const SNAPSHOTS = path.join(os.homedir(), 'Recto-eval-vaults')
+const isPrivate = (): boolean => flag('--vault') !== undefined || args.includes('--private')
+
+function loadCases(): { file: string; text: string; today: string | null; snapshot: string | null; cases: Case[] } {
   const explicit = flag('--cases')
   if (explicit !== undefined) {
     const text = fs.readFileSync(path.resolve(explicit), 'utf8')
     const read = readCases(text, path.basename(explicit, path.extname(explicit)))
     return { file: path.relative(ROOT, path.resolve(explicit)), text, ...read }
   }
-  if (flag('--vault') === undefined) {
+  if (!isPrivate()) {
     const text = fs.readFileSync(FIXTURE_CASES, 'utf8')
     return { file: path.relative(ROOT, FIXTURE_CASES), text, ...readCases(text) }
   }
   const files = fs.existsSync(PRIVATE_CASES)
     ? fs
         .readdirSync(PRIVATE_CASES)
-        .filter((f) => /\.ya?ml$/i.test(f))
+        // The held-out cases are run once, on purpose, with --cases: never with the rest, never tuned on.
+        .filter((f) => /\.ya?ml$/i.test(f) && !/^heldout\./i.test(f))
         .sort()
     : []
   if (files.length === 0)
     throw new Error(`No private cases in ${path.relative(ROOT, PRIVATE_CASES)}/ - nothing to run on the vault copy. Pass --cases <file>.`)
   const texts = files.map((f) => fs.readFileSync(path.join(PRIVATE_CASES, f), 'utf8'))
-  const cases = files.flatMap((f, i) => readCases(texts[i]!, path.basename(f, path.extname(f))).cases)
+  const read = files.map((f, i) => readCases(texts[i]!, path.basename(f, path.extname(f))))
   return {
     file: files.map((f) => path.relative(ROOT, path.join(PRIVATE_CASES, f))).join(', '),
     text: texts.join('\n---\n'),
-    today: null,
-    cases,
+    // The snapshot and its day: from the first file that names them.
+    today: read.find((r) => r.today !== null)?.today ?? null,
+    snapshot: read.find((r) => r.snapshot !== null)?.snapshot ?? null,
+    cases: read.flatMap((r) => r.cases),
   }
 }
 
 async function main(): Promise<void> {
-  const vaultArg = flag('--vault')
+  const loaded = loadCases()
+  // A private run reads the snapshot its cases name, never the live vault: the notes stay what the cases expect.
+  const vaultArg =
+    flag('--vault') ??
+    (isPrivate() || loaded.snapshot !== null ? (loaded.snapshot === null ? undefined : path.join(SNAPSHOTS, loaded.snapshot)) : undefined)
+  if (isPrivate() && vaultArg === undefined)
+    throw new Error('The private cases name no snapshot (`snapshot:` in the YAML); pass --vault <snapshot>.')
+  if (vaultArg !== undefined && path.resolve(vaultArg) === path.resolve(REAL_VAULT))
+    throw new Error(`Private runs use a frozen snapshot in ${SNAPSHOTS}, not the live vault.`)
+  if (vaultArg !== undefined && !fs.existsSync(vaultArg)) throw new Error(`No snapshot at ${vaultArg}.`)
   const fixture = vaultArg === undefined
   const model = flag('--model') ?? 'qwen3.5:9b'
   const label = flag('--label') ?? 'run'
   const only = flag('--only') as Kind | undefined
-  const loaded = loadCases()
   const cases = loaded.cases.filter((c) => only === undefined || c.kind === only)
   if (cases.length === 0) throw new Error(`No cases${only === undefined ? '' : ` of kind ${only}`}.`)
   if (!fixture && path.resolve(vaultArg).startsWith(path.resolve(ROOT))) throw new Error('--vault must be a vault outside the repo.')
 
-  const evalsVault = path.resolve(flag('--evals-vault') ?? REAL_VAULT)
-  const evalsDir = findEvalsFolder(evalsVault)
+  // Fixture runs go to the repo (docs/evals); private runs, which hold the user's answers, only to the vault.
+  const evalsVault = path.resolve(flag('--evals-vault') ?? (fixture ? REPO_STORE : REAL_VAULT))
+  const evalsDir = evalsVault === REPO_STORE ? REPO_STORE : findEvalsFolder(evalsVault)
   const battery = batteryTooLow()
   if (battery !== null && !args.includes('--force')) throw new Error(`${battery} Timings would be wrong; charge first, or pass --force.`)
 
@@ -369,7 +386,7 @@ async function main(): Promise<void> {
   const now = new Date()
   const runId = newRunId(evalsVault, label, now)
   const where = runPaths(evalsVault, evalsDir, model, runId)
-  const previous = previousRun(listRuns(evalsVault), model, fixture ? 'fixture' : 'copy')
+  const previous = previousRun(allRuns(), model, fixture ? 'fixture' : 'copy')
   const memory: Memory = {
     ollamaPeakBytes: peak.ollama || null,
     appPeakBytes: peak.app || null,
@@ -397,7 +414,12 @@ async function main(): Promise<void> {
     cases_file: loaded.file,
     cases_sha: sha(loaded.text),
     today: loaded.today,
-    vault: { kind: fixture ? 'fixture' : 'copy', notes: run.notes, languages: languagesOf(vault) },
+    vault: {
+      kind: fixture ? 'fixture' : 'copy',
+      snapshot: fixture ? null : path.basename(path.resolve(vaultArg)),
+      notes: run.notes,
+      languages: languagesOf(vault),
+    },
     machine: { chip: sh('sysctl', ['-n', 'machdep.cpu.brand_string']) || run.cpu, ram_bytes: run.ramBytes },
     ollama: {
       version,

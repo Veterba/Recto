@@ -129,6 +129,10 @@ export type CatalogNote = {
   /** Raw frontmatter values, as the index keeps them. */
   aliases: string | null
   topics: string | null
+  /** The `project:` property, raw. */
+  project?: string | null
+  /** The notes this note links to (its own links, not the topics property). */
+  linksTo?: string[]
   tasks: number
   headings: { text: string; level: number }[]
 }

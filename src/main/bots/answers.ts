@@ -2,6 +2,7 @@ import { BrowserWindow, Notification, powerSaveBlocker } from 'electron'
 import type { AiMessage } from '../../shared/ai'
 import { botThreadFolder, isActive, type Bot, type BotJob, type BotMessage, type BotSource } from '../../shared/bots'
 import { appendTurns, createdStamp, parseTopic, topicFile, topicFileName, type ChatTopicMeta } from '../../shared/chat-topics'
+import { langOfText } from '../../shared/bot-status'
 import { IPC_EVENT } from '../../shared/ipc'
 import { sendEvent } from '../events'
 import { markSelfWrite } from '../watcher'
@@ -135,13 +136,14 @@ export async function send(request: {
     if (!created.ok) return { ok: false, error: 'Could not start a topic.' }
     topic = created.path
     await writeTopic(topic, { meta, extra: [], body: appendTurns('', [turn], bot.name) })
-    return { ok: true, topic, job: jobs.enqueue({ botId: bot.id, topic, model, question: null }) }
+    return { ok: true, topic, job: jobs.enqueue({ botId: bot.id, topic, model, question: null, lang: langOfText(text) }) }
   }
-  if (jobs.busy(topic)) return { ok: true, topic, job: jobs.enqueue({ botId: bot.id, topic, model, question: text }) }
+  if (jobs.busy(topic))
+    return { ok: true, topic, job: jobs.enqueue({ botId: bot.id, topic, model, question: text, lang: langOfText(text) }) }
   const current = await readTopic(topic, bot)
   if (current === null) return { ok: false, error: 'That topic is gone.' }
   await writeTopic(topic, { ...current, body: appendTurns(current.body, [turn], bot.name) })
-  return { ok: true, topic, job: jobs.enqueue({ botId: bot.id, topic, model, question: null }) }
+  return { ok: true, topic, job: jobs.enqueue({ botId: bot.id, topic, model, question: null, lang: langOfText(text) }) }
 }
 
 /** Ask again for the topic as it stands: after an error or an interrupted answer. */
@@ -197,6 +199,9 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
   // written by a job that never finished (the app was killed): it still carries the job's id.
   const turns = parsed.messages.filter((m) => !(m.role === 'assistant' && (m.interrupted === true || m.job !== undefined)))
   const messages: AiMessage[] = turns.map(({ role, content }) => ({ role, content }))
+  // A retry knows its question only now.
+  const question = messages.findLast((m) => m.role === 'user')?.content
+  if (question !== undefined) controls.update({ lang: langOfText(question) })
   const sticky: BotSource[] = turns
     .filter((m) => m.role === 'assistant')
     .slice(-2)
@@ -209,11 +214,10 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
     provider,
     model: job.model,
     sticky,
-    onProgress: (status) => controls.update({ status }),
     onSteps: (steps) => controls.update({ steps }),
   })
   const sources = prepared.sources.map(({ path, heading }) => ({ path, heading }))
-  controls.update({ sources, status: null })
+  controls.update({ sources })
   if (controls.signal.aborted) throw new Error('cancelled')
 
   const base = topic.body

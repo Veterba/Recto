@@ -16,7 +16,7 @@ import { isActive, type BotJob, type JobState } from '../../shared/bots'
 export type RunControls = {
   signal: AbortSignal
   /** The job changed (steps, status, text): pushed to whoever watches. */
-  update: (patch: Partial<Pick<BotJob, 'state' | 'steps' | 'status' | 'text' | 'sources' | 'question'>>) => void
+  update: (patch: Partial<Pick<BotJob, 'state' | 'steps' | 'lang' | 'text' | 'sources' | 'question'>>) => void
 }
 
 export type Runner = (job: BotJob, controls: RunControls) => Promise<void>
@@ -58,7 +58,7 @@ export class Jobs {
   }
 
   /** Queue an answer for a topic; it starts at once when nothing else runs. */
-  enqueue(input: { botId: string; topic: string; model: string; question: string | null }): BotJob {
+  enqueue(input: { botId: string; topic: string; model: string; question: string | null; lang?: BotJob['lang'] }): BotJob {
     const job: BotJob = {
       id: newId(),
       botId: input.botId,
@@ -67,7 +67,7 @@ export class Jobs {
       position: 0,
       question: input.question,
       steps: [],
-      status: null,
+      lang: input.lang ?? 'en',
       text: '',
       sources: [],
       model: input.model,
@@ -177,7 +177,6 @@ export class Jobs {
     if (job !== undefined && isActive(job)) {
       job.state = state
       job.error = state === 'error' ? (error ?? job.error ?? 'The answer failed.') : null
-      job.status = null
       job.position = 0
       this.o.onChange({ ...job })
     }

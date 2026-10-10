@@ -44,8 +44,14 @@ export type Bot = BotDefinition & { system: string; examples?: Record<string, st
 /** A part of a note the bot was given to answer from. */
 export type BotSource = { path: string; heading: string | null }
 
-/** One thing the bot did while working on an answer, as the steps card shows it: "Searching notes → “Recto plan”". */
-export type BotStep = { action: string; result: string; state: 'running' | 'done' | 'failed' }
+/** What a step does, for the status text beside the working face (shared/bot-status.ts). */
+export type StepKind = 'tasks' | 'period' | 'read' | 'open' | 'search' | 'map'
+
+/**
+ * One thing the bot did while working on an answer, as the steps card shows it: "Searching notes → “Recto plan”".
+ * `kind` and `subject` ("Tutta", «прошлую неделю») word the status text; older messages have neither.
+ */
+export type BotStep = { action: string; result: string; state: 'running' | 'done' | 'failed'; kind?: StepKind; subject?: string }
 
 /**
  * What is known about a message besides its text, kept with it in the topic
@@ -124,8 +130,8 @@ export type BotJob = {
   /** The question, while it waits behind another answer in its topic (not in the file yet). */
   question: string | null
   steps: BotStep[]
-  /** What it is doing now, in the question's language ("Reading Tutta…"). */
-  status: string | null
+  /** The question's language: the status text and the steps are in it. */
+  lang: 'en' | 'ru'
   text: string
   sources: BotSource[]
   model: string

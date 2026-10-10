@@ -391,6 +391,7 @@ export async function groupedTasksTool(
 
   // A scope keeps its own notes' tasks, and those elsewhere that are about it.
   let kept = items
+  const guessed = new Set<Item>()
   if (q.scope !== null) {
     const inside = items.filter((x) => q.scope!.paths.has(x.path))
     const outside = items.filter((x) => !q.scope!.paths.has(x.path))
@@ -414,15 +415,17 @@ export async function groupedTasksTool(
     )
     o.onProgress?.(`Sorting ${heads.length} tasks…`)
     const sorted = await assignTopics(heads, topics, embed, o)
-    const related = [...units.values()].filter((_, i) => sorted.get(heads[i]!) === q.scope!.label).flat()
-    kept = [...inside, ...related]
+    // The model's guesses are shown as guesses: a group of their own, last.
+    for (const x of [...units.values()].filter((_, i) => sorted.get(heads[i]!) === q.scope!.label).flat()) guessed.add(x)
+    kept = [...inside, ...guessed]
   }
 
   // Labels: a card's board; a note in a subject folder, that folder; another note, its own title (it is a
   // topic of its own); a daily's item, the topic the model sorts it into, else "Other".
   const label = new Map<Item, string>()
   const other = langOf(o.question) === 'ru' ? 'Другое' : 'Other'
-  if (q.groupBy === 'note') for (const x of kept) label.set(x, x.where)
+  const maybe = langOf(o.question) === 'ru' ? 'Возможно, сюда' : 'Might belong here'
+  if (q.groupBy === 'note') for (const x of kept) label.set(x, guessed.has(x) ? maybe : x.where)
   else {
     const loose: Item[] = []
     for (const x of kept) {
@@ -438,9 +441,10 @@ export async function groupedTasksTool(
   }
   const byLabel = new Map<string, Item[]>()
   for (const x of kept) byLabel.set(label.get(x)!, [...(byLabel.get(label.get(x)!) ?? []), x])
-  // Biggest groups first; "Other" last.
+  // Biggest groups first; "Other" and the guesses last.
+  const last = (l: string): number => (l === maybe ? 2 : l === other ? 1 : 0)
   const ordered = [...byLabel]
-    .sort((a, b) => Number(a[0] === other) - Number(b[0] === other) || b[1].length - a[1].length)
+    .sort((a, b) => last(a[0]) - last(b[0]) || b[1].length - a[1].length)
     .map(([l, xs]) => ({ label: l, items: xs }))
   const prepared = renderGroupedTasks(ordered, o.question, q.period === null ? null : found.done.length)
   const name = q.period !== null ? 'tasks_in_period' : 'open_tasks'

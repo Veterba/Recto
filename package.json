@@ -24,6 +24,7 @@
     "snapshots": "electron-vite build && node scripts/snapshots.mjs",
     "bots:eval": "electron-vite build && node --disable-warning=ExperimentalWarning scripts/evals/run.ts",
     "bots:eval:compare": "node --disable-warning=ExperimentalWarning scripts/evals/compare.ts",
+    "bots:eval:rescore": "node --disable-warning=ExperimentalWarning scripts/evals/rescore.ts",
     "vault:tidy": "node --disable-warning=ExperimentalWarning scripts/vault-tidy.ts"
   },
   "devDependencies": {

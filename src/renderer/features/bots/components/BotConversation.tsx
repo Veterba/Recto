@@ -15,6 +15,8 @@ import { reloadBots, useBotStatus, useBots } from '../hooks/use-bots'
 import { markRead } from '../unread'
 import { isActive } from '@shared/bots'
 import { jobForTopic, ordinal, topicJobs, useJobs } from '../jobs-store'
+import { statusPhrases } from '@shared/bot-status'
+import { StatusText, useStatusText } from './BotStatus'
 import { BotStatusLine } from './BotStatusLine'
 import { Composer, type NoteCandidate } from './Composer'
 import { HistoryPanel } from './HistoryPanel'
@@ -123,6 +125,8 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
     const timer = window.setTimeout(() => setFound(null), FOUND_MS)
     return () => window.clearTimeout(timer)
   }, [firstText])
+  // What it is doing, from its steps: beside the face and in the header.
+  const statusText = useStatusText(live === null ? null : statusPhrases(live))
   const pending: Pending | null =
     live === null || live.state === 'queued'
       ? null
@@ -132,6 +136,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
           sources: live.sources,
           face: live.text === '' ? 'riffle' : found === live.id ? 'found' : 'answering',
           at: live.at,
+          status: statusText,
         }
 
   /** After a topic's first exchange, the model names it (or its first question does). */
@@ -334,10 +339,6 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
           </>
         )}
       </p>
-    ) : live !== null && live.status !== null && live.text === '' ? (
-      <p className="composer__status" aria-live="polite">
-        {live.status}
-      </p>
     ) : status !== null && !ready ? (
       <BotStatusLine status={status} onRecheck={recheck} compact />
     ) : null
@@ -361,10 +362,16 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
         </span>
         <div className="bot-chat__who">
           <span className="bot-chat__name">{bot.name}</span>
-          <span className="bot-chat__specialty">
-            {currentTitle !== undefined && currentTitle !== UNTITLED ? currentTitle : bot.specialty.replace(/\.$/, '')}
-            {current !== '' && <> · {modelLabel(current)}</>}
-          </span>
+          {pending?.status != null ? (
+            <span className="bot-chat__specialty">
+              <StatusText text={pending.status} />
+            </span>
+          ) : (
+            <span className="bot-chat__specialty">
+              {currentTitle !== undefined && currentTitle !== UNTITLED ? currentTitle : bot.specialty.replace(/\.$/, '')}
+              {current !== '' && <> · {modelLabel(current)}</>}
+            </span>
+          )}
         </div>
         <div className="bot-chat__actions">
           <Tip label="New topic" hint="⌘N">

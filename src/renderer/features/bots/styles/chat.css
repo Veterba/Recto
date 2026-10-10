@@ -422,6 +422,111 @@
   color: var(--text-secondary);
 }
 
+/* The found beat: the steps fold the moment the answer's first words arrive. */
+.bot-steps--folded.is-fresh {
+  animation: bot-steps-found 360ms ease-out;
+}
+@keyframes bot-steps-found {
+  0% {
+    transform: scale(0.96);
+    border-color: var(--text-secondary);
+  }
+  60% {
+    transform: scale(1.02);
+  }
+}
+
+/* ---------- status text: what a working answer does now ---------- */
+
+.bot-doing {
+  display: inline-grid;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+.bot-doing__text {
+  grid-area: 1 / 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* A soft light passing over the words: a mask, so the text keeps its own colour. */
+  -webkit-mask-image: linear-gradient(100deg, rgb(0 0 0 / 55%) 40%, #000 50%, rgb(0 0 0 / 55%) 60%);
+  mask-image: linear-gradient(100deg, rgb(0 0 0 / 55%) 40%, #000 50%, rgb(0 0 0 / 55%) 60%);
+  -webkit-mask-size: 250% 100%;
+  mask-size: 250% 100%;
+  animation: bot-doing-shimmer 2.4s linear infinite;
+}
+@keyframes bot-doing-shimmer {
+  from {
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+  to {
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+  }
+}
+.bot-doing__text.is-entering {
+  animation:
+    bot-doing-in 150ms ease-out,
+    bot-doing-shimmer 2.4s linear infinite;
+}
+.bot-doing__text.is-leaving {
+  animation: bot-doing-out 150ms ease-in forwards;
+}
+@keyframes bot-doing-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes bot-doing-out {
+  to {
+    opacity: 0;
+  }
+}
+.bot-doing__dots span {
+  animation: bot-doing-dot 1.2s ease-in-out infinite;
+}
+.bot-doing__dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.bot-doing__dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes bot-doing-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+/* Beside the face, under the steps or the answer. */
+.bot-doing--face {
+  margin: 2px 0 0 2px;
+  font-size: var(--font-size-12-5);
+  color: var(--text-muted);
+}
+/* No shimmer, no breathing dots, no fade: the text as it is. */
+@media (prefers-reduced-motion: reduce) {
+  .bot-doing__text,
+  .bot-doing__text.is-entering,
+  .bot-doing__dots span,
+  .bot-steps--folded.is-fresh {
+    animation: none;
+  }
+  .bot-doing__text {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .bot-doing__text.is-leaving {
+    display: none;
+  }
+  .bot-doing__dots span {
+    opacity: 1;
+  }
+}
+
 /* ---------- the composer: a glass capsule over the bottom of the conversation ---------- */
 
 /* The strip around the capsule lets clicks through; a fade under it keeps

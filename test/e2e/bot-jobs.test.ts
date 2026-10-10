@@ -79,6 +79,9 @@ describe.skipIf(!RUN)('answers survive leaving the chat; the queue', () => {
   it('send, switch to the Data tab, come back: the answer is still coming, then complete', async () => {
     await type('How do I mix soil?')
     await page.waitForSelector('.bot-chat .is-pending')
+    // The sidebar row says what it is doing, from the job's steps; the header and the face say it too.
+    await page.waitForFunction(() => /…$/.test(document.querySelector('.bot-row__preview .bot-doing')?.getAttribute('data-text') ?? ''))
+    expect(await page.locator('.bot-chat__specialty .bot-doing').count()).toBe(1)
     await page.keyboard.press('Meta+1')
     await sleep(600)
     await openRecto()
@@ -87,6 +90,8 @@ describe.skipIf(!RUN)('answers survive leaving the chat; the queue', () => {
     await expect.poll(answersInFiles, { timeout: 10_000 }).toBe(1)
     await page.waitForFunction(() => document.querySelector('.bot-chat .is-pending') === null)
     expect(await page.locator('.bot-chat .msg--bot').count()).toBe(1)
+    // Gone when done.
+    expect(await page.locator('.bot-doing').count()).toBe(0)
   }, 60_000)
 
   it('out of sight when it finished: one notification', async () => {

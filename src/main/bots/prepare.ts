@@ -1,19 +1,21 @@
 import path from 'node:path'
 import type { AiMessage } from '../../shared/ai'
-import { BOTS_FOLDER, CHATS_FOLDER, type Bot, type BotHarness, type BotSource, type BotStep } from '../../shared/bots'
+import { plural } from '../../shared/bot-status'
+import { BOTS_FOLDER, CHATS_FOLDER, type Bot, type BotHarness, type BotSource, type BotStep, type StepKind } from '../../shared/bots'
 import type { CatalogNote } from '../../shared/indexer-protocol'
+import { isDaily } from '../../shared/tasks'
 import { send as indexer } from '../index-client'
 import * as vaultFs from '../vault-fs'
 import { cardsFor, type NoteCard } from './cards'
 import { chunkNote } from './chunks'
 import { byKind, classify, exampleTexts } from './classify'
 import { buildSystem, estimateTokens, fitHistory, isExcluded, rankNotes, type Chunk } from './context'
-import { CONTEXT_TOKENS, type BotModelProvider } from './provider'
+import { CONTEXT_TOKENS, isApiModel, type BotModelProvider } from './provider'
 import { resolveNames, resolveScope, type Named, type NotFound, type Scope, type VaultNote } from './resolve'
 import { fuse, pick, RRF_K, type Candidate } from './retrieve'
 import { route, routedTerms, type Classifier, type Route, type RouteKind } from './router'
 import { isoDate, type Period } from './period'
-import { cardLine, noteOutline, notesInScope, structurePatterns, vaultMap, wholeNotes, type ScopeNote } from './scope-tools'
+import { cardLine, noteOutline, notesInScope, projectNotes, structurePatterns, vaultMap, wholeNotes, type ScopeNote } from './scope-tools'
 import { groupedTasksTool, notesTool, tasksTool, type ToolOptions } from './tools'
 import { intentOf } from './task-answer'
 import { embedTexts, searchVectors } from './vectors'
@@ -101,6 +103,13 @@ const ADVISOR_MIN_VECTOR = 0.55
 const addDays = (d: Date, n: number): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
 const lastUser = (messages: readonly AiMessage[]): string => [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
 const isRu = (text: string): boolean => /[а-яё]/i.test(text)
+/** Russian, English, or neither said (Norwegian: the rule in SYSTEM.md covers it). Latin letters and no Norwegian is English. */
+const questionLang = (text: string): 'ru' | 'en' | null =>
+  isRu(text)
+    ? 'ru'
+    : !/\p{L}/u.test(text) || /[æøå]/i.test(text) || /\b(jeg|ikke|hva|hvilke|hvor|når|meg|mine?|har|og|det|på|kan|skal|vil)\b/i.test(text)
+      ? null
+      : 'en'
 
 /** The router's example questions, embedded once per run of the app. */
 let examples: Promise<Record<RouteKind, number[][]> | null> | null = null
@@ -151,6 +160,65 @@ async function readNotes(notes: readonly CatalogNote[]): Promise<ScopeNote[]> {
   return out
 }
 
+/**
+ * What is true right now, after the prompt's stable part (SYSTEM.md and the
+ * example), so that part stays the same from answer to answer: today, the
+ * model answering, and how many notes the vault has. Never written into
+ * SYSTEM.md - a date or a model name there would go stale.
+ */
+export function runtimeFacts(today: Date, model: string, notes: number | null, lang: 'ru' | 'en' | null = null): string {
+  const day = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const where = isApiModel(model)
+    ? `the API model ${model}, through Anthropic: the question and the notes it needs are sent to Anthropic`
+    : `the model ${model}, running locally via Ollama on this computer: nothing leaves it`
+  return [
+    '## Right now',
+    `Today: ${day} (${isoDate(today)}).`,
+    "Don't state today's date unless the user asks for it; when they do, the app says it.",
+    `You are ${where}.`,
+    ...(notes === null ? [] : [`The vault has ${notes} notes.`]),
+    // A small model drifts into the notes' language, and keeps «вы» from its training, unless told right where it answers.
+    ...(lang === 'ru'
+      ? ['The question is in Russian: answer in Russian and address the user as «ты» (твои заметки, у тебя), never «вы».']
+      : lang === 'en'
+        ? ['The question is in English: answer in English, whatever language the notes are in.']
+        : []),
+  ].join('\n')
+}
+
+/** Today's date as an answer says it, in the question's language: "Saturday, 10 October 2026", «суббота, 10 октября 2026». */
+export function dateText(today: Date, lang: 'ru' | 'en' | null): string {
+  const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' } as const
+  return lang === 'ru' ? today.toLocaleDateString('ru-RU', options).replace(/\s*г\.$/, '') : today.toLocaleDateString('en-GB', options)
+}
+
+/** "What's the date today?", «Какое сегодня число?»: answered by the harness, never by the model. */
+export const asksDate = (question: string): boolean =>
+  /\b(what('?s| is) (the )?(date|day)|today'?s date|what day is (it|today)|which day is (it|today)|what is today)\b/i.test(question) ||
+  /(как(ое|ой|ая) (сегодня )?(число|день|дата)|сегодня как(ое|ой|ая)|какой сегодня день)/i.test(question)
+
+/** A period as the status text names it: "Going through last week…", «Листаю прошлую неделю…». */
+export function periodLabel(p: Period, today: Date, ru: boolean): string {
+  const day = (n: number): string => isoDate(addDays(today, n))
+  const monday = addDays(today, -((today.getDay() + 6) % 7))
+  const week = (n: number): Period => ({ from: isoDate(addDays(monday, 7 * n)), to: isoDate(addDays(monday, 7 * n + 6)) })
+  const is = (q: Period): boolean => p.from === q.from && p.to === q.to
+  if (p.from === p.to && p.from === day(0)) return ru ? 'сегодняшние заметки' : "today's notes"
+  if (p.from === p.to && p.from === day(-1)) return ru ? 'вчерашний день' : 'yesterday'
+  if (is(week(0)) || (p.from === week(0).from && p.to === day(0))) return ru ? 'эту неделю' : 'this week'
+  if (is(week(-1))) return ru ? 'прошлую неделю' : 'last week'
+  return ru ? 'те дни' : 'those days'
+}
+
+/** A tool's summary as the steps card shows it, in the question's language: "9 open", «9 открыто», «12 заметок». */
+const stepResult = (summary: string, ru: boolean): string => {
+  const open = /^(\d+) open/.exec(summary)
+  if (open !== null) return ru ? `${open[1]} ${plural(Number(open[1]), 'открыта', 'открыты', 'открыто')}` : `${open[1]} open`
+  const notes = /^(\d+) notes/.exec(summary)
+  if (notes !== null && ru) return `${notes[1]} ${plural(Number(notes[1]), 'заметка', 'заметки', 'заметок')}`
+  return summary
+}
+
 /** "Learning/Math Khan Academy" → "Math Khan Academy"; the vault → "the vault" / «хранилище». */
 const scopeName = (scope: Scope, ru: boolean): string =>
   scope.kind === 'vault'
@@ -167,8 +235,8 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
   const question = lastUser(messages)
   const ru = isRu(question)
   const steps: BotStep[] = []
-  const step = (action: string, result = '', state: BotStep['state'] = 'running'): number => {
-    steps.push({ action, result, state })
+  const step = (kind: StepKind, action: string, subject = '', result = ''): number => {
+    steps.push({ action, result, state: 'running', kind, ...(subject === '' ? {} : { subject }) })
     o.onSteps?.(steps.map((s) => ({ ...s })))
     return steps.length - 1
   }
@@ -177,6 +245,7 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
     o.onSteps?.(steps.map((s) => ({ ...s })))
   }
   const toolCalls: ToolCall[] = []
+  const said = dateText(today, questionLang(question))
   const exclude = [CHATS_FOLDER, path.dirname(BOTS_FOLDER), ...(bot.exclude ?? [])]
 
   const routed = harness.router ? await route(provider, model, messages, today, harness.classifier ? embeddingClassifier : null) : null
@@ -205,8 +274,27 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
     }
   }
 
+  const catalogResponse = await indexer({ kind: 'bot-catalog' }, 30_000).catch(() => null)
+  const catalog = (catalogResponse?.kind === 'bot-catalog-result' ? catalogResponse.notes : []).filter((n) => !isExcluded(n.path, exclude))
+  // The stable part first (SYSTEM.md, this kind's example), then what is true right now.
+  const exampleText = bot.examples?.[kind]
+  const prefix = [
+    bot.system.trim(),
+    ...(exampleText === undefined ? [] : [`## An example of a good ${kind} answer\n\n${exampleText}`]),
+    runtimeFacts(today, model, catalogResponse === null ? null : catalog.length, questionLang(question)),
+  ].join('\n\n')
+
+  // A date question: the harness says the date, from the runtime facts; the model only adds a line.
+  if (asksDate(question) && kind !== 'tasks' && kind !== 'recent') {
+    const told = questionLang(question) === 'ru' ? `Сегодня ${said}.` : `Today is ${said}.`
+    return finishWith(
+      `${prefix}\n\n## What the user was just shown, in answer to their message\n\n${told}\n\nAdd at most one short sentence, or nothing. Don't repeat the date.`,
+      [],
+      { preface: told },
+    )
+  }
   // Small talk and questions about Recto itself ask nothing of the vault: no search, no sources, no steps.
-  if (kind === 'smalltalk' || kind === 'self') return finishWith(bot.system.trim(), [])
+  if (kind === 'smalltalk' || kind === 'self') return finishWith(prefix, [])
 
   const toolOptions: ToolOptions = {
     bot,
@@ -218,8 +306,6 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
     ...(o.onProgress === undefined ? {} : { onProgress: o.onProgress }),
   }
 
-  const catalogResponse = harness.namedNotes || harness.scopeTools ? await indexer({ kind: 'bot-catalog' }, 30_000).catch(() => null) : null
-  const catalog = (catalogResponse?.kind === 'bot-catalog-result' ? catalogResponse.notes : []).filter((n) => !isExcluded(n.path, exclude))
   const vaultNotes: VaultNote[] = catalog.map((n) => ({ path: n.path, title: n.title, aliases: aliasesOf(n.aliases) }))
   const names = harness.namedNotes ? resolveNames(question, vaultNotes) : { named: [] as Named[], notFound: [] as NotFound[] }
   const found0 = harness.namedNotes ? resolveScope(routed?.scope ?? question, foldersOf(catalog), topicsOf(catalog)) : null
@@ -231,23 +317,18 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
     const period: Period | null = routed.period
     const fallback = { from: isoDate(addDays(today, kind === 'tasks' ? -13 : -6)), to: isoDate(today) }
     const scoped = scope !== null && scope.kind !== 'vault' ? scope : null
-    const i = step(kind === 'tasks' ? (ru ? 'Задачи' : 'Tasks') : ru ? 'Заметки за период' : 'Notes of the period')
-    o.onProgress?.(
+    const i =
       kind === 'tasks'
-        ? ru
-          ? 'Смотрю задачи…'
-          : 'Checking your tasks…'
-        : ru
-          ? 'Листаю заметки за период…'
-          : 'Going through the notes of the period…',
-    )
+        ? step('tasks', ru ? 'Задачи' : 'Tasks')
+        : step('period', ru ? 'Заметки за период' : 'Notes of the period', periodLabel(period ?? fallback, today, ru))
     let result
     let name: string
     let args: Record<string, unknown>
     // The whole open list, grouped - unless the question also asks what got done: that answer has its own shape.
     const asksDone = /\b(done|finish(ed)?|complete(d)?)\b|сделан|выполн|закрыл|законч|ferdig/i.test(question)
     if (kind === 'tasks' && harness.scopeTools && intentOf(question) === 'open' && !asksDone && (scoped !== null || period !== null)) {
-      const paths = scoped === null ? null : new Set(notesInScope(scoped, catalog).map((n) => n.path))
+      // The project's notes by its topics, its `project:` property, its folder and the notes linking in.
+      const paths = scoped === null ? null : new Set(projectNotes(scoped, catalog, topicsOf(catalog)).keys())
       const taskScope =
         scoped === null || paths === null
           ? null
@@ -255,6 +336,7 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
               label: scopeName(scoped, ru),
               paths,
               describe: `${scopeName(scoped, false)}: ${[...paths]
+                .filter((p) => !isDaily(p))
                 .map((p) => path.basename(p, '.md'))
                 .slice(0, 15)
                 .join(', ')}`,
@@ -280,14 +362,29 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
           : await notesTool(p, [...routed.keywordsEn, ...routed.keywordsRu], toolOptions)
     }
     toolCalls.push({ name, args, by: 'harness', summary: result.summary, notes: result.notes.map((n) => n.title), result: result.text })
-    finish(i, result.summary)
+    finish(i, stepResult(result.summary, ru))
+    // The days in words, as the answer should say them: a small model works "Wednesday" out wrong from an ISO date.
+    const lang = questionLang(question)
+    const asked =
+      typeof args['from'] === 'string' ? { from: args['from'], to: typeof args['to'] === 'string' ? args['to'] : args['from'] } : null
+    const day = (iso: string): string => dateText(new Date(`${iso}T12:00:00`), lang)
+    const daysText = asked === null ? null : asked.from === asked.to ? day(asked.from) : `${day(asked.from)} – ${day(asked.to)}`
     if (result.answer !== undefined) {
       // A task list a small model would drop items from: the harness shows it as it is, and the
       // model only adds one line of its own after it.
-      const system = `${bot.system.trim()}\n\n## What the user was just shown, in answer to their message\n\n${result.answer}\n\nWrite ONE short sentence to follow it, in the language of the user's message - a remark or an offer. Don't repeat or change the list.`
+      const system = `${prefix}\n\n## What the user was just shown, in answer to their message\n\n${result.answer}\n\nWrite ONE short sentence to follow it, in the language of the user's message: a remark, never a question. Don't repeat or change the list, and don't count anything.`
       return finishWith(system, result.notes, { preface: result.answer })
     }
-    return finishWith(`${bot.system.trim()}\n\n${result.text}`, result.notes)
+    // What happened on some days: the harness names the days, the model goes on from there and never writes a date.
+    if (kind === 'recent' && daysText !== null) {
+      const head = `**${daysText}**`
+      return finishWith(
+        `${prefix}\n\n## The days the user asks about\n\n${daysText}. The notes below are from exactly these days - this is what "${question.replace(/"/g, "'")}" means; don't work the days out again.\n\n${result.text}\n\n## The answer so far\n\n${head}\n\nThe days are already said above it. Go on with what the notes say about them, without writing any date.`,
+        result.notes,
+        { preface: head },
+      )
+    }
+    return finishWith(`${prefix}\n\n${result.text}`, result.notes)
   }
 
   // ---- notes, reviews, advice ------------------------------------------------------------
@@ -304,7 +401,7 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
 
   // Named notes: whole when small, else their best pieces. Never another note in their place.
   for (const n of names.named) {
-    const i = step(ru ? 'Открыл' : 'Opened', n.title)
+    const i = step('open', ru ? 'Открыл' : 'Opened', n.title, n.title)
     const read = await vaultFs.readFile(n.path)
     if (!read.ok) {
       finish(i, n.title, 'failed')
@@ -325,8 +422,22 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
     }
     finish(i, n.title)
   }
+  // "the project Transcript pipeline" that is the folder Transcript: the scope answers it, it isn't missing.
+  const scopeWords = scope === null || scope.kind === 'vault' ? '' : scopeName(scope, false).toLowerCase()
   for (const nf of names.notFound) {
-    const i = step(ru ? 'Не нашёл' : "Couldn't open", `${nf.asked} · ${ru ? 'ближе всего' : 'closest'}: ${nf.closest.join(', ')}`)
+    if (scopeWords !== '' && nf.asked.toLowerCase().includes(scopeWords)) {
+      add(
+        `## What the user means by "${nf.asked}"\n"${nf.asked}" is the user's name for ${scopeName(scope!, false)}: the notes read below. Answer about them; don't say it doesn't exist.`,
+        [],
+      )
+      continue
+    }
+    const i = step(
+      'open',
+      ru ? 'Не нашёл' : "Couldn't open",
+      nf.asked,
+      `${nf.asked} · ${ru ? 'ближе всего' : 'closest'}: ${nf.closest.join(', ')}`,
+    )
     finish(i, steps[i]!.result, 'failed')
     add(
       `## A note the user named that doesn't exist\n"${nf.asked}" matches no note in the vault. The closest titles: ${nf.closest.map((t) => `"${t}"`).join(', ')}. Say so plainly and offer these; don't answer from another note as if it were "${nf.asked}".`,
@@ -343,7 +454,7 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
         ? await cardsFor(model, scope.kind === 'vault' ? catalog : notesInScope(scope, catalog))
         : new Map()
     if (scope?.kind === 'vault' || wantsTemplates) {
-      const i = step(ru ? 'Карта хранилища' : 'Mapping the vault')
+      const i = step('map', ru ? 'Карта хранилища' : 'Mapping the vault')
       const all = await readNotes(catalog)
       const map = vaultMap(all, harness.noteCards && scope?.kind === 'vault' ? cards : new Map())
       toolCalls.push({ name: 'vault_map', args: {}, by: 'harness', summary: `${all.length} notes`, notes: [], result: map })
@@ -355,8 +466,11 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
       }
       // Its sources: the notes the map and the patterns single out (quoted, or given as an example), and the templates.
       const shown = sections.join('\n')
+      // Templates first, dated notes (dailies, logs) last: what the map is about comes before its examples.
+      const rank = (n: ScopeNote): number => (/^templates?\//i.test(n.path) ? 0 : isDaily(n.path) ? 2 : 1)
       const singled = all
         .filter((n) => shown.includes(`"${n.title}"`) || shown.includes(`e.g. ${n.title}`) || /^templates?\//i.test(n.path))
+        .sort((a, b) => rank(a) - rank(b))
         .slice(0, 8)
       for (const [k, n] of singled.entries())
         context.push({ path: n.path, title: n.title, heading: null, score: Math.max(0.1, 2 - k * 0.1) })
@@ -364,7 +478,7 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
     } else if (scope !== null) {
       const label = scopeName(scope, ru)
       const inScope = await readNotes(notesInScope(scope, catalog))
-      const i = step(ru ? `Читаю ${label}` : `Reading ${label}`, `0/${inScope.length}`)
+      const i = step('read', ru ? `Читаю ${label}` : `Reading ${label}`, label, `0/${inScope.length}`)
       const whole = wholeNotes(inScope, budget - used - 1500)
       let text: string
       if (whole !== null) text = `## The notes in ${label} (${inScope.length}), in full\n\n${whole}`
@@ -397,7 +511,10 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
         text = `## What the notes in ${label} (${inScope.length}) hold, read card by card\n\n${findings.join('\n')}\n\nAll notes: ${inScope.map((n) => n.title).join(', ')}`
       }
       if (text.length > budget - used) text = `${text.slice(0, Math.max(0, budget - used - 1)).trimEnd()}…`
-      const notes = inScope.map((n, k) => ({ path: n.path, title: n.title, heading: null, score: Math.max(0.1, 3 - k * 0.1) }))
+      // The scope's own notes before its dated ones: a project's main note ("Trasncript") before its log entries.
+      const notes = [...inScope]
+        .sort((a, b) => Number(isDaily(a.path)) - Number(isDaily(b.path)) || b.linksIn - a.linksIn)
+        .map((n, k) => ({ path: n.path, title: n.title, heading: null, score: Math.max(0.1, 3 - k * 0.1) }))
       toolCalls.push({
         name: 'read_scope',
         args: { scope: label },
@@ -432,7 +549,7 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
   // over a folder or topic already has its notes; any other looks only for notes close in meaning.
   const terms = routedTerms(question, routed)
   const searching = !(advisor && scope !== null && scope.kind !== 'vault')
-  const searchStep = searching ? step(ru ? 'Ищу в заметках' : 'Searching notes') : -1
+  const searchStep = searching ? step('search', ru ? 'Ищу в заметках' : 'Searching notes') : -1
   const named = new Set(names.named.map((n) => n.path))
   let found: Candidate[] = []
   if (searching && (terms.length > 0 || harness.hybridRetrieval)) {
@@ -500,12 +617,7 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
   const score = (p: string): number => found.find((c) => c.path === p)?.score ?? 1
   for (const c of chunks) context.push({ path: c.path, title: c.title, heading: c.heading, score: score(c.path) })
 
-  const exampleText = advisor ? bot.examples?.[kind] : undefined
-  const head = [
-    bot.system.trim(),
-    ...(exampleText === undefined ? [] : [`## An example of a good ${kind} answer\n\n${exampleText}`]),
-    ...sections,
-  ].join('\n\n')
+  const head = [prefix, ...sections].join('\n\n')
   // Nothing found and nothing looked up: the plain "no notes matched" line.
   const system = buildSystem(head, sections.length === 0 || chunks.length > 0 ? chunks : null)
   // Sources: the pieces read, then the scope's notes - each note once.

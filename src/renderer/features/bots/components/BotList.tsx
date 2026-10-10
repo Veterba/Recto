@@ -12,7 +12,9 @@ import { useBots } from '../hooks/use-bots'
 import { useUnread } from '../unread'
 import { botJob, lastEnded, ordinal, useJobs } from '../jobs-store'
 import { previewOf, shortTime } from '../threads'
+import { statusPhrases } from '@shared/bot-status'
 import { MAIN_BOT } from './BotConversation'
+import { StatusText, useStatusText } from './BotStatus'
 
 /**
  * The AI section's sidebar: the bots, like contacts. Recto first - the keeper
@@ -84,14 +86,8 @@ function BotRow({
   const unread = useUnread(bot.id)
   // An answer running for this bot, on any tab: the face works and the row says what it does.
   const job = botJob(bot.id)
-  const working =
-    job === null
-      ? null
-      : job.state === 'queued'
-        ? `Queued · ${ordinal(job.position + 1)}`
-        : job.state === 'streaming'
-          ? 'Writing…'
-          : (job.status ?? job.steps.findLast((st) => st.state === 'running')?.action ?? 'Thinking…')
+  const status = useStatusText(job === null ? null : statusPhrases(job))
+  const working = job === null ? null : job.state === 'queued' ? `Queued · ${ordinal(job.position + 1)}` : status
   const preview = previewOf(last.messages)
   // When it was last written: the moment this row saw it change, when it did;
   // otherwise the file's own time (as on opening the app).
@@ -116,7 +112,17 @@ function BotRow({
         </span>
         <span className="bot-row__bottom">
           <span className={`bot-row__preview${working !== null ? ' is-working' : ''}`}>
-            {working ?? (preview === '' ? bot.specialty : preview)}
+            {working === null ? (
+              preview === '' ? (
+                bot.specialty
+              ) : (
+                preview
+              )
+            ) : job?.state === 'queued' ? (
+              working
+            ) : (
+              <StatusText text={working} />
+            )}
           </span>
           {unread && !active && <span className="bot-row__unread" aria-label="New answer" />}
         </span>

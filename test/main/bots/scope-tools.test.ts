@@ -4,7 +4,15 @@ vi.mock('electron', () => ({ shell: {}, powerMonitor: { isOnBatteryPower: () => 
 vi.mock('../../../src/main/index-client', () => ({ send: vi.fn() }))
 vi.mock('../../../src/main/vault', () => ({ currentVault: () => null }))
 
-import { noteOutline, notesInScope, structurePatterns, vaultMap, wholeNotes, type ScopeNote } from '../../../src/main/bots/scope-tools'
+import {
+  noteOutline,
+  notesInScope,
+  projectNotes,
+  structurePatterns,
+  vaultMap,
+  wholeNotes,
+  type ScopeNote,
+} from '../../../src/main/bots/scope-tools'
 import { codeCard, languageOfText, mainHeadings } from '../../../src/main/bots/cards'
 import { dailyThoughts, subjectFolder } from '../../../src/main/bots/tools'
 
@@ -119,5 +127,31 @@ describe('task grouping helpers', () => {
     expect(subjectFolder('Daily/2026/09/W39/2026-09-21.md')).toBeNull()
     expect(subjectFolder('tasks/0 Commit topics.md')).toBeNull()
     expect(subjectFolder('Просто заметка.md')).toBeNull()
+  })
+})
+
+describe('projectNotes', () => {
+  const notes = [
+    n('Programming/Projects/Recto app/Recto plan.md', 'plan'),
+    n('Programming/Projects/Recto app/Recto log/2026-10-03 — v0.43.0.md', 'log'),
+    n('Other/Electron notes.md', 'x', { topics: '["[[topics/Recto]]"]' }),
+    n('tasks/0 Commit topics.md', 'x', { project: '"[[Recto]]"' }),
+    n('tasks/1 Architecture map.md', 'x', { linksTo: ['Programming/Projects/Recto app/Recto plan.md'] }),
+    n('Daily/2026/09/W39/2026-09-21.md', DAILY, { linksTo: ['Programming/Projects/Recto app/Recto plan.md'] }),
+    n('Other/Japan trip.md', 'x', { topics: '["[[topics/Travel · plan]]"]' }),
+  ]
+
+  it('topics first, then the project property, the folder, and notes linking in - never a daily by a link', () => {
+    const found = projectNotes({ kind: 'folder', folder: 'Programming/Projects/Recto app', words: 'recto app' }, notes, [
+      'Recto',
+      'Travel · plan',
+    ])
+    expect(Object.fromEntries(found)).toEqual({
+      'Other/Electron notes.md': 'topic',
+      'tasks/0 Commit topics.md': 'project',
+      'Programming/Projects/Recto app/Recto plan.md': 'folder',
+      'Programming/Projects/Recto app/Recto log/2026-10-03 — v0.43.0.md': 'folder',
+      'tasks/1 Architecture map.md': 'linking',
+    })
   })
 })

@@ -54,7 +54,7 @@ export type Scores = {
   items?: number | null
   /** The router sent it where its kind says; null before there is a router. */
   routerOk?: boolean | null
-  /** Notes the answer names or links that were not in its context. */
+  /** Notes the answer names or links, numbers it gives and notes it describes, that were not in its context. */
   ungrounded?: string[]
   /** The answer names one of the expected notes. */
   namedInAnswer: boolean | null
@@ -162,7 +162,149 @@ export function ungroundedClaims(
     // Words quoted from the notes it was given ("Weekly goals — asked by 7 of 12") are not a claim about another note.
     if (title !== undefined && !given.includes(inner)) out.add(title)
   }
+  if (contextText !== '') {
+    for (const n of numberClaims(answer, contextText)) out.add(`number ${n}`)
+    for (const d of descriptionClaims(answer, context, contextText)) out.add(`description “${d}”`)
+  }
   return [...out]
+}
+
+/** Numbers as whole tokens: "67", "20+", "60k", "0.12", "2026-10-03", "3/12". */
+const NUMBER = /(?<![\p{L}\d.,:/-])\d+(?:[.,:/-]\d+)*k?\+?(?![\p{L}\d])/gu
+/** Every number in a text, however it sits ("v0.9", "Unit4"): what the context has. */
+const ANY_NUMBER = /\d+(?:[.,:/-]\d+)*k?/g
+/** Things a vault has, after which even a small number is a count of them. */
+const COUNTED =
+  /^\s*(?:\+\s*)?(?:notes?|dailies|daily notes|tasks?|folders?|files?|links?|days?|weeks?|entries|projects?|заметк\p{L}*|задач\p{L}*|пап\p{L}*|файл\p{L}*|ссыл\p{L}*|дн\p{L}*|дней|недел\p{L}*|запис\p{L}*|проект\p{L}*)\b/iu
+
+/** "450 000" and "450,000" are one number, 450000; "60k" is 60000. */
+const joinThousands = (text: string): string => text.replace(/(\d)[\u00a0\u202f ,](?=\d{3}(?!\d))/g, '$1')
+const normal = (token: string): string => {
+  const t = token.replace(/\+$/, '')
+  return /^\d+k$/i.test(t) ? `${t.slice(0, -1)}000` : t
+}
+
+const MONTHS: readonly RegExp[] = [
+  /^(jan|январ)/i,
+  /^(feb|феврал)/i,
+  /^(mar|март)/i,
+  /^(apr|апрел)/i,
+  /^(may|ма[яй])/i,
+  /^(jun|июн)/i,
+  /^(jul|июл)/i,
+  /^(aug|август)/i,
+  /^(sep|сентябр)/i,
+  /^(oct|октябр)/i,
+  /^(nov|ноябр)/i,
+  /^(dec|декабр)/i,
+]
+/** The month named right after a number ("29 сентября") or right before it ("September 23"): "09", or null. */
+function monthAround(text: string, at: number, length: number): string | null {
+  const after = /^[\s–-]*(?:\d{1,2}\s+)?(\p{L}+)/u.exec(text.slice(at + length))?.[1] ?? ''
+  const before = /(\p{L}+)\s+$/u.exec(text.slice(0, at))?.[1] ?? ''
+  for (const word of [after, before]) {
+    const i = MONTHS.findIndex((re) => re.test(word))
+    if (i >= 0) return String(i + 1).padStart(2, '0')
+  }
+  return null
+}
+
+/**
+ * Numbers the answer gives that its context never had: a count or a fact
+ * about the vault ("67 dailies") must come from what it read, never from a
+ * guess. A number of two digits or more, or any number counting notes, tasks,
+ * days and the like, is a claim; a list's "1.", "2-3 ideas" and "1:1" are not.
+ * Written another way ("450,000" for "450 000") it is the same number, and the
+ * sum or difference of two numbers the context has ("you still need 230 000"
+ * of 540 000 with 310 000 saved) is worked out from it, not made up. The
+ * question's own numbers count as given (contextText includes the prompt).
+ */
+export function numberClaims(answer: string, contextText: string): string[] {
+  const whole = [...joinThousands(contextText).matchAll(ANY_NUMBER)].map((m) => m[0])
+  // Each number, and the parts of a date or a version ("2026" of 2026-09-23) - the parts are not summed.
+  const given = new Set(whole.flatMap((t) => [normal(t), ...t.split(/[-/:]/), t.replace(/\.0+$/, '')]))
+  const values = [
+    ...new Set(
+      whole
+        .map(normal)
+        .filter((g) => /^\d+(\.\d+)?$/.test(g))
+        .map(Number),
+    ),
+  ].slice(0, 400)
+  const derived = (n: number): boolean => values.some((a) => values.some((b) => a + b === n || a - b === n))
+  const isoDays = new Set([...contextText.matchAll(/\d{4}-(\d{2})-(\d{2})/g)].map((m) => `${m[1]}-${m[2]}`))
+  const out = new Set<string>()
+  for (const line of joinThousands(answer).split('\n')) {
+    const body = line.replace(/^\s*(?:\d+[.)]|[-*•])\s+/, '')
+    for (const m of body.matchAll(NUMBER)) {
+      // "230 тысяч", "1.5 million": the word is part of the number.
+      const scale = /^\s*(тысяч\p{L}*|тыс\.?|thousand)/iu.test(body.slice(m.index! + m[0].length))
+        ? 1e3
+        : /^\s*(млн|миллион\p{L}*|million)/iu.test(body.slice(m.index! + m[0].length))
+          ? 1e6
+          : 1
+      const n = scale === 1 || !/^\d+(\.\d+)?$/.test(normal(m[0])) ? normal(m[0]) : String(Number(normal(m[0])) * scale)
+      const counts = COUNTED.test(body.slice(m.index! + m[0].length))
+      if (n.length < 2 && !counts) continue
+      if (given.has(n)) continue
+      // "2-3 notes a day", "1/2", "1:1": a range, a fraction or a ratio of its own making.
+      if (/^\d[-/:]\d$/.test(n)) continue
+      if (/^\d+(\.\d+)?$/.test(n) && derived(Number(n))) continue
+      // "29 сентября", "23 September": a day in words, the context's 2026-09-29.
+      const month = monthAround(body, m.index!, m[0].length)
+      if (month !== null && /^\d{1,2}$/.test(n) && isoDays.has(`${month}-${n.padStart(2, '0')}`)) continue
+      out.add(m[0])
+    }
+  }
+  return [...out]
+}
+
+const STOP = new Set(
+  'about these those their there which where while would could should after before other every being having within without first second third really things thing notes users their yours about также этого этой которые который которая может можно очень своих своей твоих твоей заметки заметка заметке заметок'.split(
+    ' ',
+  ),
+)
+/** "X is a …", "X describes …", «X - это …»: the answer saying what a note or a project is. */
+const DESCRIBES =
+  /\b(?:is|are|was)\s+(?:a|an|the|about|your|my)\b|\b(?:describes?|covers?|explains?|documents?|is about|focuses on)\b|\s(?:—|-)\s*это\b|\bэто\s|описыва\p{L}*|посвящ\p{L}*|рассказыва\p{L}*/iu
+
+/**
+ * Sentences that say what a note or project is, in words found nowhere in
+ * what the answer was given: a description of a note it didn't read, or made
+ * up for one it did ("Transcript pipeline is a tool for…" when the note says
+ * something else). A sentence counts when it names a note it had (or "the
+ * project", «проект») and describes it with three or more longer words, none
+ * of which - by their first five letters - are in the context.
+ */
+export function descriptionClaims(answer: string, context: readonly ContextNote[], contextText: string): string[] {
+  const given = fold(contextText)
+  const stems = new Set((given.match(/\p{L}{5,}/gu) ?? []).map((w) => w.slice(0, 5)))
+  // A sentence can only be checked against notes in its own script: a Russian line about an English
+  // note shares no words with it and is not made up for that. What the notes are written in: the
+  // context after the prompt's own rules (which are English).
+  const notesPart = contextText.slice(Math.max(0, contextText.indexOf('## Right now')))
+  const letters = notesPart.match(/\p{L}/gu) ?? []
+  const cyrillicShare = letters.length === 0 ? 0 : letters.filter((l) => /\p{Script=Cyrillic}/u.test(l)).length / letters.length
+  const checkable = (sentence: string): boolean => {
+    const cyrillic = (sentence.match(/\p{Script=Cyrillic}/gu) ?? []).length > (sentence.match(/\p{Script=Latin}/gu) ?? []).length
+    return cyrillic ? cyrillicShare >= 0.3 : cyrillicShare <= 0.7
+  }
+  const names = [...new Set(context.flatMap((c) => [fold(noteName(c.path)), fold(c.title)]))].filter((n) => n.length >= 3)
+  const out: string[] = []
+  // Facts come before the model's own ideas; what follows "My suggestions" is its own.
+  const facts = answer.split(/^.*(?:my suggestions?|my ideas|мои идеи|мои предложения).*$/im)[0] ?? ''
+  for (const sentence of facts.split(/(?<=[.!?])\s+|\n+/)) {
+    const s = fold(sentence.replace(/[*_`#>]/g, ''))
+    if (!checkable(s)) continue
+    const verb = DESCRIBES.exec(s)
+    if (verb === null) continue
+    if (!names.some((n) => s.includes(n)) && !/\b(?:the|this|your) project\b|проект/.test(s)) continue
+    const words = (s.slice(verb.index + verb[0].length).match(/\p{L}{5,}/gu) ?? []).filter(
+      (w) => !STOP.has(w) && !names.some((n) => n.includes(w)),
+    )
+    if (words.length >= 3 && words.every((w) => !stems.has(w.slice(0, 5)))) out.push(sentence.trim().slice(0, 80))
+  }
+  return out
 }
 
 /**

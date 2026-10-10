@@ -2,8 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { KINDS } from './cases.ts'
 import { summarise, type Scored } from './metrics.ts'
-import { fromLine, gb, pct, secs } from './report.ts'
-import { REAL_VAULT, findEvalsFolder, gradesOf, guard, listRuns, modelSlug, runPaths, stamp, type StoredRun } from './store.ts'
+import { fromLine, gb, pct, secs, snapshotName } from './report.ts'
+import { REAL_VAULT, REPO_STORE, allRuns, findEvalsFolder, gradesOf, guard, modelSlug, runPaths, stamp, type StoredRun } from './store.ts'
 
 /**
  * npm run bots:eval:compare -- "<run id A>" "<run id B>" [more…]
@@ -15,12 +15,11 @@ import { REAL_VAULT, findEvalsFolder, gradesOf, guard, listRuns, modelSlug, runP
 
 const ids = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const vaultFlag = process.argv.indexOf('--evals-vault')
-const evalsVault = vaultFlag >= 0 ? process.argv[vaultFlag + 1]! : REAL_VAULT
-const evalsDir = findEvalsFolder(evalsVault)
+const vault = vaultFlag >= 0 ? process.argv[vaultFlag + 1]! : REAL_VAULT
 
 function main(): void {
   if (ids.length < 2) throw new Error('Give at least two run ids: npm run bots:eval:compare -- "<run id A>" "<run id B>"')
-  const all = listRuns(evalsVault)
+  const all = allRuns(vault)
   const runs: StoredRun[] = ids.map((id) => {
     const found = all.filter((r) => r.config.run_id === id)
     if (found.length !== 1)
@@ -37,6 +36,9 @@ function main(): void {
   out.push(`Runs: ${runs.map((r) => `"${r.config.run_id}" (${r.config.model}, ${r.config.git.commit.slice(0, 7)})`).join(', ')}.`)
   const sameCases = new Set(runs.map((r) => r.config.cases_sha)).size === 1
   out.push(sameCases ? 'All on the same cases.' : '**The runs used different cases**: per-kind numbers are not strictly comparable.')
+  const snapshots = new Set(runs.map((r) => snapshotName(r.config)))
+  if (snapshots.size > 1)
+    out.push(`**Different snapshot**: the runs read different vaults (${[...snapshots].join(', ')}); compare direction, not numbers.`)
   out.push('')
 
   out.push('## Quality per kind (pass · recall@4)')
@@ -103,6 +105,9 @@ function main(): void {
   out.push('')
 
   const id = `${stamp(new Date())} — comparison ${runs.map((r) => modelSlug(r.config.model)).join(' vs ')}`.replace(/[\\/:*?"<>|]/g, '-')
+  // Fixture runs only: the comparison goes beside them in the repo. Any private run in it: the vault.
+  const evalsVault = runs.every((r) => r.config.vault.kind === 'fixture') ? REPO_STORE : vault
+  const evalsDir = evalsVault === REPO_STORE ? REPO_STORE : findEvalsFolder(evalsVault)
   const where = runPaths(evalsVault, evalsDir, newest.config.model, id)
   guard(where.note, evalsVault, evalsDir, where)
   if (fs.existsSync(where.note)) throw new Error(`${where.note} exists already.`)

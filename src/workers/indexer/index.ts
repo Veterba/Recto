@@ -242,7 +242,7 @@ function notesInPeriod(from: string, to: string): PeriodNote[] {
   })
 }
 
-/** Every note with what the scope tools count: links both ways, aliases and topics, task rows, headings. */
+/** Every note with what the scope tools count: links both ways, aliases, topics and project, task rows, headings. */
 function botCatalog(): CatalogNote[] {
   const handle = requireDb()
   const notes = handle
@@ -252,6 +252,10 @@ function botCatalog(): CatalogNote[] {
               (SELECT COUNT(*) FROM links l WHERE l.target_path = n.path AND l.source_path <> n.path) AS links_in,
               (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'aliases') AS aliases,
               (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'topics') AS topics,
+              (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'project') AS project,
+              (SELECT GROUP_CONCAT(DISTINCT l.target_path) FROM links l
+                WHERE l.source_path = n.path AND l.target_path IS NOT NULL AND l.target_path <> n.path
+                  AND (l.property IS NULL OR l.property <> 'topics')) AS links_to,
               (SELECT COUNT(*) FROM tasks t WHERE t.path = n.path) AS tasks
          FROM notes n ORDER BY n.path`,
     )
@@ -265,6 +269,8 @@ function botCatalog(): CatalogNote[] {
     links_in: number
     aliases: string | null
     topics: string | null
+    project: string | null
+    links_to: string | null
     tasks: number
   }[]
   const headings = new Map<string, { text: string; level: number }[]>()
@@ -287,6 +293,9 @@ function botCatalog(): CatalogNote[] {
     linksIn: n.links_in,
     aliases: n.aliases,
     topics: n.topics,
+    project: n.project,
+    // GROUP_CONCAT joins with ","; a path may hold one too, so split only where a path ends.
+    linksTo: n.links_to === null ? [] : n.links_to.split(/(?<=\.md),/),
     tasks: n.tasks,
     headings: headings.get(n.path) ?? [],
   }))

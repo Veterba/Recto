@@ -87,12 +87,12 @@ describe('the job registry', () => {
     const h = harness()
     const a = h.jobs.enqueue(input('a.md'))
     const controls = h.runs.get(a.id)!.controls
-    controls.update({ steps: [{ action: 'Searching notes', result: '', state: 'running' }], status: 'Searching…' })
+    controls.update({ steps: [{ action: 'Searching notes', result: '', state: 'running' }] })
     controls.update({ state: 'streaming', text: 'Your notes' })
     h.runs.get(a.id)!.finish()
     await h.tick()
     controls.update({ text: 'late' })
-    expect(h.jobs.get(a.id)).toMatchObject({ state: 'done', text: 'Your notes', status: null })
+    expect(h.jobs.get(a.id)).toMatchObject({ state: 'done', text: 'Your notes' })
     expect(h.changes.map((c) => c.state)).toEqual(['queued', 'preparing', 'preparing', 'streaming', 'done'])
   })
 

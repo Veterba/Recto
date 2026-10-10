@@ -3,8 +3,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { readCases, type Case } from '../../scripts/evals/cases.ts'
-import { languageOf, percentile, saysNotFound, score, type Answered } from '../../scripts/evals/metrics.ts'
-import { readGrades, renderReport, type RunConfig } from '../../scripts/evals/report.ts'
+import { descriptionClaims, languageOf, numberClaims, percentile, saysNotFound, score, type Answered } from '../../scripts/evals/metrics.ts'
+import { differentSnapshot, readGrades, renderReport, snapshotName, type RunConfig } from '../../scripts/evals/report.ts'
 import { guard, newRunId, noteNames, runPaths } from '../../scripts/evals/store.ts'
 
 const answered = (over: Partial<Answered> = {}): Answered => ({
@@ -176,6 +176,69 @@ describe('the new checks', () => {
   it('router accuracy compares the routed kind with the case kind', () => {
     expect(score(caseOf({ kind: 'small-talk', question: 'hi' }), answered({ router: { kind: 'smalltalk' } })).routerOk).toBe(true)
     expect(score(caseOf({ kind: 'tasks' }), answered({ router: { kind: 'notes' } })).reasons).toContain('wrong route')
+  })
+})
+
+describe('grounded numbers and descriptions', () => {
+  const ctx = '## The vault\n812 notes. Daily: 31 notes. 45 notes with no links.\n\n## Japan trip\n60k NOK for two, March next year.'
+
+  it('a count the context never gave is a claim; one it gave is not', () => {
+    expect(numberClaims('You have 67 dailies and 45 notes with no links.', ctx)).toEqual(['67'])
+    expect(numberClaims('Your vault has 3 folders.', ctx)).toEqual(['3'])
+  })
+
+  it('the same number written another way, or worked out from two the context has, is not', () => {
+    const notes = 'Цель — 540 000 рублей, накоплено 310 000. Budget 450 000 rubles. Lark v0.9 shipped.'
+    expect(numberClaims('Осталось 230 000 рублей.', notes)).toEqual([])
+    expect(numberClaims('A budget of 450,000 rubles; version 0.9; a 1:1 call.', notes)).toEqual([])
+    expect(numberClaims('About 1,200,000 in total.', notes)).toEqual(['1200000'])
+    expect(numberClaims('Остаётся ещё около 230 тысяч; виджет на iOS 17.', notes + ' iOS 17.0')).toEqual([])
+    // A day in words is the context's ISO date; a day the context never had is still a claim.
+    const days = 'from 2026-09-23 to 2026-09-29'
+    expect(numberClaims('From 23 September to 29 September; заметка от 28–29 сентября.', days + ' 2026-09-28')).toEqual([])
+    expect(numberClaims('On 20 September 2026.', days)).toEqual(['20'])
+  })
+
+  it("a list's numbering, small ranges and the context's own numbers are not", () => {
+    expect(numberClaims('1. Pick 2-3 notes a day.\n2. Budget: 60k NOK for two.', ctx)).toEqual([])
+  })
+
+  it('a description of a note in words it never read is a claim', () => {
+    const context = [{ path: 'Work/Trasncript pipeline.md', title: 'Trasncript pipeline', heading: null, score: 1 }]
+    const read =
+      'Trasncript pipeline\nNote about my first project from my internship. Teams transcript, summary by a model, sent by email to recipients.'
+    expect(descriptionClaims('Trasncript pipeline is a mobile banking application with blockchain wallets.', context, read)).toHaveLength(1)
+    expect(
+      descriptionClaims('Trasncript pipeline is your internship project: a Teams transcript summarised and sent by email.', context, read),
+    ).toEqual([])
+    // A Russian line about an English note is not checked word by word.
+    expect(descriptionClaims('Trasncript pipeline — это твой проект для стажировки с почтой.', context, `## Right now\n${read}`)).toEqual(
+      [],
+    )
+    // Its own ideas are its own.
+    expect(descriptionClaims('**My suggestions**\nThe project is a candidate for scheduled cronjobs everywhere.', context, read)).toEqual(
+      [],
+    )
+  })
+})
+
+describe('snapshots', () => {
+  it('cases name their snapshot and day; proposed notes are kept', () => {
+    const r = readCases(
+      'snapshot: private-2026-10-10\ntoday: 2026-10-10\ncases:\n  - id: A\n    question: q?\n    proposed: true\n    expectNotes: [X]\n',
+    )
+    expect(r.snapshot).toBe('private-2026-10-10')
+    expect(r.today).toBe('2026-10-10')
+    expect(r.cases[0]!.proposed).toBe(true)
+  })
+
+  it('runs on different snapshots are marked, a run from before snapshots is a live copy', () => {
+    const run = (snapshot?: string) => ({
+      vault: { kind: 'copy' as const, notes: 1, languages: {}, ...(snapshot === undefined ? {} : { snapshot }) },
+    })
+    expect(differentSnapshot(run(), run('private-2026-10-10'))).toBe(true)
+    expect(differentSnapshot(run('private-2026-10-10'), run('private-2026-10-10'))).toBe(false)
+    expect(snapshotName(run())).toBe('a live copy of the vault')
   })
 })
 
