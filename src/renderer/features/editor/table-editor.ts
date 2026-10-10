@@ -1,11 +1,23 @@
 import { isolateHistory, redo, undo } from '@codemirror/commands'
-import { ChangeSet, StateEffect, StateField, type EditorState, type Extension, type Text, type TransactionSpec } from '@codemirror/state'
+import {
+  ChangeSet,
+  EditorState,
+  StateEffect,
+  StateField,
+  Transaction,
+  type Extension,
+  type Text,
+  type TransactionSpec,
+} from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
-import { EditorView, showTooltip, WidgetType, type Tooltip } from '@codemirror/view'
-import type { MenuItem } from '../../ui/ContextMenu'
-import { openMenu } from '../../ui/menu-host'
+import { EditorView, showTooltip, ViewPlugin, WidgetType, type Tooltip } from '@codemirror/view'
+import { createElement } from 'react'
+import { openLayer } from '../../ui/menu-host'
+import { TableMenu, type IconAction, type MenuEntry } from './components/TableMenu'
 import { pressOrDrag } from '../../ui/press-or-drag'
+import { attachTip, type TipPlacement } from '../../ui/Tip'
 import { renderInline } from './rich-widgets'
+import { livePreviewEnabled } from './live-preview-state'
 import {
   type Align,
   type CellRect,
@@ -49,6 +61,15 @@ import { cellKind, keepWhole, numericColumn } from './table-widget'
  */
 
 type Cell = { row: number; col: number }
+
+/** Six dots: something to take hold of. Sideways for a column. */
+const GRIP_DOTS =
+  '<svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true">' +
+  '<circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/>' +
+  '<circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg>'
+
+/** What a table menu is about. */
+type Target = { kind: 'row' | 'col' | 'table'; index: number }
 
 type Pending = {
   /** Where the table starts in the new document. */
@@ -143,6 +164,9 @@ function placeCaret(el: HTMLElement, where: 'start' | 'end' | 'all' | { x: numbe
 class TableController {
   readonly wrap: HTMLDivElement
   private readonly scroll: HTMLDivElement
+  /** The row handles, beside the scroll box rather than in it: see layoutGutter. */
+  private readonly gutter: HTMLDivElement
+  private table: HTMLTableElement | null = null
   private readonly model: TableModel
   private cells: HTMLElement[][] = []
   private editing: { cell: Cell; el: HTMLElement; original: string } | null = null
@@ -157,16 +181,71 @@ class TableController {
     this.wrap = document.createElement('div')
     this.wrap.className = 'cm-table-wrap cm-tbl'
     this.wrap.tabIndex = -1
+    // The visible box: the table scrolling in its own scroll box, the add-column
+    // strip on its right edge and the add-row bar under it. The two stay put
+    // while the table scrolls - they belong to the box, not to the content.
+    const frame = document.createElement('div')
+    frame.className = 'cm-tbl-frame'
     this.scroll = document.createElement('div')
     this.scroll.className = 'cm-table-scroll'
-    this.wrap.append(this.scroll)
+    const columns = this.model.align.length
+    const rows = this.model.rows.length
+    const addCol = this.button('cm-tbl-add cm-tbl-add-col', 'Add a column', 'right', (base) =>
+      this.apply(insertColumn(base, columns), { row: 0, col: columns, edit: true, selectAll: true }),
+    )
+    const addRow = this.button('cm-tbl-add cm-tbl-add-row', 'Add a row', 'bottom', (base) =>
+      this.apply(insertRow(base, rows), { row: rows, col: 0, edit: true }),
+    )
+    this.gutter = document.createElement('div')
+    this.gutter.className = 'cm-tbl-gutter'
+    // The table's own handle, at its top-left corner: the table menu.
+    const corner = document.createElement('button')
+    corner.type = 'button'
+    corner.className = 'cm-tbl-corner'
+    corner.setAttribute('aria-label', 'Table')
+    attachTip(corner, 'Table', 'top')
+    corner.addEventListener('click', (event) => {
+      if (event.detail === 0) this.onCorner(corner)
+    })
+    frame.append(corner, this.gutter, this.scroll, addCol, addRow)
+    this.wrap.append(frame)
     this.render()
     this.listen()
-    requestAnimationFrame(() => this.restore())
+    requestAnimationFrame(() => {
+      this.layoutGutter()
+      this.restore()
+    })
+    // Rows change height as the pane is resized or a cell wraps differently.
+    this.resize = new ResizeObserver(() => this.layoutGutter())
+    if (this.table !== null) this.resize.observe(this.table)
   }
+
+  private readonly resize: ResizeObserver
 
   destroy(): void {
     this.destroyed = true
+    this.resize.disconnect()
+  }
+
+  /**
+   * The row handles sit in their own gutter left of the scroll box, each level
+   * with its row. Inside the scroll box they made it 16px wider than the table
+   * - its scrollbar started left of the table's edge - and they scrolled away
+   * with the cells. Rows do not move vertically when the table scrolls
+   * sideways, so placing them once per layout is enough.
+   */
+  private layoutGutter(): void {
+    if (this.table === null) return
+    const top = this.gutter.getBoundingClientRect().top
+    const grips = [...this.gutter.children] as HTMLElement[]
+    this.cells.forEach((row, r) => {
+      const grip = grips[r]
+      const cell = row[0]
+      if (grip === undefined || cell === undefined) return
+      const rect = cell.getBoundingClientRect()
+      grip.style.top = `${rect.top - top}px`
+      grip.style.height = `${rect.height}px`
+    })
   }
 
   // --- drawing -------------------------------------------------------------
@@ -181,30 +260,17 @@ class TableController {
     const thead = document.createElement('thead')
     const handles = document.createElement('tr')
     handles.className = 'cm-tbl-colhandles'
-    handles.append(document.createElement('th'))
     for (let c = 0; c < columns; c++) {
       const th = document.createElement('th')
       th.className = 'cm-tbl-colh'
       th.append(this.grip('col', c))
       handles.append(th)
     }
-    const addCol = document.createElement('th')
-    addCol.className = 'cm-tbl-addc'
-    addCol.append(
-      this.button('cm-tbl-add cm-tbl-add-col', 'Add a column', () =>
-        this.apply(insertColumn(this.model, columns), { row: 0, col: columns, edit: true, selectAll: true }),
-      ),
-    )
-    handles.append(addCol)
     thead.append(handles)
 
     const tbody = document.createElement('tbody')
     this.cells = rows.map((row, r) => {
       const tr = document.createElement('tr')
-      const handle = document.createElement(r === 0 ? 'th' : 'td')
-      handle.className = 'cm-tbl-rowh'
-      handle.append(this.grip('row', r))
-      tr.append(handle)
       const els = row.map((raw, c) => {
         const el = document.createElement(r === 0 ? 'th' : 'td')
         const alignment = align[c] ?? (numeric[c] === true ? 'right' : null)
@@ -221,20 +287,18 @@ class TableController {
       ;(r === 0 ? thead : tbody).append(tr)
       return els
     })
-    const addRow = document.createElement('tr')
-    addRow.className = 'cm-tbl-addr'
-    const addCell = document.createElement('td')
-    addCell.colSpan = columns + 1
-    addCell.append(
-      this.button('cm-tbl-add cm-tbl-add-row', 'Add a row', () =>
-        this.apply(insertRow(this.model, rows.length), { row: rows.length, col: 0, edit: true }),
-      ),
-    )
-    addRow.append(document.createElement('td'), addCell)
-    tbody.append(addRow)
-
     table.append(thead, tbody)
     this.scroll.replaceChildren(table)
+    this.table = table
+    this.gutter.replaceChildren(
+      ...rows.map((_, r) => {
+        const slot = document.createElement('div')
+        slot.className = 'cm-tbl-rowh'
+        slot.dataset['row'] = String(r)
+        slot.append(this.grip('row', r))
+        return slot
+      }),
+    )
   }
 
   private grip(kind: 'row' | 'col', index: number): HTMLButtonElement {
@@ -246,28 +310,48 @@ class TableController {
     grip.title = 'Click for options, drag to move'
     grip.dataset['kind'] = kind
     grip.dataset['index'] = String(index)
+    grip.draggable = false
+    grip.innerHTML = GRIP_DOTS
     return grip
   }
 
-  private button(className: string, label: string, run: () => void): HTMLButtonElement {
+  /** One "+" control: focusable, a tooltip in the app's layer, the cell being edited written first. */
+  private button(className: string, label: string, placement: TipPlacement, run: (base: TableModel) => void): HTMLButtonElement {
     const button = document.createElement('button')
     button.type = 'button'
-    button.tabIndex = -1
     button.className = className
-    button.title = label
     button.setAttribute('aria-label', label)
-    button.textContent = '+'
+    button.textContent = className.includes('add-row') ? '+ Add row' : '+'
+    if (!className.includes('add-row')) attachTip(button, label, placement)
+    // mousedown, so the cell being edited is still there to be read; Enter and
+    // Space arrive as a click.
     button.addEventListener('mousedown', (event) => {
       event.preventDefault()
       event.stopPropagation()
-      this.commitEdit()
-      run()
+      run(this.commitEditQuietly())
+    })
+    button.addEventListener('click', (event) => {
+      if (event.detail === 0) run(this.commitEditQuietly())
     })
     return button
   }
 
+  /** Show the handles of the row and column under the pointer - only those. */
+  private hot(cell: Cell | null): void {
+    for (const el of this.wrap.querySelectorAll('.is-hot')) el.classList.remove('is-hot')
+    if (cell === null) return
+    this.gutter.querySelector(`[data-row="${cell.row}"]`)?.classList.add('is-hot')
+    this.wrap.querySelectorAll('.cm-tbl-colh')[cell.col]?.classList.add('is-hot')
+  }
+
+  /** Show the add-row bar near the last row, the add-column strip near the last column. */
+  private near(cell: Cell | null): void {
+    this.wrap.classList.toggle('is-near-last-row', cell !== null && cell.row === this.model.rows.length - 1)
+    this.wrap.classList.toggle('is-near-last-col', cell !== null && cell.col === this.model.align.length - 1)
+  }
+
   private cellAt(target: EventTarget | null): Cell | null {
-    const el = (target as HTMLElement | null)?.closest?.('[data-row]') as HTMLElement | null
+    const el = (target as HTMLElement | null)?.closest?.('[data-col][data-row]') as HTMLElement | null
     if (el === null || !this.wrap.contains(el)) return null
     return { row: Number(el.dataset['row']), col: Number(el.dataset['col']) }
   }
@@ -300,15 +384,28 @@ class TableController {
     const insert = formatTable(next)
     const doc = this.view.state.doc
     const to = from + this.source.length
-    // A table always keeps a blank line under it; leaving it downwards also
-    // gets a paragraph line after that, for the caret (see tableTail).
-    const tail = tableTail(doc, to, leave === 'below')
+    // A table always keeps a blank line under it. Leaving it changes nothing
+    // else: the caret goes to the line after it, and the first key typed
+    // there gets its own blank line (firstKeyAfterTable).
+    const tail = tableTail(doc, to)
     const changes = ChangeSet.of(
       [...(insert === this.source ? [] : [{ from, to, insert }]), ...(tail.insert === '' ? [] : [{ from: tail.at, insert: tail.insert }])],
       doc.length,
     )
     let selection: number | undefined
-    if (leave === 'below') selection = changes.mapPos(tail.caret.pos, tail.caret.assoc) + tail.caret.offset
+    if (leave === 'below') {
+      // The line after the table - or, when that is the blank line and an
+      // empty paragraph follows it (Recto leaves one after a new table), that
+      // paragraph. Anywhere else the first key is moved past a blank line.
+      const end = changes.mapPos(to, 1)
+      const after = changes.apply(doc)
+      selection = end
+      if (end < after.length) {
+        const next = after.lineAt(end + 1)
+        const paragraph = next.number < after.lines ? after.line(next.number + 1) : null
+        selection = next.text.trim() === '' && paragraph !== null && paragraph.text.trim() === '' ? paragraph.from : next.from
+      }
+    }
     if (leave === 'above') selection = from > 0 ? from - 1 : undefined
     if (focus !== null) pendingFocus.set(this.view, { ...focus, from, scrollLeft: this.scroll.scrollLeft })
     if (changes.empty && selection === undefined) {
@@ -316,10 +413,13 @@ class TableController {
       if (focus !== null) this.focusCell(focus)
       return
     }
+    // Leaving a table that ends the note, unchanged, only adds the line break
+    // the caret needs after it: that is not an edit to undo.
+    const onlyTail = insert === this.source && leave !== undefined
     this.view.dispatch({
       changes,
       ...(selection === undefined ? {} : { selection: { anchor: selection } }),
-      annotations: isolateHistory.of('full'),
+      annotations: onlyTail ? Transaction.addToHistory.of(false) : isolateHistory.of('full'),
       userEvent: 'input.table',
       scrollIntoView: leave !== undefined,
     })
@@ -395,6 +495,7 @@ class TableController {
     el.classList.add('is-editing')
     el.spellcheck = true
     this.editing = { cell, el, original }
+    this.near(cell)
     el.focus({ preventScroll: true })
     el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
     placeCaret(el, where)
@@ -416,6 +517,22 @@ class TableController {
   private listen(): void {
     const wrap = this.wrap
     wrap.addEventListener('mousedown', (event) => this.onMouseDown(event))
+    // The pointer over the last row or column (or over the control itself)
+    // shows its "+"; so does editing a cell there.
+    wrap.addEventListener('mouseover', (event) => {
+      const target = event.target as HTMLElement
+      if (target.closest('.cm-tbl-add') !== null) return
+      const cell = this.cellAt(target)
+      this.near(cell ?? this.editing?.cell ?? null)
+      if (!this.wrap.classList.contains('is-dragging')) this.hot(cell)
+    })
+    // A native drag (of the text around, say) would swallow the pointer and
+    // leave a handle drag hanging: none starts in a table.
+    wrap.addEventListener('dragstart', (event) => event.preventDefault())
+    wrap.addEventListener('mouseleave', () => {
+      this.near(this.editing?.cell ?? null)
+      if (!this.wrap.classList.contains('is-dragging')) this.hot(null)
+    })
     wrap.addEventListener('contextmenu', (event) => this.onContextMenu(event))
     wrap.addEventListener('keydown', (event) => this.onKeyDown(event))
     wrap.addEventListener('focusout', (event) => {
@@ -438,6 +555,12 @@ class TableController {
 
   private onMouseDown(event: MouseEvent): void {
     const target = event.target as HTMLElement
+    const corner = target.closest('.cm-tbl-corner') as HTMLElement | null
+    if (corner !== null) {
+      event.preventDefault()
+      this.onCorner(corner)
+      return
+    }
     const grip = target.closest('.cm-tbl-grip') as HTMLElement | null
     if (grip !== null) {
       event.preventDefault()
@@ -452,6 +575,19 @@ class TableController {
     // A link in a cell nobody is editing is followed, as in the rest of the note.
     if (target.closest('.cm-wikilink, .cm-mdlink') !== null && !event.shiftKey) return
     event.preventDefault()
+
+    // A header opens its column's menu, as in the reference design; a double
+    // click (or Enter on a selected header) edits it.
+    if (cell.row === 0 && !event.shiftKey && event.detail === 1) {
+      const base = this.commitEditQuietly()
+      const head = this.cells[0]![cell.col]!.getBoundingClientRect()
+      this.openTableMenu(this.columnEntries(base, cell.col), { x: head.left, y: head.bottom + 6 }, { kind: 'col', index: cell.col }, base)
+      return
+    }
+    if (cell.row === 0 && event.detail >= 2) {
+      this.startEdit(cell, 'end')
+      return
+    }
 
     if (event.shiftKey) {
       const anchor = this.range?.anchor ?? this.editing?.cell ?? cell
@@ -513,6 +649,27 @@ class TableController {
       this.stopEdit()
       if (event.shiftKey) redo(this.view)
       else undo(this.view)
+      return
+    }
+
+    // ⌥↑ ⌥↓ move the row, ⌥← ⌥→ the column - the cell goes along.
+    if (event.altKey && !mod && event.key.startsWith('Arrow')) {
+      const at = this.editing?.cell ?? this.range?.head
+      if (at !== undefined) {
+        handled()
+        const base = this.edited() ?? this.model
+        const editing = this.editing !== null
+        const lastRow = base.rows.length - 1
+        const lastCol = base.align.length - 1
+        if (event.key === 'ArrowUp' && at.row > 1)
+          this.apply(moveRow(base, at.row, at.row - 1), { row: at.row - 1, col: at.col, edit: editing })
+        else if (event.key === 'ArrowDown' && at.row > 0 && at.row < lastRow)
+          this.apply(moveRow(base, at.row, at.row + 1), { row: at.row + 1, col: at.col, edit: editing })
+        else if (event.key === 'ArrowLeft' && at.col > 0)
+          this.apply(moveColumn(base, at.col, at.col - 1), { row: at.row, col: at.col - 1, edit: editing })
+        else if (event.key === 'ArrowRight' && at.col < lastCol)
+          this.apply(moveColumn(base, at.col, at.col + 1), { row: at.row, col: at.col + 1, edit: editing })
+      }
       return
     }
 
@@ -703,7 +860,16 @@ class TableController {
     pressOrDrag(event, {
       onClick: () => {
         const rect = grip.getBoundingClientRect()
-        openMenu(kind === 'row' ? this.rowItems(base, index) : this.columnItems(base, index), { x: rect.right + 4, y: rect.top })
+        const target: Target = { kind, index }
+        const entries = kind === 'row' ? this.rowEntries(base, index) : this.columnEntries(base, index)
+        // Under the row, so the selected row stays in view; under the handle for a column.
+        const row = kind === 'row' ? this.cells[index]?.[0]?.getBoundingClientRect() : undefined
+        this.openTableMenu(
+          entries,
+          row !== undefined ? { x: rect.right + 6, y: row.bottom + 4 } : { x: rect.left, y: rect.bottom + 6 },
+          target,
+          base,
+        )
       },
       onDrag: (x, y) => this.drag(base, kind, index, x, y),
     })
@@ -716,92 +882,292 @@ class TableController {
     return next
   }
 
+  /** The table menu, from the handle at the table's top-left corner. */
+  private onCorner(button: HTMLElement): void {
+    const base = this.commitEditQuietly()
+    const rect = button.getBoundingClientRect()
+    this.openTableMenu(this.tableEntries(base), { x: rect.left, y: rect.bottom + 6 }, { kind: 'table', index: 0 }, base)
+  }
+
+  /** A right-click on a cell: three ways in - its row, its column, the table. */
   private onContextMenu(event: MouseEvent): void {
     const cell = this.cellAt(event.target)
     if (cell === null) return
     event.preventDefault()
     event.stopPropagation()
     const base = this.commitEditQuietly()
-    const rect = this.range === null ? null : rectOf(this.range.anchor, this.range.head)
-    const cells = rect === null ? base.rows : cellsIn(base, rect)
-    const copy = (text: string): void => void navigator.clipboard.writeText(text)
-    openMenu(
+    const row: Target = { kind: 'row', index: cell.row }
+    const col: Target = { kind: 'col', index: cell.col }
+    const table: Target = { kind: 'table', index: 0 }
+    this.openTableMenu(
       [
-        { kind: 'heading', label: 'Row' },
-        ...this.rowItems(base, cell.row),
-        { kind: 'heading', label: 'Column' },
-        ...this.columnItems(base, cell.col),
-        { kind: 'separator' },
+        { kind: 'submenu', icon: 'rows-3', label: 'Row', entries: this.rowEntries(base, cell.row), idle: () => this.showMark(row) },
         {
-          kind: 'item',
-          label: rect === null ? 'Copy table as TSV' : 'Copy cells as TSV',
-          icon: 'clipboard-copy',
-          run: () => copy(toTsv(cells)),
+          kind: 'submenu',
+          icon: 'columns-3',
+          label: 'Column',
+          entries: this.columnEntries(base, cell.col),
+          idle: () => this.showMark(col),
         },
-        {
-          kind: 'item',
-          label: rect === null ? 'Copy table as Markdown' : 'Copy cells as Markdown',
-          icon: 'clipboard-copy',
-          run: () => copy(toMarkdown(cells)),
-        },
-        { kind: 'separator' },
-        { kind: 'item', label: 'Delete table', icon: 'trash', danger: true, run: () => this.deleteTable() },
+        { kind: 'submenu', icon: 'table', label: 'Table', entries: this.tableEntries(base), idle: () => this.showMark(table) },
       ],
       { x: event.clientX, y: event.clientY },
+      null,
+      base,
     )
   }
 
-  private rowItems(base: TableModel, row: number): MenuItem[] {
+  /**
+   * `base` is the table with the cell being edited written in: an action in
+   * the menu writes both in one step; a menu closed without one still writes
+   * the edit, so typing is never lost to a menu.
+   */
+  private openTableMenu(
+    entries: readonly MenuEntry[],
+    at: { x: number; y: number },
+    target: Target | null,
+    base: TableModel,
+    keyboard = false,
+  ): void {
+    this.showMark(target)
+    openLayer(
+      (close) => createElement(TableMenu, { entries, at, keyboard, onClose: close, idle: () => this.showMark(target) }),
+      () => {
+        this.showMark(null)
+        if (base !== this.model && !this.destroyed && this.wrap.isConnected) this.apply(base, null)
+      },
+    )
+  }
+
+  private rowEntries(base: TableModel, row: number): MenuEntry[] {
     const body = row > 0
     const last = base.rows.length - 1
+    const target: Target = { kind: 'row', index: row }
     const go = (next: TableModel, at: number): void => this.apply(next, { row: at, col: 0, edit: false })
     return [
-      { kind: 'item', label: 'Insert row above', icon: 'arrow-up', disabled: !body, run: () => go(insertRow(base, row), row) },
-      { kind: 'item', label: 'Insert row below', icon: 'arrow-down', run: () => go(insertRow(base, row + 1), row + 1) },
-      { kind: 'item', label: 'Duplicate row', icon: 'copy', disabled: !body, run: () => go(duplicateRow(base, row), row + 1) },
-      { kind: 'item', label: 'Move row up', disabled: row <= 1, run: () => go(moveRow(base, row, row - 1), row - 1) },
-      { kind: 'item', label: 'Move row down', disabled: !body || row >= last, run: () => go(moveRow(base, row, row + 1), row + 1) },
+      {
+        kind: 'icons',
+        items: [
+          {
+            icon: 'between-horizontal-start',
+            label: 'Insert row above',
+            disabled: !body,
+            preview: () => this.showMark(target, 'before'),
+            run: () => go(insertRow(base, row), row),
+          },
+          {
+            icon: 'between-horizontal-end',
+            label: 'Insert row below',
+            preview: () => this.showMark(target, 'after'),
+            run: () => go(insertRow(base, row + 1), row + 1),
+          },
+          {
+            icon: 'copy',
+            label: 'Duplicate row',
+            disabled: !body,
+            preview: () => this.showMark(target, 'after'),
+            run: () => go(duplicateRow(base, row), row + 1),
+          },
+        ],
+      },
       {
         kind: 'item',
-        label: 'Delete row',
+        icon: 'arrow-up',
+        label: 'Move row up',
+        shortcut: '⌥↑',
+        disabled: row <= 1,
+        run: () => go(moveRow(base, row, row - 1), row - 1),
+      },
+      {
+        kind: 'item',
+        icon: 'arrow-down',
+        label: 'Move row down',
+        shortcut: '⌥↓',
+        disabled: !body || row >= last,
+        run: () => go(moveRow(base, row, row + 1), row + 1),
+      },
+      { kind: 'separator' },
+      {
+        kind: 'item',
         icon: 'trash',
+        label: 'Delete row',
         danger: true,
         disabled: !body,
+        preview: () => this.showMark(target, 'delete'),
         run: () => go(deleteRow(base, row), Math.min(row, last - 1)),
       },
     ]
   }
 
-  private columnItems(base: TableModel, col: number): MenuItem[] {
+  private columnEntries(base: TableModel, col: number): MenuEntry[] {
     const last = base.align.length - 1
+    const target: Target = { kind: 'col', index: col }
     const go = (next: TableModel, at: number): void => this.apply(next, { row: 0, col: at, edit: false })
-    const alignItem = (label: string, value: Align): MenuItem => ({
-      kind: 'item',
+    const align = (icon: string, label: string, value: Align): IconAction & { active: boolean } => ({
+      icon,
       label,
-      ...(base.align[col] === value ? { icon: 'check' } : {}),
-      run: () => go(setAlign(base, col, value), col),
+      active: base.align[col] === value,
+      // The active one again goes back to the default.
+      run: () => go(setAlign(base, col, base.align[col] === value ? null : value), col),
+      preview: () => this.showMark(target),
     })
     return [
-      { kind: 'item', label: 'Insert column left', icon: 'arrow-left', run: () => go(insertColumn(base, col), col) },
-      { kind: 'item', label: 'Insert column right', icon: 'arrow-right', run: () => go(insertColumn(base, col + 1), col + 1) },
-      { kind: 'item', label: 'Duplicate column', icon: 'copy', run: () => go(duplicateColumn(base, col), col + 1) },
-      { kind: 'item', label: 'Move column left', disabled: col === 0, run: () => go(moveColumn(base, col, col - 1), col - 1) },
-      { kind: 'item', label: 'Move column right', disabled: col >= last, run: () => go(moveColumn(base, col, col + 1), col + 1) },
-      alignItem('Align left', 'left'),
-      alignItem('Align centre', 'center'),
-      alignItem('Align right', 'right'),
-      alignItem('Default alignment', null),
-      { kind: 'item', label: 'Sort A → Z', run: () => go(sortRows(base, col, 'asc'), col) },
-      { kind: 'item', label: 'Sort Z → A', run: () => go(sortRows(base, col, 'desc'), col) },
+      {
+        kind: 'icons',
+        items: [
+          {
+            icon: 'between-vertical-start',
+            label: 'Insert column left',
+            preview: () => this.showMark(target, 'before'),
+            run: () => go(insertColumn(base, col), col),
+          },
+          {
+            icon: 'between-vertical-end',
+            label: 'Insert column right',
+            preview: () => this.showMark(target, 'after'),
+            run: () => go(insertColumn(base, col + 1), col + 1),
+          },
+          {
+            icon: 'copy',
+            label: 'Duplicate column',
+            preview: () => this.showMark(target, 'after'),
+            run: () => go(duplicateColumn(base, col), col + 1),
+          },
+        ],
+      },
+      {
+        kind: 'segmented',
+        label: 'Align',
+        options: [
+          align('text-align-start', 'Align left', 'left'),
+          align('text-align-center', 'Align centre', 'center'),
+          align('text-align-end', 'Align right', 'right'),
+        ],
+      },
+      {
+        kind: 'segmented',
+        label: 'Sort',
+        options: [
+          {
+            icon: 'arrow-down-a-z',
+            label: 'Sort A → Z',
+            active: false,
+            run: () => go(sortRows(base, col, 'asc'), col),
+            preview: () => this.showMark(target),
+          },
+          {
+            icon: 'arrow-down-z-a',
+            label: 'Sort Z → A',
+            active: false,
+            run: () => go(sortRows(base, col, 'desc'), col),
+            preview: () => this.showMark(target),
+          },
+        ],
+      },
       {
         kind: 'item',
-        label: 'Delete column',
+        icon: 'arrow-left',
+        label: 'Move column left',
+        shortcut: '⌥←',
+        disabled: col === 0,
+        run: () => go(moveColumn(base, col, col - 1), col - 1),
+      },
+      {
+        kind: 'item',
+        icon: 'arrow-right',
+        label: 'Move column right',
+        shortcut: '⌥→',
+        disabled: col >= last,
+        run: () => go(moveColumn(base, col, col + 1), col + 1),
+      },
+      { kind: 'separator' },
+      {
+        kind: 'item',
         icon: 'trash',
+        label: 'Delete column',
         danger: true,
         disabled: last === 0,
+        preview: () => this.showMark(target, 'delete'),
         run: () => go(deleteColumn(base, col), Math.min(col, last - 1)),
       },
     ]
+  }
+
+  private tableEntries(base: TableModel): MenuEntry[] {
+    const target: Target = { kind: 'table', index: 0 }
+    const copy = (text: string): void => void navigator.clipboard.writeText(text)
+    return [
+      { kind: 'item', icon: 'clipboard-copy', label: 'Copy as Markdown', run: () => copy(toMarkdown(base.rows)) },
+      { kind: 'item', icon: 'sheet', label: 'Copy as TSV', run: () => copy(toTsv(base.rows)) },
+      { kind: 'item', icon: 'code', label: 'Edit as markdown', run: () => this.editAsMarkdown() },
+      { kind: 'separator' },
+      {
+        kind: 'item',
+        icon: 'trash',
+        label: 'Delete table',
+        danger: true,
+        preview: () => this.showMark(target, 'delete'),
+        run: () => this.deleteTable(),
+      },
+    ]
+  }
+
+  /**
+   * What a menu is about, drawn on the table: a soft tint and an accent
+   * outline on the row, column or table; red for a delete being hovered; a
+   * line where an insert would land. Drawn in the scroll box, over the cells.
+   */
+  private showMark(target: Target | null, mode: 'target' | 'delete' | 'before' | 'after' = 'target'): void {
+    this.scroll.querySelectorAll('.cm-tbl-mark').forEach((el) => el.remove())
+    if (target === null || this.destroyed || this.cells.length === 0) return
+    const head = this.cells[0]!
+    const lastRow = this.cells[this.cells.length - 1]!
+    const box = (el: HTMLElement): { left: number; top: number; right: number; bottom: number } => ({
+      left: el.offsetLeft,
+      top: el.offsetTop,
+      right: el.offsetLeft + el.offsetWidth,
+      bottom: el.offsetTop + el.offsetHeight,
+    })
+    let area: { left: number; top: number; right: number; bottom: number }
+    if (target.kind === 'row') {
+      const row = this.cells[target.index]
+      if (row === undefined) return
+      area = { left: box(row[0]!).left, top: box(row[0]!).top, right: box(row[row.length - 1]!).right, bottom: box(row[0]!).bottom }
+    } else if (target.kind === 'col') {
+      const h = head[target.index]
+      if (h === undefined) return
+      area = { left: box(h).left, top: box(h).top, right: box(h).right, bottom: box(lastRow[target.index]!).bottom }
+    } else {
+      area = { left: box(head[0]!).left, top: box(head[0]!).top, right: box(head[head.length - 1]!).right, bottom: box(lastRow[0]!).bottom }
+    }
+    const mark = document.createElement('div')
+    mark.className = `cm-tbl-mark is-${mode} is-${target.kind}`
+    const along = target.kind === 'col' ? 'x' : 'y'
+    if (mode === 'before' || mode === 'after') {
+      const at = along === 'y' ? (mode === 'before' ? area.top : area.bottom) : mode === 'before' ? area.left : area.right
+      Object.assign(
+        mark.style,
+        along === 'y'
+          ? { left: `${area.left}px`, width: `${area.right - area.left}px`, top: `${at - 1}px`, height: '3px' }
+          : { top: `${area.top}px`, height: `${area.bottom - area.top}px`, left: `${at - 1}px`, width: '3px' },
+      )
+      mark.classList.add(`is-line-${along}`)
+    } else {
+      Object.assign(mark.style, {
+        left: `${area.left}px`,
+        top: `${area.top}px`,
+        width: `${area.right - area.left}px`,
+        height: `${area.bottom - area.top}px`,
+      })
+    }
+    this.scroll.append(mark)
+  }
+
+  /** Show this table's markdown, caret at its start, until the caret leaves it. */
+  private editAsMarkdown(): void {
+    const from = this.from()
+    this.view.dispatch({ effects: editAsMarkdown.of(from), selection: { anchor: from }, scrollIntoView: true })
+    this.view.focus()
   }
 
   private deleteTable(): void {
@@ -823,6 +1189,9 @@ class TableController {
     marker.className = `cm-tbl-drop cm-tbl-drop--${kind}`
     this.wrap.append(marker)
     this.wrap.classList.add('is-dragging')
+    this.hot(null)
+    const grip = this.wrap.querySelector(`.cm-tbl-grip--${kind}[data-index="${index}"]`)
+    grip?.classList.add('is-dragged')
     let target = index
     const wrapRect = (): DOMRect => this.wrap.getBoundingClientRect()
     const place = (px: number, py: number): void => {
@@ -856,11 +1225,16 @@ class TableController {
     }
     place(x, y)
     const move = (event: PointerEvent): void => place(event.clientX, event.clientY)
-    const up = (): void => {
+    const end = (): void => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', end)
       marker.remove()
+      grip?.classList.remove('is-dragged')
       this.wrap.classList.remove('is-dragging')
+    }
+    const up = (): void => {
+      end()
       // Dropping after itself moves it to where it already is.
       const to = target > index ? target - 1 : target
       if (to === index) return
@@ -869,41 +1243,20 @@ class TableController {
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', end)
   }
 }
 
 /**
- * What goes under a table that ends at `end`.
- *
- * In GFM a line right under a table is one more row of it (Obsidian reads it
- * the same way), so the editor must never leave you there. Always: one blank
- * line under the table. Leaving it (`leaving`): also a paragraph line after
- * that blank line - an empty one, made if needed - and the caret goes there.
- * `caret` is a position in the old document to map through the changes, plus
- * an offset into what was inserted there. Exported for the tests.
+ * What goes under a table that ends at `end`, when Recto writes the table:
+ * one blank line, so the next line is never a row of it. In GFM a line right
+ * under a table is one more row (Obsidian reads it the same way); Recto
+ * keeps the gap rather than read the file differently. Exported for the tests.
  */
-export function tableTail(
-  doc: Text,
-  end: number,
-  leaving: boolean,
-): { at: number; insert: string; caret: { pos: number; assoc: -1 | 1; offset: number } } {
-  const blank = (n: number): boolean => doc.line(n).text.trim() === ''
+export function tableTail(doc: Text, end: number): { at: number; insert: string } {
   const last = doc.lineAt(end).number
-  // The table is the end of the note.
-  if (last === doc.lines) {
-    const insert = leaving ? '\n\n' : '\n'
-    return { at: end, insert, caret: { pos: end, assoc: 1, offset: 0 } }
-  }
-  // Text right under it: push it down.
-  if (!blank(last + 1)) {
-    return { at: end, insert: leaving ? '\n\n\n' : '\n', caret: { pos: end, assoc: -1, offset: 2 } }
-  }
-  const under = doc.line(last + 1)
-  if (!leaving) return { at: end, insert: '', caret: { pos: under.from, assoc: 1, offset: 0 } }
-  if (last + 1 === doc.lines) return { at: under.to, insert: '\n', caret: { pos: under.to, assoc: 1, offset: 0 } }
-  const next = doc.line(last + 2)
-  if (blank(last + 2)) return { at: next.from, insert: '', caret: { pos: next.from, assoc: 1, offset: 0 } }
-  return { at: next.from, insert: '\n\n', caret: { pos: next.from, assoc: -1, offset: 0 } }
+  if (last === doc.lines) return { at: end, insert: '\n' }
+  return { at: end, insert: doc.line(last + 1).text.trim() === '' ? '' : '\n' }
 }
 
 /** Focus the table itself, for keys over a rectangle of cells. */
@@ -1006,7 +1359,7 @@ const chipField = StateField.define<Chip | null>({
           button.addEventListener('mousedown', (event) => {
             event.preventDefault()
             const table = formatTable(tableFromCells(chip.cells))
-            const tail = tableTail(view.state.doc, chip.to, false)
+            const tail = tableTail(view.state.doc, chip.to)
             view.dispatch({
               changes: [
                 { from: chip.from, to: chip.to, insert: table },
@@ -1049,27 +1402,138 @@ const chipOnPaste = EditorView.updateListener.of((update) => {
   }
 })
 
-/**
- * A click on the blank line right under a table would put the caret where
- * the next keystroke becomes a table row. It goes to the paragraph after
- * that blank line instead, made if needed.
- */
-const clickBelowTable = EditorView.updateListener.of((update) => {
-  if (!update.transactions.some((tr) => tr.isUserEvent('select.pointer'))) return
-  const { state } = update
-  const sel = state.selection.main
-  if (!sel.empty) return
-  const line = state.doc.lineAt(sel.head)
-  if (line.number === 1 || line.text.trim() !== '') return
-  const above = state.doc.line(line.number - 1)
-  let node = syntaxTree(state).resolveInner(above.to, -1)
+// --- the table as markdown, and the lines around it ---------------------------
+
+/** "Edit as markdown": this table (by where it starts) is shown as source until the caret leaves it. */
+export const editAsMarkdown = StateEffect.define<number>()
+
+export const rawTables = StateField.define<readonly number[]>({
+  create: () => [],
+  update(value, tr) {
+    let next = value.map((pos) => tr.changes.mapPos(pos))
+    for (const effect of tr.effects) if (effect.is(editAsMarkdown)) next = [...next, effect.value]
+    if (next.length === 0) return value.length === 0 ? value : next
+    // Leaving the table ends it: the caret is the only reason to show source.
+    const head = tr.state.selection.main.head
+    return next.filter((pos) => {
+      const table = tableAt(tr.state, pos)
+      return table !== null && head >= table.from && head <= table.to
+    })
+  },
+})
+
+/** The GFM table starting at or containing `pos`, if any. */
+function tableAt(state: EditorState, pos: number): { from: number; to: number } | null {
+  let node = syntaxTree(state).resolveInner(Math.min(pos + 1, state.doc.length), -1)
   while (node.parent !== null && node.name !== 'Table') node = node.parent
-  if (node.name !== 'Table' || state.doc.lineAt(node.to).number !== above.number) return
-  const tail = tableTail(state.doc, above.to, true)
-  const changes = ChangeSet.of(tail.insert === '' ? [] : [{ from: tail.at, insert: tail.insert }], state.doc.length)
-  const anchor = changes.mapPos(tail.caret.pos, tail.caret.assoc) + tail.caret.offset
-  queueMicrotask(() => update.view.dispatch({ changes, selection: { anchor }, userEvent: 'select.table' }))
+  return node.name === 'Table' ? { from: node.from, to: node.to } : null
+}
+
+/**
+ * The first key typed next to a table.
+ *
+ * On the line right under a table it would become a row; right above the
+ * header it would run into the table; and with the caret on a table's own
+ * line - the end of a note that ends with one - it would land in a cell. So
+ * the text goes where it means to: after a blank line under the table, or
+ * before a blank line above it, in the SAME transaction - undoing the key
+ * takes the blank line with it. Lines already glued to a table are rows of
+ * it and are left alone; only new typing is moved. Live Preview only: in
+ * Source mode, and in a table opened with "Edit as markdown", you type
+ * markdown.
+ */
+const firstKeyAfterTable = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged || !tr.isUserEvent('input') || tr.isUserEvent('input.table')) return tr
+  const state = tr.startState
+  if (!(state.field(livePreviewEnabled, false) ?? false)) return tr
+  let single: { from: number; to: number; text: string } | null = null
+  let count = 0
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    count++
+    single = { from: fromA, to: toA, text: inserted.toString() }
+  })
+  if (count !== 1 || single === null) return tr
+  const { from, to, text } = single as { from: number; to: number; text: string }
+  if (from !== to || text.trim() === '') return tr
+  const doc = state.doc
+  const line = doc.lineAt(from)
+  const raw = state.field(rawTables, false) ?? []
+  const editable = (t: { from: number } | null): boolean => t !== null && !raw.includes(t.from)
+  const spec = (at: number, insert: string, caret: number): TransactionSpec => ({
+    changes: { from: at, insert },
+    selection: { anchor: caret },
+    userEvent: 'input.type',
+    scrollIntoView: true,
+  })
+
+  // At a table's very edge - the only place in a table the caret can be in
+  // Live Preview, where the table is one block: its end (a note that ends with
+  // it) goes after it past a blank line, its start goes before it. Decided by
+  // where the caret was, not where the key landed: with nothing after a drawn
+  // block, the browser types at the block's start.
+  const head = state.selection.main
+  const edge = head.empty ? tableAt(state, head.head) : null
+  if (editable(edge) && head.head === edge!.to && from >= edge!.from && from <= edge!.to) {
+    const insert = `\n\n${text}`
+    return spec(edge!.to, insert, edge!.to + insert.length)
+  }
+  if (editable(edge) && head.head === edge!.from && from === edge!.from) return spec(from, `${text}\n\n`, from + text.length)
+  if (line.text.trim() !== '') return tr
+  // Text on the other side gets its own blank line too, or the new line would
+  // join its paragraph.
+  const textBelow = line.number < doc.lines && doc.line(line.number + 1).text.trim() !== ''
+  const textAbove = line.number > 1 && doc.line(line.number - 1).text.trim() !== ''
+  // Right under the last row.
+  if (line.number > 1) {
+    const above = doc.line(line.number - 1)
+    const table = tableAt(state, above.to - 1)
+    if (editable(table) && doc.lineAt(table!.to).number === above.number) {
+      const insert = `\n${text}${textBelow ? '\n' : ''}`
+      return spec(from, insert, from + 1 + text.length)
+    }
+  }
+  // Right above the header.
+  if (line.number < doc.lines) {
+    const below = doc.line(line.number + 1)
+    const table = tableAt(state, below.from)
+    if (editable(table) && table!.from === below.from) {
+      const lead = textAbove ? '\n' : ''
+      return spec(from, `${lead}${text}\n`, from + lead.length + text.length)
+    }
+  }
+  return tr
+})
+
+/**
+ * A click below the end of a note that ends with a table goes to the end of
+ * the note, after the table. Left to CodeMirror, a click past the last drawn
+ * block lands before that block - above the table - and the text typed next
+ * goes there. Caught on the scroller, in the capture phase: clicks in the
+ * space under the text never reach the content element.
+ */
+const clickPastEnd = ViewPlugin.define((view) => {
+  const onDown = (event: MouseEvent): void => {
+    if (event.button !== 0 || event.shiftKey || !(view.state.field(livePreviewEnabled, false) ?? false)) return
+    const end = view.state.doc.length
+    const table = tableAt(view.state, end)
+    if (table === null || table.to !== end || (view.state.field(rawTables, false) ?? []).includes(table.from)) return
+    if (event.clientY <= view.documentTop + view.lineBlockAt(end).bottom) return
+    event.preventDefault()
+    event.stopPropagation()
+    // The browser cannot hold a caret after a drawn block that ends the note,
+    // so the note gets the line break it was missing - not an undo step; the
+    // blank line and the text come with the first key (firstKeyAfterTable).
+    view.dispatch({
+      changes: { from: end, insert: '\n' },
+      selection: { anchor: end + 1 },
+      annotations: Transaction.addToHistory.of(false),
+      userEvent: 'select.pointer',
+    })
+    view.focus()
+  }
+  view.scrollDOM.addEventListener('mousedown', onDown, true)
+  return { destroy: () => view.scrollDOM.removeEventListener('mousedown', onDown, true) }
 })
 
 /** Everything the editor needs for editable tables. */
-export const tableEditing = (): Extension => [pendingListener, chipField, chipOnPaste, clickBelowTable]
+export const tableEditing = (): Extension => [pendingListener, chipField, chipOnPaste, rawTables, firstKeyAfterTable, clickPastEnd]

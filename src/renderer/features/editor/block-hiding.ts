@@ -9,7 +9,7 @@ import { syntaxTree } from '@codemirror/language'
 import { livePreviewEnabled } from './live-preview-state'
 import { mathSource, MathWidget, stripContainers } from './rich-widgets'
 import { TableWidget } from './table-widget'
-import { EditableTableWidget } from './table-editor'
+import { EditableTableWidget, rawTables } from './table-editor'
 import { detailsEnd, htmlWithText, HtmlBlockWidget, isRenderedHtmlBlock } from './html-blocks'
 
 const FENCE_LINE = /^---\s*$/
@@ -136,7 +136,13 @@ export const blockHiding = StateField.define<DecorationSet>({
           if (end > 0) last = doc.lineAt(node.to + end)
         }
         if (first.number <= frontmatterEnd) return false
-        for (let n = first.number; n <= last.number; n++) if (touched.has(n)) return false
+        // A table you can edit in place never turns into source because the
+        // caret is next to it: typing there would land in its markdown. Only
+        // Source mode or "Edit as markdown" (rawTables) show it as text.
+        const inPlace =
+          name === 'Table' && editable && stripContainers(doc.sliceString(first.from, last.to)) === doc.sliceString(first.from, last.to)
+        if (inPlace && (state.field(rawTables, false) ?? []).includes(node.from)) return false
+        if (!inPlace) for (let n = first.number; n <= last.number; n++) if (touched.has(n)) return false
 
         if (name === 'HorizontalRule') {
           ranges.push({ from: first.from, to: first.from, deco: ruleLine })

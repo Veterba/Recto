@@ -800,15 +800,35 @@ async function tableEditShots(dir, theme) {
     await shoot(page, dir, '26d-table-picker', 500)
     await page.keyboard.press('Escape')
 
-    const grip = page.locator('.cm-tbl-grip--row').nth(2)
+    // The row menu, from the grip of the hovered row: the row selected.
+    await page.locator('.cm-tbl td[data-row="2"]').first().hover()
+    const grip = page.locator('.cm-tbl-grip--row[data-index="2"]')
     await grip.hover()
     await grip.click()
-    await page.waitForSelector('.menu')
-    const box = await grip.boundingBox()
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.waitForSelector('.tmenu')
+    await page.mouse.move(5, 300)
     await sleep(300)
-    await page.screenshot({ path: path.join(dir, '26e-table-handles-menu.png'), caret: 'hide', animations: 'disabled' })
-    console.log('  26e-table-handles-menu')
+    await page.screenshot({ path: path.join(dir, '26e-table-row-menu.png'), caret: 'hide', animations: 'disabled' })
+    console.log('  26e-table-row-menu')
+    await page.keyboard.press('Escape')
+
+    // The column menu from a header click, "Insert column right" hovered: its line shows.
+    await page.locator('.cm-tbl th[data-row="0"][data-col="2"]').click()
+    await page.waitForSelector('.tmenu')
+    await page.locator('.tmenu [aria-label="Insert column right"]').hover()
+    await sleep(400)
+    await page.screenshot({ path: path.join(dir, '26k-table-column-menu.png'), caret: 'hide', animations: 'disabled' })
+    console.log('  26k-table-column-menu')
+    await page.keyboard.press('Escape')
+
+    // The table menu, from the corner handle.
+    await page.locator('.cm-tbl td[data-row="1"]').first().hover()
+    await page.locator('.cm-tbl-corner').click()
+    await page.waitForSelector('.tmenu')
+    await page.mouse.move(5, 300)
+    await sleep(300)
+    await page.screenshot({ path: path.join(dir, '26l-table-menu.png'), caret: 'hide', animations: 'disabled' })
+    console.log('  26l-table-menu')
     await page.keyboard.press('Escape')
 
     await page.locator('.cm-tbl [data-row="2"][data-col="1"]').click()
@@ -816,14 +836,46 @@ async function tableEditShots(dir, theme) {
     await shoot(page, dir, '26f-table-selection', 500)
     await page.keyboard.press('Escape')
 
-    // Thirteen columns: in the text column, scrolled inside the box, the first column held.
+    // Thirteen columns: in the text column, the whole table scrolling inside
+    // its box; the "+" controls and the scrollbar keep the box's edges.
     await page.locator('[role=treeitem]', { hasText: 'Wide table' }).first().click()
     await page.waitForSelector('.cm-tbl [data-col="12"]')
-    await page.evaluate(() => {
-      document.querySelector('.cm-tbl .cm-table-scroll')?.scrollTo(260, 0)
-      document.activeElement?.blur()
-    })
+    const scrollTo = (where) =>
+      page.evaluate((w) => {
+        const box = document.querySelector('.cm-tbl .cm-table-scroll')
+        box.scrollLeft = w === 'middle' ? (box.scrollWidth - box.clientWidth) / 2 : w === 'end' ? box.scrollWidth : 0
+        document.activeElement?.blur()
+      }, where)
+    await scrollTo('middle')
     await shoot(page, dir, '26g-table-wide-scrolled', 600)
+    // The add-row bar, hovered, at the start; the add-column strip, hovered, at the end.
+    await scrollTo('start')
+    await page.locator('.cm-tbl-add-row').hover()
+    await sleep(500)
+    await page.screenshot({ path: path.join(dir, '26h-table-add-row-hover.png'), caret: 'hide', animations: 'disabled' })
+    console.log('  26h-table-add-row-hover')
+    await scrollTo('end')
+    await page.locator('.cm-tbl-add-col').hover()
+    await sleep(500)
+    await page.screenshot({ path: path.join(dir, '26i-table-add-col-hover.png'), caret: 'hide', animations: 'disabled' })
+    console.log('  26i-table-add-col-hover')
+    // A row handle being dragged: only it is lit, a line shows where it lands.
+    await scrollTo('start')
+    const dragGrip = page.locator('.cm-tbl-grip--row[data-index="1"]')
+    await page.locator('.cm-tbl td[data-row="1"]').first().hover()
+    await dragGrip.hover()
+    const g = await dragGrip.boundingBox()
+    const t = await page.locator('.cm-tbl td[data-row="3"]').first().boundingBox()
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(g.x + 2, g.y + 12, { steps: 3 })
+    await page.mouse.move(g.x + 2, t.y + t.height - 3, { steps: 6 })
+    await sleep(300)
+    await page.screenshot({ path: path.join(dir, '26j-table-row-drag.png'), caret: 'hide', animations: 'disabled' })
+    console.log('  26j-table-row-drag')
+    await page.keyboard.press('Escape')
+    await page.mouse.move(g.x + 2, g.y + g.height / 2, { steps: 4 })
+    await page.mouse.up()
   } finally {
     await app.close()
     fs.rmSync(base, { recursive: true, force: true })

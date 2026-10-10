@@ -235,7 +235,7 @@ export function convertHtmlTableAt(state: EditorState): TransactionSpec | null {
   const markdown = htmlTableToMarkdown(state.sliceDoc(node.from, node.to))
   if (markdown === null) return null
   // A blank line under the new table, or the next line would be a row of it.
-  const tail = tableTail(state.doc, node.to, false)
+  const tail = tableTail(state.doc, node.to)
   return {
     changes: [{ from: node.from, to: node.to, insert: markdown }, ...(tail.insert === '' ? [] : [{ from: tail.at, insert: tail.insert }])],
     selection: { anchor: node.from },

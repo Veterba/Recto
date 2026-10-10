@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { ensureSyntaxTree } from '@codemirror/language'
 import { ChangeSet, EditorState, Text } from '@codemirror/state'
+import { livePreviewEnabled } from '../../../../src/renderer/features/editor/live-preview-state'
 import { describe, expect, it } from 'vitest'
-import { focusTableCell, insertTableSpec, tableTail } from '../../../../src/renderer/features/editor/table-editor'
+import { focusTableCell, insertTableSpec, tableEditing, tableTail } from '../../../../src/renderer/features/editor/table-editor'
 
 const TABLE = [
   '| Column 1 | Column 2 | Column 3 |',
@@ -49,30 +52,69 @@ describe('inserting a table', () => {
   })
 })
 
-describe('the lines under a table', () => {
-  const T = '| a |\n| - |\n| 1 |'
-  /** The document after the tail, and where the caret goes (shown as ^ when leaving). */
-  const after = (doc: string, leaving: boolean): string => {
-    const text = Text.of(doc.split('\n'))
-    const tail = tableTail(text, T.length, leaving)
-    const changes = ChangeSet.of(tail.insert === '' ? [] : [{ from: tail.at, insert: tail.insert }], text.length)
-    const next = changes.apply(text).toString()
-    if (!leaving) return next
-    const caret = changes.mapPos(tail.caret.pos, tail.caret.assoc) + tail.caret.offset
-    return `${next.slice(0, caret)}^${next.slice(caret)}`
-  }
+describe('the line under a table', () => {
+  const T = '| a   |\n| --- |\n| 1   |'
 
-  it('always keeps one blank line under the table', () => {
-    expect(after(T, false)).toBe(`${T}\n`)
-    expect(after(`${T}\nText`, false)).toBe(`${T}\n\nText`)
-    expect(after(`${T}\n\nText`, false)).toBe(`${T}\n\nText`)
+  it('every table Recto writes keeps one blank line under it', () => {
+    const tail = (doc: string): string => {
+      const text = Text.of(doc.split('\n'))
+      const t = tableTail(text, T.length)
+      return ChangeSet.of(t.insert === '' ? [] : [{ from: t.at, insert: t.insert }], text.length)
+        .apply(text)
+        .toString()
+    }
+    expect(tail(T)).toBe(`${T}\n`)
+    expect(tail(`${T}\n# Next`)).toBe(`${T}\n\n# Next`)
+    expect(tail(`${T}\n\nText`)).toBe(`${T}\n\nText`)
   })
 
-  it('leaving it, the caret lands in a paragraph after that blank line - never right under the table', () => {
-    expect(after(T, true)).toBe(`${T}\n\n^`)
-    expect(after(`${T}\n`, true)).toBe(`${T}\n\n^`)
-    expect(after(`${T}\nText`, true)).toBe(`${T}\n\n^\n\nText`)
-    expect(after(`${T}\n\nText`, true)).toBe(`${T}\n\n^\n\nText`)
-    expect(after(`${T}\n\n\nText`, true)).toBe(`${T}\n\n^\nText`)
+  /** Type `key` with the caret at `at` (Live Preview on) and return the note, the caret shown as ^. */
+  const typed = (doc: string, at: number, key = 'abc'): string => {
+    const state = EditorState.create({
+      doc,
+      selection: { anchor: at },
+      extensions: [markdown({ base: markdownLanguage }), livePreviewEnabled, tableEditing()],
+    })
+    ensureSyntaxTree(state, state.doc.length, 5000)
+    const tr = state.update({ changes: { from: at, insert: key }, selection: { anchor: at + key.length }, userEvent: 'input.type' })
+    const out = tr.state.doc.toString()
+    const caret = tr.state.selection.main.head
+    return `${out.slice(0, caret)}^${out.slice(caret)}`
+  }
+
+  it('the first key on the empty line right under a table starts a paragraph after a blank line', () => {
+    expect(typed(`${T}\n`, T.length + 1)).toBe(`${T}\n\nabc^`)
+    // A paragraph below keeps its own blank line: the new text doesn't join it.
+    expect(typed(`${T}\n\nMore.`, T.length + 1)).toBe(`${T}\n\nabc^\n\nMore.`)
+  })
+
+  it('with the caret on the last line of a note that ends with a table, it goes after the table', () => {
+    expect(typed(T, T.length)).toBe(`${T}\n\nabc^`)
+  })
+
+  it('right above the header, it ends before a blank line', () => {
+    expect(typed(`Intro\n\n${T}`, 6)).toBe(`Intro\n\nabc^\n\n${T}`)
+    expect(typed(T, 0)).toBe(`abc^\n\n${T}`)
+  })
+
+  it('anywhere else it is just typing', () => {
+    expect(typed(`${T}\n\nText`, T.length + 2)).toBe(`${T}\n\nabc^Text`)
+    expect(typed('Plain', 5)).toBe('Plainabc^')
+  })
+
+  it('a line already glued to a table is a row and is left alone', () => {
+    const glued = `${T}\n| 2   |`
+    expect(typed(glued, glued.length - 1, 'x')).toBe(`${glued.slice(0, -1)}x^|`)
+  })
+
+  it('in Source mode nothing moves', () => {
+    const state = EditorState.create({
+      doc: `${T}\n`,
+      selection: { anchor: T.length + 1 },
+      extensions: [markdown({ base: markdownLanguage }), livePreviewEnabled.init(() => false), tableEditing()],
+    })
+    ensureSyntaxTree(state, state.doc.length, 5000)
+    const tr = state.update({ changes: { from: T.length + 1, insert: 'abc' }, userEvent: 'input.type' })
+    expect(tr.state.doc.toString()).toBe(`${T}\nabc`)
   })
 })

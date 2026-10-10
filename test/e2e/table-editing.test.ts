@@ -42,7 +42,12 @@ describe.skipIf(!RUN)('editing tables', () => {
     const grip = page.locator(`.cm-tbl-grip--${kind}`).nth(index)
     await grip.hover()
     await grip.click()
-    await page.locator('.menu .menu__item', { hasText: label }).click()
+    // An icon button (by its label) or a text item in the table menu.
+    await page
+      .locator(`.tmenu [aria-label="${label}"]`)
+      .or(page.locator('.tmenu .tmenu__item', { hasText: label }))
+      .first()
+      .click()
     await sleep(300)
   }
 
@@ -308,36 +313,321 @@ describe.skipIf(!RUN)('editing tables', () => {
       expect(text).toMatch(/\|\n\nTyped\.\n\nAfter\.\n$/)
     })
 
-    it('a 13-column table stays in the text column and scrolls inside its box, first column held', async () => {
+    it('a 13-column table stays in the text column and scrolls inside its box as one piece; the "+" controls hold still', async () => {
+      const wide = path.join(path.dirname(note), 'Wide.md')
       await page.locator('[role=treeitem]', { hasText: 'Wide' }).click()
       await page.waitForSelector('.cm-tbl [data-col="12"]')
-      const m = await page.evaluate(() => {
-        const content = document.querySelector('.cm-content')!.getBoundingClientRect()
-        const line = document.querySelector('.cm-line')!.getBoundingClientRect()
-        const scroll = document.querySelector('.cm-tbl .cm-table-scroll') as HTMLElement
-        const first = () => document.querySelector('.cm-tbl td[data-col="0"]')!.getBoundingClientRect().left
-        const fifth = () => document.querySelector('.cm-tbl td[data-col="4"]')!.getBoundingClientRect().left
-        const before = { first: first(), fifth: fifth() }
-        scroll.scrollLeft = 400
-        const after = { first: first(), fifth: fifth() }
-        return {
-          lineLeft: line.left,
-          contentRight: content.right,
-          box: scroll.getBoundingClientRect(),
-          scrolls: scroll.scrollWidth > scroll.clientWidth,
-          pageScrolls: document.querySelector('.cm-scroller')!.scrollWidth > document.querySelector('.cm-scroller')!.clientWidth + 1,
-          before,
-          after,
-        }
-      })
-      expect(m.scrolls).toBe(true)
-      expect(m.pageScrolls).toBe(false)
-      // The cells start at the text column; the box ends inside it.
-      expect(Math.abs(m.before.first - m.lineLeft)).toBeLessThan(2)
-      expect(m.box.right).toBeLessThanOrEqual(m.contentRight + 1)
-      // Scrolled: the first column stays, the fifth moved.
-      expect(m.after.first).toBe(m.before.first)
-      expect(m.before.fifth - m.after.fifth).toBeGreaterThan(300)
+      type Spot = Record<
+        | 'trackLeft'
+        | 'trackRight'
+        | 'boxLeft'
+        | 'rowRight'
+        | 'scrolls'
+        | 'boxRight'
+        | 'contentRight'
+        | 'lineLeft'
+        | 'first'
+        | 'colX'
+        | 'colY'
+        | 'rowX'
+        | 'rowY'
+        | 'rowW'
+        | 'boxW',
+        number
+      >
+      const at = async (scroll: 'start' | 'middle' | 'end'): Promise<Spot> =>
+        page.evaluate((where) => {
+          const box = document.querySelector('.cm-tbl .cm-table-scroll') as HTMLElement
+          const max = box.scrollWidth - box.clientWidth
+          box.scrollLeft = where === 'start' ? 0 : where === 'middle' ? max / 2 : max
+          const r = (sel: string): DOMRect => document.querySelector(sel)!.getBoundingClientRect()
+          const sb = box.getBoundingClientRect()
+          return {
+            trackLeft: sb.left + box.clientLeft,
+            trackRight: sb.left + box.clientLeft + box.clientWidth,
+            boxLeft: sb.left,
+            scrolls: max > 0 ? 1 : 0,
+            boxRight: r('.cm-tbl .cm-table-scroll').right,
+            contentRight: r('.cm-content').right,
+            lineLeft: r('.cm-line').left,
+            first: r('.cm-tbl td[data-col="0"]').left,
+            colX: r('.cm-tbl-add-col').left,
+            colY: r('.cm-tbl-add-col').top,
+            rowX: r('.cm-tbl-add-row').left,
+            rowY: r('.cm-tbl-add-row').top,
+            rowW: r('.cm-tbl-add-row').width,
+            rowRight: r('.cm-tbl-add-row').right,
+            boxW: r('.cm-tbl .cm-table-scroll').width,
+          }
+        }, scroll)
+      const start = await at('start')
+      const middle = await at('middle')
+      const end = await at('end')
+      expect(start.scrolls).toBe(1)
+      // In the text column: the cells start at its edge, the box ends inside it.
+      expect(Math.abs(start.first - start.lineLeft)).toBeLessThan(2)
+      expect(start.boxRight).toBeLessThanOrEqual(start.contentRight + 1)
+      // The whole table moves; nothing is held.
+      expect(start.first - end.first).toBeGreaterThan(300)
+      // The "+" controls stay where they are, and the bar is as wide as the box.
+      for (const p of [middle, end]) {
+        expect([p.colX, p.colY, p.rowX, p.rowY]).toEqual([start.colX, start.colY, start.rowX, start.rowY])
+      }
+      // At every scroll position the bar and the scrollbar share the box's left and right edges.
+      for (const p of [start, middle, end]) {
+        expect(Math.abs(p.rowX - p.boxLeft)).toBeLessThanOrEqual(1)
+        expect(Math.abs(p.rowRight - p.boxRight)).toBeLessThanOrEqual(1)
+        expect(Math.abs(p.trackLeft - p.boxLeft)).toBeLessThanOrEqual(1)
+        expect(Math.abs(p.trackRight - p.boxRight)).toBeLessThanOrEqual(1)
+      }
+      // And they work, scrolled to the end.
+      await page.locator('.cm-tbl td[data-col="12"]').first().hover()
+      await page.locator('.cm-tbl-add-col').click()
+      await expect.poll(() => body(fs.readFileSync(wide, 'utf8'))[0]!.length).toBe(14)
+      await page.keyboard.press('Escape')
+      await at('middle')
+      await page.locator('.cm-tbl-add-row').click()
+      await expect.poll(() => body(fs.readFileSync(wide, 'utf8')).length).toBe(3)
+      await page.keyboard.press('Escape')
+    })
+  })
+
+  describe('typing next to a table', () => {
+    const dir = (): string => path.dirname(note)
+    /** Type key by key, checking after each one that the table is still drawn and no markdown of it shows. */
+    const typeWatching = async (text: string): Promise<void> => {
+      for (const key of text) {
+        await page.keyboard.type(key)
+        await sleep(60)
+        expect(await page.locator('.cm-tbl').count()).toBe(1)
+        expect(await page.locator('.cm-line', { hasText: '| ---' }).count()).toBe(0)
+      }
+    }
+
+    beforeAll(() => {
+      fs.writeFileSync(path.join(dir(), 'Ends.md'), '# Ends\n\n| Fruit | Qty |\n| ----- | --- |\n| Plum  | 3   |')
+      fs.writeFileSync(path.join(dir(), 'Down.md'), '# Down\n\n| Fruit | Qty |\n| ----- | --- |\n| Plum  | 3   |\n')
+      fs.writeFileSync(
+        path.join(dir(), 'Middle.md'),
+        '# Middle\n\nBefore.\n\n| Fruit | Qty |\n| ----- | --- |\n| Plum  | 3   |\n\nAfter.\n',
+      )
+    })
+
+    it('dragging the row 2 handle to row 4 moves the row; only that handle is lit while dragging', async () => {
+      const file = path.join(dir(), 'Five.md')
+      fs.writeFileSync(file, '# Five\n\n| N   |\n| --- |\n| r1  |\n| r2  |\n| r3  |\n| r4  |\n| r5  |\n')
+      await page.locator('[role=treeitem]', { hasText: 'Five' }).click()
+      await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Five.md')
+      await page.waitForSelector('.cm-tbl')
+      await sleep(300)
+      const grip = page.locator('.cm-tbl-grip--row[data-index="2"]')
+      await page.locator('.cm-tbl td[data-row="2"]').hover()
+      await grip.hover()
+      const from = (await grip.boundingBox())!
+      const target = (await page.locator('.cm-tbl td[data-row="4"]').boundingBox())!
+      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(from.x + 2, from.y + 12, { steps: 4 })
+      await page.mouse.move(from.x + 2, target.y + target.height - 3, { steps: 8 })
+      const lit = await page.evaluate(
+        () => [...document.querySelectorAll('.cm-tbl-grip')].filter((g) => Number(getComputedStyle(g).opacity) > 0.1).length,
+      )
+      expect(await page.locator('.cm-tbl-grip.is-dragged').count()).toBe(1)
+      expect(lit).toBe(1)
+      expect(await page.locator('.cm-tbl-drop--row').count()).toBe(1)
+      await page.mouse.up()
+      await expect.poll(() => body(fs.readFileSync(file, 'utf8')).map((r) => r[0])).toEqual(['N', 'r1', 'r3', 'r4', 'r2', 'r5'])
+      expect(await page.locator('.cm-tbl-grip.is-dragged').count()).toBe(0)
+    })
+
+    it('a note ending with a table: click below it, type - a paragraph after a blank line, never raw source; one undo takes it back', async () => {
+      const file = path.join(dir(), 'Ends.md')
+      await page.locator('[role=treeitem]', { hasText: 'Ends' }).click()
+      await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Ends.md')
+      await page.waitForSelector('.cm-tbl')
+      await sleep(300)
+      const box = (await page.locator('.cm-tbl').boundingBox())!
+      await page.mouse.click(box.x + 60, box.y + box.height + 40)
+      await typeWatching('abc')
+      await expect.poll(() => fs.readFileSync(file, 'utf8')).toBe('# Ends\n\n| Fruit | Qty |\n| ----- | --- |\n| Plum  | 3   |\n\nabc')
+      expect(body(fs.readFileSync(file, 'utf8')).flat()).not.toContain('abc')
+      // One undo per key; the first takes its blank line with it. The note keeps
+      // the line break the caret needed after the table (not an edit).
+      for (let i = 0; i < 3; i++) await page.keyboard.press('Meta+Z')
+      await expect.poll(() => fs.readFileSync(file, 'utf8')).toBe('# Ends\n\n| Fruit | Qty |\n| ----- | --- |\n| Plum  | 3   |\n')
+    })
+
+    it('arrow down from the last row, type - the same', async () => {
+      const file = path.join(dir(), 'Down.md')
+      await page.locator('[role=treeitem]', { hasText: 'Down' }).click()
+      await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Down.md')
+      await page.waitForSelector('.cm-tbl')
+      await sleep(300)
+      await page.locator('.cm-tbl td[data-row="1"][data-col="0"]').click()
+      await page.keyboard.press('ArrowDown')
+      await typeWatching('abc')
+      await expect.poll(() => fs.readFileSync(file, 'utf8')).toBe('# Down\n\n| Fruit | Qty |\n| ----- | --- |\n| Plum  | 3   |\n\nabc')
+    })
+
+    it('a table in the middle of a note: click the line under it, type - its own paragraph, the next one untouched', async () => {
+      const file = path.join(dir(), 'Middle.md')
+      await page.locator('[role=treeitem]', { hasText: 'Middle' }).click()
+      await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Middle.md')
+      await page.waitForSelector('.cm-tbl')
+      await sleep(300)
+      const box = (await page.locator('.cm-tbl').boundingBox())!
+      await page.mouse.click(box.x + 60, box.y + box.height + 8)
+      await typeWatching('abc')
+      await expect
+        .poll(() => fs.readFileSync(file, 'utf8'))
+        .toBe('# Middle\n\nBefore.\n\n| Fruit | Qty |\n| ----- | --- |\n| Plum  | 3   |\n\nabc\n\nAfter.\n')
+    })
+  })
+
+  describe('table menus', () => {
+    const file = (): string => path.join(path.dirname(note), 'Menus.md')
+    const read = (): string => fs.readFileSync(file(), 'utf8')
+    const grip = (kind: 'row' | 'col', index: number) => page.locator(`.cm-tbl-grip--${kind}[data-index="${index}"]`)
+    const openGrip = async (kind: 'row' | 'col', index: number): Promise<void> => {
+      await page.locator(`.cm-tbl [data-row="${kind === 'row' ? index : 1}"][data-col="${kind === 'col' ? index : 0}"]`).hover()
+      await grip(kind, index).hover()
+      await grip(kind, index).click()
+      await page.waitForSelector('.tmenu')
+    }
+    // Esc closes a table menu wherever the focus is.
+    const close = async (): Promise<void> => {
+      await page.keyboard.press('Escape')
+      await expect.poll(() => page.locator('.tmenu').count()).toBe(0)
+    }
+
+    beforeAll(async () => {
+      fs.writeFileSync(
+        file(),
+        '# Menus\n\n| A   | B   | C   |\n| --- | --- | --- |\n| 1   | x   | p   |\n| 2   | y   | q   |\n| 3   | z   | r   |\n',
+      )
+      await page.locator('[role=treeitem]', { hasText: 'Menus' }).click()
+      await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Menus.md')
+      await page.waitForSelector('.cm-tbl')
+      await sleep(300)
+    })
+
+    it('a row handle opens the row menu only, marks its row, and previews inserts and deletes', async () => {
+      await openGrip('row', 2)
+      expect(await page.locator('.tmenu .tmenu__item', { hasText: 'column' }).count()).toBe(0)
+      expect(await page.locator('.tmenu [aria-label="Insert row above"]').count()).toBe(1)
+      expect(await page.locator('.cm-tbl-mark.is-target').count()).toBe(1)
+      await page.locator('.tmenu [aria-label="Insert row below"]').hover()
+      expect(await page.locator('.cm-tbl-mark.is-after').count()).toBe(1)
+      await page.locator('.tmenu .tmenu__item', { hasText: 'Delete row' }).hover()
+      expect(await page.locator('.cm-tbl-mark.is-delete').count()).toBe(1)
+      expect(await page.locator('.tmenu .tmenu__item', { hasText: 'Move row down' }).locator('.tmenu__shortcut').textContent()).toBe('⌥↓')
+      await close()
+      expect(await page.locator('.cm-tbl-mark').count()).toBe(0)
+    })
+
+    it('a column handle opens the column menu; the active alignment clicked again goes back to default', async () => {
+      await openGrip('col', 1)
+      expect(await page.locator('.tmenu .tmenu__item', { hasText: 'row' }).count()).toBe(0)
+      await page.locator('.tmenu [aria-label="Align right"]').click()
+      await expect.poll(() => read().includes('| --: |')).toBe(true)
+      await openGrip('col', 1)
+      expect(await page.locator('.tmenu [aria-label="Align right"]').getAttribute('aria-checked')).toBe('true')
+      await page.locator('.tmenu [aria-label="Align right"]').click()
+      await expect.poll(() => read().includes('| --: |')).toBe(false)
+    })
+
+    it('the corner handle opens the table menu', async () => {
+      await page.locator('.cm-tbl td[data-row="1"]').first().hover()
+      await page.locator('.cm-tbl-corner').click()
+      await page.waitForSelector('.tmenu')
+      expect(await page.locator('.tmenu .tmenu__item').allTextContents()).toEqual([
+        'Copy as Markdown',
+        'Copy as TSV',
+        'Edit as markdown',
+        'Delete table',
+      ])
+      await close()
+    })
+
+    it('a right-click on a cell: Row ›, Column ›, Table ›, all by keyboard', async () => {
+      await page.locator('.cm-tbl [data-row="1"][data-col="0"]').click({ button: 'right' })
+      await page.waitForSelector('.tmenu')
+      expect(await page.locator('.tmenu .tmenu__item').allTextContents()).toEqual(['Row', 'Column', 'Table'])
+      // Open Row › from the keyboard, go to Move row down, run it.
+      await page.locator('.tmenu .tmenu__item', { hasText: 'Row' }).focus()
+      await page.keyboard.press('ArrowRight')
+      await expect.poll(() => page.locator('.tmenu').count()).toBe(2)
+      await page.keyboard.press('ArrowDown') // Move row up (disabled for row 1, skipped) → Move row down
+      await page.keyboard.press('Enter')
+      await expect.poll(() => body(read()).map((r) => r[0])).toEqual(['A', '2', '1', '3'])
+    })
+
+    it('a header click opens its column menu and tints the column; a row grip selects its row', async () => {
+      await page.locator('.cm-tbl th[data-row="0"][data-col="2"]').click()
+      await page.waitForSelector('.tmenu')
+      expect(await page.locator('.tmenu [aria-label="Align left"]').count()).toBe(1)
+      expect(await page.locator('.cm-tbl-mark.is-target.is-col').count()).toBe(1)
+      await close()
+      await openGrip('row', 1)
+      expect(await page.locator('.cm-tbl-mark.is-target.is-row').count()).toBe(1)
+      await close()
+    })
+
+    it('typing in a cell is kept when a menu opens and closes without an action', async () => {
+      await page.locator('.cm-tbl [data-row="3"][data-col="1"]').click()
+      await page.keyboard.press('Meta+A')
+      await page.keyboard.type('kept')
+      await grip('row', 3).hover()
+      await grip('row', 3).click()
+      await page.waitForSelector('.tmenu')
+      await close()
+      await expect.poll(() => body(read())[3]![1]).toBe('kept')
+    })
+
+    it('a submenu without room on the right opens beside its menu, never on top of it', async () => {
+      // Right-click far enough right that Row › cannot open to the right.
+      const width = await page.evaluate(() => window.innerWidth)
+      const cell = (await page.locator('.cm-tbl [data-row="1"][data-col="2"]').boundingBox())!
+      await page.mouse.click(Math.min(cell.x + cell.width - 4, width - 330), cell.y + cell.height / 2, { button: 'right' })
+      await page.waitForSelector('.tmenu')
+      await page.locator('.tmenu .tmenu__item', { hasText: 'Row' }).hover()
+      await expect.poll(() => page.locator('.tmenu').count()).toBe(2)
+      await sleep(250) // past the open animation, which scales the menus
+      const [parent, sub] = await page.evaluate(() =>
+        [...document.querySelectorAll('.tmenu')].map((m) => m.getBoundingClientRect().toJSON()),
+      )
+      const overlap = Math.min(parent.right, sub.right) - Math.max(parent.left, sub.left)
+      expect(overlap).toBeLessThanOrEqual(0)
+      await close()
+
+      // A narrow window: no room on the right at all - it opens on the left of the menu.
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setContentSize(1000, 900))
+      await sleep(400)
+      const narrow = await page.evaluate(() => window.innerWidth)
+      const c = (await page.locator('.cm-tbl [data-row="1"][data-col="2"]').boundingBox())!
+      const x = c.x + c.width - 4
+      // The menu fits at x, the submenu beside it does not.
+      expect(x + 250 + 4 + 250).toBeGreaterThan(narrow)
+      await page.mouse.click(x, c.y + c.height / 2, { button: 'right' })
+      await page.waitForSelector('.tmenu')
+      await page.locator('.tmenu .tmenu__item', { hasText: 'Row' }).hover()
+      await expect.poll(() => page.locator('.tmenu').count()).toBe(2)
+      await sleep(250)
+      const [p2, s2] = await page.evaluate(() => [...document.querySelectorAll('.tmenu')].map((m) => m.getBoundingClientRect().toJSON()))
+      expect(s2.right).toBeLessThanOrEqual(p2.left)
+      await close()
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setContentSize(1400, 900))
+      await sleep(400)
+    })
+
+    it('⌥↓ and ⌥→ move the row and the column of the cell being edited', async () => {
+      await page.locator('.cm-tbl [data-row="1"][data-col="0"]').click()
+      await page.keyboard.press('Alt+ArrowDown')
+      await expect.poll(() => body(read()).map((r) => r[0])).toEqual(['A', '1', '2', '3'])
+      await page.waitForSelector('.cm-tbl [data-row="2"][data-col="0"].is-editing')
+      await page.keyboard.press('Alt+ArrowRight')
+      await expect.poll(() => body(read())[0]).toEqual(['B', 'A', 'C'])
+      await page.keyboard.press('Escape')
     })
   })
 })

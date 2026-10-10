@@ -8,100 +8,91 @@
   cursor: cell;
 }
 
-/* The handle row and column sit outside the table's borders and stay quiet until hovered. */
-.cm-tbl .cm-table .cm-tbl-colhandles th,
-.cm-tbl .cm-table .cm-tbl-rowh,
-.cm-tbl .cm-table .cm-tbl-addr td {
+/* The column handles: a row above the cells, inside the table so they scroll
+   with their columns. Quiet until the pointer is in their column. */
+.cm-tbl .cm-table .cm-tbl-colhandles th {
   position: static;
+  height: 14px;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
+  text-align: center;
   cursor: default;
 }
-.cm-tbl .cm-table .cm-tbl-colhandles th {
-  height: 14px;
-  text-align: center;
+.cm-tbl .cm-table {
+  border-top: 0;
 }
-.cm-tbl .cm-table .cm-tbl-rowh {
+.cm-tbl .cm-table thead tr:nth-child(2) > th {
+  border-top: 1px solid var(--border-strong);
+}
+
+/* The row handles: a gutter left of the scroll box, one slot per row, placed
+   level with it by table-editor.ts (layoutGutter). */
+.cm-tbl-gutter {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  /* The column-handle row is above the first cells: the gutter starts below it. */
+  margin-top: 14px;
+}
+.cm-tbl-gutter .cm-tbl-rowh {
+  position: absolute;
+  left: 0;
   width: 16px;
-  vertical-align: middle;
-}
-.cm-tbl .cm-table .cm-tbl-rowh + * {
-  border-left: 1px solid var(--border);
-}
-.cm-tbl .cm-table thead tr:nth-child(2) > th:not(.cm-tbl-rowh) {
-  border-top: 1px solid var(--border);
-}
-.cm-tbl .cm-table tbody tr:nth-child(even) td.cm-tbl-rowh {
-  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .cm-tbl-grip {
   all: unset;
-  display: block;
+  display: grid;
+  place-items: center;
   box-sizing: border-box;
-  border-radius: 3px;
-  background: var(--text-muted);
+  border-radius: 5px;
+  color: var(--text-muted);
   opacity: 0;
   cursor: grab;
+  touch-action: none;
+  user-select: none;
   transition: opacity var(--anim-fast) var(--ease);
 }
-.cm-tbl-grip--col {
-  width: 18px;
-  height: 4px;
-  margin: 4px auto;
+.cm-tbl-grip svg {
+  display: block;
 }
 .cm-tbl-grip--row {
-  width: 4px;
-  height: 18px;
+  width: 14px;
+  height: 20px;
+}
+.cm-tbl-grip--col {
+  width: 20px;
+  height: 14px;
   margin: 0 auto;
 }
-.cm-tbl-colh:hover .cm-tbl-grip,
-.cm-tbl-rowh:hover .cm-tbl-grip,
-.cm-tbl tr:hover > .cm-tbl-rowh .cm-tbl-grip,
-.cm-tbl.is-dragging .cm-tbl-grip {
-  opacity: 0.55;
+.cm-tbl-grip--col svg {
+  transform: rotate(90deg);
 }
-.cm-tbl-grip:hover {
-  opacity: 1 !important;
-  background: var(--accent);
+/* Only the hovered row's grip (and its column's) shows; the one under the
+   pointer, or the one being dragged, stands out. */
+.is-hot > .cm-tbl-grip {
+  opacity: 1;
 }
-
-/* "+" after the last column and under the last row. */
-.cm-tbl-add {
-  all: unset;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  border-radius: var(--radius-s);
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1;
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity var(--anim-fast) var(--ease);
-}
-.cm-tbl-add-col {
-  width: 12px;
-  height: 14px;
-  margin-left: 4px;
-}
-.cm-tbl .cm-table .cm-tbl-addc {
-  width: 16px;
-}
-.cm-tbl-add-row {
-  width: 100%;
-  height: 16px;
-  margin-top: 2px;
-}
-.cm-tbl:hover .cm-tbl-add {
-  opacity: 0.7;
-}
-.cm-tbl-add:hover {
-  opacity: 1 !important;
+.cm-tbl-grip:hover,
+.cm-tbl-grip.is-dragged {
+  opacity: 1;
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+.cm-tbl.is-dragging .cm-tbl-grip:not(.is-dragged) {
+  opacity: 0;
+}
+.cm-tbl.is-dragging,
+.cm-tbl.is-dragging * {
+  cursor: grabbing !important;
+}
+.cm-tbl .cm-table thead tr:nth-child(2) > th {
+  cursor: pointer;
 }
 
 /* Selection: a rectangle of cells, its moving corner marked. */
@@ -205,32 +196,266 @@
   text-align: center;
 }
 
-/* The row handles sit in a gutter just left of the text column, so the
-   cells start at the column's edge; the "+" column stays inside the box,
-   which is never wider than the column plus that gutter. */
-.cm-tbl .cm-table-scroll {
+/* The visible box (table-editor.ts): the row-handle gutter, the scroll box,
+   a strip on the box's right edge to add a column, and a bar under the box
+   to add a row. A grid, so the strip is exactly as tall as the box and the
+   bar exactly as wide - same left and right edges as the box and its
+   scrollbar - and neither moves when the table scrolls inside it. The gutter
+   hangs left of the text column, so the cells start at the column's edge. */
+.cm-tbl-frame {
+  display: grid;
+  grid-template-columns: 16px minmax(0, max-content) 20px;
+  grid-template-rows: auto 26px;
+  width: max-content;
   max-width: calc(100% + 16px);
   margin: -14px 0 0 -16px;
 }
-.cm-tbl .cm-table .cm-tbl-rowh {
-  position: sticky;
-  left: 0;
+.cm-tbl .cm-table-scroll {
+  grid-column: 2;
+  grid-row: 1;
+  max-width: 100%;
+  /* Tall tables grow the note, not a box of their own: the row handles beside
+     the box stay level with their rows. */
+  max-height: none;
+}
+.cm-tbl .cm-table thead th {
+  position: static;
+}
+
+/* The two "+" controls: one look, quiet until the pointer is near the last
+   row or column, or a cell there is being edited. */
+.cm-tbl-add {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin: 2px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    opacity var(--anim-fast) var(--ease),
+    background var(--anim-fast) var(--ease);
+}
+.cm-tbl-add-col {
+  grid-column: 3;
+  grid-row: 1;
+  /* Below the column-handle row, level with the table's own top edge. */
+  margin: 16px 0 2px 2px;
+}
+.cm-tbl-add-row {
+  grid-column: 2;
+  grid-row: 2;
+  /* Exactly the box's width: no side margins. */
+  margin: 4px 0 0;
+}
+.cm-tbl:hover .cm-tbl-add-row,
+.cm-tbl.is-near-last-row .cm-tbl-add-row {
+  opacity: 1;
+}
+.cm-tbl.is-near-last-col .cm-tbl-add-col,
+.cm-tbl-add:hover,
+.cm-tbl-add:focus-visible {
+  opacity: 1;
+  background: var(--bg-hover);
+}
+.cm-tbl-add-row {
+  gap: 6px;
+  border-radius: 7px;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-12-5);
+}
+.cm-tbl-add:hover,
+.cm-tbl-add:focus-visible {
+  color: var(--text-primary);
+}
+.cm-tbl-add:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The table's own handle, at its top-left corner: opens the table menu. */
+.cm-tbl-corner {
+  all: unset;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  justify-self: center;
   z-index: 1;
-  min-width: 16px;
-  background-color: var(--bg-primary);
+  width: 8px;
+  height: 8px;
+  margin-top: 3px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--anim-fast) var(--ease);
 }
-.cm-tbl .cm-table tr > [data-col='0'] {
-  left: 16px;
+.cm-tbl:hover .cm-tbl-corner {
+  opacity: 0.45;
 }
-.cm-tbl .cm-table .cm-tbl-colhandles th,
-.cm-tbl .cm-table .cm-tbl-addr td,
-.cm-tbl .cm-table .cm-tbl-addc {
-  min-width: 0;
+.cm-tbl-corner:hover,
+.cm-tbl-corner:focus-visible {
+  opacity: 1 !important;
+  background: var(--accent);
 }
-/* Above the cells that scroll under it - header cells are sticky too. */
-.cm-tbl .cm-table .cm-tbl-rowh {
+
+/* What a table menu is about (table-editor.ts, showMark): a soft tint and an
+   accent outline; red for a delete being hovered; a line where an insert lands. */
+.cm-tbl .cm-table-scroll {
+  position: relative;
+}
+.cm-tbl-mark {
+  position: absolute;
   z-index: 2;
+  border-radius: 2px;
+  pointer-events: none;
 }
-.cm-tbl .cm-table thead .cm-tbl-rowh {
-  z-index: 3;
+.cm-tbl-mark.is-target {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.cm-tbl-mark.is-target.is-row {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.cm-tbl-mark.is-delete {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--danger);
+}
+.cm-tbl-mark.is-before,
+.cm-tbl-mark.is-after {
+  background: var(--accent);
+}
+
+/* The table menus (components/TableMenu.tsx). */
+.tmenu {
+  position: fixed;
+  z-index: 230;
+  width: 250px;
+  padding: 6px;
+  border-radius: 14px;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-13);
+  outline: none;
+  animation: menu-in 110ms var(--ease);
+}
+.tmenu__icons {
+  display: flex;
+  gap: 4px;
+  padding: 2px 2px 4px;
+}
+.tmenu__icons > .tip__anchor {
+  display: flex;
+  flex: 1;
+}
+.tmenu__icon,
+.tmenu__segment {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.tmenu__icon {
+  flex: 1;
+  height: 34px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--bg-hover) 80%, transparent);
+}
+.tmenu__icon:hover,
+.tmenu__icon:focus-visible,
+.tmenu__segment:hover,
+.tmenu__segment:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.tmenu__icon:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.tmenu__icon:disabled:hover {
+  background: none;
+}
+.tmenu__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-3);
+  padding: 6px 8px;
+}
+.tmenu__label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
+}
+.tmenu__segmented {
+  display: flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-hover) 80%, transparent);
+}
+.tmenu__segment.is-on {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+.tmenu__item {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tmenu__item:hover,
+.tmenu__item:focus-visible,
+.tmenu__item.is-open {
+  background: var(--bg-hover);
+}
+.tmenu__item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tmenu__item:disabled:hover {
+  background: none;
+}
+.tmenu__item-icon {
+  display: flex;
+  color: var(--text-secondary);
+}
+.tmenu__item-label {
+  flex: 1;
+}
+.tmenu__item.is-danger,
+.tmenu__item.is-danger .tmenu__item-icon {
+  color: var(--danger);
+}
+.tmenu__item.is-danger:hover,
+.tmenu__item.is-danger:focus-visible {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.tmenu__shortcut {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+.tmenu__chevron {
+  color: var(--text-muted);
+}
+.tmenu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  border: 0;
+  background: var(--border);
 }

@@ -195,8 +195,8 @@
  *
  * A table lives in the text column: it starts at the column's left edge, is
  * as wide as its content asks for and at most as wide as the column. Past
- * that it scrolls sideways inside its own box - a fade on the right where
- * there is more, the first column held in place - and the page never does.
+ * that the whole table scrolls sideways inside its own box, as one piece -
+ * with a fade on the side that has more - and the page never does.
  */
 .cm-table-wrap {
   margin: var(--size-2) 0;
@@ -206,32 +206,28 @@
   position: relative;
   width: max-content;
   max-width: 100%;
-  max-height: 70vh;
-  overflow: auto;
+  overflow-x: auto;
   overscroll-behavior-x: contain;
 }
 .cm-table-scroll.is-more-right {
   mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
-/* The first column stays while the rest scrolls under it. */
-.cm-table tr > [data-col='0'],
-.cm-table:not(.cm-tbl-table) tr > :first-child {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  background-color: var(--bg-primary);
+.cm-table-scroll.is-more-left {
+  mask-image: linear-gradient(to right, transparent, #000 28px);
 }
-.cm-table thead tr > [data-col='0'],
-.cm-table:not(.cm-tbl-table) thead tr > :first-child {
-  z-index: 2;
+.cm-table-scroll.is-more-left.is-more-right {
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
 }
-.cm-table-scroll.is-more-left .cm-table tr > [data-col='0'],
-.cm-table-scroll.is-more-left .cm-table:not(.cm-tbl-table) tr > :first-child {
-  box-shadow: 6px 0 8px -6px rgb(0 0 0 / 0.25);
-}
+/*
+ * "Quiet" (docs/design/recto-table-reference.html, style A): no vertical
+ * lines, no header fill, no stripes, no outer box - a hairline above and under
+ * the header, hairline rows, a muted header. It reads as part of the note,
+ * not a spreadsheet pasted into it.
+ */
 .cm-table {
   border-collapse: separate;
   border-spacing: 0;
+  border-top: 1px solid var(--border-strong);
   font-family: var(--font-ui);
   font-size: 0.92em;
   line-height: 1.5;
@@ -244,36 +240,24 @@
   /* Columns are as wide as their content: a short or empty one stays narrow. */
   min-width: 80px;
   box-sizing: border-box;
-  padding: 6px var(--size-3);
-  border-right: 1px solid var(--border);
+  padding: 7px var(--size-3);
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
 }
 .cm-table tr > :first-child {
-  border-left: 1px solid var(--border);
+  padding-left: 4px;
 }
-.cm-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-weight: 650;
+.cm-table th {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-bottom-color: var(--border-strong);
+  color: var(--text-muted);
+  font-size: 0.93em;
+  font-weight: 500;
 }
-.cm-table tbody tr:nth-child(even) td {
-  background: color-mix(in srgb, var(--bg-secondary) 45%, transparent);
-}
-/* A header cell in that column keeps the header's colour. */
-.cm-table tr > th[data-col='0'],
-.cm-table:not(.cm-tbl-table) tr > th:first-child {
-  background-color: var(--bg-secondary);
-}
-/* The same stripe, opaque, on the column that stays while the rest scrolls. */
-.cm-table tbody tr:nth-child(even) > td[data-col='0'],
-.cm-table:not(.cm-tbl-table) tbody tr:nth-child(even) > td:first-child {
-  background: color-mix(in srgb, var(--bg-secondary) 45%, var(--bg-primary));
+.cm-table tbody tr:hover td {
+  background: var(--bg-hover);
 }
 .cm-table .cm-cell-nowrap,
 .cm-table .cm-cell-whole {
@@ -390,13 +374,11 @@
 .cm-html-block p {
   margin: 0;
 }
+/* A pasted HTML table often puts its header row in the body: it still looks like one. */
 .cm-html-block .cm-table th {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-weight: 650;
-}
-.cm-html-block .cm-table tr:first-child > * {
-  border-top: 1px solid var(--border);
+  border-bottom-color: var(--border-strong);
+  color: var(--text-muted);
+  font-weight: 500;
 }
 .cm-html-block details {
   padding: var(--size-1) var(--size-3);

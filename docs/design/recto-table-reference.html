@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recto table styles</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: one editor column like Recto, three table treatments stacked, each with live hover states */
+:root{
+  --bg:#ffffff;--ink:#18181b;--soft:#55555b;--muted:#8e8e93;--line:#ececee;--line2:#e2e2e5;
+  --tint:#f6f6f7;--hover:#f2f2f4;--accent:#3b6fe0;--accentTint:rgba(59,111,224,.08);--danger:#c0392b;
+  --chip:#f0f0f2;--card:#fafafa;
+  --sans:Geist,system-ui,-apple-system,sans-serif;--mono:"Geist Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141316;--ink:#ecebf0;--soft:#b5b4bc;--muted:#86858f;--line:#25242a;--line2:#2e2d34;
+  --tint:#1b1a1f;--hover:#1e1d22;--accent:#7c9cf0;--accentTint:rgba(124,156,240,.12);--danger:#e57366;
+  --chip:#232228;--card:#18171b;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141316;--ink:#ecebf0;--soft:#b5b4bc;--muted:#86858f;--line:#25242a;--line2:#2e2d34;
+  --tint:#1b1a1f;--hover:#1e1d22;--accent:#7c9cf0;--accentTint:rgba(124,156,240,.12);--danger:#e57366;
+  --chip:#232228;--card:#18171b;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.55 var(--sans)}
+.page{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:40px 80px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font:600 26px/1.2 var(--sans);margin:0;text-wrap:balance}
+.lede{color:var(--soft);margin:6px 0 0;max-width:62ch}
+.theme{font:500 12px var(--mono);color:var(--soft);background:var(--chip);border:0;border-radius:8px;padding:7px 10px;cursor:pointer}
+section{margin-top:44px}
+.label{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+.label b{font:600 17px var(--sans)}
+.label span{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.desc{color:var(--soft);font-size:14px;margin:0 0 14px;max-width:62ch}
+.para{color:var(--soft);font-size:14px;margin:14px 0 0}
+
+/* shared table shell */
+.tw{position:relative}
+.box{overflow-x:auto}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 12px;white-space:nowrap}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td.wrap{white-space:normal;min-width:180px}
+tr{position:relative}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--soft)}
+.status i{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.status.done i{background:#3fae6a}.status.doing i{background:var(--accent)}
+.link{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+.link:hover{border-bottom-color:currentColor}
+
+/* grips: appear on row hover, only the hovered one */
+.grip{position:absolute;left:-22px;top:50%;transform:translateY(-50%);width:14px;height:20px;border-radius:5px;display:grid;place-items:center;color:var(--muted);opacity:0;cursor:grab;transition:opacity .12s}
+.grip svg{display:block}
+tbody tr:hover .grip{opacity:1}
+.grip:hover{background:var(--hover);color:var(--ink)}
+tbody tr.sel td{background:var(--accentTint)!important}
+tbody tr.sel td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
+.colsel{background:var(--accentTint)!important}
+
+/* A · Quiet (recommended) */
+.quiet table{border-top:1px solid var(--line2)}
+.quiet th{font-weight:500;color:var(--muted);font-size:13px;border-bottom:1px solid var(--line2);padding-top:9px;padding-bottom:9px}
+.quiet td{border-bottom:1px solid var(--line)}
+.quiet tbody tr:hover td{background:var(--hover)}
+.quiet th:first-child,.quiet td:first-child{padding-left:4px}
+
+/* B · Card */
+.card .box{border:1px solid var(--line2);border-radius:12px;background:var(--bg)}
+.card th{font-weight:600;font-size:13px;background:var(--tint);border-bottom:1px solid var(--line2)}
+.card td{border-bottom:1px solid var(--line)}
+.card tbody tr:last-child td{border-bottom:0}
+.card th+th,.card td+td{border-left:1px solid var(--line)}
+.card tbody tr:hover td{background:var(--hover)}
+
+/* C · Grid (current, refined) */
+.grid .box{border:1px solid var(--line2)}
+.grid th{font-weight:600;background:var(--tint)}
+.grid th,.grid td{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2)}
+.grid th:last-child,.grid td:last-child{border-right:0}
+.grid tbody tr:last-child td{border-bottom:0}
+.grid tbody tr:nth-child(even) td{background:var(--card)}
+
+/* add row bar */
+.add{margin-top:6px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;gap:6px;opacity:0;transition:opacity .12s;cursor:pointer}
+.tw:hover .add{opacity:1}
+.add:hover{background:var(--hover);color:var(--ink)}
+
+/* menu demo */
+.menu{position:absolute;z-index:5;width:250px;padding:6px;border-radius:14px;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line2);box-shadow:0 12px 34px rgba(0,0,0,.14);font-size:14px}
+.menu[hidden]{display:none!important}
+.mrow{display:flex;gap:4px;padding:2px}
+.ib{flex:1;height:34px;border:0;border-radius:9px;background:var(--chip);color:var(--soft);display:grid;place-items:center;cursor:pointer}
+.ib:hover{background:var(--hover);color:var(--ink)}
+.seg{display:flex;align-items:center;justify-content:space-between;padding:6px 8px}
+.seg span{color:var(--soft);font-size:13px}
+.segc{display:flex;background:var(--chip);border-radius:8px;padding:2px}
+.segc button{border:0;background:none;color:var(--muted);width:30px;height:26px;border-radius:6px;cursor:pointer;display:grid;place-items:center}
+.segc button.on{background:var(--bg);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.mi{display:flex;justify-content:space-between;align-items:center;padding:7px 8px;border-radius:8px;cursor:pointer;color:var(--ink)}
+.mi:hover{background:var(--hover)}
+.mi kbd{font:500 11px var(--mono);color:var(--muted)}
+.mi.del{color:var(--danger)}
+.sep{height:1px;background:var(--line);margin:4px 6px}
+.hint{font:500 11px var(--mono);color:var(--muted);margin-top:8px}
+
+@media (max-width:520px){.grip{display:none}h1{font-size:22px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body>
+
+<div class="page">
+  <div class="top">
+    <div>
+      <h1>Table styles for Recto</h1>
+      <p class="lede">Three treatments of the same table. Hover a row to see its grip, click a row's grip to select it, click a header to open the column menu.</p>
+    </div>
+    <button class="theme" id="theme">Dark</button>
+  </div>
+
+  <section class="quiet" data-v="quiet">
+    <div class="label"><b>A · Quiet</b><span>recommended</span></div>
+    <p class="desc">No vertical lines, no fills. Hairline rows, a muted header, numbers right-aligned. Reads like part of the note, not a spreadsheet pasted into it.</p>
+  </section>
+
+  <section class="card" data-v="card">
+    <div class="label"><b>B · Card</b></div>
+    <p class="desc">A rounded box with a hairline edge and a tinted header. Clearly an object; good when a note has several tables.</p>
+  </section>
+
+  <section class="grid" data-v="grid">
+    <div class="label"><b>C · Grid</b></div>
+    <p class="desc">Close to what Recto has now, cleaned up: lighter lines, subtle stripes. Most spreadsheet-like, heaviest on the page.</p>
+  </section>
+</div>
+
+<div class="menu" id="menu" hidden>
+  <div class="mrow">
+    <button class="ib" title="Insert column left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 5v14M4 12h6M7 9l-3 3 3 3"/></svg></button>
+    <button class="ib" title="Insert column right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 5v14M20 12h-6M17 9l3 3-3 3"/></svg></button>
+    <button class="ib" title="Duplicate column"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button>
+  </div>
+  <div class="seg"><span>Align</span>
+    <div class="segc" id="align">
+      <button data-a="left" title="Left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 6h16M4 12h10M4 18h13"/></svg></button>
+      <button data-a="center" title="Centre"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 6h16M7 12h10M5.5 18h13"/></svg></button>
+      <button data-a="right" title="Right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 6h16M10 12h10M7 18h13"/></svg></button>
+    </div>
+  </div>
+  <div class="seg"><span>Sort</span>
+    <div class="segc"><button title="A → Z" style="width:44px;font:600 11px var(--mono)">A→Z</button><button title="Z → A" style="width:44px;font:600 11px var(--mono)">Z→A</button></div>
+  </div>
+  <div class="sep"></div>
+  <div class="mi">Move left <kbd>⌥←</kbd></div>
+  <div class="mi">Move right <kbd>⌥→</kbd></div>
+  <div class="sep"></div>
+  <div class="mi del">Delete column</div>
+</div>
+
+<script>
+const rows=[
+  ['Read the indexer','Recto','Mon 13 Oct','1.5','doing'],
+  ['Unit 6 · linear systems','Khan Academy','Tue 14 Oct','2','todo'],
+  ['Svar på deloppgåve b og c','Tutta','Wed 15 Oct','1','todo'],
+  ['Periodic notes review','Recto','Thu 16 Oct','0.5','done'],
+  ['Script: cosine similarity on 10 notes','Topics','Fri 17 Oct','1','todo'],
+];
+const head=['Task','Project','Due','Hours','Status'];
+const statusLabel={doing:'In progress',todo:'Not started',done:'Done'};
+const grip='<span class="grip" title="Drag to move · click for row menu"><svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg></span>';
+document.querySelectorAll('section').forEach(s=>{
+  const w=document.createElement('div');w.className='tw';
+  w.innerHTML=`<div class="box"><table><thead><tr>${head.map((h,i)=>`<th class="${i===3?'num':''}" data-c="${i}">${h}</th>`).join('')}</tr></thead><tbody>${
+    rows.map(r=>`<tr><td class="wrap">${grip}${r[0]}</td><td><a class="link" href="#">${r[1]}</a></td><td>${r[2]}</td><td class="num">${r[3]}</td><td><span class="status ${r[4]}"><i></i>${statusLabel[r[4]]}</span></td></tr>`).join('')
+  }</tbody></table></div><div class="add">+ Add row</div>`;
+  s.appendChild(w);
+  const p=document.createElement('p');p.className='para';p.textContent='A paragraph after the table, separated by a blank line.';s.appendChild(p);
+});
+document.addEventListener('click',e=>{
+  if(e.target.closest('a'))e.preventDefault();
+  const g=e.target.closest('.grip');
+  if(g){const tr=g.closest('tr');const on=!tr.classList.contains('sel');tr.closest('tbody').querySelectorAll('tr').forEach(r=>r.classList.remove('sel'));if(on)tr.classList.add('sel');return}
+  const th=e.target.closest('th');const menu=document.getElementById('menu');
+  document.querySelectorAll('.colsel').forEach(c=>c.classList.remove('colsel'));
+  if(th){
+    const t=th.closest('table'),c=+th.dataset.c;
+    t.querySelectorAll('tr').forEach(r=>r.children[c].classList.add('colsel'));
+    const r=th.getBoundingClientRect();
+    menu.hidden=false;
+    const left=Math.min(window.scrollX+r.left,window.scrollX+document.documentElement.clientWidth-266);
+    menu.style.left=Math.max(8,left)+'px';menu.style.top=(window.scrollY+r.bottom+6)+'px';
+    menu.dataset.c=c;menu._t=t;
+    const cur=th.style.textAlign||(th.classList.contains('num')?'right':'left');
+    menu.querySelectorAll('#align button').forEach(b=>b.classList.toggle('on',b.dataset.a===cur));
+    return;
+  }
+  if(!e.target.closest('#menu'))menu.hidden=true;
+});
+document.getElementById('align').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;const m=document.getElementById('menu');const c=+m.dataset.c;
+  m._t.querySelectorAll('tr').forEach(r=>{r.children[c].style.textAlign=b.dataset.a});
+  m.querySelectorAll('#align button').forEach(x=>x.classList.toggle('on',x===b));
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.getElementById('menu').hidden=true;document.querySelectorAll('.colsel').forEach(c=>c.classList.remove('colsel'))}});
+const tb=document.getElementById('theme');
+const isDark=()=>document.documentElement.dataset.theme?document.documentElement.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
+tb.textContent=isDark()?'Light':'Dark';
+tb.onclick=()=>{const d=!isDark();document.documentElement.dataset.theme=d?'dark':'light';tb.textContent=d?'Light':'Dark'};
+</script>
+</body></html>

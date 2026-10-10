@@ -18,7 +18,66 @@ import { createPortal } from 'react-dom'
 const GAP = 6
 const MARGIN = 6
 
-type TipPlacement = 'top' | 'bottom' | 'left' | 'right'
+export type TipPlacement = 'top' | 'bottom' | 'left' | 'right'
+
+/** Where a tooltip of size `b` goes beside an anchor at `a`: flipped, not clamped, at a window edge. */
+export function placeTip(a: DOMRect, b: DOMRect, placement: TipPlacement): { x: number; y: number } {
+  let x = a.left + a.width / 2 - b.width / 2
+  let y = placement === 'top' ? a.top - b.height - GAP : a.bottom + GAP
+
+  if (placement === 'left' || placement === 'right') {
+    x = placement === 'left' ? a.left - b.width - GAP : a.right + GAP
+    y = a.top + a.height / 2 - b.height / 2
+  }
+
+  // Flip rather than clamp when it would leave the window: a tooltip pinned
+  // to the edge covers the thing it is describing.
+  if (y + b.height > window.innerHeight - MARGIN) y = a.top - b.height - GAP
+  if (y < MARGIN) y = a.bottom + GAP
+  if (placement === 'right' && x + b.width > window.innerWidth - MARGIN) x = a.left - b.width - GAP
+
+  return {
+    x: Math.max(MARGIN, Math.min(x, window.innerWidth - b.width - MARGIN)),
+    y: Math.max(MARGIN, y),
+  }
+}
+
+/**
+ * The same tooltip for an element that is not React - a CodeMirror widget's
+ * button. Shown on hover and focus, gone on press, in the same layer.
+ */
+export function attachTip(anchor: HTMLElement, label: string, placement: TipPlacement = 'bottom'): void {
+  let bubble: HTMLDivElement | null = null
+  let watch = 0
+  const hide = (): void => {
+    bubble?.remove()
+    bubble = null
+    window.clearInterval(watch)
+  }
+  const show = (): void => {
+    hide()
+    bubble = document.createElement('div')
+    bubble.className = 'tip'
+    bubble.setAttribute('role', 'tooltip')
+    const text = document.createElement('span')
+    text.className = 'tip__label'
+    text.textContent = label
+    bubble.append(text)
+    document.body.append(bubble)
+    const at = placeTip(anchor.getBoundingClientRect(), bubble.getBoundingClientRect(), placement)
+    bubble.style.left = `${at.x}px`
+    bubble.style.top = `${at.y}px`
+    // A button redrawn away under the pointer never sends pointerleave.
+    watch = window.setInterval(() => {
+      if (!anchor.isConnected) hide()
+    }, 250)
+  }
+  anchor.addEventListener('pointerenter', show)
+  anchor.addEventListener('pointerleave', hide)
+  anchor.addEventListener('pointerdown', hide)
+  anchor.addEventListener('focus', show)
+  anchor.addEventListener('blur', hide)
+}
 
 type Props = {
   /** The tooltip text. An empty string renders the child with no tooltip. */
@@ -43,26 +102,7 @@ export function Tip({ label, hint, placement = 'bottom', wrap = false, children 
     const element = bubble.current
     if (anchor === null || element === null) return
 
-    const a = anchor.getBoundingClientRect()
-    const b = element.getBoundingClientRect()
-
-    let x = a.left + a.width / 2 - b.width / 2
-    let y = placement === 'top' ? a.top - b.height - GAP : a.bottom + GAP
-
-    if (placement === 'left' || placement === 'right') {
-      x = placement === 'left' ? a.left - b.width - GAP : a.right + GAP
-      y = a.top + a.height / 2 - b.height / 2
-    }
-
-    // Flip rather than clamp when it would leave the window: a tooltip pinned
-    // to the edge covers the thing it is describing.
-    if (y + b.height > window.innerHeight - MARGIN) y = a.top - b.height - GAP
-    if (y < MARGIN) y = a.bottom + GAP
-
-    setAt({
-      x: Math.max(MARGIN, Math.min(x, window.innerWidth - b.width - MARGIN)),
-      y: Math.max(MARGIN, y),
-    })
+    setAt(placeTip(anchor.getBoundingClientRect(), element.getBoundingClientRect(), placement))
   }, [shown, placement, label, hint])
 
   if (label === '') return children
