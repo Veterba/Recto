@@ -5,6 +5,7 @@ import './styles/note-preview.css'
 
 export * from './components/FileTree'
 export * from './components/NotePreviewCard'
+export * from './components/OutsideLinksNotice'
 export * from './file-tree-ops'
 export * from './note-preview'
 export * from './tree-lists'

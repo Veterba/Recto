@@ -2,6 +2,7 @@ import { formatChord } from '../hotkeys'
 import { viewTitle } from '../view-registry'
 import type { Workspace } from '../workspace'
 import { TopicsNotice } from '../../features/topics'
+import { OutsideLinksNotice } from '../../features/file-tree'
 import { Icon } from '../../ui/Icon'
 import { Tip } from '../../ui/Tip'
 
@@ -29,6 +30,7 @@ export function StatusBar({ workspace, vaultName, graphOpen, onToggleGraph, onOp
       <span className="status__sep" />
       <span className="status__item">{leaf ? viewTitle(leaf.type, leaf.state) : 'Nothing open'}</span>
       <span className="status__spacer" />
+      <OutsideLinksNotice />
       <TopicsNotice />
       <Tip label="Today's note" hint={formatChord('Mod+Shift+D')} placement="top">
         <button className="status__btn" onClick={onOpenDaily} aria-label="Daily note">

@@ -5,7 +5,7 @@ import { shell } from 'electron'
 import type { FileNode } from '../shared/vault'
 import { writeLog } from './config'
 import { rewriteWikiLinks } from './link-rewrite'
-import { resolveInVault } from './paths'
+import { leavesVault, resolveInVault } from './paths'
 import { currentVault } from './vault'
 import { notTextMessage, notTextReason } from './text-file'
 import { isHidden, sortNodes } from '../shared/vault'
@@ -27,8 +27,26 @@ function toRelative(root: string, absolute: string): string {
   return path.relative(root, absolute).split(path.sep).join('/')
 }
 
+/** Symlinks that point outside the vault, as found by the last tree walk. */
+let outsideLinks: { root: string; paths: string[] } = { root: '', paths: [] }
+/** Already reported this session (vault root + path), so the notice shows each once. */
+const reportedOutsideLinks = new Set<string>()
+
+/**
+ * The outside-pointing symlinks not yet reported this session. They are never
+ * listed, opened or indexed; this is only so the user hears about it instead
+ * of wondering where a folder went.
+ */
+export function takeOutsideLinks(): string[] {
+  const { root, paths } = outsideLinks
+  const fresh = paths.filter((p) => !reportedOutsideLinks.has(path.join(root, p)))
+  for (const p of fresh) reportedOutsideLinks.add(path.join(root, p))
+  return fresh
+}
+
 export function listTree(): FileNode[] {
   const root = requireVault()
+  const outside: string[] = []
 
   const walk = (dir: string): FileNode[] => {
     let entries: fs.Dirent[]
@@ -44,6 +62,12 @@ export function listTree(): FileNode[] {
       const absolute = path.join(dir, entry.name)
       const relative = toRelative(root, absolute)
 
+      // Dirents describe the link itself, so symlinks were never listed. Ones
+      // that leave the vault are noted for the notice; ones inside stay as before.
+      if (entry.isSymbolicLink()) {
+        if (leavesVault(root, absolute)) outside.push(relative)
+        continue
+      }
       if (entry.isDirectory()) {
         nodes.push({ path: relative, name: entry.name, kind: 'folder', children: walk(absolute) })
       } else if (entry.isFile()) {
@@ -62,7 +86,9 @@ export function listTree(): FileNode[] {
     return sortNodes(nodes)
   }
 
-  return walk(root)
+  const tree = walk(root)
+  outsideLinks = { root, paths: outside }
+  return tree
 }
 
 export async function readFile(relative: string): Promise<{ ok: true; content: string } | { ok: false; error: string }> {

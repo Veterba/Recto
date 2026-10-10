@@ -22,6 +22,19 @@ import { search, backlinks, resolveOne, unresolved, graph, board, boards, contex
  * rest rebuilds on next launch; those two are lost.
  */
 
+/**
+ * A note's absolute path, refusing one that really lives outside the vault
+ * through a symlink: it must never reach the index, tasks or the bots. The
+ * same rule as main's `resolveInVault`, which this process may not import;
+ * simpler, because the indexer only reads files that exist.
+ */
+export function notePath(relative: string): string {
+  const absolute = path.join(vaultRoot, relative)
+  const rel = path.relative(fs.realpathSync(vaultRoot), fs.realpathSync(absolute))
+  if (rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) throw new Error(`outside the vault: ${relative}`)
+  return absolute
+}
+
 /** Every markdown file in the vault, with its stat. */
 async function walk(dir: string, out: { path: string; mtime: number; size: number }[] = []): Promise<typeof out> {
   let entries: fs.Dirent[]
@@ -222,7 +235,7 @@ function notesInPeriod(from: string, to: string): PeriodNote[] {
   return rows.flatMap((r) => {
     let content: string
     try {
-      content = fs.readFileSync(path.join(vaultRoot, r.path), 'utf8')
+      content = fs.readFileSync(notePath(r.path), 'utf8')
     } catch {
       return []
     }
@@ -352,8 +365,8 @@ function resolveAllLinks(): number {
   return resolved
 }
 
-/** Full reconcile: index what changed, drop what is gone. */
-async function reindex(force: boolean): Promise<{ indexed: number; removed: number; total: number }> {
+/** Full reconcile: index what changed, drop what is gone. Exported for the tests. */
+export async function reindex(force: boolean): Promise<{ indexed: number; removed: number; total: number }> {
   const handle = requireDb()
   const onDisk = await walk(vaultRoot)
   const known = new Map(
@@ -379,7 +392,7 @@ async function reindex(force: boolean): Promise<{ indexed: number; removed: numb
     const contents = await Promise.all(
       batch.map(async (file) => {
         try {
-          return { file, content: await fsp.readFile(path.join(vaultRoot, file.path), 'utf8') }
+          return { file, content: await fsp.readFile(notePath(file.path), 'utf8') }
         } catch {
           return null
         }
@@ -557,7 +570,8 @@ process.parentPort?.on('message', (event) => {
           continue
         }
         try {
-          const absolute = path.join(vaultRoot, change.path)
+          // Throws for a symlink out of the vault: it is never indexed.
+          const absolute = notePath(change.path)
           const stat = fs.statSync(absolute)
           const content = fs.readFileSync(absolute, 'utf8')
           handleDb.transaction(() => {

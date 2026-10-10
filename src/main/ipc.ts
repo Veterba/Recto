@@ -130,6 +130,7 @@ export function registerIpc(): void {
   })
 
   handle(IPC.fsTree, () => vaultFs.listTree())
+  handle(IPC.fsOutsideLinks, () => vaultFs.takeOutsideLinks())
   handle(IPC.fsRead, (p) => vaultFs.readFile(p))
   handle(IPC.fsWrite, (p, content) => {
     // Declared BEFORE the write, or the watcher event can arrive first and be

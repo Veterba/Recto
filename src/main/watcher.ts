@@ -6,6 +6,7 @@ import { send } from './index-client'
 import { currentVault } from './vault'
 import { IPC_EVENT } from '../shared/ipc'
 import { sendEvent } from './events'
+import { leavesVault, realPath } from './paths'
 
 /**
  * Watches the vault and pushes changes to the renderer.
@@ -41,7 +42,22 @@ const selfWrites = new Map<string, number>()
 export function markSelfWrite(relative: string): void {
   const vault = currentVault()
   if (!vault) return
-  selfWrites.set(path.resolve(vault.path, relative), Date.now() + SELF_WRITE_TTL_MS)
+  // Keyed by the real path, because that is what the watcher reports.
+  selfWrites.set(path.resolve(watchedRoot(vault.path), relative), Date.now() + SELF_WRITE_TTL_MS)
+}
+
+/**
+ * The vault's real path. The watcher must not follow symlinks (one pointing at
+ * ~ would have it watch the whole home folder, and report files from outside
+ * the vault), so it watches the real folder - which also keeps a vault opened
+ * through a symlinked path working.
+ */
+function watchedRoot(vaultPath: string): string {
+  try {
+    return realPath(vaultPath)
+  } catch {
+    return vaultPath
+  }
 }
 
 function isSelfWrite(absolute: string): boolean {
@@ -95,7 +111,7 @@ export function startWatching(window: BrowserWindow): void {
   if (!vault) return
 
   target = window
-  const root = vault.path
+  const root = watchedRoot(vault.path)
   const toRelative = (absolute: string): string => path.relative(root, absolute).split(path.sep).join('/')
 
   watcher = chokidar.watch(root, {
@@ -109,10 +125,17 @@ export function startWatching(window: BrowserWindow): void {
       return name === VAULT_STATE_DIR || name === 'node_modules' || name.startsWith('.')
     },
     awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 30 },
+    followSymlinks: false,
   })
+
+  // A symlink itself is still reported. One that points outside the vault is
+  // never passed on: not to the tree, not to the index. Removals pass, since
+  // there is nothing left to read.
+  const outside = (absolute: string): boolean => leavesVault(root, absolute)
 
   watcher
     .on('add', (absolute, stat) => {
+      if (outside(absolute)) return
       const relative = toRelative(absolute)
       // A file the app created lands here, not in 'change': chokidar coalesces
       // the create and the first write into one 'add'. Suppressing it outright
@@ -125,6 +148,7 @@ export function startWatching(window: BrowserWindow): void {
       enqueue({ type: 'add', path: relative, mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })
     })
     .on('change', (absolute, stat) => {
+      if (outside(absolute)) return
       const relative = toRelative(absolute)
       if (isSelfWrite(absolute)) {
         // Suppression stops the EDITOR reloading its buffer. The index still
@@ -138,7 +162,9 @@ export function startWatching(window: BrowserWindow): void {
       if (isSelfWrite(absolute)) return
       enqueue({ type: 'unlink', path: toRelative(absolute) })
     })
-    .on('addDir', (absolute) => enqueue({ type: 'addDir', path: toRelative(absolute) }))
+    .on('addDir', (absolute) => {
+      if (!outside(absolute)) enqueue({ type: 'addDir', path: toRelative(absolute) })
+    })
     .on('unlinkDir', (absolute) => enqueue({ type: 'unlinkDir', path: toRelative(absolute) }))
     .on('ready', () => enqueue({ type: 'ready' }))
     .on('error', (err) => {

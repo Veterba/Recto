@@ -63,6 +63,7 @@ export const IPC = {
   stateRead: 'state:read',
   stateWrite: 'state:write',
   fsTree: 'fs:tree',
+  fsOutsideLinks: 'fs:outside-links',
   fsRead: 'fs:read',
   fsWrite: 'fs:write',
   fsCreate: 'fs:create',
@@ -232,6 +233,11 @@ export type IpcApi = Exhaustive<
     [IPC.stateRead]: (feature: StateFeature) => unknown
     [IPC.stateWrite]: (feature: StateFeature, data: unknown) => { ok: boolean; error?: string }
     [IPC.fsTree]: () => FileNode[]
+    /**
+     * Symlinks the last tree walk found pointing outside the vault, each reported
+     * once per session. They are never listed, opened or indexed.
+     */
+    [IPC.fsOutsideLinks]: () => string[]
     [IPC.fsRead]: (path: string) => { ok: true; content: string } | { ok: false; error: string }
     [IPC.fsWrite]: (path: string, content: string) => { ok: boolean; error?: string }
     [IPC.fsCreate]: (parentPath: string, name: string, kind: 'file' | 'folder') => { ok: true; path: string } | { ok: false; error: string }
