@@ -5,7 +5,7 @@
 
 import type { GraphLook } from './look'
 import type { Palette } from './palette'
-import type { RenderState } from './render-state'
+import type { Camera, GraphNodeView, RenderState } from './render-state'
 import { worldToScreen, radiusIn } from './geometry'
 
 /** Labels, culled by zoom and crowding, fading out under the veil. */
@@ -28,7 +28,7 @@ export function drawLabels({
   zoomScale,
 }: {
   active: number
-  camera: import('/Users/veterba/Documents/workplace/code/Recto/src/renderer/features/graph/render-state').Camera
+  camera: Camera
   context: CanvasRenderingContext2D
   focus: ReadonlySet<number> | null
   focusFade: number
@@ -36,7 +36,7 @@ export function drawLabels({
   hovered: number
   look: GraphLook
   neighbours: ReadonlySet<number>
-  nodes: readonly import('/Users/veterba/Documents/workplace/code/Recto/src/renderer/features/graph/render-state').GraphNodeView[]
+  nodes: readonly GraphNodeView[]
   palette: Palette
   positions: Float32Array<ArrayBufferLike>
   state: RenderState
