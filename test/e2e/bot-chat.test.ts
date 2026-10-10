@@ -131,8 +131,9 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
     expect(newest).toMatch(/^---\nbot: recto\ncreated: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?\ntitle: Soil mix\n---/)
     expect(newest).toContain('hei')
     expect(newest).not.toContain('How do I mix soil?')
-    expect(await page.locator('.chat-topic').count()).toBe(2)
-    expect(await page.locator('.chat-topic.is-past').count()).toBe(1)
+    // A new topic is a clean page: only its own turns on screen.
+    expect(await page.locator('.chat-topic').count()).toBe(1)
+    expect(await page.locator('.chat-topic').innerText()).not.toContain('How do I mix soil?')
   }, 60_000)
 
   it('History renames a topic: its file name and its title', async () => {
@@ -164,8 +165,10 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
     await page.waitForSelector('.bot-undo')
     expect(topicFiles()).toHaveLength(before.length - 1)
     await page.locator('.bot-undo').getByRole('button', { name: 'Undo' }).click()
+    await expect.poll(topicFiles).toEqual(before)
+    // The toast is outside History, so the click closes it (a click elsewhere); open it again.
+    if ((await page.locator('.bot-history__row').count()) === 0) await page.getByRole('button', { name: 'History' }).click()
     await page.waitForFunction(() => document.querySelectorAll('.bot-history__row').length === 2)
-    expect(topicFiles()).toEqual(before)
     expect(fs.readFileSync(path.join(vault, 'chats', 'recto', greetings), 'utf8')).toBe(content)
   }, 60_000)
 
@@ -175,7 +178,7 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
     await page.getByText('Clear all').click()
     await expect(page.getByRole('alertdialog').innerText()).resolves.toContain('All 2 topics')
     await page.getByRole('alertdialog').getByRole('button', { name: 'Delete 2 topics' }).click()
-    await page.waitForFunction(() => document.querySelectorAll('.chat-topic').length === 1)
-    expect(topicFiles()).toEqual([])
+    await expect.poll(topicFiles).toEqual([])
+    await page.waitForSelector('.chat__welcome')
   }, 60_000)
 })

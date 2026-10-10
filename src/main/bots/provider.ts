@@ -457,7 +457,11 @@ export class MockProvider implements BotModelProvider, LocalModels {
     const reply = 'Your notes keep the soil mix simple: compost, loam and grit, tested for pH before planting.'
     // All at once, the way a real model's last tokens and its end arrive: the
     // case where the renderer gets the end before it has drawn the last token.
+    // RECTO_BOTS_MOCK_DELAY (ms a word): slow enough for a test to leave the chat mid-answer.
+    const delay = Number(process.env['RECTO_BOTS_MOCK_DELAY'] ?? 0)
     for (const word of reply.split(/(?<= )/)) {
+      if (signal.aborted) return
+      if (delay > 0) await new Promise((r) => setTimeout(r, delay))
       if (signal.aborted) return
       yield word
     }

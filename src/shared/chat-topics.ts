@@ -59,7 +59,7 @@ const TRAILER = /\n*<!-- recto:(meta|sources) (.*) -->\s*$/
 /** JSON inside an HTML comment, with `--` escaped so it cannot close the comment early. */
 const commentJson = (value: unknown): string => JSON.stringify(value).replace(/--/g, '-\\u002d')
 
-const META_FIELDS = ['at', 'model', 'sources', 'steps', 'ttftMs', 'totalMs'] as const
+const META_FIELDS = ['at', 'model', 'sources', 'steps', 'ttftMs', 'totalMs', 'job', 'interrupted'] as const
 
 /** A message's meta as its comment; empty when there is nothing to say. */
 export function metaComment(message: MessageMeta): string {
@@ -91,6 +91,8 @@ export function metaFrom(kind: string, json: string): MessageMeta {
   text('model')
   if (typeof raw['ttftMs'] === 'number') meta.ttftMs = raw['ttftMs']
   if (typeof raw['totalMs'] === 'number') meta.totalMs = raw['totalMs']
+  if (typeof raw['job'] === 'string') meta.job = raw['job']
+  if (raw['interrupted'] === true) meta.interrupted = true
   if (Array.isArray(raw['sources'])) meta.sources = sourcesFrom(raw['sources'])
   if (Array.isArray(raw['steps'])) {
     meta.steps = raw['steps']

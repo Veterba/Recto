@@ -52,13 +52,17 @@ if (job !== undefined) {
     })
   })
 
-  // The model is kept loaded while the app is open; it goes when the app does.
+  // An answer running is stopped and saved (marked interrupted) first; then the model, kept
+  // loaded while the app is open, goes when the app does.
   let unloaded = false
   app.on('before-quit', (event) => {
     if (unloaded) return
     event.preventDefault()
     unloaded = true
-    void Promise.race([bots.unloadOnQuit(), new Promise((resolve) => setTimeout(resolve, 1500))]).finally(() => app.quit())
+    void bots
+      .stopAnswers()
+      .then(() => Promise.race([bots.unloadOnQuit(), new Promise((resolve) => setTimeout(resolve, 1500))]))
+      .finally(() => app.quit())
   })
 
   app.on('window-all-closed', () => {

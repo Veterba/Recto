@@ -10,6 +10,7 @@ import { RectoBot } from '../../recto-bot'
 import { topicPaths } from '../chat-topics-model'
 import { useBots } from '../hooks/use-bots'
 import { useUnread } from '../unread'
+import { botJob, lastEnded, ordinal, useJobs } from '../jobs-store'
 import { previewOf, shortTime } from '../threads'
 import { MAIN_BOT } from './BotConversation'
 
@@ -56,6 +57,9 @@ function BotRow({
   // The app's own writes are not echoed back into the tree, so a chat saving a
   // turn shows up here as a bump of the note bus, not as a new mtime.
   const { revision } = useNoteBus()
+  // An answer that ended: main wrote it into the topic, so the row reads it again.
+  useJobs()
+  const ended = lastEnded(bot.id)
 
   useEffect(() => {
     if (newest === null) {
@@ -75,9 +79,19 @@ function BotRow({
     return () => {
       cancelled = true
     }
-  }, [newest?.path, newest?.mtime, bot.name, revision])
+  }, [newest?.path, newest?.mtime, bot.name, revision, ended])
 
   const unread = useUnread(bot.id)
+  // An answer running for this bot, on any tab: the face works and the row says what it does.
+  const job = botJob(bot.id)
+  const working =
+    job === null
+      ? null
+      : job.state === 'queued'
+        ? `Queued · ${ordinal(job.position + 1)}`
+        : job.state === 'streaming'
+          ? 'Writing…'
+          : (job.status ?? job.steps.findLast((st) => st.state === 'running')?.action ?? 'Thinking…')
   const preview = previewOf(last.messages)
   // When it was last written: the moment this row saw it change, when it did;
   // otherwise the file's own time (as on opening the app).
@@ -85,7 +99,15 @@ function BotRow({
   return (
     <button className={`bot-row${active ? ' is-active' : ''}`} onClick={() => onOpen(bot)}>
       <span className="bot-face bot-face--row">
-        <RectoBot id={bot.id} size={48} look={bot.look} personality={bot.personality} />
+        <RectoBot
+          id={bot.id}
+          size={48}
+          look={bot.look}
+          personality={bot.personality}
+          {...(job === null || job.state === 'queued'
+            ? {}
+            : { state: job.state === 'streaming' ? ('answering' as const) : ('riffle' as const) })}
+        />
       </span>
       <span className="bot-row__text">
         <span className="bot-row__top">
@@ -93,7 +115,9 @@ function BotRow({
           {at > 0 && last.messages.length > 0 && <span className="bot-row__time">{shortTime(at)}</span>}
         </span>
         <span className="bot-row__bottom">
-          <span className="bot-row__preview">{preview === '' ? bot.specialty : preview}</span>
+          <span className={`bot-row__preview${working !== null ? ' is-working' : ''}`}>
+            {working ?? (preview === '' ? bot.specialty : preview)}
+          </span>
           {unread && !active && <span className="bot-row__unread" aria-label="New answer" />}
         </span>
       </span>

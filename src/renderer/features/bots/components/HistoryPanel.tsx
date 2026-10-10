@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ConfirmDialog } from '../../../ui/ConfirmDialog'
+import { isActive } from '@shared/bots'
+import { jobForTopic, ordinal, useJobs } from '../jobs-store'
 import { Icon } from '../../../ui/Icon'
 import { fromFileName, type ChatTopics, type LoadedTopic } from '../chat-topics-model'
 
@@ -32,6 +34,13 @@ export function HistoryPanel({
   onDelete: (path: string) => void
   onClose: () => void
 }): React.ReactElement {
+  // A topic with an answer running or waiting says so instead of its date.
+  useJobs()
+  const working = (path: string): string | null => {
+    const job = jobForTopic(path)
+    if (job === null || !isActive(job)) return null
+    return job.state === 'queued' ? `Queued · ${ordinal(job.position + 1)}` : 'Answering…'
+  }
   const [all, setAll] = useState<LoadedTopic[] | null>(null)
   const [query, setQuery] = useState('')
   const [renaming, setRenaming] = useState<{ path: string; title: string } | null>(null)
@@ -122,7 +131,7 @@ export function HistoryPanel({
             ) : (
               <button className="bot-history__open" onClick={() => onJump(row.path)}>
                 <span className="bot-history__title">{row.title}</span>
-                <span className="bot-history__when">{when(row.created)}</span>
+                <span className="bot-history__when">{working(row.path) ?? when(row.created)}</span>
               </button>
             )}
             <button

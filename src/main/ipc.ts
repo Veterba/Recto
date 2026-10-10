@@ -3,6 +3,7 @@ import { ATTACHMENTS_FOLDER as ATTACHMENTS, type RenameOutcome } from '../shared
 import { IPC, type IpcApi } from '../shared/ipc'
 import * as ai from './ai'
 import * as bots from './bots'
+import * as answers from './bots/answers'
 import { migrateChats } from './bots/migration'
 import * as topics from './topics/service'
 import * as topicCommands from './topics/commands'
@@ -317,8 +318,14 @@ export function registerIpc(): void {
   handle(IPC.botsStatus, (model) => bots.status(model))
   handle(IPC.botsSettings, () => bots.settings())
   handle(IPC.botsSetSettings, (patch) => bots.setSettings(patch))
-  handle(IPC.botsSend, (request) => bots.ask(request))
-  handle(IPC.botsCancel, (id) => bots.cancel(id))
+  handle(IPC.botsSend, (request) => answers.send(request))
+  handle(IPC.botsCancel, (target, discard) => ({ ok: answers.jobs.cancel(target, discard === true) > 0 }))
+  handle(IPC.botsRetry, (request) => answers.retry(request))
+  handle(IPC.botsJobs, () => answers.jobs.list())
+  handle(IPC.botsViewing, (view) => {
+    answers.setViewing(view)
+    return { ok: true }
+  })
   handle(IPC.botsSetModel, (botId, model) => bots.setModel(botId, model))
   handle(IPC.botsTitle, (request) => bots.title(request))
   handle(IPC.botsModels, () => bots.models())

@@ -170,6 +170,22 @@ export class ChatTopics {
     this.emit()
   }
 
+  /** Read a topic again from its file: main wrote to it (a question, an answer). */
+  async reload(path: string): Promise<void> {
+    this.loaded.delete(path)
+    await this.load(path)
+    this.emit()
+  }
+
+  /** A topic main just started for the next message becomes the current one. */
+  async adopt(path: string): Promise<void> {
+    this.loaded.delete(path)
+    if (!this.files.includes(path)) this.files = [path, ...this.files]
+    this.current = path
+    await this.load(path)
+    this.emit()
+  }
+
   currentTopic(): LoadedTopic | null {
     return this.current === null ? null : (this.loaded.get(this.current) ?? null)
   }

@@ -29,6 +29,8 @@ export type MessageActions = {
   onOpen: (path: string, heading?: string | null) => void
   /** A note named in an answer or a [[link]]: open it by title. */
   onOpenNote: (title: string, sources: readonly BotSource[]) => void
+  /** Ask again: after an answer that stopped before its end, or failed. Absent while one runs. */
+  onRetry?: () => void
 }
 
 const noteTitle = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
@@ -152,6 +154,17 @@ export function TopicBlock({
                   {message.steps !== undefined && <StepsCard steps={message.steps} running={false} />}
                   <Bubble message={message} actions={actions} />
                   {message.sources !== undefined && <Sources sources={message.sources} onOpen={actions.onOpen} />}
+                  {/* Stopped before its end: marked so, or left with the id of a job no longer running (the app was killed). */}
+                  {(message.interrupted === true || message.job !== undefined) && (
+                    <p className="msg-interrupted">
+                      Stopped before the end
+                      {actions.onRetry !== undefined && index === topic.messages.length - 1 && (
+                        <button className="composer__link" onClick={actions.onRetry}>
+                          Retry
+                        </button>
+                      )}
+                    </p>
+                  )}
                 </div>
               )
             })}
@@ -173,6 +186,18 @@ export function TopicBlock({
       {error !== null && (
         <p className="chat__error" role="alert" onClick={onDismissError}>
           {error}
+          {actions.onRetry !== undefined && (
+            <button
+              className="composer__link"
+              onClick={(event) => {
+                event.stopPropagation()
+                onDismissError()
+                actions.onRetry?.()
+              }}
+            >
+              Retry
+            </button>
+          )}
         </p>
       )}
     </section>

@@ -64,6 +64,10 @@ export type MessageMeta = {
   /** Milliseconds to the first token, and to the end. */
   ttftMs?: number
   totalMs?: number
+  /** Written while the answer streams in: the job writing it (bots/jobs.ts). */
+  job?: string
+  /** The answer stopped before its end (the app quit, a timeout): kept as far as it got, with Retry. */
+  interrupted?: boolean
 }
 
 /** A turn in a bot's thread: the text, and what is known about it. */
@@ -100,6 +104,38 @@ export type ModelChoice = {
  * running, waiting for the user to step away, paused on a low battery, or done.
  */
 export type NoteCardsStatus = { done: number; total: number; state: 'idle' | 'running' | 'waiting' | 'paused-battery' | 'done' | 'off' }
+
+/**
+ * An answer being worked on, owned by main (bots/jobs.ts): queued behind
+ * others (one model run at a time on this Mac), preparing (routing, tools,
+ * search), streaming, or ended. The chat, History and the sidebar row show it;
+ * closing the chat only stops watching it.
+ */
+export type JobState = 'queued' | 'preparing' | 'streaming' | 'done' | 'error' | 'cancelled'
+
+export type BotJob = {
+  id: string
+  botId: string
+  /** The topic file it answers in. */
+  topic: string
+  state: JobState
+  /** Place in the queue: 0 while it runs, 1 for next, … */
+  position: number
+  /** The question, while it waits behind another answer in its topic (not in the file yet). */
+  question: string | null
+  steps: BotStep[]
+  /** What it is doing now, in the question's language ("Reading Tutta…"). */
+  status: string | null
+  text: string
+  sources: BotSource[]
+  model: string
+  /** When the answer began (local ISO), for its message. */
+  at: string
+  error: string | null
+}
+
+export const isActive = (job: Pick<BotJob, 'state'>): boolean =>
+  job.state === 'queued' || job.state === 'preparing' || job.state === 'streaming'
 
 /** A model download in progress. */
 export type PullProgress = { name: string; status: string; completed: number; total: number }
@@ -148,6 +184,8 @@ export const DEFAULT_HARNESS: BotHarness = {
 export type BotSettings = {
   /** The model a bot uses when its definition names none. */
   defaultModel: string
+  /** A macOS notification when an answer finishes while its chat is out of sight. */
+  notify: boolean
   harness: BotHarness
 }
 

@@ -745,3 +745,17 @@
   border-radius: 50%;
   background: var(--ink);
 }
+
+/* Under an answer that stopped before its end: one muted line, with Retry on the latest. */
+.msg-interrupted {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 0 0;
+  font-size: var(--font-size-12-5);
+  color: var(--text-muted);
+}
+.bot-row__preview.is-working {
+  color: var(--text-muted);
+  font-style: italic;
+}

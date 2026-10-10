@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { Bot, BotMessage, BotSource, PullProgress } from '@shared/bots'
+import type { Bot, BotSource, PullProgress } from '@shared/bots'
 import { createdStamp, fallbackTitle } from '@shared/chat-topics'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { api } from '../../../app/api'
@@ -10,9 +10,11 @@ import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { RectoBot, type BotState } from '../../recto-bot'
 import { ChatTopics, UNTITLED } from '../chat-topics-model'
-import { onNewTopicRequest } from '../new-topic'
+import { onNewTopicRequest, onTopicRequest } from '../new-topic'
 import { reloadBots, useBotStatus, useBots } from '../hooks/use-bots'
-import { markRead, markUnread } from '../unread'
+import { markRead } from '../unread'
+import { isActive } from '@shared/bots'
+import { jobForTopic, ordinal, topicJobs, useJobs } from '../jobs-store'
 import { BotStatusLine } from './BotStatusLine'
 import { Composer, type NoteCandidate } from './Composer'
 import { HistoryPanel } from './HistoryPanel'
@@ -51,7 +53,6 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   const model = useMemo(() => new ChatTopics(bot, bot.id === MAIN_BOT ? [bot.name, 'Claude'] : [bot.name]), [bot.id, bot.name])
   useTopics(model)
   const [draft, setDraft] = useState('')
-  const [pending, setPending] = useState<Pending | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [typing, setTyping] = useState(false)
   const [history, setHistory] = useState(false)
@@ -61,22 +62,11 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   const [keyPresent, setKeyPresent] = useState(false)
   const [defaultModel, setDefaultModel] = useState('')
   const [pull, setPull] = useState<(PullProgress & { error?: string }) | null>(null)
-  /** What the bot is doing before its first word ("Checking your tasks…"). */
-  const [progress, setProgress] = useState<string | null>(null)
   const { status, recheck } = useBotStatus(bot.model)
   const root = useRef<HTMLDivElement | null>(null)
   const scroller = useRef<HTMLDivElement | null>(null)
   const composer = useRef<HTMLTextAreaElement | null>(null)
   const seen = useRef(true)
-
-  /** The answer being streamed, and the topic it belongs to: refs, read by the stream's handlers directly. */
-  const pendingRef = useRef<Pending | null>(null)
-  const streamPath = useRef<string | null>(null)
-  const timing = useRef({ sent: 0, first: 0 })
-  const setStream = useCallback((next: Pending | null) => {
-    pendingRef.current = next
-    setPending(next)
-  }, [])
 
   /** The model this bot answers with now. */
   const current = bot.model !== undefined && bot.model !== '' ? bot.model : defaultModel
@@ -88,24 +78,70 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   }, [model])
 
   useEffect(() => onNewTopicRequest(bot.id, () => model.startNew()), [bot.id, model])
+  useEffect(() => onTopicRequest(bot.id, (path) => void model.select(path)), [bot.id, model])
 
-  // Seen or not: an answer that lands out of sight puts a dot on the bot's row.
+  // Seen or not, and which topic: main decides from this whether a finished answer
+  // gets a notification and the bot's row a dot.
+  const viewing = useRef<() => void>(() => undefined)
+  viewing.current = () =>
+    void api.invoke(IPC.botsViewing, {
+      botId: bot.id,
+      topic: model.current,
+      visible: seen.current && document.visibilityState === 'visible',
+    })
   useEffect(() => {
     const element = root.current
     if (element === null) return
     const observer = new IntersectionObserver((entries) => {
       seen.current = entries.some((e) => e.isIntersecting)
       if (seen.current) markRead(bot.id)
+      viewing.current()
     })
     observer.observe(element)
-    return () => observer.disconnect()
+    const report = (): void => viewing.current()
+    document.addEventListener('visibilitychange', report)
+    return () => {
+      observer.disconnect()
+      document.removeEventListener('visibilitychange', report)
+      void api.invoke(IPC.botsViewing, { botId: bot.id, topic: null, visible: false })
+    }
   }, [bot.id])
+  useEffect(() => viewing.current(), [model.current])
+
+  // The answer for the topic on screen is main's job; this only watches it.
+  useJobs()
+  const job = jobForTopic(model.current)
+  const live = job !== null && isActive(job) ? job : null
+  // The face's "found it" beat on an answer's first text, then it reads the answer out.
+  const [found, setFound] = useState<string | null>(null)
+  const firstText = live !== null && live.text !== '' ? live.id : null
+  const beat = useRef<string | null>(null)
+  useEffect(() => {
+    if (firstText === null || beat.current === firstText) return
+    beat.current = firstText
+    setFound(firstText)
+    const timer = window.setTimeout(() => setFound(null), FOUND_MS)
+    return () => window.clearTimeout(timer)
+  }, [firstText])
+  const pending: Pending | null =
+    live === null || live.state === 'queued'
+      ? null
+      : {
+          text: live.text,
+          steps: live.steps,
+          sources: live.sources,
+          face: live.text === '' ? 'riffle' : found === live.id ? 'found' : 'answering',
+          at: live.at,
+        }
 
   /** After a topic's first exchange, the model names it (or its first question does). */
   const nameTopic = useCallback(
     async (path: string) => {
       const topic = model.loaded.get(path)
-      if (topic === undefined || topic.meta.title !== UNTITLED || topic.messages.length < 2) return
+      // Not while main writes to it: a rename would pull the file from under the answer.
+      const running = jobForTopic(path)
+      if (topic === undefined || topic.meta.title !== UNTITLED || topic.messages.length < 2 || (running !== null && isActive(running)))
+        return
       // From the first exchange only: that is what the topic was opened for.
       const plain = topic.messages.slice(0, 2).map(({ role, content }) => ({ role, content }))
       const title = (await api.invoke(IPC.botsTitle, { botId: bot.id, messages: plain })) ?? fallbackTitle(topic.messages)
@@ -114,67 +150,17 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
     [model, bot.id],
   )
 
-  /** The stream ended: whatever arrived becomes one answer in its topic, saved once, with what is known about it. */
-  const land = useCallback(async () => {
-    const answer = pendingRef.current
-    const path = streamPath.current
-    setStream(null)
-    streamPath.current = null
-    setProgress(null)
-    const reply = (answer?.text ?? '').trim()
-    if (answer === null || reply === '' || path === null) return
-    if (model.current !== path) await model.select(path)
-    const { sent, first } = timing.current
-    const turn: BotMessage = {
-      role: 'assistant',
-      content: reply,
-      at: answer.at,
-      model: current,
-      sources: answer.sources,
-      ...(answer.steps.length > 0 ? { steps: answer.steps } : {}),
-      ...(first > 0 ? { ttftMs: Math.round(first - sent) } : {}),
-      totalMs: Math.round(performance.now() - sent),
-    }
-    await model.append(turn)
-    if (!seen.current || document.visibilityState !== 'visible') markUnread(bot.id)
-    await nameTopic(path)
-  }, [model, nameTopic, setStream, current, bot.id])
-
+  // A job that ends, or starts (a waiting question goes into the file): read the topic again.
+  const stage = job === null ? null : `${job.id}:${isActive(job) ? (job.question === null ? 'written' : 'waiting') : job.state}`
   useEffect(() => {
-    let found = 0
-    const offDelta = api.on(IPC_EVENT.botsDelta, (delta) => {
-      const now = pendingRef.current
-      if (delta.id !== streamPath.current || now === null) return
-      if (now.text === '') {
-        setProgress(null)
-        // The first token: the face's "found it" beat, then it reads the answer out.
-        timing.current.first = performance.now()
-        window.clearTimeout(found)
-        found = window.setTimeout(() => {
-          if (pendingRef.current !== null) setStream({ ...pendingRef.current, face: 'answering' })
-        }, FOUND_MS)
-        setStream({ ...now, text: delta.text, face: 'found' })
-      } else setStream({ ...now, text: now.text + delta.text })
+    if (job === null || stage === null) return
+    void model.reload(job.topic).then(() => {
+      if (!isActive(job)) void nameTopic(job.topic)
     })
-    const offProgress = api.on(IPC_EVENT.botsProgress, (event) => {
-      if (event.id === streamPath.current && pendingRef.current?.text === '') setProgress(event.text)
-    })
-    const offDone = api.on(IPC_EVENT.botsDone, (done) => {
-      if (done.id === streamPath.current) void land()
-    })
-    const offError = api.on(IPC_EVENT.botsError, (failure) => {
-      if (failure.id !== streamPath.current) return
-      void land()
-      setError(failure.message)
-    })
-    return () => {
-      window.clearTimeout(found)
-      offDelta()
-      offProgress()
-      offDone()
-      offError()
-    }
-  }, [land, setStream])
+    if (job.state === 'error' && job.error !== null) setError(job.error)
+    // Only when the stage changes; the job object changes with every token.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage])
 
   const ready = status?.state === 'ready'
 
@@ -184,47 +170,34 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
     if (ready && model.ready && model.current !== null) void nameTopic(model.current)
   }, [ready, model, model.ready, model.current, nameTopic])
 
-  /** Ask for an answer to the current topic as it stands. */
-  const ask = useCallback(
-    async (path: string) => {
-      // The model sees this topic and nothing before it.
-      const thread = model.loaded.get(path)?.messages ?? []
-      const messages = thread.map(({ role, content }) => ({ role, content }))
-      // What the last two answers read stays in reach for the next question.
-      const sticky = thread
-        .filter((m) => m.role === 'assistant')
-        .slice(-2)
-        .flatMap((m) => m.sources ?? [])
-      streamPath.current = path
-      timing.current = { sent: performance.now(), first: 0 }
-      setStream({ text: '', steps: [], sources: [], face: 'riffle', at: createdStamp(new Date()) })
-      const started = await api.invoke(IPC.botsSend, { id: path, botId: bot.id, messages, sticky })
-      if (started.ok) {
-        if (pendingRef.current !== null) setStream({ ...pendingRef.current, sources: started.sources })
-        return
-      }
-      streamPath.current = null
-      setStream(null)
-      if (started.status !== undefined) recheck()
-      else setError(started.error)
-    },
-    [model, bot.id, recheck, setStream],
-  )
-
+  /** A question: main writes it into the topic (a new one if none is open) and queues the answer. */
   const send = useCallback(async () => {
     const text = draft.trim()
-    if (text === '' || pendingRef.current !== null || !ready) return
+    if (text === '' || !ready) return
     setError(null)
     setDraft('')
-    const path = await model.append({ role: 'user', content: text })
-    if (path !== null) await ask(path)
-  }, [draft, ready, model, ask])
+    const result = await api.invoke(IPC.botsSend, { botId: bot.id, topic: model.current, text, at: createdStamp(new Date()) })
+    if (!result.ok) {
+      setDraft(text)
+      if (result.status !== undefined) recheck()
+      else setError(result.error)
+      return
+    }
+    pinned.current = true
+    if (model.current === result.topic) await model.reload(result.topic)
+    else await model.adopt(result.topic)
+  }, [draft, ready, model, bot.id, recheck])
 
+  /** Stop: the answer running in this topic (a question waiting behind it stays). */
   const stop = useCallback(() => {
-    if (streamPath.current !== null) void api.invoke(IPC.botsCancel, streamPath.current)
-  }, [])
+    const running = topicJobs(model.current).find((j) => j.state === 'preparing' || j.state === 'streaming')
+    if (running !== undefined) void api.invoke(IPC.botsCancel, { id: running.id })
+  }, [model])
 
   const actions: MessageActions = {
+    ...(live === null && model.current !== null
+      ? { onRetry: () => void api.invoke(IPC.botsRetry, { botId: bot.id, topic: model.current! }) }
+      : {}),
     onOpen,
     onOpenNote: (title: string, sources: readonly BotSource[]) => {
       const source = sources.find((s) => noteTitle(s.path).toLowerCase() === title.toLowerCase())
@@ -282,6 +255,8 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
 
   const remove = useCallback(
     async (path: string) => {
+      // An answer running or waiting in it stops first, and writes nothing more.
+      await api.invoke(IPC.botsCancel, { topic: path }, true)
       const title = model.loaded.get(path)?.meta.title ?? 'Topic'
       const restore = await model.remove(path)
       setUndo({ title, run: restore })
@@ -341,9 +316,27 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
           {pull.error === undefined ? 'Cancel' : 'Dismiss'}
         </button>
       </p>
-    ) : progress !== null && pending !== null ? (
+    ) : live !== null && live.state === 'queued' ? (
       <p className="composer__status" aria-live="polite">
-        {progress}
+        {topicJobs(live.topic).some((j) => j.state === 'preparing' || j.state === 'streaming') ? (
+          <>
+            {bot.name} is still answering
+            <button className="composer__link" onClick={stop}>
+              Stop
+            </button>
+          </>
+        ) : (
+          <>
+            Queued · {ordinal(live.position + 1)}
+            <button className="composer__link" onClick={() => void api.invoke(IPC.botsCancel, { id: live.id })}>
+              Cancel
+            </button>
+          </>
+        )}
+      </p>
+    ) : live !== null && live.status !== null && live.text === '' ? (
+      <p className="composer__status" aria-live="polite">
+        {live.status}
       </p>
     ) : status !== null && !ready ? (
       <BotStatusLine status={status} onRecheck={recheck} compact />
@@ -422,14 +415,19 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
       >
         <div className="chat__thread">
           {visible.map((path) => {
-            const topic = model.loaded.get(path)
-            if (topic === undefined) return null
+            const loaded = model.loaded.get(path)
+            if (loaded === undefined) return null
+            // What main has written of the answer so far is shown live instead; a question still
+            // waiting behind the running answer is shown as sent.
+            const messages = loaded.messages.filter((m) => !(live !== null && m.job === live.id))
+            if (live !== null && live.question !== null) messages.push({ role: 'user', content: live.question, at: live.at })
+            const topic = { ...loaded, messages }
             return (
               <TopicBlock
                 key={path}
                 topic={topic}
                 bot={bot}
-                pending={streamPath.current === path ? pending : null}
+                pending={pending}
                 error={error}
                 onDismissError={() => setError(null)}
                 actions={actions}
@@ -466,7 +464,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
           if (error !== null && pending === null) setError(null)
         }}
         placeholder={`Ask ${bot.name}…`}
-        busy={pending !== null}
+        busy={pending !== null && draft.trim() === ''}
         canSend={ready}
         onSend={() => void send()}
         onStop={stop}
@@ -523,7 +521,10 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
           confirmLabel={`Delete ${model.files.length} ${model.files.length === 1 ? 'topic' : 'topics'}`}
           onConfirm={() => {
             setConfirmClear(false)
-            void model.clearAll()
+            void (async () => {
+              for (const path of model.files) await api.invoke(IPC.botsCancel, { topic: path }, true)
+              await model.clearAll()
+            })()
           }}
           onCancel={() => setConfirmClear(false)}
         />

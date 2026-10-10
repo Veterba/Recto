@@ -4,6 +4,7 @@ import { IPC, IPC_EVENT } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { Icon } from '../../../ui/Icon'
 import { SettingRow } from '../../../ui/SettingRow'
+import { Toggle } from '../../../ui/Toggle'
 import { useBotStatus } from '../hooks/use-bots'
 import { BotStatusLine } from './BotStatusLine'
 
@@ -76,6 +77,19 @@ export function BotsSettings(): React.ReactElement {
       <div className="bots-settings__status">
         <BotStatusLine status={status} onRecheck={recheck} />
       </div>
+
+      <SettingRow
+        label="Notify when an answer is ready"
+        hint="A macOS notification when Recto finishes an answer while its chat isn't on screen. Clicking it opens the topic."
+      >
+        <Toggle
+          on={settings?.notify ?? true}
+          onChange={() => {
+            if (settings === null) return
+            void api.invoke(IPC.botsSetSettings, { notify: !settings.notify }).then(setSettings)
+          }}
+        />
+      </SettingRow>
 
       <SettingRow
         label="Note cards"

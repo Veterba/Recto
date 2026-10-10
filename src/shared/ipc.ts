@@ -8,7 +8,7 @@
 
 import type { AiDelta, AiDone, AiError, AiMessage } from './ai'
 import type { ArchiveState } from './archive'
-import type { Bot, BotModelStatus, BotSettings, BotSource, ModelChoice, NoteCardsStatus, PullProgress } from './bots'
+import type { Bot, BotJob, BotModelStatus, BotSettings, ModelChoice, NoteCardsStatus, PullProgress } from './bots'
 import type {
   BacklinkResult,
   BoardCardInfo,
@@ -129,6 +129,9 @@ export const IPC = {
   botsPull: 'bots:pull',
   botsPullCancel: 'bots:pull-cancel',
   botsCards: 'bots:cards',
+  botsRetry: 'bots:retry',
+  botsJobs: 'bots:jobs',
+  botsViewing: 'bots:viewing',
 } as const
 
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
@@ -141,11 +144,10 @@ export const IPC_EVENT = {
   aiError: 'ai:error',
   topicsStatus: 'topics:status',
   topicsRun: 'topics:run',
-  botsDelta: 'bots:delta',
-  botsDone: 'bots:done',
-  botsError: 'bots:error',
+  botsJob: 'bots:job',
+  botsUnread: 'bots:unread',
+  botsOpenTopic: 'bots:open-topic',
   botsPullProgress: 'bots:pull-progress',
-  botsProgress: 'bots:progress',
   botsCardsStatus: 'bots:cards-status',
 } as const
 
@@ -178,17 +180,17 @@ export type IpcEvents = Exhaustive<
     /** A run wrote something - for the status-bar notice with Undo. */
     [IPC_EVENT.topicsRun]: (run: TopicsRunNotice) => void
     /**
-     * A bot's reply, token by token, on channels of its own: bots run on a
-     * local model and never share the main chat's client or its streams.
-     * `bots:done` and `bots:error` are terminal, one per accepted `bots:send`.
+     * An answer's job changed (bots/jobs.ts): queued, preparing with its steps
+     * and status, streaming with its text so far, or ended. The chat, History
+     * and the sidebar watch it; leaving the chat only stops watching.
      */
-    [IPC_EVENT.botsDelta]: (delta: { id: string; text: string }) => void
-    [IPC_EVENT.botsDone]: (done: { id: string }) => void
-    [IPC_EVENT.botsError]: (error: { id: string; message: string }) => void
+    [IPC_EVENT.botsJob]: (job: BotJob) => void
+    /** An answer finished while its chat was out of sight: the sidebar's dot. */
+    [IPC_EVENT.botsUnread]: (event: { botId: string; topic: string }) => void
+    /** A notification about an answer was clicked: open that topic. */
+    [IPC_EVENT.botsOpenTopic]: (event: { botId: string; topic: string }) => void
     /** A model download: progress, then one event with `done` (success, cancelled or error). */
     [IPC_EVENT.botsPullProgress]: (progress: PullProgress & { done: boolean; error?: string }) => void
-    /** What a bot is doing before it answers ("Checking your tasks…"), for the status line; the steps card from 3.8. */
-    [IPC_EVENT.botsProgress]: (progress: { id: string; text: string }) => void
     /** Note cards being built in the background: how many notes have one. */
     [IPC_EVENT.botsCardsStatus]: (status: NoteCardsStatus) => void
   }
@@ -329,14 +331,21 @@ export type IpcApi = Exhaustive<
      * the thread's note path.
      */
     [IPC.botsSend]: (request: {
-      id: string
       botId: string
-      messages: AiMessage[]
-      /** What the last two answers in this topic read, newest last: they stay in reach (sticky context). */
-      sticky?: BotSource[]
-    }) => { ok: true; sources: BotSource[] } | { ok: false; error: string; status?: BotModelStatus }
-    /** Stop a running reply. Unknown ids are a no-op. */
-    [IPC.botsCancel]: (id: string) => { ok: boolean }
+      /** The topic it goes into; null starts a new one. */
+      topic: string | null
+      text: string
+      /** When it was asked, by the renderer's clock (local ISO, to the second): the question's time and a new topic's. */
+      at?: string
+    }) => { ok: true; topic: string; job: BotJob } | { ok: false; error: string; status?: BotModelStatus }
+    /** Stop a job: one by id, or every job of a topic (`discard`: the topic is being deleted, write nothing more). */
+    [IPC.botsCancel]: (target: { id: string } | { topic: string }, discard?: boolean) => { ok: boolean }
+    /** Ask again for a topic as it stands (after an error or an interrupted answer). */
+    [IPC.botsRetry]: (request: { botId: string; topic: string }) => { ok: boolean; job?: BotJob }
+    /** Every job main knows about: the running one, the queue, the ones just ended. */
+    [IPC.botsJobs]: () => BotJob[]
+    /** What a bot's chat shows and whether it is on screen: for notifications and the unread dot. */
+    [IPC.botsViewing]: (view: { botId: string; topic: string | null; visible: boolean }) => { ok: boolean }
     /** A bot's model, written to its bot.json: an API model id, an Ollama model, or null for the local default. Returns the bots. */
     [IPC.botsSetModel]: (botId: string, model: string | null) => Bot[]
     /** A 2-5 word title for a chat topic from its first exchange, by the bot's model; null when it cannot make one. */

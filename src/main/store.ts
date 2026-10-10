@@ -17,6 +17,8 @@ type AppState = {
   botDefaultModel?: string
   /** Bot pipeline switches that differ from the defaults (shared/bots.ts DEFAULT_HARNESS). */
   botHarness?: Partial<import('../shared/bots').BotHarness>
+  /** A notification when an answer finishes out of sight (Settings → Bots). */
+  botNotify?: boolean
 }
 
 const file = () => path.join(app.getPath('userData'), 'app-state.json')

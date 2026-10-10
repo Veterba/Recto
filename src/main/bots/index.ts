@@ -3,10 +3,10 @@ import type { AiMessage } from '../../shared/ai'
 import {
   DEFAULT_BOT_MODEL,
   DEFAULT_HARNESS,
+  isActive,
   type Bot,
   type BotModelStatus,
   type BotSettings,
-  type BotSource,
   type ModelChoice,
 } from '../../shared/bots'
 import { IPC_EVENT, type IpcEvents } from '../../shared/ipc'
@@ -19,8 +19,7 @@ import { listBots, writeBotModel } from './definitions'
 import { AnthropicProvider, MockProvider, OllamaProvider, isApiModel, type BotModelProvider, type LocalModels } from './provider'
 import { localChoices } from './models/catalog'
 import { switchPlan } from './models/switch'
-import { prepare } from './prepare'
-import { answerWithTools } from './model-tools'
+import { initAnswers, jobs, stopAnswers } from './answers'
 import { cardsStatus, startBackground as startJobs, yieldToAnswer } from './background'
 import os from 'node:os'
 import { readKey } from '../secrets'
@@ -39,13 +38,18 @@ export const providerFor = (model: string): BotModelProvider => (isApiModel(mode
 
 export function settings(): BotSettings {
   const state = readState()
-  return { defaultModel: state.botDefaultModel ?? DEFAULT_BOT_MODEL, harness: { ...DEFAULT_HARNESS, ...state.botHarness } }
+  return {
+    defaultModel: state.botDefaultModel ?? DEFAULT_BOT_MODEL,
+    notify: state.botNotify ?? true,
+    harness: { ...DEFAULT_HARNESS, ...state.botHarness },
+  }
 }
 
 export function setSettings(patch: Partial<BotSettings>): BotSettings {
   const model = patch.defaultModel?.trim()
   if (model !== undefined) writeState({ botDefaultModel: model === '' ? undefined : model })
   if (patch.harness !== undefined) writeState({ botHarness: { ...readState().botHarness, ...patch.harness } })
+  if (patch.notify !== undefined) writeState({ botNotify: patch.notify })
   return settings()
 }
 
@@ -154,9 +158,11 @@ function pushPull(progress: Parameters<IpcEvents[typeof IPC_EVENT.botsPullProgre
 
 export { prepare, type ContextNote, type Prepared, type ToolCall } from './prepare'
 
-const running = new Map<string, AbortController>()
-
 export { cardsStatus }
+
+/** Answers run in main, queued one at a time (bots/answers.ts, bots/jobs.ts). */
+initAnswers({ bots: list, modelOf, providerFor, settings: () => settings(), beforeRun: yieldToAnswer })
+export { stopAnswers }
 
 /**
  * Keep the open vault's chunk vectors and note cards up to date in the
@@ -172,83 +178,9 @@ export function startBackground(): void {
       vectors: settings().harness.hybridRetrieval,
       cards: settings().harness.noteCards && !isApiModel(settings().defaultModel),
     }),
-    busy: () => running.size > 0,
+    busy: () => jobs.list().some(isActive),
     ready: async () => (await providerFor(settings().defaultModel).status(settings().defaultModel)).state === 'ready',
   })
-}
-
-function push<
-  C extends typeof IPC_EVENT.botsDelta | typeof IPC_EVENT.botsDone | typeof IPC_EVENT.botsError | typeof IPC_EVENT.botsProgress,
->(channel: C, ...args: Parameters<IpcEvents[C]>): void {
-  const window = BrowserWindow.getAllWindows()[0]
-  if (window === undefined || window.isDestroyed()) return
-  sendEvent(window, channel, ...args)
-}
-
-export async function ask(request: {
-  id: string
-  botId: string
-  messages: AiMessage[]
-  sticky?: BotSource[]
-}): Promise<{ ok: true; sources: BotSource[] } | { ok: false; error: string; status?: BotModelStatus }> {
-  const bot = list().find((b) => b.id === request.botId)
-  if (bot === undefined) return { ok: false, error: 'That bot no longer exists.' }
-  if (running.has(request.id)) return { ok: false, error: 'This bot is already answering.' }
-
-  const model = modelOf(bot)
-  const provider = providerFor(model)
-  const ready = await provider.status(model)
-  if (ready.state !== 'ready') return { ok: false, error: 'The model is not available.', status: ready }
-
-  const harness = settings().harness
-  yieldToAnswer()
-  const { system, history, sources, preface, maxTokens, advisor, toolContext } = await prepare(bot, request.messages, {
-    harness,
-    provider,
-    model,
-    ...(request.sticky === undefined ? {} : { sticky: request.sticky }),
-    onProgress: (text) => push(IPC_EVENT.botsProgress, { id: request.id, text }),
-  })
-
-  const controller = new AbortController()
-  running.set(request.id, controller)
-  // Not awaited: `bots:send` resolves once the request is under way, and the
-  // reply arrives on the push channels.
-  void (async () => {
-    try {
-      if (preface !== null) push(IPC_EVENT.botsDelta, { id: request.id, text: preface })
-      let first = true
-      const options = { model, signal: controller.signal, maxTokens }
-      const reply =
-        harness.tools && toolContext !== null
-          ? answerWithTools(provider, history, system, {
-              ...options,
-              advisor,
-              context: toolContext,
-              result: { calls: [], parseFailures: 0 },
-            })
-          : provider.stream(history, system, options)
-      for await (const text of reply) {
-        push(IPC_EVENT.botsDelta, { id: request.id, text: preface !== null && first ? `\n\n${text.trimStart()}` : text })
-        first = false
-      }
-      push(IPC_EVENT.botsDone, { id: request.id })
-    } catch (err) {
-      if (controller.signal.aborted) push(IPC_EVENT.botsDone, { id: request.id })
-      else push(IPC_EVENT.botsError, { id: request.id, message: err instanceof Error ? err.message : String(err) })
-    } finally {
-      running.delete(request.id)
-    }
-  })()
-
-  return { ok: true, sources: sources.map(({ path: p, heading }) => ({ path: p, heading })) }
-}
-
-export function cancel(id: string): { ok: boolean } {
-  const controller = running.get(id)
-  if (controller === undefined) return { ok: false }
-  controller.abort()
-  return { ok: true }
 }
 
 const TITLE_SYSTEM = [

@@ -38,7 +38,7 @@ import { SettingsDialog, SidebarThemePicker } from '../../features/settings'
 import { TemplatePicker, useDailyNoteAutoCreate, useTemplateActions, useTemplateSettings } from '../../features/templates'
 import { TidyDialog, useTidy } from '../../features/tidy'
 import { CHAT_FOLDER } from '../../features/ai'
-import { BotList, MAIN_BOT, reloadBots } from '../../features/bots'
+import { BotList, MAIN_BOT, onOpenTopic, reloadBots, requestTopic, useBots } from '../../features/bots'
 import { BoardList, CARD_FOLDER, useBoards } from '../../features/boards'
 import { registerArchiveView } from '../../features/archive'
 import { HomeOverlay } from '../../features/home'
@@ -135,6 +135,21 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   updateRef.current = update
 
   const { openFile, newChat, openBoard, openBoardCard, openBot } = useShellNavigation(sections, setActiveSection)
+
+  // A notification about a finished answer was clicked: open that bot's chat at that topic.
+  const bots = useBots()
+  const openBotRef = useRef(openBot)
+  openBotRef.current = openBot
+  useEffect(
+    () =>
+      onOpenTopic(({ botId, topic }) => {
+        const bot = bots?.find((b) => b.id === botId)
+        if (bot === undefined) return
+        requestTopic(botId, topic)
+        void openBotRef.current(bot)
+      }),
+    [bots],
+  )
 
   // --- sidebar list -------------------------------------------------------
 
