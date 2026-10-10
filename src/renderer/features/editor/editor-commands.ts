@@ -3,6 +3,7 @@ import * as md from './markdown-actions'
 import { getActiveEditor } from './components/MarkdownView'
 import { getActiveCodeEditor } from './components/CodeView'
 import { convertHtmlTableAt } from './html-blocks'
+import { insertTableSpec } from './table-editor'
 import type { Command, CommandRegistry } from '../../app/commands'
 import { toggleOutline } from './outline'
 import { setFocusUnit, toggleAuthors, toggleFocus, toggleStyle, toggleSyntax, toggleTypewriter } from './writing-modes'
@@ -34,7 +35,8 @@ const inEditor = (): boolean => {
   const active = document.activeElement
   // A floating note window reads a note; the editor commands are for the one being written.
   // The code editor is a CodeMirror too, but markdown commands have no business there.
-  return active !== null && active.closest('.cm-editor') !== null && active.closest('.note-window, .code-view') === null
+  // Nor in a table being edited: its cells take keys of their own (table-editor.ts).
+  return active !== null && active.closest('.cm-editor') !== null && active.closest('.note-window, .code-view, .cm-tbl') === null
 }
 
 /** Wrap a markdown action as a command that runs against the live editor. */
@@ -68,6 +70,7 @@ export function registerEditorCommands(registry: CommandRegistry, onToggleLivePr
     editorCommand('editor:inline-code', 'Inline code', 'Mod+E', md.toggleInlineCode),
     editorCommand('editor:strikethrough', 'Strikethrough', 'Mod+Shift+X', md.toggleStrikethrough),
     // A table pasted as HTML, made a markdown table: put the caret in it first.
+    editorCommand('editor:insert-table', 'Insert table', undefined, (state) => insertTableSpec(state, 3, 3)),
     editorCommand('editor:convert-html-table', 'Convert HTML table to Markdown', undefined, convertHtmlTableAt),
     // Mod+Alt+H, not Mod+Shift+H: the home overlay took that, and an
     // editor-scoped binding wins whenever a note has focus - which would have

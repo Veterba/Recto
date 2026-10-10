@@ -20,6 +20,7 @@ import { setLivePreview } from './live-preview-state'
 import { linkCompletion, type LinkCandidate } from './link-complete'
 import { editorTheme, markdownHighlighting } from './theme'
 import { findInNote, openFind } from './find'
+import { tableEditing } from './table-editor'
 import type { EditorHandle } from './editor-handle'
 import { pressOrDrag } from '../../ui/press-or-drag'
 
@@ -250,6 +251,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         // iA Writer's tools: focus, typewriter, syntax, style, authors.
         writingTools(),
         findInNote(),
+        tableEditing(),
         ...(options.getLinkCandidates === undefined ? [] : [linkCompletion(options.getLinkCandidates)]),
         EditorState.allowMultipleSelections.of(true),
         // Markdown with GFM-ish extensions; the grammar is CM's own, so

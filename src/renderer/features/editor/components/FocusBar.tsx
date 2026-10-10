@@ -4,6 +4,8 @@ import { commands } from '../../../app/commands'
 import { toggleFocus } from '../writing-modes'
 import type { Format } from '../active-formats'
 import { FormatBar } from './FormatBar'
+import { getActiveEditor } from './MarkdownView'
+import { insertTableSpec } from '../table-editor'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { WritingButtons } from './WritingButtons'
@@ -93,6 +95,9 @@ export function FocusBar({
         shortcutFor={(id) => {
           const chord = commands.bindingFor(id)
           return chord === null ? null : formatChord(chord)
+        }}
+        onInsertTable={(columns, rows) => {
+          getActiveEditor()?.run((state) => insertTableSpec(state, columns, rows))
         }}
         trailing={
           <>

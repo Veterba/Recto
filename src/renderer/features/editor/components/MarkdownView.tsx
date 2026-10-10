@@ -25,6 +25,7 @@ import { IPC, IPC_EVENT } from '@shared/ipc'
 import { NoteTitle } from './NoteTitle'
 import { FileView } from './FileView'
 import { CodeView } from './CodeView'
+import { insertTableSpec } from '../table-editor'
 import { fileKind } from '@shared/file-kind'
 
 /**
@@ -348,6 +349,9 @@ function MarkdownEditor({
         shortcutFor={(id) => {
           const binding = commands.bindingFor(id)
           return binding === null ? null : formatChord(binding)
+        }}
+        onInsertTable={(columns, rows) => {
+          handle.current?.run((state) => insertTableSpec(state, columns, rows))
         }}
         trailing={<WritingButtons onAfter={() => handle.current?.focus()} />}
       />

@@ -9,6 +9,7 @@ import { syntaxTree } from '@codemirror/language'
 import { livePreviewEnabled } from './live-preview-state'
 import { mathSource, MathWidget, stripContainers } from './rich-widgets'
 import { TableWidget } from './table-widget'
+import { EditableTableWidget } from './table-editor'
 import { detailsEnd, htmlWithText, HtmlBlockWidget, isRenderedHtmlBlock } from './html-blocks'
 
 const FENCE_LINE = /^---\s*$/
@@ -61,6 +62,7 @@ export const blockHiding = StateField.define<DecorationSet>({
     if (!(state.field(livePreviewEnabled, false) ?? false)) return Decoration.none
 
     const doc = state.doc
+    const editable = state.facet(EditorView.editable)
     /** Line numbers the selection touches; those stay raw - none in a read-only view. */
     const touched = new Set<number>()
     for (const range of state.facet(EditorView.editable) ? state.selection.ranges : []) {
@@ -158,14 +160,12 @@ export const blockHiding = StateField.define<DecorationSet>({
             deco: Decoration.replace({ block: true, widget: new MathWidget(tex, true, true) }),
           })
         } else {
-          ranges.push({
-            from: first.from,
-            to: last.to,
-            deco: Decoration.replace({
-              block: true,
-              widget: new TableWidget(stripContainers(doc.sliceString(first.from, last.to))),
-            }),
-          })
+          // A table at the top level of an editable note is edited in place;
+          // one in a quote or a list, or in a read-only view, is drawn as before.
+          const raw = doc.sliceString(first.from, last.to)
+          const stripped = stripContainers(raw)
+          const widget = editable && stripped === raw ? new EditableTableWidget(raw) : new TableWidget(stripped)
+          ranges.push({ from: first.from, to: last.to, deco: Decoration.replace({ block: true, widget }) })
         }
         return false
       },

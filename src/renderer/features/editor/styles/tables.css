@@ -1,0 +1,215 @@
+/* Tables edited in place (table-editor.ts): handles, selection, the editing cell, the size picker. */
+
+.cm-tbl {
+  outline: none;
+}
+.cm-tbl .cm-table td,
+.cm-tbl .cm-table th {
+  cursor: cell;
+}
+
+/* The handle row and column sit outside the table's borders and stay quiet until hovered. */
+.cm-tbl .cm-table .cm-tbl-colhandles th,
+.cm-tbl .cm-table .cm-tbl-rowh,
+.cm-tbl .cm-table .cm-tbl-addr td {
+  position: static;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+.cm-tbl .cm-table .cm-tbl-colhandles th {
+  height: 14px;
+  text-align: center;
+}
+.cm-tbl .cm-table .cm-tbl-rowh {
+  width: 16px;
+  vertical-align: middle;
+}
+.cm-tbl .cm-table .cm-tbl-rowh + * {
+  border-left: 1px solid var(--border);
+}
+.cm-tbl .cm-table thead tr:nth-child(2) > th:not(.cm-tbl-rowh) {
+  border-top: 1px solid var(--border);
+}
+.cm-tbl .cm-table tbody tr:nth-child(even) td.cm-tbl-rowh {
+  background: transparent;
+}
+
+.cm-tbl-grip {
+  all: unset;
+  display: block;
+  box-sizing: border-box;
+  border-radius: 3px;
+  background: var(--text-muted);
+  opacity: 0;
+  cursor: grab;
+  transition: opacity var(--anim-fast) var(--ease);
+}
+.cm-tbl-grip--col {
+  width: 18px;
+  height: 4px;
+  margin: 4px auto;
+}
+.cm-tbl-grip--row {
+  width: 4px;
+  height: 18px;
+  margin: 0 auto;
+}
+.cm-tbl-colh:hover .cm-tbl-grip,
+.cm-tbl-rowh:hover .cm-tbl-grip,
+.cm-tbl tr:hover > .cm-tbl-rowh .cm-tbl-grip,
+.cm-tbl.is-dragging .cm-tbl-grip {
+  opacity: 0.55;
+}
+.cm-tbl-grip:hover {
+  opacity: 1 !important;
+  background: var(--accent);
+}
+
+/* "+" after the last column and under the last row. */
+.cm-tbl-add {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--anim-fast) var(--ease);
+}
+.cm-tbl-add-col {
+  width: 12px;
+  height: 14px;
+  margin-left: 4px;
+}
+.cm-tbl .cm-table .cm-tbl-addc {
+  width: 16px;
+}
+.cm-tbl-add-row {
+  width: 100%;
+  height: 16px;
+  margin-top: 2px;
+}
+.cm-tbl:hover .cm-tbl-add {
+  opacity: 0.7;
+}
+.cm-tbl-add:hover {
+  opacity: 1 !important;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Selection: a rectangle of cells, its moving corner marked. */
+.cm-tbl .cm-table .is-sel {
+  background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
+}
+.cm-tbl .cm-table .is-head {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* The cell being typed into: its markdown, as written. */
+.cm-tbl .cm-table .is-editing {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  outline: none;
+  white-space: pre-wrap;
+  cursor: text;
+  caret-color: var(--accent);
+}
+
+/* Where a dragged row or column lands. */
+.cm-tbl {
+  position: relative;
+}
+.cm-tbl-drop {
+  position: absolute;
+  z-index: 3;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.cm-tbl-drop--row {
+  height: 2px;
+}
+.cm-tbl-drop--col {
+  width: 2px;
+}
+
+/* "Paste as table", beside text that was rows and columns. */
+.cm-tooltip:has(.cm-tbl-chip) {
+  border: 0;
+  background: transparent;
+}
+.cm-tbl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-m);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-12);
+}
+.cm-tbl-chip button {
+  all: unset;
+  padding: 3px var(--size-2);
+  border-radius: var(--radius-s);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.cm-tbl-chip__btn {
+  font-weight: 550;
+}
+.cm-tbl-chip__close {
+  color: var(--text-muted) !important;
+}
+.cm-tbl-chip button:hover {
+  background: var(--bg-hover);
+}
+
+/* The toolbar's size picker. */
+.table-picker {
+  position: fixed;
+  z-index: 220;
+  padding: var(--size-2);
+  border-radius: var(--radius-m);
+  outline: none;
+  animation: menu-in 110ms var(--ease);
+}
+.table-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(8, 16px);
+  gap: 3px;
+}
+.table-picker__cell {
+  all: unset;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.table-picker__cell.is-on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.table-picker__size {
+  margin: var(--size-2) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* The handle column (16px, left) and the "+" column (16px, right) hang
+   outside the space the table had before it could be edited: the box grows by
+   both and stays centred, so the cells sit exactly where they did. */
+.cm-tbl .cm-table-scroll {
+  min-width: calc(100% + 32px);
+  max-width: calc(var(--cm-pane-width, 100%) + 32px);
+  margin-top: -14px;
+}

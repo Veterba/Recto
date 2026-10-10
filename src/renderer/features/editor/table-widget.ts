@@ -84,7 +84,7 @@ const SHORT_TEXT = 14
 const WHOLE = /\S*\d[\S]*[-–:/.]\S*/g
 
 /** Wrap the dates, times and versions in a cell's text so the line breaks around them, never inside. */
-function keepWhole(el: HTMLElement): void {
+export function keepWhole(el: HTMLElement): void {
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
   const nodes: Text[] = []
   for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) nodes.push(n as Text)

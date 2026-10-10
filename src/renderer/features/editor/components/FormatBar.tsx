@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Icon } from '../../../ui/Icon'
+import { TablePicker } from './TablePicker'
 import { Tip } from '../../../ui/Tip'
 import type { Format } from '../active-formats'
 
@@ -15,6 +17,7 @@ import type { Format } from '../active-formats'
 
 type Item =
   | { kind: 'sep' }
+  | { kind: 'table' }
   | {
       kind: 'button'
       commandId: string
@@ -55,6 +58,7 @@ const ITEMS: readonly Item[] = [
   { kind: 'button', commandId: 'editor:numbered-list', label: 'Numbered list', icon: 'list-ordered', format: 'numbered' },
   { kind: 'button', commandId: 'editor:checklist', label: 'Checklist', icon: 'list-checks', format: 'task' },
   { kind: 'button', commandId: 'editor:quote', label: 'Quote', icon: 'quote', format: 'quote' },
+  { kind: 'table' },
   { kind: 'sep' },
   { kind: 'button', commandId: 'editor:code-block', label: 'Code block', icon: 'square-code' },
   { kind: 'button', commandId: 'editor:image', label: 'Insert image', hint: 'Copies the file into the vault', icon: 'image' },
@@ -69,9 +73,12 @@ type Props = {
   onRun: (commandId: string) => void
   /** Keyboard shortcut for a command, for the tooltip. */
   shortcutFor: (commandId: string) => string | null
+  /** Insert a table of this size at the caret. */
+  onInsertTable: (columns: number, rows: number) => void
 }
 
-export function FormatBar({ active, onRun, shortcutFor, trailing }: Props): React.ReactElement {
+export function FormatBar({ active, onRun, shortcutFor, onInsertTable, trailing }: Props): React.ReactElement {
+  const [picker, setPicker] = useState<{ anchor: DOMRect; trigger: HTMLElement } | null>(null)
   return (
     <div className="formatbar" role="toolbar" aria-label="Formatting">
       {/*
@@ -83,6 +90,24 @@ export function FormatBar({ active, onRun, shortcutFor, trailing }: Props): Reac
       <div className="formatbar__scroll">
         {ITEMS.map((item, i) => {
           if (item.kind === 'sep') return <span key={`sep-${i}`} className="formatbar__sep" aria-hidden="true" />
+          if (item.kind === 'table') {
+            return (
+              <Tip key="table" label="Table" hint="Pick a size" placement="bottom">
+                <button
+                  className={`formatbar__btn${picker !== null ? ' is-active' : ''}`}
+                  aria-label="Table"
+                  aria-expanded={picker !== null}
+                  onMouseDown={(ev) => {
+                    ev.preventDefault()
+                    const trigger = ev.currentTarget
+                    setPicker((open) => (open !== null ? null : { anchor: trigger.getBoundingClientRect(), trigger }))
+                  }}
+                >
+                  <Icon name="grid-3x3" size={15} />
+                </button>
+              </Tip>
+            )
+          }
 
           const isActive = item.format !== undefined && active.has(item.format)
           const shortcut = shortcutFor(item.commandId)
@@ -111,6 +136,17 @@ export function FormatBar({ active, onRun, shortcutFor, trailing }: Props): Reac
         })}
       </div>
       {trailing !== undefined && <div className="formatbar__trail">{trailing}</div>}
+      {picker !== null && (
+        <TablePicker
+          anchor={picker.anchor}
+          trigger={picker.trigger}
+          onClose={() => setPicker(null)}
+          onPick={(columns, rows) => {
+            setPicker(null)
+            onInsertTable(columns, rows)
+          }}
+        />
+      )}
     </div>
   )
 }

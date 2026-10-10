@@ -782,6 +782,44 @@ async function fileShots(dir, theme) {
   }
 }
 
+/**
+ * Editing tables, in their own run: the toolbar's size picker, a row's handle
+ * with its menu, and a rectangle of selected cells (test/fixtures/table-edit).
+ */
+async function tableEditShots(dir, theme) {
+  const { base, vault, userData } = prepareVault(theme, `${theme}-table-edit`)
+  fs.cpSync(path.join(ROOT, 'test/fixtures/table-edit'), vault, { recursive: true })
+  const { app, page } = await launch(userData)
+  try {
+    await page.locator('[role=treeitem]', { hasText: 'Groceries' }).first().click()
+    await page.waitForSelector('.cm-tbl')
+    await page.locator('.cm-line', { hasText: 'Plan the next run' }).click()
+    await page.locator('.formatbar__btn[aria-label="Table"]').dispatchEvent('mousedown')
+    await page.waitForSelector('.table-picker')
+    await page.locator('.table-picker__cell[aria-label="4 × 3"]').hover()
+    await shoot(page, dir, '26d-table-picker', 500)
+    await page.keyboard.press('Escape')
+
+    const grip = page.locator('.cm-tbl-grip--row').nth(2)
+    await grip.hover()
+    await grip.click()
+    await page.waitForSelector('.menu')
+    const box = await grip.boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await sleep(300)
+    await page.screenshot({ path: path.join(dir, '26e-table-handles-menu.png'), caret: 'hide', animations: 'disabled' })
+    console.log('  26e-table-handles-menu')
+    await page.keyboard.press('Escape')
+
+    await page.locator('.cm-tbl [data-row="2"][data-col="1"]').click()
+    await page.locator('.cm-tbl [data-row="4"][data-col="3"]').click({ modifiers: ['Shift'] })
+    await shoot(page, dir, '26f-table-selection', 500)
+  } finally {
+    await app.close()
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
 function nextRun() {
   const counter = path.join(DIFFS, 'last-run')
   const run = (fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) || 0 : 0) + 1
@@ -815,6 +853,7 @@ for (const theme of ['light', 'dark']) {
     await botStills(renderer.origin, dir, theme)
     await tableShots(dir, theme)
     await fileShots(dir, theme)
+    await tableEditShots(dir, theme)
     if (COMPARE !== null) {
       for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.png'))) {
         const old = path.join(COMPARE, theme, name)

@@ -10,6 +10,7 @@ import './styles/writing.css'
 import '@fontsource/geist-mono/500.css'
 import './styles/find.css'
 import './styles/files.css'
+import './styles/tables.css'
 
 export * from './components/History'
 export * from './components/MarkdownView'

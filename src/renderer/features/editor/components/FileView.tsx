@@ -56,7 +56,10 @@ export function BinaryCard({
 export function FileView({ path }: { path: string }): React.ReactElement {
   const [failed, setFailed] = useState(false)
   const kind = fileKind(path)
-  if (failed || (kind !== 'image' && kind !== 'pdf')) {
+  // Only vault files, served by vault:// (which refuses anything outside the
+  // vault): `vaultFileUrl` passes absolute paths and URLs through, for images.
+  const inVault = !path.startsWith('/') && !/^[a-z][a-z0-9+.-]*:/i.test(path)
+  if (failed || !inVault || (kind !== 'image' && kind !== 'pdf')) {
     return <BinaryCard path={path} reason={failed ? 'This file could not be loaded.' : undefined} />
   }
   return (

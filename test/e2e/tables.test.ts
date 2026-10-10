@@ -69,7 +69,7 @@ describe.skipIf(!RUN)('tables', () => {
         columnWidth: column.width,
         pageScrollsSideways: scroller.scrollWidth > scroller.clientWidth + 1,
         broken,
-        cells: table.querySelectorAll('tbody tr:first-child td').length,
+        cells: table.querySelectorAll('tbody tr:first-child td[data-col]').length,
       }
     })
     expect(m.tableWidth).toBeGreaterThan(m.columnWidth)
@@ -81,7 +81,7 @@ describe.skipIf(!RUN)('tables', () => {
   it('keeps [[path|alias]] in one cell and opens its note', async () => {
     const tables = page.locator('.cm-table')
     const last = tables.nth((await tables.count()) - 1)
-    await expect.poll(() => last.locator('tbody tr:first-child td').count()).toBe(3)
+    await expect.poll(() => last.locator('tbody tr:first-child td[data-col]').count()).toBe(3)
     const link = last.locator('.cm-wikilink', { hasText: 'B final report' })
     await link.click()
     await page.waitForFunction(() => document.querySelector('.cm-content')?.textContent?.includes('The report.') === true, null, {
