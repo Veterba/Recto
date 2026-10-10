@@ -404,3 +404,18 @@
 .bot-status__copy.is-done {
   color: var(--accent);
 }
+
+/* The AI tab while bots are off: one line, and the way to turn them on. */
+.bots-off {
+  margin: var(--size-3) var(--size-3);
+  color: var(--text-muted);
+  font-size: var(--font-size-12-5);
+}
+.bots-off__link {
+  all: unset;
+  color: var(--accent);
+  cursor: pointer;
+}
+.bots-off__link:hover {
+  text-decoration: underline;
+}

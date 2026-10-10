@@ -44,6 +44,10 @@ describe('how cells wrap', () => {
     expect(cellKind('Stage 3 start: the baseline again with daily notes')).toBe('text')
     expect(cellKind('[[Programming/Projects/Recto app/Evals Qwen/qwen3.5-9b/report|report]]')).toBe('nowrap')
     expect(cellKind('docs/evals/2026-10-03-12-19-baseline-v2/report.md')).toBe('long')
+    // One link is one thing: it stays on a line, however many words its label has.
+    expect(cellKind('[[Eval 2026-10-10 15-30 — v0.43.3 warm]]')).toBe('nowrap')
+    expect(cellKind('[the report for this run](docs/evals/report.md)')).toBe('nowrap')
+    expect(cellKind('see [[Eval 2026-10-10 15-30 — v0.43.3 warm]] for the details of it')).toBe('text')
   })
 
   it('reads links by their label', () => {

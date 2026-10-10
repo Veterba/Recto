@@ -121,6 +121,8 @@ export const IPC = {
   topicsSeen: 'topics:seen',
   topicsUndoLastRun: 'topics:undo-last-run',
   botsList: 'bots:list',
+  botsEnabled: 'bots:enabled',
+  botsSetEnabled: 'bots:set-enabled',
   botsStatus: 'bots:status',
   botsSettings: 'bots:settings',
   botsSetSettings: 'bots:set-settings',
@@ -152,6 +154,7 @@ export const IPC_EVENT = {
   botsOpenTopic: 'bots:open-topic',
   botsPullProgress: 'bots:pull-progress',
   botsCardsStatus: 'bots:cards-status',
+  botsEnabledChanged: 'bots:enabled-changed',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -196,6 +199,8 @@ export type IpcEvents = Exhaustive<
     [IPC_EVENT.botsPullProgress]: (progress: PullProgress & { done: boolean; error?: string }) => void
     /** Note cards being built in the background: how many notes have one. */
     [IPC_EVENT.botsCardsStatus]: (status: NoteCardsStatus) => void
+    /** Bots were turned on or off (Settings → Bots). */
+    [IPC_EVENT.botsEnabledChanged]: (on: boolean) => void
   }
 >
 
@@ -330,6 +335,9 @@ export type IpcApi = Exhaustive<
     [IPC.topicsUndoLastRun]: () => { ok: boolean; changes: number }
     /** The open vault's bots, from `.recto/bots/`. The first call in a vault without bots creates Recto. */
     [IPC.botsList]: () => Bot[]
+    /** Bots are experimental and per vault: off, nothing of theirs runs. */
+    [IPC.botsEnabled]: () => boolean
+    [IPC.botsSetEnabled]: (on: boolean) => boolean
     /** Whether the local model can run: Ollama reachable, and the model downloaded. */
     [IPC.botsStatus]: (model?: string) => BotModelStatus
     [IPC.botsSettings]: () => BotSettings

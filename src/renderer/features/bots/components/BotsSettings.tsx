@@ -5,7 +5,7 @@ import { api } from '../../../app/api'
 import { Icon } from '../../../ui/Icon'
 import { SettingRow } from '../../../ui/SettingRow'
 import { Toggle } from '../../../ui/Toggle'
-import { useBotStatus } from '../hooks/use-bots'
+import { turnBots, useBotStatus, useBotsEnabled } from '../hooks/use-bots'
 import { BotStatusLine } from './BotStatusLine'
 
 /** "Note cards: 412/530", and why it isn't moving when it isn't. */
@@ -24,6 +24,27 @@ function cardsLine(cards: NoteCardsStatus | null): string {
  * where everything about them lives. Nothing here involves a key or a server.
  */
 export function BotsSettings(): React.ReactElement {
+  const on = useBotsEnabled()
+  if (on === null) return <></>
+  return (
+    <>
+      <SettingRow
+        label={
+          <>
+            Bots <span className="topics__badge">Experimental</span>
+          </>
+        }
+        hint="Chat with your notes through a local model (Ollama). Off, nothing of theirs runs: no model is loaded, no note cards or vectors are built, Ollama is never asked."
+      >
+        <Toggle on={on} onChange={() => void turnBots(!on)} label="Bots" />
+      </SettingRow>
+      {on && <BotsOptions />}
+    </>
+  )
+}
+
+/** Everything else about bots - shown only while they are on, since none of it runs otherwise. */
+function BotsOptions(): React.ReactElement {
   const [settings, setSettings] = useState<BotSettings | null>(null)
   const [draft, setDraft] = useState('')
   const { status, recheck } = useBotStatus(settings?.defaultModel)

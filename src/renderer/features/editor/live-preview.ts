@@ -8,7 +8,6 @@ import { livePreviewEnabled, isLivePreviewOn, setLivePreview } from './live-prev
 import { bullet, mdLink, hidden, TaskBox, ImageWidget, LinkLabel } from './live-preview-widgets'
 import { blockHiding } from './block-hiding'
 import { inlineTag, InlineHtmlWidget } from './html-blocks'
-import { tablePaneWidth } from './table-widget'
 
 /**
  * Live Preview: the markdown markers are hidden until the cursor reaches them.
@@ -318,7 +317,6 @@ export function livePreview(getUnresolved: (view: EditorView) => ReadonlySet<str
       class: state.field(livePreviewEnabled) ? 'cm-live' : 'cm-source',
     })),
     blockHiding,
-    tablePaneWidth,
     ViewPlugin.fromClass(
       class {
         decorations: DecorationSet

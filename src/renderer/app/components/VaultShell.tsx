@@ -34,11 +34,11 @@ import { fuzzyMatch } from '../../ui/fuzzy'
 import { FileTree, allFilePaths, allFolderPaths, filterTree, noteEntries, notePaths } from '../../features/file-tree'
 import { focusEditorOnOpen, type LinkCandidate } from '../../features/editor'
 import { QuickSwitcher, SearchPanel } from '../../features/search'
-import { SettingsDialog, SidebarThemePicker } from '../../features/settings'
+import { SettingsDialog, SidebarThemePicker, type SettingsTab } from '../../features/settings'
 import { TemplatePicker, useDailyNoteAutoCreate, useTemplateActions, useTemplateSettings } from '../../features/templates'
 import { TidyDialog, useTidy } from '../../features/tidy'
 import { CHAT_FOLDER } from '../../features/ai'
-import { BotList, MAIN_BOT, onOpenTopic, reloadBots, requestTopic, useBots } from '../../features/bots'
+import { BotList, MAIN_BOT, onOpenTopic, reloadBots, requestTopic, useBots, useBotsEnabled } from '../../features/bots'
 import { BoardList, CARD_FOLDER, useBoards } from '../../features/boards'
 import { registerArchiveView } from '../../features/archive'
 import { HomeOverlay } from '../../features/home'
@@ -80,6 +80,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const [searchOpen, setSearchOpen] = useState(false)
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  /** The tab Settings opens on, when something asked for a particular one. */
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [themePicker, setThemePicker] = useState<{ x: number; y: number } | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -138,6 +140,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
 
   // A notification about a finished answer was clicked: open that bot's chat at that topic.
   const bots = useBots()
+  const botsOn = useBotsEnabled()
   const openBotRef = useRef(openBot)
   openBotRef.current = openBot
   useEffect(
@@ -457,6 +460,19 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
               />
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} />
+            ) : botsOn === false ? (
+              <p className="bots-off">
+                Bots are off ·{' '}
+                <button
+                  className="bots-off__link"
+                  onClick={() => {
+                    setSettingsTab('bots')
+                    setSettingsOpen(true)
+                  }}
+                >
+                  Turn on in Settings
+                </button>
+              </p>
             ) : (
               <BotList tree={tree.roots} activeBot={activeBot} query={query} onOpen={(bot) => void openBot(bot)} />
             )}
@@ -513,7 +529,16 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       {themePicker !== null && (
         <SidebarThemePicker at={themePicker} appearance={appearance} update={update} onClose={() => setThemePicker(null)} />
       )}
-      {settingsOpen && <SettingsDialog {...settingsDepsRef.current} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsDialog
+          {...settingsDepsRef.current}
+          initialTab={settingsTab}
+          onClose={() => {
+            setSettingsOpen(false)
+            setSettingsTab(undefined)
+          }}
+        />
+      )}
       {tidy !== null && <TidyDialog plan={tidy} busy={tidyBusy} onConfirm={() => void runTidy()} onCancel={() => setTidy(null)} />}
       <HomeOverlay
         open={homeOpen}

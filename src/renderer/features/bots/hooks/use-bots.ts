@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DEFAULT_BOT_MODEL, type Bot, type BotModelStatus } from '@shared/bots'
-import { IPC } from '@shared/ipc'
+import { IPC, IPC_EVENT } from '@shared/ipc'
 import { api } from '../../../app/api'
 
 /**
@@ -31,6 +31,39 @@ export function useBots(): Bot[] | null {
     }
   }, [])
   return bots
+}
+
+/** Bots on or off in this vault (experimental, Settings → Bots). Null until known. */
+let enabled: boolean | null = null
+const enabledListeners = new Set<(on: boolean) => void>()
+let watching = false
+
+function setEnabled(on: boolean): void {
+  enabled = on
+  for (const listener of enabledListeners) listener(on)
+  // The list follows: none while off, read again when they come back.
+  reloadBots()
+}
+
+export function useBotsEnabled(): boolean | null {
+  const [on, setOn] = useState<boolean | null>(enabled)
+  useEffect(() => {
+    enabledListeners.add(setOn)
+    if (!watching) {
+      watching = true
+      void api.invoke(IPC.botsEnabled).then(setEnabled)
+      api.on(IPC_EVENT.botsEnabledChanged, setEnabled)
+    } else if (enabled !== null) setOn(enabled)
+    return () => {
+      enabledListeners.delete(setOn)
+    }
+  }, [])
+  return on
+}
+
+/** Turn bots on or off for this vault; every view following `useBotsEnabled` updates. */
+export async function turnBots(on: boolean): Promise<void> {
+  setEnabled(await api.invoke(IPC.botsSetEnabled, on))
 }
 
 /** How often to look again while the model is not available: starting Ollama should be noticed without a click. */

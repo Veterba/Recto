@@ -193,10 +193,10 @@
 /*
  * Tables, drawn like a document table rather than a spreadsheet.
  *
- * The wrap is the text column; the scroll box inside it is as wide as the
- * table wants, at least the column and at most the pane (--cm-pane-width,
- * table-widget.ts), centred on the column. Past the pane it scrolls sideways
- * inside itself, with a fade on the side that has more - the page never does.
+ * A table lives in the text column: it starts at the column's left edge, is
+ * as wide as its content asks for and at most as wide as the column. Past
+ * that it scrolls sideways inside its own box - a fade on the right where
+ * there is more, the first column held in place - and the page never does.
  */
 .cm-table-wrap {
   margin: var(--size-2) 0;
@@ -204,23 +204,30 @@
 }
 .cm-table-scroll {
   position: relative;
-  left: 50%;
   width: max-content;
-  min-width: 100%;
-  max-width: var(--cm-pane-width, 100%);
+  max-width: 100%;
   max-height: 70vh;
   overflow: auto;
-  transform: translateX(-50%);
   overscroll-behavior-x: contain;
 }
 .cm-table-scroll.is-more-right {
   mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
-.cm-table-scroll.is-more-left {
-  mask-image: linear-gradient(to right, transparent, #000 28px);
+/* The first column stays while the rest scrolls under it. */
+.cm-table tr > [data-col='0'],
+.cm-table:not(.cm-tbl-table) tr > :first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--bg-primary);
 }
-.cm-table-scroll.is-more-left.is-more-right {
-  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+.cm-table thead tr > [data-col='0'],
+.cm-table:not(.cm-tbl-table) thead tr > :first-child {
+  z-index: 2;
+}
+.cm-table-scroll.is-more-left .cm-table tr > [data-col='0'],
+.cm-table-scroll.is-more-left .cm-table:not(.cm-tbl-table) tr > :first-child {
+  box-shadow: 6px 0 8px -6px rgb(0 0 0 / 0.25);
 }
 .cm-table {
   border-collapse: separate;
@@ -234,6 +241,9 @@
 }
 .cm-table th,
 .cm-table td {
+  /* Columns are as wide as their content: a short or empty one stays narrow. */
+  min-width: 80px;
+  box-sizing: border-box;
   padding: 6px var(--size-3);
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -254,6 +264,16 @@
 }
 .cm-table tbody tr:nth-child(even) td {
   background: color-mix(in srgb, var(--bg-secondary) 45%, transparent);
+}
+/* A header cell in that column keeps the header's colour. */
+.cm-table tr > th[data-col='0'],
+.cm-table:not(.cm-tbl-table) tr > th:first-child {
+  background-color: var(--bg-secondary);
+}
+/* The same stripe, opaque, on the column that stays while the rest scrolls. */
+.cm-table tbody tr:nth-child(even) > td[data-col='0'],
+.cm-table:not(.cm-tbl-table) tbody tr:nth-child(even) > td:first-child {
+  background: color-mix(in srgb, var(--bg-secondary) 45%, var(--bg-primary));
 }
 .cm-table .cm-cell-nowrap,
 .cm-table .cm-cell-whole {

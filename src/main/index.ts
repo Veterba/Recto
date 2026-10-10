@@ -44,8 +44,6 @@ if (job !== undefined) {
     handleVaultScheme()
     registerIpc()
     createWindow()
-    // The default model, loaded while the window opens (if Ollama is up).
-    bots.warmOnStart()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

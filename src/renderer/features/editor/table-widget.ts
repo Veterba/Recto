@@ -2,7 +2,7 @@
  * Markdown tables, parsed and drawn as a table while the cursor is elsewhere.
  */
 
-import { ViewPlugin, WidgetType, type EditorView } from '@codemirror/view'
+import { WidgetType, type EditorView } from '@codemirror/view'
 import { renderInline, revealOnPress } from './rich-widgets'
 
 /**
@@ -118,6 +118,10 @@ export type CellKind = 'nowrap' | 'long' | 'text'
  */
 export function cellKind(cell: string): CellKind {
   const text = visibleText(cell)
+  // A cell that is one link reads as one thing, like a name: it stays on a
+  // line (up to a sentence's worth), and the table scrolls instead. Wrapped,
+  // "Eval 2026-10-10 15-30 — v0.43.3 warm" made every row four lines tall.
+  if (/^(\[\[[^\]]+\]\]|\[[^\]]+\]\([^)]*\))$/.test(cell.trim()) && text.length <= 60) return 'nowrap'
   if (text.split(/\s+/).some((w) => w.length > LONG_TOKEN)) return 'long'
   if ((SHORT_VALUE.test(text) && text.length <= 28) || (!/\s/.test(text) && text.length <= LONG_TOKEN) || text.length <= SHORT_TEXT)
     return 'nowrap'
@@ -206,31 +210,3 @@ export class TableWidget extends WidgetType {
     return (event.target as HTMLElement | null)?.closest?.('.cm-wikilink, .cm-mdlink') == null
   }
 }
-
-/**
- * How wide a table may grow: the pane's text area (the scroller without its
- * side padding), as `--cm-pane-width` on the editor, kept up to date as the
- * pane is resized, split or focused.
- */
-export const tablePaneWidth = ViewPlugin.fromClass(
-  class {
-    private readonly observer: ResizeObserver
-
-    constructor(private readonly view: EditorView) {
-      this.observer = new ResizeObserver(() => this.measure())
-      this.observer.observe(view.scrollDOM)
-      this.measure()
-    }
-
-    measure(): void {
-      const scroller = this.view.scrollDOM
-      const style = getComputedStyle(scroller)
-      const width = scroller.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
-      if (width > 0) this.view.dom.style.setProperty('--cm-pane-width', `${Math.floor(width)}px`)
-    }
-
-    destroy(): void {
-      this.observer.disconnect()
-    }
-  },
-)

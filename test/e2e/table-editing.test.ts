@@ -58,6 +58,13 @@ describe.skipIf(!RUN)('editing tables', () => {
       (_, r) => `| ${Array.from({ length: 10 }, (_, c) => (r === 0 ? `col ${c}` : `${r}.${c}`)).join(' | ')} |`,
     )
     big.splice(1, 0, `|${' --- |'.repeat(10)}`)
+    fs.writeFileSync(path.join(vault, 'End.md'), '# End\n\nLast line.')
+    const head = Array.from({ length: 13 }, (_, c) => `Column number ${c + 1}`)
+    const row = Array.from({ length: 13 }, (_, c) => (c === 0 ? 'First' : `value ${c} with some words`))
+    fs.writeFileSync(
+      path.join(vault, 'Wide.md'),
+      `# Wide\n\n| ${head.join(' | ')} |\n|${' --- |'.repeat(13)}\n| ${row.join(' | ')} |\n\nAfter.\n`,
+    )
     fs.writeFileSync(path.join(vault, 'Big.md'), `# Big\n\n${big.join('\n')}\n`)
     fs.writeFileSync(path.join(vault, '.recto', 'topics-settings.json'), JSON.stringify({ enabled: false }))
     fs.mkdirSync(path.join(base, 'profile'))
@@ -267,6 +274,70 @@ describe.skipIf(!RUN)('editing tables', () => {
       const elapsed = Date.now() - started
       expect(elapsed).toBeLessThan(400)
       await expect.poll(() => fs.readFileSync(big, 'utf8').includes('| 100.4 | X     | 100.6 |')).toBe(true)
+    })
+  })
+
+  describe('the line under a table, and its width', () => {
+    it('inserted at the end of a note, Esc, then typing: a paragraph, not a row', async () => {
+      const end = path.join(path.dirname(note), 'End.md')
+      await page.locator('[role=treeitem]', { hasText: 'End' }).click()
+      await page.locator('.cm-line', { hasText: 'Last line.' }).click()
+      await page.keyboard.press('End')
+      await page.locator('.formatbar__btn[aria-label="Table"]').dispatchEvent('mousedown')
+      await page.waitForSelector('.table-picker')
+      await page.keyboard.press('Enter')
+      await page.waitForSelector('.cm-tbl th.is-editing')
+      await page.keyboard.press('Escape')
+      await page.keyboard.type('A paragraph.')
+      await expect.poll(() => fs.readFileSync(end, 'utf8').endsWith('|\n\nA paragraph.')).toBe(true)
+      const text = fs.readFileSync(end, 'utf8')
+      expect(body(text).flat()).not.toContain('A paragraph.')
+      expect(await page.locator('.cm-tbl').count()).toBe(1)
+    })
+
+    it('a click on the blank line right under a table puts the caret in a paragraph after it, not in a new row', async () => {
+      const wide = path.join(path.dirname(note), 'Wide.md')
+      await page.locator('[role=treeitem]', { hasText: 'Wide' }).click()
+      await page.waitForSelector('.cm-tbl')
+      const box = (await page.locator('.cm-tbl').boundingBox())!
+      await page.mouse.click(box.x + 40, box.y + box.height + 12)
+      await page.keyboard.type('Typed.')
+      await expect.poll(() => fs.readFileSync(wide, 'utf8').includes('Typed.')).toBe(true)
+      const text = fs.readFileSync(wide, 'utf8')
+      expect(body(text).flat()).not.toContain('Typed.')
+      expect(text).toMatch(/\|\n\nTyped\.\n\nAfter\.\n$/)
+    })
+
+    it('a 13-column table stays in the text column and scrolls inside its box, first column held', async () => {
+      await page.locator('[role=treeitem]', { hasText: 'Wide' }).click()
+      await page.waitForSelector('.cm-tbl [data-col="12"]')
+      const m = await page.evaluate(() => {
+        const content = document.querySelector('.cm-content')!.getBoundingClientRect()
+        const line = document.querySelector('.cm-line')!.getBoundingClientRect()
+        const scroll = document.querySelector('.cm-tbl .cm-table-scroll') as HTMLElement
+        const first = () => document.querySelector('.cm-tbl td[data-col="0"]')!.getBoundingClientRect().left
+        const fifth = () => document.querySelector('.cm-tbl td[data-col="4"]')!.getBoundingClientRect().left
+        const before = { first: first(), fifth: fifth() }
+        scroll.scrollLeft = 400
+        const after = { first: first(), fifth: fifth() }
+        return {
+          lineLeft: line.left,
+          contentRight: content.right,
+          box: scroll.getBoundingClientRect(),
+          scrolls: scroll.scrollWidth > scroll.clientWidth,
+          pageScrolls: document.querySelector('.cm-scroller')!.scrollWidth > document.querySelector('.cm-scroller')!.clientWidth + 1,
+          before,
+          after,
+        }
+      })
+      expect(m.scrolls).toBe(true)
+      expect(m.pageScrolls).toBe(false)
+      // The cells start at the text column; the box ends inside it.
+      expect(Math.abs(m.before.first - m.lineLeft)).toBeLessThan(2)
+      expect(m.box.right).toBeLessThanOrEqual(m.contentRight + 1)
+      // Scrolled: the first column stays, the fifth moved.
+      expect(m.after.first).toBe(m.before.first)
+      expect(m.before.fifth - m.after.fifth).toBeGreaterThan(300)
     })
   })
 })

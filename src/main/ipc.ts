@@ -37,7 +37,9 @@ const renameUndo = new Map<string, { from: string; to: string; entries: { path: 
 function rewatch(): void {
   // Before the watcher starts, so the files it moves are not reported as edits.
   const vault = currentVault()
-  if (vault !== null) {
+  // Bots on or off is decided first, from the vault as it is: the chat
+  // migration below makes a chats folder, which would read as "has bots".
+  if (vault !== null && bots.botsEnabled()) {
     try {
       const report = migrateChats(vault.path)
       if (report !== null) console.log(`[bots] chats became Recto's topics: ${report.moved.length} moved, ${report.skipped.length} skipped`)
@@ -317,10 +319,14 @@ export function registerIpc(): void {
   handle(IPC.aiCancel, (id) => ai.cancel(id))
 
   handle(IPC.botsList, () => bots.list())
+  handle(IPC.botsEnabled, () => bots.botsEnabled())
+  handle(IPC.botsSetEnabled, (on) => bots.setEnabled(on))
   handle(IPC.botsStatus, (model) => bots.status(model))
   handle(IPC.botsSettings, () => bots.settings())
   handle(IPC.botsSetSettings, (patch) => bots.setSettings(patch))
-  handle(IPC.botsSend, (request) => answers.send(request))
+  handle(IPC.botsSend, (request) =>
+    bots.botsEnabled() ? answers.send(request) : { ok: false as const, error: 'Bots are off. Turn them on in Settings → Bots.' },
+  )
   handle(IPC.botsCancel, (target, discard) => ({ ok: answers.jobs.cancel(target, discard === true) > 0 }))
   handle(IPC.botsRetry, (request) => answers.retry(request))
   handle(IPC.botsJobs, () => answers.jobs.list())

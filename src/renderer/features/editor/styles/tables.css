@@ -33,7 +33,7 @@
   border-top: 1px solid var(--border);
 }
 .cm-tbl .cm-table tbody tr:nth-child(even) td.cm-tbl-rowh {
-  background: transparent;
+  background: var(--bg-primary);
 }
 
 .cm-tbl-grip {
@@ -205,11 +205,32 @@
   text-align: center;
 }
 
-/* The handle column (16px, left) and the "+" column (16px, right) hang
-   outside the space the table had before it could be edited: the box grows by
-   both and stays centred, so the cells sit exactly where they did. */
+/* The row handles sit in a gutter just left of the text column, so the
+   cells start at the column's edge; the "+" column stays inside the box,
+   which is never wider than the column plus that gutter. */
 .cm-tbl .cm-table-scroll {
-  min-width: calc(100% + 32px);
-  max-width: calc(var(--cm-pane-width, 100%) + 32px);
-  margin-top: -14px;
+  max-width: calc(100% + 16px);
+  margin: -14px 0 0 -16px;
+}
+.cm-tbl .cm-table .cm-tbl-rowh {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 16px;
+  background-color: var(--bg-primary);
+}
+.cm-tbl .cm-table tr > [data-col='0'] {
+  left: 16px;
+}
+.cm-tbl .cm-table .cm-tbl-colhandles th,
+.cm-tbl .cm-table .cm-tbl-addr td,
+.cm-tbl .cm-table .cm-tbl-addc {
+  min-width: 0;
+}
+/* Above the cells that scroll under it - header cells are sticky too. */
+.cm-tbl .cm-table .cm-tbl-rowh {
+  z-index: 2;
+}
+.cm-tbl .cm-table thead .cm-tbl-rowh {
+  z-index: 3;
 }

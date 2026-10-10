@@ -814,6 +814,16 @@ async function tableEditShots(dir, theme) {
     await page.locator('.cm-tbl [data-row="2"][data-col="1"]').click()
     await page.locator('.cm-tbl [data-row="4"][data-col="3"]').click({ modifiers: ['Shift'] })
     await shoot(page, dir, '26f-table-selection', 500)
+    await page.keyboard.press('Escape')
+
+    // Thirteen columns: in the text column, scrolled inside the box, the first column held.
+    await page.locator('[role=treeitem]', { hasText: 'Wide table' }).first().click()
+    await page.waitForSelector('.cm-tbl [data-col="12"]')
+    await page.evaluate(() => {
+      document.querySelector('.cm-tbl .cm-table-scroll')?.scrollTo(260, 0)
+      document.activeElement?.blur()
+    })
+    await shoot(page, dir, '26g-table-wide-scrolled', 600)
   } finally {
     await app.close()
     fs.rmSync(base, { recursive: true, force: true })

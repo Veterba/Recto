@@ -20,7 +20,8 @@ import { AnthropicProvider, MockProvider, OllamaProvider, isApiModel, type BotMo
 import { localChoices } from './models/catalog'
 import { switchPlan } from './models/switch'
 import { initAnswers, jobs, stopAnswers } from './answers'
-import { cardsStatus, startBackground as startJobs, yieldToAnswer } from './background'
+import { cardsStatus, startBackground as startJobs, stopBackground, yieldToAnswer } from './background'
+import { botsEnabled, writeBotsEnabled } from './enabled'
 import os from 'node:os'
 import { readKey } from '../secrets'
 
@@ -53,9 +54,33 @@ export function setSettings(patch: Partial<BotSettings>): BotSettings {
   return settings()
 }
 
+/** The open vault's bots - none while bots are off, so nothing scaffolds their folder either. */
 export function list(): Bot[] {
   const vault = currentVault()
-  return vault === null ? [] : listBots(vault.path)
+  return vault === null || !botsEnabled() ? [] : listBots(vault.path)
+}
+
+export { botsEnabled }
+
+/**
+ * Bots on or off for this vault. On starts their background work and loads
+ * the default model; off stops all of it - a running answer is stopped and
+ * saved, the background loop ends, and the local model goes out of memory.
+ */
+export async function setEnabled(on: boolean): Promise<boolean> {
+  if (on === botsEnabled()) return on
+  if (on) {
+    writeBotsEnabled(true)
+    startBackground()
+  } else {
+    await stopAnswers()
+    stopBackground()
+    // The last call to Ollama: take the model out of memory.
+    await unloadModels()
+    writeBotsEnabled(false)
+  }
+  for (const win of BrowserWindow.getAllWindows()) if (!win.isDestroyed()) sendEvent(win, IPC_EVENT.botsEnabledChanged, on)
+  return on
 }
 
 export const modelOf = (bot: Bot | undefined): string => bot?.model ?? settings().defaultModel
@@ -67,23 +92,29 @@ export const modelOf = (bot: Bot | undefined): string => bot?.model ?? settings(
  */
 export async function status(model?: string): Promise<BotModelStatus> {
   const chosen = model ?? settings().defaultModel
+  // Off: not a single request to Ollama, not even to ask.
+  if (!botsEnabled()) return { state: 'not-running', model: chosen }
   const result = await providerFor(chosen).status(chosen)
   if (result.state === 'ready') providerFor(chosen).warm(result.model)
   return result
 }
 
 /**
- * On app start: load the default model if Ollama is up, so the first question
- * doesn't wait for it. On quit: take whatever local model is loaded back out
- * of memory - it was kept there for as long as the app is open.
+ * When a vault opens with bots on: load the default model if Ollama is up, so
+ * the first question doesn't wait for it. On quit: take whatever local model
+ * is loaded back out of memory - it was kept there for as long as the app is open.
  */
-export function warmOnStart(): void {
-  void status()
-}
 
 export async function unloadOnQuit(): Promise<void> {
+  // Off means nothing was loaded, and nothing is asked of Ollama on the way out.
+  if (!botsEnabled()) return
+  await unloadModels()
+}
+
+async function unloadModels(): Promise<void> {
   const model = settings().defaultModel
-  const bots = list()
+  const vault = currentVault()
+  const bots = vault === null ? [] : listBots(vault.path)
   const models = new Set([model, ...bots.map((b) => modelOf(b))].filter((m) => !isApiModel(m)))
   await Promise.all([...models].map((m) => local.unload(m)))
 }
@@ -109,6 +140,7 @@ export function setModel(botId: string, model: string | null): Bot[] {
 
 /** The picker's local models: installed ones that can chat, then the recommended ones to download. */
 export async function models(): Promise<{ local: ModelChoice[]; running: boolean; ramBytes: number }> {
+  if (!botsEnabled()) return { local: [], running: false, ramBytes: os.totalmem() }
   const installed = await local.installed()
   // The snapshot run pretends to be the 16 GB Mac the hints are written for.
   const ramBytes = botsMock() ? 16 * 2 ** 30 : os.totalmem()
@@ -123,6 +155,7 @@ let pulling: { name: string; controller: AbortController } | null = null
  * confirmed. Progress, the end and any failure arrive on `bots:pull-progress`.
  */
 export function pull(name: string): { ok: boolean; error?: string } {
+  if (!botsEnabled()) return { ok: false, error: 'Bots are off.' }
   if (pulling !== null) return { ok: false, error: `Already downloading ${pulling.name}.` }
   const controller = new AbortController()
   pulling = { name, controller }
@@ -169,6 +202,9 @@ export { stopAnswers }
  * background (bots/background.ts), on the default model.
  */
 export function startBackground(): void {
+  if (!botsEnabled()) return
+  // The default model, loaded while you look around (if Ollama is up).
+  void status()
   if (botsMock()) return
   startJobs({
     provider: () => providerFor(settings().defaultModel),
@@ -197,6 +233,7 @@ const TITLE_SYSTEM = [
  * back to the first question.
  */
 export async function title(request: { botId: string; messages: AiMessage[] }): Promise<string | null> {
+  if (!botsEnabled()) return null
   const bot = list().find((b) => b.id === request.botId)
   const model = modelOf(bot)
   const provider = providerFor(model)

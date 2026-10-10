@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify'
 import { syntaxTree } from '@codemirror/language'
 import type { EditorState, TransactionSpec } from '@codemirror/state'
 import { type EditorView, WidgetType } from '@codemirror/view'
+import { tableTail } from './table-editor'
 
 /**
  * Raw HTML inside notes: the simple, safe part of it rendered, the rest left
@@ -233,8 +234,10 @@ export function convertHtmlTableAt(state: EditorState): TransactionSpec | null {
   if (node.name !== 'HTMLBlock') return null
   const markdown = htmlTableToMarkdown(state.sliceDoc(node.from, node.to))
   if (markdown === null) return null
+  // A blank line under the new table, or the next line would be a row of it.
+  const tail = tableTail(state.doc, node.to, false)
   return {
-    changes: { from: node.from, to: node.to, insert: markdown },
+    changes: [{ from: node.from, to: node.to, insert: markdown }, ...(tail.insert === '' ? [] : [{ from: tail.at, insert: tail.insert }])],
     selection: { anchor: node.from },
     userEvent: 'input.convert',
     scrollIntoView: true,

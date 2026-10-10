@@ -1,5 +1,6 @@
 import { isolateHistory, redo, undo } from '@codemirror/commands'
-import { StateEffect, StateField, type EditorState, type Extension, type TransactionSpec } from '@codemirror/state'
+import { ChangeSet, StateEffect, StateField, type EditorState, type Extension, type Text, type TransactionSpec } from '@codemirror/state'
+import { syntaxTree } from '@codemirror/language'
 import { EditorView, showTooltip, WidgetType, type Tooltip } from '@codemirror/view'
 import type { MenuItem } from '../../ui/ContextMenu'
 import { openMenu } from '../../ui/menu-host'
@@ -299,18 +300,24 @@ class TableController {
     const insert = formatTable(next)
     const doc = this.view.state.doc
     const to = from + this.source.length
-    const delta = insert.length - this.source.length
+    // A table always keeps a blank line under it; leaving it downwards also
+    // gets a paragraph line after that, for the caret (see tableTail).
+    const tail = tableTail(doc, to, leave === 'below')
+    const changes = ChangeSet.of(
+      [...(insert === this.source ? [] : [{ from, to, insert }]), ...(tail.insert === '' ? [] : [{ from: tail.at, insert: tail.insert }])],
+      doc.length,
+    )
     let selection: number | undefined
-    if (leave === 'below') selection = to < doc.length ? to + 1 + delta : undefined
+    if (leave === 'below') selection = changes.mapPos(tail.caret.pos, tail.caret.assoc) + tail.caret.offset
     if (leave === 'above') selection = from > 0 ? from - 1 : undefined
     if (focus !== null) pendingFocus.set(this.view, { ...focus, from, scrollLeft: this.scroll.scrollLeft })
-    if (insert === this.source && selection === undefined) {
+    if (changes.empty && selection === undefined) {
       pendingFocus.delete(this.view)
       if (focus !== null) this.focusCell(focus)
       return
     }
     this.view.dispatch({
-      changes: insert === this.source ? [] : { from, to, insert },
+      changes,
       ...(selection === undefined ? {} : { selection: { anchor: selection } }),
       annotations: isolateHistory.of('full'),
       userEvent: 'input.table',
@@ -865,6 +872,40 @@ class TableController {
   }
 }
 
+/**
+ * What goes under a table that ends at `end`.
+ *
+ * In GFM a line right under a table is one more row of it (Obsidian reads it
+ * the same way), so the editor must never leave you there. Always: one blank
+ * line under the table. Leaving it (`leaving`): also a paragraph line after
+ * that blank line - an empty one, made if needed - and the caret goes there.
+ * `caret` is a position in the old document to map through the changes, plus
+ * an offset into what was inserted there. Exported for the tests.
+ */
+export function tableTail(
+  doc: Text,
+  end: number,
+  leaving: boolean,
+): { at: number; insert: string; caret: { pos: number; assoc: -1 | 1; offset: number } } {
+  const blank = (n: number): boolean => doc.line(n).text.trim() === ''
+  const last = doc.lineAt(end).number
+  // The table is the end of the note.
+  if (last === doc.lines) {
+    const insert = leaving ? '\n\n' : '\n'
+    return { at: end, insert, caret: { pos: end, assoc: 1, offset: 0 } }
+  }
+  // Text right under it: push it down.
+  if (!blank(last + 1)) {
+    return { at: end, insert: leaving ? '\n\n\n' : '\n', caret: { pos: end, assoc: -1, offset: 2 } }
+  }
+  const under = doc.line(last + 1)
+  if (!leaving) return { at: end, insert: '', caret: { pos: under.from, assoc: 1, offset: 0 } }
+  if (last + 1 === doc.lines) return { at: under.to, insert: '\n', caret: { pos: under.to, assoc: 1, offset: 0 } }
+  const next = doc.line(last + 2)
+  if (blank(last + 2)) return { at: next.from, insert: '', caret: { pos: next.from, assoc: 1, offset: 0 } }
+  return { at: next.from, insert: '\n\n', caret: { pos: next.from, assoc: -1, offset: 0 } }
+}
+
 /** Focus the table itself, for keys over a rectangle of cells. */
 function focusTable(el: HTMLElement): void {
   el.focus({ preventScroll: true })
@@ -915,15 +956,18 @@ export function insertTableSpec(state: EditorState, columns: number, rows: numbe
   // On an empty line the table takes its place; otherwise it goes after the line.
   const before = empty ? (previousBlank ? '' : '\n') : '\n\n'
   const table = formatTable(emptyTable(columns, rows))
-  // Exactly one blank line between the table and what follows - and, at the
-  // end of the note, a line to come back to.
-  const last = line.number === doc.lines
-  const nextBlank = !last && doc.line(line.number + 1).text.trim() === ''
-  const after = last ? '\n' : nextBlank ? '' : '\n'
-  const from = (empty ? line.from : line.to) + before.length
+  // Exactly one blank line between the table and what follows. At the end of
+  // the note - nothing but blank lines after it - the blank line and an empty
+  // paragraph after that, to come back to.
+  const start = empty ? line.from : line.to
+  const atEnd = doc.sliceString(line.to).trim() === ''
+  const nextBlank = !atEnd && doc.line(line.number + 1).text.trim() === ''
+  const after = atEnd ? '\n\n' : nextBlank ? '' : '\n'
+  const from = start + before.length
+  const insert = `${before}${table}${after}`
   return {
-    changes: { from: empty ? line.from : line.to, to: line.to, insert: `${before}${table}${after}` },
-    selection: { anchor: from + table.length + 1 },
+    changes: { from: start, to: atEnd ? doc.length : line.to, insert },
+    selection: { anchor: atEnd ? start + insert.length : from + table.length + 1 },
     effects: focusTableCell.of({ from, row: 0, col: 0, edit: true, selectAll: true }),
     annotations: isolateHistory.of('full'),
     userEvent: 'input.table',
@@ -962,8 +1006,12 @@ const chipField = StateField.define<Chip | null>({
           button.addEventListener('mousedown', (event) => {
             event.preventDefault()
             const table = formatTable(tableFromCells(chip.cells))
+            const tail = tableTail(view.state.doc, chip.to, false)
             view.dispatch({
-              changes: { from: chip.from, to: chip.to, insert: table },
+              changes: [
+                { from: chip.from, to: chip.to, insert: table },
+                ...(tail.insert === '' ? [] : [{ from: tail.at, insert: tail.insert }]),
+              ],
               effects: setChip.of(null),
               annotations: isolateHistory.of('full'),
               userEvent: 'input.table',
@@ -1001,5 +1049,27 @@ const chipOnPaste = EditorView.updateListener.of((update) => {
   }
 })
 
+/**
+ * A click on the blank line right under a table would put the caret where
+ * the next keystroke becomes a table row. It goes to the paragraph after
+ * that blank line instead, made if needed.
+ */
+const clickBelowTable = EditorView.updateListener.of((update) => {
+  if (!update.transactions.some((tr) => tr.isUserEvent('select.pointer'))) return
+  const { state } = update
+  const sel = state.selection.main
+  if (!sel.empty) return
+  const line = state.doc.lineAt(sel.head)
+  if (line.number === 1 || line.text.trim() !== '') return
+  const above = state.doc.line(line.number - 1)
+  let node = syntaxTree(state).resolveInner(above.to, -1)
+  while (node.parent !== null && node.name !== 'Table') node = node.parent
+  if (node.name !== 'Table' || state.doc.lineAt(node.to).number !== above.number) return
+  const tail = tableTail(state.doc, above.to, true)
+  const changes = ChangeSet.of(tail.insert === '' ? [] : [{ from: tail.at, insert: tail.insert }], state.doc.length)
+  const anchor = changes.mapPos(tail.caret.pos, tail.caret.assoc) + tail.caret.offset
+  queueMicrotask(() => update.view.dispatch({ changes, selection: { anchor }, userEvent: 'select.table' }))
+})
+
 /** Everything the editor needs for editable tables. */
-export const tableEditing = (): Extension => [pendingListener, chipField, chipOnPaste]
+export const tableEditing = (): Extension => [pendingListener, chipField, chipOnPaste, clickBelowTable]

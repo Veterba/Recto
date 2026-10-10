@@ -23,9 +23,9 @@ import { BotsSettings } from '../../bots'
  * there is no "apply" button and nothing to get out of sync.
  */
 
-type Tab = 'appearance' | 'editor' | 'writing' | 'templates' | 'topics' | 'obsidian' | 'ai' | 'bots' | 'shortcuts' | 'vault'
+export type SettingsTab = 'appearance' | 'editor' | 'writing' | 'templates' | 'topics' | 'obsidian' | 'ai' | 'bots' | 'shortcuts' | 'vault'
 
-const TABS: readonly { id: Tab; label: string }[] = [
+const TABS: readonly { id: SettingsTab; label: string }[] = [
   { id: 'appearance', label: 'Appearance' },
   { id: 'editor', label: 'Editor' },
   { id: 'writing', label: 'Writing' },
@@ -38,8 +38,8 @@ const TABS: readonly { id: Tab; label: string }[] = [
   { id: 'vault', label: 'Vault' },
 ]
 
-function Settings(deps: SettingsDeps): React.ReactElement {
-  const [tab, setTab] = useState<Tab>('appearance')
+function Settings({ initialTab, ...deps }: SettingsDeps & { initialTab?: SettingsTab | undefined }): React.ReactElement {
+  const [tab, setTab] = useState<SettingsTab>(initialTab ?? 'appearance')
 
   return (
     <div className="settings">
@@ -82,7 +82,11 @@ function Settings(deps: SettingsDeps): React.ReactElement {
  * screen - it is a thing you open, change, and close. `⌘,` like every other
  * Mac app.
  */
-export function SettingsDialog({ onClose, ...deps }: SettingsDeps & { onClose: () => void }): React.ReactElement {
+export function SettingsDialog({
+  onClose,
+  initialTab,
+  ...deps
+}: SettingsDeps & { onClose: () => void; initialTab?: SettingsTab | undefined }): React.ReactElement {
   const sheet = useRef<HTMLDivElement | null>(null)
   /*
    * Take focus when it opens.
@@ -119,7 +123,7 @@ export function SettingsDialog({ onClose, ...deps }: SettingsDeps & { onClose: (
             <Icon name="x" size={16} />
           </button>
         </header>
-        <Settings {...deps} />
+        <Settings {...deps} initialTab={initialTab} />
       </div>
     </div>,
     document.body,
