@@ -7,6 +7,7 @@ import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate
 import { livePreviewEnabled, isLivePreviewOn, setLivePreview } from './live-preview-state'
 import { bullet, mdLink, hidden, TaskBox, ImageWidget, LinkLabel } from './live-preview-widgets'
 import { blockHiding } from './block-hiding'
+import { inlineTag, InlineHtmlWidget } from './html-blocks'
 import { tablePaneWidth } from './table-widget'
 
 /**
@@ -110,6 +111,27 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
             ranges.push({ from: node.from, to: node.to, deco: Decoration.replace({ widget: new FootnoteWidget(text.slice(2, -1)) }) })
           }
           return false
+        }
+
+        if (node.name === 'HTMLTag') {
+          // `<br>`, `<sup>…</sup>`, `<sub>…</sub>`, `<kbd>…</kbd>` render in place,
+          // sanitised; the pair must close on the same line, or it stays source.
+          const line = view.state.doc.lineAt(node.from)
+          if (active.has(line.number)) return
+          const tag = inlineTag(view.state.doc.sliceString(node.from, node.to))
+          if (tag === null || tag.closing) return
+          let end = node.to
+          if (tag.name !== 'br') {
+            const close = new RegExp(`</${tag.name}\\s*>`, 'i').exec(line.text.slice(node.to - line.from))
+            if (close === null) return
+            end = node.to + close.index + close[0].length
+          }
+          ranges.push({
+            from: node.from,
+            to: end,
+            deco: Decoration.replace({ widget: new InlineHtmlWidget(view.state.doc.sliceString(node.from, end)) }),
+          })
+          return
         }
 
         if (node.name === 'ListMark') {

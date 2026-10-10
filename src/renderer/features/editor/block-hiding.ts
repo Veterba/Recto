@@ -9,6 +9,7 @@ import { syntaxTree } from '@codemirror/language'
 import { livePreviewEnabled } from './live-preview-state'
 import { mathSource, MathWidget, stripContainers } from './rich-widgets'
 import { TableWidget } from './table-widget'
+import { detailsEnd, htmlWithText, HtmlBlockWidget, isRenderedHtmlBlock } from './html-blocks'
 
 const FENCE_LINE = /^---\s*$/
 
@@ -116,18 +117,39 @@ export const blockHiding = StateField.define<DecorationSet>({
     // both ways - a `---` right after a list item stayed raw, and a `---` under
     // a `$$` block the grammar did not understand became a heading. The parser
     // knows which one it is, so it decides.
+    /** End of a `<details>` already rendered with what it encloses. */
+    let consumedTo = -1
     syntaxTree(state).iterate({
       enter: (node) => {
         const name = node.name
-        if (name !== 'HorizontalRule' && name !== 'MathBlock' && name !== 'Table') return undefined
+        if (name !== 'HorizontalRule' && name !== 'MathBlock' && name !== 'Table' && name !== 'HTMLBlock') return undefined
+        if (node.from < consumedTo) return false
         const first = doc.lineAt(node.from)
-        const last = doc.lineAt(node.to)
+        let last = doc.lineAt(node.to)
+        if (name === 'HTMLBlock') {
+          // `<details>` with blank lines inside parses as several blocks; render
+          // it whole, up to its `</details>`, or leave it as source.
+          const end = detailsEnd(doc.sliceString(node.from, node.to), doc.sliceString(node.to, Math.min(doc.length, node.to + 20_000)))
+          if (end === -1) return false
+          if (end > 0) last = doc.lineAt(node.to + end)
+        }
         if (first.number <= frontmatterEnd) return false
         for (let n = first.number; n <= last.number; n++) if (touched.has(n)) return false
 
         if (name === 'HorizontalRule') {
           ranges.push({ from: first.from, to: first.from, deco: ruleLine })
           if (last.to > first.from) ranges.push({ from: first.from, to: last.to, deco: ruleMarks })
+        } else if (name === 'HTMLBlock') {
+          // Simple HTML (a pasted table, <details>, <br>) is rendered, sanitised;
+          // anything else stays source.
+          const html = doc.sliceString(first.from, last.to)
+          if (!isRenderedHtmlBlock(html)) return false
+          consumedTo = last.to
+          ranges.push({
+            from: first.from,
+            to: last.to,
+            deco: Decoration.replace({ block: true, widget: new HtmlBlockWidget(htmlWithText(stripContainers(html))) }),
+          })
         } else if (name === 'MathBlock') {
           const tex = mathSource(doc.sliceString(node.from, node.to))
           ranges.push({

@@ -1,6 +1,8 @@
 import { api } from '../../app/api'
 import * as md from './markdown-actions'
 import { getActiveEditor } from './components/MarkdownView'
+import { getActiveCodeEditor } from './components/CodeView'
+import { convertHtmlTableAt } from './html-blocks'
 import type { Command, CommandRegistry } from '../../app/commands'
 import { toggleOutline } from './outline'
 import { setFocusUnit, toggleAuthors, toggleFocus, toggleStyle, toggleSyntax, toggleTypewriter } from './writing-modes'
@@ -31,7 +33,8 @@ const inEditor = (): boolean => {
   if (getActiveEditor() === null) return false
   const active = document.activeElement
   // A floating note window reads a note; the editor commands are for the one being written.
-  return active !== null && active.closest('.cm-editor') !== null && active.closest('.note-window') === null
+  // The code editor is a CodeMirror too, but markdown commands have no business there.
+  return active !== null && active.closest('.cm-editor') !== null && active.closest('.note-window, .code-view') === null
 }
 
 /** Wrap a markdown action as a command that runs against the live editor. */
@@ -64,6 +67,8 @@ export function registerEditorCommands(registry: CommandRegistry, onToggleLivePr
     editorCommand('editor:italic', 'Italic', 'Mod+I', md.toggleItalic),
     editorCommand('editor:inline-code', 'Inline code', 'Mod+E', md.toggleInlineCode),
     editorCommand('editor:strikethrough', 'Strikethrough', 'Mod+Shift+X', md.toggleStrikethrough),
+    // A table pasted as HTML, made a markdown table: put the caret in it first.
+    editorCommand('editor:convert-html-table', 'Convert HTML table to Markdown', undefined, convertHtmlTableAt),
     // Mod+Alt+H, not Mod+Shift+H: the home overlay took that, and an
     // editor-scoped binding wins whenever a note has focus - which would have
     // made the overlay unreachable from the place you spend all your time. The
@@ -247,8 +252,8 @@ export function registerEditorCommands(registry: CommandRegistry, onToggleLivePr
       section: 'Editor',
       scope: 'editor',
       hotkey: 'Mod+F',
-      isAvailable: inEditor,
-      run: () => getActiveEditor()?.openFind(false),
+      isAvailable: () => inEditor() || getActiveCodeEditor() !== null,
+      run: () => (getActiveCodeEditor() ?? getActiveEditor())?.openFind(false),
     },
     {
       id: 'editor:replace',
@@ -256,8 +261,8 @@ export function registerEditorCommands(registry: CommandRegistry, onToggleLivePr
       section: 'Editor',
       scope: 'editor',
       hotkey: 'Mod+Alt+F',
-      isAvailable: inEditor,
-      run: () => getActiveEditor()?.openFind(true),
+      isAvailable: () => inEditor() || getActiveCodeEditor() !== null,
+      run: () => (getActiveCodeEditor() ?? getActiveEditor())?.openFind(true),
     },
   ]
 

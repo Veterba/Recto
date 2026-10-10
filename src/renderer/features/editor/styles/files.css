@@ -1,0 +1,70 @@
+/* Files that are not notes: the code editor, previews, and the card for the rest. */
+
+.code-view,
+.file-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.code-view .md__path,
+.file-view .md__path {
+  flex: 1;
+  min-width: 0;
+}
+
+/* CodeMirror owns everything inside this element; React never touches it. */
+.code-view__host {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.code-view__notice {
+  flex: none;
+  padding: 1px var(--size-2);
+  border-radius: var(--radius-s);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+.code-view__error {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--danger);
+}
+.code-view__format {
+  flex: none;
+}
+
+.file-view__stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-4);
+  overflow: auto;
+}
+.file-view__stage img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-s);
+}
+.file-view__stage--pdf {
+  padding: 0;
+  align-items: stretch;
+}
+.file-view__pdf {
+  flex: 1;
+  border: 0;
+  background: var(--bg-secondary);
+}
+
+/* A file Recto cannot show is not an error: the card's icon stays neutral. */
+.file-card .note-error__icon {
+  color: var(--text-muted);
+}

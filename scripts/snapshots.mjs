@@ -188,8 +188,8 @@ async function launch(userData) {
   // a few pixels.
   await page.addInitScript(() => {
     // The home scene's own debug switches (features/home/scene-flags.ts): one
-    // still frame, deaf to the pointer.
-    localStorage.setItem('homeFlags', JSON.stringify({ freeze: true, noInput: true }))
+    // still frame, deaf to the pointer, with a fixed version label.
+    localStorage.setItem('homeFlags', JSON.stringify({ freeze: true, noInput: true, fixedVersion: true }))
     // The bots' own switch (features/recto-bot/loop.ts): their resting face, no blinks.
     localStorage.setItem('rectoBotStill', '1')
     let seed = 0x2f6b
@@ -746,6 +746,42 @@ async function tableShots(dir, theme) {
   }
 }
 
+/**
+ * Files that are not notes, in their own run so no other screen changes: the
+ * snapshot vault plus test/fixtures/files. A json file in the code editor
+ * (with the tree's file icons beside it), a note with pasted HTML rendered,
+ * and the card for a file Recto cannot show.
+ */
+async function fileShots(dir, theme) {
+  const { base, vault, userData } = prepareVault(theme, `${theme}-files`)
+  fs.cpSync(path.join(ROOT, 'test/fixtures/files'), vault, { recursive: true })
+  const { app, page } = await launch(userData)
+  const open = async (name) => {
+    await page.locator('[role=treeitem]', { hasText: name }).first().click()
+    await sleep(400)
+  }
+  try {
+    await open('Data')
+    await open('settings.json')
+    await page.waitForSelector('.code-view .cm-lineNumbers')
+    await page.evaluate(() => document.activeElement?.blur())
+    await shoot(page, dir, '27-code-json', 1000)
+
+    await open('Pasted table')
+    await page.waitForSelector('.cm-html-block table')
+    await page.evaluate(() => document.activeElement?.blur())
+    await shoot(page, dir, '27b-html-in-note', 900)
+
+    await open('backup.zip')
+    await page.waitForSelector('.file-card')
+    await shoot(page, dir, '27c-binary-card', 600)
+    console.log('  27-files')
+  } finally {
+    await app.close()
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
 function nextRun() {
   const counter = path.join(DIFFS, 'last-run')
   const run = (fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) || 0 : 0) + 1
@@ -778,6 +814,7 @@ for (const theme of ['light', 'dark']) {
     await smoke(page, vault)
     await botStills(renderer.origin, dir, theme)
     await tableShots(dir, theme)
+    await fileShots(dir, theme)
     if (COMPARE !== null) {
       for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.png'))) {
         const old = path.join(COMPARE, theme, name)

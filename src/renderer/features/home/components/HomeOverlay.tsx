@@ -7,6 +7,7 @@ import { type Scene } from '../scene'
 import { getHomeStats, type HomeStats } from '../home-stats'
 import { IPC_EVENT } from '@shared/ipc'
 import { useHomeScene } from '../hooks/use-home-scene'
+import { readFlags } from '../scene-flags'
 import { Statistics } from './HomeStatistics'
 import { lastEdited, clockText, tildePath, pad2, META_INK } from '../hero-text'
 // Bundled, offline, OFL: only the three faces this screen uses.
@@ -396,7 +397,7 @@ export function HomeOverlay({ open, onClose, sidebarWidth, vaultPath, roots }: P
                 Esc to close
               </p>
               <p className="home__meta home__meta--br" data-hero-line data-ink={META_INK}>
-                v{version}
+                v{readFlags().fixedVersion ? '0.0.0' : version}
               </p>
             </div>
           </section>

@@ -1,0 +1,8 @@
+{
+  "theme": "system",
+  "accent": 258,
+  "editor": { "font": "Geist Mono", "size": 14, "livePreview": true },
+  "recent": ["Garden/Soil.md", "Kitchen/Bread.md"],
+  "archiveDays": 10,
+  "sync": null
+}

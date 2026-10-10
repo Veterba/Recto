@@ -21,6 +21,10 @@ export function CommandPalette({ registry, open, onClose }: Props): React.ReactE
 
   // `available()` is called per open, not per keystroke, so isAvailable() stays cheap.
   const commands = useMemo(() => (open ? registry.available() : []), [registry, open])
+  // Where focus was when the palette opened. Editor commands check that the
+  // editor has focus when they run, so it goes back there first - without
+  // this, every editor command picked here did nothing.
+  const before = useMemo(() => (open && document.activeElement instanceof HTMLElement ? document.activeElement : null), [open])
   const results = useMemo(() => fuzzyFilter(query, commands, (c) => c.name).slice(0, 50), [query, commands])
 
   useScrollSelected(listRef, cursor, results)
@@ -31,6 +35,7 @@ export function CommandPalette({ registry, open, onClose }: Props): React.ReactE
     const hit = results[index]
     if (!hit) return
     onClose()
+    before?.focus()
     void registry.run(hit.item.id)
   }
 

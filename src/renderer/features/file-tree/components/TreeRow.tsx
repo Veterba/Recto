@@ -1,6 +1,7 @@
 import type { Row } from '../tree-rows'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
+import { extensionOf, fileKind } from '@shared/file-kind'
 import type { FileNode } from '@shared/vault'
 
 const INDENT = 13
@@ -114,16 +115,26 @@ export function TreeRow({
 }
 
 /**
- * The icon for a node.
+ * The icon for a node, by what it is.
  *
- * Attachments get their own so an image does not read as a note - the tree is
- * the one place you see both kinds side by side.
+ * Notes, images and the other files get their own, so a json or a PDF does
+ * not read as a note - the tree is the one place you see every kind side by side.
  */
+const ICON_BY_EXTENSION: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(['json', 'jsonl', 'ndjson', 'yaml', 'yml', 'toml', 'ini', 'canvas'].map((e) => [e, 'file-braces'])),
+  ...Object.fromEntries(['csv', 'tsv'].map((e) => [e, 'file-spreadsheet'])),
+  ...Object.fromEntries(['sh', 'bash', 'zsh', 'fish'].map((e) => [e, 'file-terminal'])),
+  ...Object.fromEntries(['txt', 'text', 'log'].map((e) => [e, 'scroll-text'])),
+  ...Object.fromEntries(['zip', 'tar', 'gz', 'tgz', 'rar', '7z'].map((e) => [e, 'file-archive'])),
+  ...Object.fromEntries(['mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac'].map((e) => [e, 'file-audio'])),
+  ...Object.fromEntries(['mp4', 'mov', 'mkv', 'webm', 'avi'].map((e) => [e, 'file-video'])),
+}
+
 function iconFor(node: FileNode): string {
   if (node.kind === 'folder') return 'folder'
-  const lower = node.name.toLowerCase()
-  if (lower.endsWith('.md')) return 'file-text'
-  if (/\.(png|jpe?g|gif|webp|svg|avif)$/.test(lower)) return 'image'
-  if (/\.(json|ya?ml|toml|css|js|ts|tsx|py|sh)$/.test(lower)) return 'file-code'
-  return 'file'
+  const kind = fileKind(node.name)
+  if (kind === 'note') return 'file-text'
+  if (kind === 'image') return 'image'
+  if (kind === 'pdf') return 'file-scan'
+  return ICON_BY_EXTENSION[extensionOf(node.name)] ?? (kind === 'code' ? 'file-code' : 'file')
 }

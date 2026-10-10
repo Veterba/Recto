@@ -4,7 +4,7 @@
  */
 
 /**
- * Debug switches: `?noGrain&freeze&readback&noInput&glassTest&noFringe&flatField`.
+ * Debug switches: `?noGrain&freeze&readback&noInput&glassTest&noFringe&flatField&fixedVersion`.
  *
  * Also settable as `localStorage.homeFlags` - a JSON object - because the app
  * is not loaded from a URL anyone can edit: a packaged Electron renderer has
@@ -29,6 +29,8 @@ export type SceneFlags = {
   noFringe: boolean
   /** Page two's glass over flat grey, to check the rims read without an image. */
   flatField: boolean
+  /** Show v0.0.0 instead of the real version, so a version bump doesn't change a snapshot. */
+  fixedVersion: boolean
 }
 
 export function readFlags(search = window.location.search): SceneFlags {
@@ -49,6 +51,7 @@ export function readFlags(search = window.location.search): SceneFlags {
     glassTest: on('glassTest'),
     noFringe: on('noFringe'),
     flatField: on('flatField'),
+    fixedVersion: on('fixedVersion'),
   }
 }
 

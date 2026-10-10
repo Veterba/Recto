@@ -359,3 +359,51 @@
 .cm-callout-quote {
   --callout: 140 140 140;
 }
+
+/* Raw HTML in a note, rendered (html-blocks.ts): sanitised, so only simple tags reach here. */
+.cm-html-block {
+  margin: var(--size-2) 0;
+  cursor: text;
+  /* HTML's own whitespace rules, not the editor's pre-wrap: a newline between tags is not a line. */
+  white-space: normal;
+}
+.cm-html-block p {
+  margin: 0;
+}
+.cm-html-block .cm-table th {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight: 650;
+}
+.cm-html-block .cm-table tr:first-child > * {
+  border-top: 1px solid var(--border);
+}
+.cm-html-block details {
+  padding: var(--size-1) var(--size-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+}
+.cm-html-block summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.cm-html-block details[open] summary {
+  margin-bottom: var(--size-1);
+}
+.cm-html-block kbd,
+.cm-html-inline kbd {
+  padding: 0 5px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+.cm-html-block code {
+  padding: 1px var(--size-1);
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}

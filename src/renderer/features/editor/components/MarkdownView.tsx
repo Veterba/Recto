@@ -23,7 +23,9 @@ import { noteIndexChanged } from '../../../app/note-bus'
 import { registerView } from '../../../app/view-registry'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { NoteTitle } from './NoteTitle'
-import { isTextFile, FileView } from './FileView'
+import { FileView } from './FileView'
+import { CodeView } from './CodeView'
+import { fileKind } from '@shared/file-kind'
 
 /**
  * One note, in CodeMirror.
@@ -465,7 +467,11 @@ export function registerMarkdownView(
           </div>
         )
       }
-      if (!isTextFile(path)) return <FileView key={path} path={path} />
+      // Only `.md` is a note. Images and PDFs are previewed; every other file
+      // goes to the code editor, which shows the binary card if it is not text.
+      const kind = fileKind(path)
+      if (kind === 'image' || kind === 'pdf') return <FileView key={path} path={path} />
+      if (kind !== 'note') return <CodeView key={path} path={path} />
       return (
         <MarkdownEditor
           key={path}

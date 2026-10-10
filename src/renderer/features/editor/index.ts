@@ -9,6 +9,7 @@ import './styles/structure.css'
 import './styles/writing.css'
 import '@fontsource/geist-mono/500.css'
 import './styles/find.css'
+import './styles/files.css'
 
 export * from './components/History'
 export * from './components/MarkdownView'

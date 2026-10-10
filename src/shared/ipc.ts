@@ -22,6 +22,7 @@ import type {
 import type { ObsidianSyncStatus, ObsidianVaultInfo, SyncCounts, SyncProblem } from './obsidian-sync'
 import type { TopicInfo, TopicsPreview, TopicsRunNotice, TopicsSettings, TopicsStatus } from './topics'
 import type { FileNode, OpenVaultResult, RecentVault, RenameOutcome, StartupState, StateFeature, VaultChange } from './vault'
+import type { TextFileResult } from './file-kind'
 
 /**
  * How sharp the backdrop stays, sharpest first.
@@ -65,6 +66,7 @@ export const IPC = {
   fsTree: 'fs:tree',
   fsOutsideLinks: 'fs:outside-links',
   fsRead: 'fs:read',
+  fsReadText: 'fs:read-text',
   fsWrite: 'fs:write',
   fsCreate: 'fs:create',
   fsRename: 'fs:rename',
@@ -239,6 +241,8 @@ export type IpcApi = Exhaustive<
      */
     [IPC.fsOutsideLinks]: () => string[]
     [IPC.fsRead]: (path: string) => { ok: true; content: string } | { ok: false; error: string }
+    /** A file that is not a note, for the code editor: its text, or why it is not shown as text. */
+    [IPC.fsReadText]: (path: string) => TextFileResult
     [IPC.fsWrite]: (path: string, content: string) => { ok: boolean; error?: string }
     [IPC.fsCreate]: (parentPath: string, name: string, kind: 'file' | 'folder') => { ok: true; path: string } | { ok: false; error: string }
     [IPC.fsRename]: (path: string, newName: string) => RenameOutcome | { ok: false; error: string }

@@ -44,6 +44,9 @@ export function createWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: false,
       webSecurity: true,
+      // Chromium's own PDF viewer, for a PDF opened in a tab. It is the only
+      // plugin Electron still has; nothing else is enabled by this.
+      plugins: true,
     },
   })
 

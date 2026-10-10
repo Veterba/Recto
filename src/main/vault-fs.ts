@@ -3,6 +3,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { shell } from 'electron'
 import type { FileNode } from '../shared/vault'
+import { READ_ONLY_BYTES, TOO_LARGE_BYTES, type TextFileResult } from '../shared/file-kind'
 import { writeLog } from './config'
 import { rewriteWikiLinks } from './link-rewrite'
 import { leavesVault, resolveInVault } from './paths'
@@ -101,6 +102,33 @@ export async function readFile(relative: string): Promise<{ ok: true; content: s
     return { ok: true, content: data.toString('utf8') }
   } catch (err) {
     return { ok: false, error: message(err) }
+  }
+}
+
+/**
+ * A file that is not a note, for the code editor. Same binary check as notes,
+ * plus the size: large files open read-only, huge ones not at all - the tab
+ * offers Show in Finder instead of freezing the window on a 2 GB log.
+ */
+export async function readText(relative: string): Promise<TextFileResult> {
+  try {
+    const absolute = resolveInVault(requireVault(), relative)
+    const { size } = await fsp.stat(absolute)
+    if (size > TOO_LARGE_BYTES) {
+      return {
+        ok: false,
+        reason: 'too-large',
+        size,
+        error: `This file is ${Math.round(size / 1024 / 1024)} MB, too large to open in Recto.`,
+      }
+    }
+    const data = await fsp.readFile(absolute)
+    const notText = notTextReason(data)
+    if (notText === 'binary') return { ok: false, reason: 'binary', size, error: 'This file holds binary data, not text.' }
+    if (notText === 'encoding') return { ok: false, reason: 'encoding', size, error: notTextMessage(notText, false) }
+    return { ok: true, content: data.toString('utf8'), size, readOnly: size > READ_ONLY_BYTES }
+  } catch (err) {
+    return { ok: false, reason: 'error', error: message(err) }
   }
 }
 

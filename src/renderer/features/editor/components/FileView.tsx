@@ -1,46 +1,79 @@
 import { useState } from 'react'
+import { fileKind } from '@shared/file-kind'
+import { IPC } from '@shared/ipc'
+import { api } from '../../../app/api'
 import { vaultFileUrl } from '../../../app/vault-url'
+import { Icon } from '../../../ui/Icon'
 
-const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i
+const nameOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 
-/** Files opened in the editor. Anything else is shown, not edited. */
-const TEXT_FILE = /\.(md|markdown|txt|text|mdx|canvas|json|ya?ml|csv|tsv|log|css|js|ts|tsx|jsx|py|sh|html?|xml|toml|ini)$/i
+export const sizeLabel = (bytes: number): string =>
+  bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : `${bytes} bytes`
 
-/** A path with no extension counts as text: that is how plain notes are named elsewhere. */
-export const isTextFile = (path: string): boolean => {
-  const name = path.slice(path.lastIndexOf('/') + 1)
-  return !name.includes('.') || TEXT_FILE.test(name)
+/**
+ * A file Recto shows but does not edit: what it is, and the way out.
+ *
+ * Every file that opens in a tab ends somewhere useful - the note editor, the
+ * code editor, a preview, or this card with Show in Finder - never a blank.
+ */
+export function BinaryCard({
+  path,
+  reason,
+  size,
+}: {
+  path: string
+  reason?: string | undefined
+  size?: number | undefined
+}): React.ReactElement {
+  return (
+    <div className="note-error">
+      <div className="note-error__card file-card">
+        <Icon name="file" size={18} className="note-error__icon" />
+        <p className="note-error__title">{nameOf(path)}</p>
+        <code className="note-error__path">{path}</code>
+        <p className="note-error__detail">
+          {reason ?? 'Recto cannot show this kind of file.'}
+          {size !== undefined && size > 0 ? ` ${sizeLabel(size)}.` : ''}
+        </p>
+        <div className="note-error__actions">
+          <button className="btn btn--sm" onClick={() => void api.invoke(IPC.fsReveal, path)}>
+            Show in Finder
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /**
- * A tab for a file that is not a note.
+ * An image or a PDF, previewed in its tab.
  *
  * Clicking a screenshot in the sidebar used to open its bytes in the markdown
  * editor - unreadable at best, and one such PNG crashed the editor outright.
- * Images are shown as images; anything else says what it is.
+ * Images are shown as images and PDFs in Chromium's own viewer; one that fails
+ * to load falls back to the card.
  */
 export function FileView({ path }: { path: string }): React.ReactElement {
-  const name = path.slice(path.lastIndexOf('/') + 1)
   const [failed, setFailed] = useState(false)
-  if (IMAGE_FILE.test(name) && !failed) {
-    return (
-      <div className="file-view">
-        <div className="md__bar">
-          <span className="md__path">{path}</span>
-        </div>
-        <div className="file-view__stage">
-          <img src={vaultFileUrl(path)} alt={name} onError={() => setFailed(true)} />
-        </div>
-      </div>
-    )
+  const kind = fileKind(path)
+  if (failed || (kind !== 'image' && kind !== 'pdf')) {
+    return <BinaryCard path={path} reason={failed ? 'This file could not be loaded.' : undefined} />
   }
   return (
-    <div className="pane-empty">
-      <p>
-        <code>{name}</code>
-        <br />
-        {failed ? 'This image could not be loaded.' : 'This file is not a note, so Recto does not open it as text.'}
-      </p>
+    <div className="file-view">
+      <div className="md__bar">
+        <span className="md__path">{path}</span>
+        <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke(IPC.fsReveal, path)}>
+          Show in Finder
+        </button>
+      </div>
+      <div className={`file-view__stage file-view__stage--${kind}`}>
+        {kind === 'image' ? (
+          <img src={vaultFileUrl(path)} alt={nameOf(path)} onError={() => setFailed(true)} />
+        ) : (
+          <iframe className="file-view__pdf" src={vaultFileUrl(path)} title={nameOf(path)} />
+        )}
+      </div>
     </div>
   )
 }
