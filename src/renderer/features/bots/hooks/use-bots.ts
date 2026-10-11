@@ -72,21 +72,22 @@ const LOADING_RECHECK_MS = 1000
 
 /**
  * Whether a bot's model can run right now. Checked on mount, when the window
- * regains focus, and every few seconds while it cannot.
+ * regains focus, and every few seconds while it cannot. `warm`: a bot's chat
+ * asking, which also starts loading the model; Settings only looks.
  */
-export function useBotStatus(model: string | undefined): { status: BotModelStatus | null; recheck: () => void } {
+export function useBotStatus(model: string | undefined, warm = false): { status: BotModelStatus | null; recheck: () => void } {
   const [status, setStatus] = useState<BotModelStatus | null>(null)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    void api.invoke(IPC.botsStatus, ...(model === undefined ? [] : [model])).then((next) => {
+    void api.invoke(IPC.botsStatus, model, warm).then((next) => {
       if (!cancelled) setStatus(next)
     })
     return () => {
       cancelled = true
     }
-  }, [model, tick])
+  }, [model, tick, warm])
 
   useEffect(() => {
     const again = (): void => setTick((t) => t + 1)

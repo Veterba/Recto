@@ -19,6 +19,8 @@ type AppState = {
   botHarness?: Partial<import('../shared/bots').BotHarness>
   /** A notification when an answer finishes out of sight (Settings → Bots). */
   botNotify?: boolean
+  /** Minutes without bot use before the local model is unloaded; -1 keeps it (Settings → Bots). */
+  botUnloadMinutes?: number
 }
 
 const file = () => path.join(app.getPath('userData'), 'app-state.json')

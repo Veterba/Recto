@@ -1,3 +1,4 @@
+import { syncVectors } from './vectors'
 import { BrowserWindow, Notification, powerSaveBlocker } from 'electron'
 import type { AiMessage } from '../../shared/ai'
 import { botThreadFolder, isActive, type Bot, type BotJob, type BotMessage, type BotSource } from '../../shared/bots'
@@ -210,6 +211,10 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
 
   const harness: BotHarness = d.settings().harness
   const provider = d.providerFor(job.model)
+  // The vectors are built in the background only on the charger and while
+  // you are away (background-gate.ts): here, the notes changed since are
+  // brought up to date first, so a question never searches stale ones.
+  if (harness.hybridRetrieval) await syncVectors(bot.exclude ?? []).catch((err: unknown) => console.error('[bots] vectors', err))
   const prepared = await prepare(bot, messages, {
     harness,
     provider,

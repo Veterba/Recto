@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
-import { BOTS_FOLDER, CHATS_FOLDER, DEFAULT_BOT_MODEL, type BotSettings, type NoteCardsStatus } from '@shared/bots'
+import {
+  BOTS_FOLDER,
+  CHATS_FOLDER,
+  DEFAULT_BOT_MODEL,
+  UNLOAD_CHOICES,
+  type BotMemoryStatus,
+  type BotSettings,
+  type NoteCardsStatus,
+} from '@shared/bots'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { Icon } from '../../../ui/Icon'
@@ -8,15 +16,37 @@ import { Toggle } from '../../../ui/Toggle'
 import { turnBots, useBotStatus, useBotsEnabled } from '../hooks/use-bots'
 import { BotStatusLine } from './BotStatusLine'
 
-/** "Note cards: 412/530", and why it isn't moving when it isn't. */
+/** "Note cards 412/530 · waits for the charger": the background work, and why it isn't moving when it isn't. */
 function cardsLine(cards: NoteCardsStatus | null): string {
   if (cards === null || cards.state === 'off') return 'Off'
-  if (cards.total === 0) return 'Not started yet'
-  const count = `${cards.done}/${cards.total}`
-  if (cards.state === 'running') return `${count} · writing…`
-  if (cards.state === 'paused-battery') return `${count} · paused, battery low`
-  if (cards.state === 'waiting' && cards.done < cards.total) return `${count} · waits until you're away`
+  const count = cards.total === 0 ? 'Note cards not started' : `Note cards ${cards.done}/${cards.total}`
+  if (cards.state === 'running') return `${count} · working…`
+  if (cards.state === 'waiting-charger') return `${count} · waits for the charger`
+  if (cards.state === 'waiting') return `${count} · waits until you're away`
   return count
+}
+
+const gb = (bytes: number): string => `${(bytes / 1024 ** 3).toFixed(1)} GB`
+const unloadLabel = (minutes: number): string => (minutes < 0 ? 'never, while Recto is open' : `${minutes} min after the last use`)
+
+/** What the local model takes in memory now, looked at every few seconds while Settings is open. */
+function useMemoryStatus(): BotMemoryStatus | null {
+  const [memory, setMemory] = useState<BotMemoryStatus | null>(null)
+  useEffect(() => {
+    let live = true
+    const look = (): void => {
+      void api.invoke(IPC.botsMemory).then((next) => {
+        if (live) setMemory(next)
+      })
+    }
+    look()
+    const timer = window.setInterval(look, 5000)
+    return () => {
+      live = false
+      window.clearInterval(timer)
+    }
+  }, [])
+  return memory
 }
 
 /**
@@ -49,6 +79,7 @@ function BotsOptions(): React.ReactElement {
   const [draft, setDraft] = useState('')
   const { status, recheck } = useBotStatus(settings?.defaultModel)
   const [cards, setCards] = useState<NoteCardsStatus | null>(null)
+  const memory = useMemoryStatus()
 
   useEffect(() => {
     void api.invoke(IPC.botsCards).then(setCards)
@@ -100,6 +131,37 @@ function BotsOptions(): React.ReactElement {
       </div>
 
       <SettingRow
+        label="Unload the model after"
+        hint="Minutes without using a bot before the model leaves memory, so its gigabytes go back to the Mac. It loads again when you open a bot chat or start typing to a bot."
+      >
+        <select
+          className="setting__select"
+          aria-label="Unload the model after"
+          value={settings?.unloadAfterMinutes ?? 5}
+          onChange={(event) => void api.invoke(IPC.botsSetSettings, { unloadAfterMinutes: Number(event.target.value) }).then(setSettings)}
+        >
+          {UNLOAD_CHOICES.map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {minutes < 0 ? 'Never (while Recto is open)' : `${minutes} min`}
+            </option>
+          ))}
+        </select>
+      </SettingRow>
+
+      <SettingRow
+        label="Model in memory"
+        hint={
+          memory === null || memory.loaded.length === 0
+            ? 'Nothing loaded. The model loads when you open a bot chat or start typing to a bot.'
+            : `Leaves memory ${unloadLabel(memory.unloadAfterMinutes)}.`
+        }
+      >
+        <span className="bot-cards" data-testid="bot-memory">
+          {memory === null || memory.loaded.length === 0 ? 'None' : `${memory.loaded.join(', ')} · ${gb(memory.bytes)}`}
+        </span>
+      </SettingRow>
+
+      <SettingRow
         label="Notify when an answer is ready"
         hint="A macOS notification when Recto finishes an answer while its chat isn't on screen. Clicking it opens the topic."
       >
@@ -113,8 +175,8 @@ function BotsOptions(): React.ReactElement {
       </SettingRow>
 
       <SettingRow
-        label="Note cards"
-        hint="A short summary of every note, written by the local model while you're away from the keyboard. Recto reads them to review a folder or the whole vault. Paused on battery below 20%."
+        label="Background work"
+        hint="Chunk vectors (for search by meaning) and note cards (a short summary of every note, for reviewing a folder or the vault). Built only on the charger, after a minute away from the keyboard; a key pressed stops them until you're away again. A question brings the vectors it needs up to date itself."
       >
         <span className="bot-cards">{cardsLine(cards)}</span>
       </SettingRow>

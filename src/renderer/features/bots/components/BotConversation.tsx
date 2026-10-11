@@ -42,6 +42,8 @@ export const MAIN_BOT = 'recto'
 const UNDO_MS = 6000
 /** How long the face's "found it" beat lasts before it reads the answer out. */
 const FOUND_MS = 400
+/** How often typing tells main to load the model again (each one also restarts its unload timer). */
+const WARM_EVERY_MS = 30_000
 
 const noteTitle = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
 
@@ -56,6 +58,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   const model = useMemo(() => new ChatTopics(bot, bot.id === MAIN_BOT ? [bot.name, 'Claude'] : [bot.name]), [bot.id, bot.name])
   useTopics(model)
   const [draft, setDraft] = useState('')
+  const lastWarm = useRef(0)
   const [error, setError] = useState<string | null>(null)
   const [typing, setTyping] = useState(false)
   const [history, setHistory] = useState(false)
@@ -65,7 +68,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   const [keyPresent, setKeyPresent] = useState(false)
   const [defaultModel, setDefaultModel] = useState('')
   const [pull, setPull] = useState<(PullProgress & { error?: string }) | null>(null)
-  const { status, recheck } = useBotStatus(bot.model)
+  const { status, recheck } = useBotStatus(bot.model, true)
   const root = useRef<HTMLDivElement | null>(null)
   const scroller = useRef<HTMLDivElement | null>(null)
   const composer = useRef<HTMLTextAreaElement | null>(null)
@@ -468,6 +471,11 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
         inputRef={composer}
         draft={draft}
         onDraft={(text) => {
+          // Typing to the bot: its model starts loading now, not at Send.
+          if (text.trim() !== '' && Date.now() - lastWarm.current > WARM_EVERY_MS) {
+            lastWarm.current = Date.now()
+            void api.invoke(IPC.botsWarm, bot.id)
+          }
           setDraft(text)
           if (error !== null && pending === null) setError(null)
         }}

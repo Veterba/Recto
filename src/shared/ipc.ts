@@ -8,7 +8,7 @@
 
 import type { AiDelta, AiDone, AiError, AiMessage } from './ai'
 import type { ArchiveState } from './archive'
-import type { Bot, BotJob, BotModelStatus, BotSettings, ModelChoice, NoteCardsStatus, PullProgress } from './bots'
+import type { Bot, BotJob, BotMemoryStatus, BotModelStatus, BotSettings, ModelChoice, NoteCardsStatus, PullProgress } from './bots'
 import type {
   BacklinkResult,
   BoardCardInfo,
@@ -124,6 +124,8 @@ export const IPC = {
   botsEnabled: 'bots:enabled',
   botsSetEnabled: 'bots:set-enabled',
   botsStatus: 'bots:status',
+  botsWarm: 'bots:warm',
+  botsMemory: 'bots:memory',
   botsSettings: 'bots:settings',
   botsSetSettings: 'bots:set-settings',
   botsSend: 'bots:send',
@@ -339,7 +341,11 @@ export type IpcApi = Exhaustive<
     [IPC.botsEnabled]: () => boolean
     [IPC.botsSetEnabled]: (on: boolean) => boolean
     /** Whether the local model can run: Ollama reachable, and the model downloaded. */
-    [IPC.botsStatus]: (model?: string) => BotModelStatus
+    /** `warm`: a bot chat is asking, so start loading the model too. */
+    [IPC.botsStatus]: (model?: string, warm?: boolean) => BotModelStatus
+    /** Someone is typing to this bot: load its model now. */
+    [IPC.botsWarm]: (botId: string) => void
+    [IPC.botsMemory]: () => BotMemoryStatus
     [IPC.botsSettings]: () => BotSettings
     [IPC.botsSetSettings]: (patch: Partial<BotSettings>) => BotSettings
     /**

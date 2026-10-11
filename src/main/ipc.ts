@@ -321,7 +321,9 @@ export function registerIpc(): void {
   handle(IPC.botsList, () => bots.list())
   handle(IPC.botsEnabled, () => bots.botsEnabled())
   handle(IPC.botsSetEnabled, (on) => bots.setEnabled(on))
-  handle(IPC.botsStatus, (model) => bots.status(model))
+  handle(IPC.botsStatus, (model, warm) => bots.status(model, warm === true))
+  handle(IPC.botsWarm, (botId) => bots.warm(botId))
+  handle(IPC.botsMemory, () => bots.memoryStatus())
   handle(IPC.botsSettings, () => bots.settings())
   handle(IPC.botsSetSettings, (patch) => bots.setSettings(patch))
   handle(IPC.botsSend, (request) =>

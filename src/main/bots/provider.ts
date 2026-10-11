@@ -55,11 +55,15 @@ export interface BotModelProvider {
 export const CONTEXT_TOKENS = 8192
 
 /**
- * How long Ollama keeps the model in memory after the last request: for as
- * long as the app is open (-1), so no question pays ten seconds of loading.
- * The app unloads it when it quits (`unloadOnQuit` in bots/index.ts).
+ * How long Ollama keeps the model in memory after the last request, as Ollama
+ * takes it: '5m', or -1 for as long as the app is open. Sent with every
+ * request, so Ollama itself unloads the model that many minutes after the
+ * last use - a question, a note card, or typing in a bot's composer (which
+ * loads it ahead of the question). The app still unloads it when it quits
+ * (`unloadOnQuit` in bots/index.ts).
  */
-const KEEP_ALIVE = -1
+export type KeepAlive = string | number
+export const keepAliveFor = (minutes: number): KeepAlive => (minutes < 0 ? -1 : `${minutes}m`)
 
 /** Localhost only - the one address this module ever connects to. */
 const OLLAMA = 'http://127.0.0.1:11434'
@@ -80,9 +84,16 @@ export interface LocalModels {
   preload(model: string): Promise<void>
   /** Take a model out of memory: on a 16 GB Mac only one fits at a time. */
   unload(model: string): Promise<void>
+  /** Models in memory right now. */
+  loadedModels(): Promise<string[]>
+  /** Tell a model in memory the new "unload after". */
+  retime(model: string): Promise<void>
 }
 
 export class OllamaProvider implements BotModelProvider, LocalModels {
+  /** Read on every request, so a change in Settings applies to the next one. */
+  constructor(private readonly keepAlive: () => KeepAlive = () => keepAliveFor(5)) {}
+
   /** What each installed model says it can do ("completion", "thinking", "tools"...), from the last listing. */
   private readonly capabilities = new Map<string, string[]>()
   /** Models being loaded into memory right now: their status says so. */
@@ -133,7 +144,7 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model,
-          keep_alive: KEEP_ALIVE,
+          keep_alive: this.keepAlive(),
           options: requestFields(model, this.capabilities.get(model) ?? null).options,
         }),
       })
@@ -146,6 +157,30 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
 
   warm(model: string): void {
     if (!this.loading.has(model)) void this.preload(model)
+  }
+
+  /** Models in memory right now: what Settings → Bots shows. */
+  async loadedModels(): Promise<string[]> {
+    try {
+      const response = await fetch(`${OLLAMA}/api/ps`, { signal: AbortSignal.timeout(2000) })
+      if (!response.ok) return []
+      const body = (await response.json()) as { models?: { name?: unknown }[] }
+      return (body.models ?? []).map((m) => m.name).filter((name): name is string => typeof name === 'string')
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * A new "unload after" for a model already in memory: Ollama only learns
+   * it with a request, so one that loads nothing and asks nothing carries it.
+   */
+  async retime(model: string): Promise<void> {
+    await fetch(`${OLLAMA}/api/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model, keep_alive: this.keepAlive() }),
+    }).catch(() => undefined)
   }
 
   async unload(model: string): Promise<void> {
@@ -195,7 +230,7 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
       body: JSON.stringify({
         model,
         stream: false,
-        keep_alive: KEEP_ALIVE,
+        keep_alive: this.keepAlive(),
         ...fields,
         ...(json ? { format: 'json' } : {}),
         options: { ...fields.options, temperature: 0, num_predict: maxTokens },
@@ -216,7 +251,7 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
       body: JSON.stringify({
         model,
         stream: true,
-        keep_alive: KEEP_ALIVE,
+        keep_alive: this.keepAlive(),
         // How thinking is turned off, the context size, the answer's length: the model's profile.
         ...fields,
         ...(maxTokens === undefined ? {} : { options: { ...fields.options, num_predict: maxTokens } }),
@@ -250,7 +285,7 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
       body: JSON.stringify({
         model,
         stream: true,
-        keep_alive: KEEP_ALIVE,
+        keep_alive: this.keepAlive(),
         ...fields,
         ...(maxTokens === undefined ? {} : { options: { ...fields.options, num_predict: maxTokens } }),
         tools,
@@ -425,6 +460,12 @@ export const isApiModel = (model: string): boolean => isAiModel(model)
  */
 export class MockProvider implements BotModelProvider, LocalModels {
   warm(): void {}
+
+  async loadedModels(): Promise<string[]> {
+    return []
+  }
+
+  async retime(): Promise<void> {}
 
   async installed(): Promise<{ name: string; bytes: number }[]> {
     return [{ name: 'qwen3.5:9b', bytes: 6_590_000_000 }]

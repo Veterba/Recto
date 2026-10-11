@@ -3,8 +3,11 @@ import type { AiMessage } from '../../shared/ai'
 import {
   DEFAULT_BOT_MODEL,
   DEFAULT_HARNESS,
+  DEFAULT_UNLOAD_MINUTES,
+  UNLOAD_CHOICES,
   isActive,
   type Bot,
+  type BotMemoryStatus,
   type BotModelStatus,
   type BotSettings,
   type ModelChoice,
@@ -16,13 +19,22 @@ import { readState, writeState } from '../store'
 import { currentVault } from '../vault'
 import { cleanTitle } from '../../shared/chat-topics'
 import { listBots, writeBotModel } from './definitions'
-import { AnthropicProvider, MockProvider, OllamaProvider, isApiModel, type BotModelProvider, type LocalModels } from './provider'
+import {
+  AnthropicProvider,
+  MockProvider,
+  OllamaProvider,
+  isApiModel,
+  keepAliveFor,
+  type BotModelProvider,
+  type LocalModels,
+} from './provider'
 import { localChoices } from './models/catalog'
 import { switchPlan } from './models/switch'
 import { initAnswers, jobs, stopAnswers } from './answers'
 import { cardsStatus, startBackground as startJobs, stopBackground, yieldToAnswer } from './background'
 import { botsEnabled, writeBotsEnabled } from './enabled'
 import os from 'node:os'
+import { execFile } from 'node:child_process'
 import { readKey } from '../secrets'
 
 /**
@@ -31,7 +43,9 @@ import { readKey } from '../secrets'
  * search, the prompt and the connection to the model all happen here.
  */
 
-const local: BotModelProvider & LocalModels = botsMock() ? new MockProvider() : new OllamaProvider()
+const local: BotModelProvider & LocalModels = botsMock()
+  ? new MockProvider()
+  : new OllamaProvider(() => keepAliveFor(settings().unloadAfterMinutes))
 const api: BotModelProvider = botsMock() ? new MockProvider() : new AnthropicProvider(readKey)
 
 /** The model's provider: an Anthropic model when it is one of the API models, otherwise Ollama on this Mac. */
@@ -42,6 +56,7 @@ export function settings(): BotSettings {
   return {
     defaultModel: state.botDefaultModel ?? DEFAULT_BOT_MODEL,
     notify: state.botNotify ?? true,
+    unloadAfterMinutes: state.botUnloadMinutes ?? DEFAULT_UNLOAD_MINUTES,
     harness: { ...DEFAULT_HARNESS, ...state.botHarness },
   }
 }
@@ -51,7 +66,43 @@ export function setSettings(patch: Partial<BotSettings>): BotSettings {
   if (model !== undefined) writeState({ botDefaultModel: model === '' ? undefined : model })
   if (patch.harness !== undefined) writeState({ botHarness: { ...readState().botHarness, ...patch.harness } })
   if (patch.notify !== undefined) writeState({ botNotify: patch.notify })
+  if (patch.unloadAfterMinutes !== undefined && (UNLOAD_CHOICES as readonly number[]).includes(patch.unloadAfterMinutes)) {
+    writeState({ botUnloadMinutes: patch.unloadAfterMinutes })
+    // A model already in memory keeps its old timer until told otherwise.
+    void local.loadedModels().then((models) => Promise.all(models.map((m) => local.retime(m))))
+  }
   return settings()
+}
+
+/** What the local model takes in memory now, and when it will leave (Settings → Bots). */
+export async function memoryStatus(): Promise<BotMemoryStatus> {
+  const loaded = botsEnabled() ? await local.loadedModels() : []
+  return { loaded, bytes: loaded.length === 0 ? 0 : await ollamaResident(), unloadAfterMinutes: settings().unloadAfterMinutes }
+}
+
+/** Resident memory of Ollama's processes (the server and the model runner), from `ps`. */
+function ollamaResident(): Promise<number> {
+  return new Promise((resolve) =>
+    execFile('ps', ['-axo', 'rss=,comm='], (_err, stdout) =>
+      resolve(
+        (stdout ?? '')
+          .split('\n')
+          .filter((line) => /ollama|llama-server/i.test(line))
+          .reduce((sum, line) => sum + Number(line.trim().split(/\s+/)[0] ?? 0) * 1024, 0),
+      ),
+    ),
+  )
+}
+
+/**
+ * Load a bot's model ahead of its question: called when someone starts typing
+ * in its composer. Loading it again when it is in memory costs nothing and
+ * restarts its unload timer, which is right - typing is using the bot.
+ */
+export function warm(botId: string): void {
+  if (!botsEnabled() || botsMock()) return
+  const model = modelOf(list().find((b) => b.id === botId))
+  if (!isApiModel(model)) local.warm(model)
 }
 
 /** The open vault's bots - none while bots are off, so nothing scaffolds their folder either. */
@@ -63,8 +114,8 @@ export function list(): Bot[] {
 export { botsEnabled }
 
 /**
- * Bots on or off for this vault. On starts their background work and loads
- * the default model; off stops all of it - a running answer is stopped and
+ * Bots on or off for this vault. On starts their background work (the model
+ * loads when a bot is used); off stops all of it - a running answer is stopped and
  * saved, the background loop ends, and the local model goes out of memory.
  */
 export async function setEnabled(on: boolean): Promise<boolean> {
@@ -86,16 +137,17 @@ export async function setEnabled(on: boolean): Promise<boolean> {
 export const modelOf = (bot: Bot | undefined): string => bot?.model ?? settings().defaultModel
 
 /**
- * Whether the model can run. A bot's chat asks this when it opens, which is
- * also the moment to start loading the model: by the time the question is
- * typed, the ten-second cold start is over.
+ * Whether the model can run. A bot's chat asks this when it opens (`warm`),
+ * which is also the moment to start loading the model: by the time the
+ * question is typed, the ten-second cold start is over. Settings asks without
+ * loading anything.
  */
-export async function status(model?: string): Promise<BotModelStatus> {
+export async function status(model?: string, warmUp = false): Promise<BotModelStatus> {
   const chosen = model ?? settings().defaultModel
   // Off: not a single request to Ollama, not even to ask.
   if (!botsEnabled()) return { state: 'not-running', model: chosen }
   const result = await providerFor(chosen).status(chosen)
-  if (result.state === 'ready') providerFor(chosen).warm(result.model)
+  if (warmUp && result.state === 'ready') providerFor(chosen).warm(result.model)
   return result
 }
 
@@ -203,8 +255,8 @@ export { stopAnswers }
  */
 export function startBackground(): void {
   if (!botsEnabled()) return
-  // The default model, loaded while you look around (if Ollama is up).
-  void status()
+  // No model is loaded here: it loads when a bot chat opens or someone types
+  // to a bot, and leaves memory a few minutes after the last use.
   if (botsMock()) return
   startJobs({
     provider: () => providerFor(settings().defaultModel),

@@ -119,14 +119,14 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
     const files = topicFiles()
     expect(files).toHaveLength(2)
     // Begun in the same minute on the same subject, the second gets a number.
-    expect(files.map((f) => f.slice(17)).sort()).toEqual(['— Soil mix (2).md', '— Soil mix.md'])
+    // The two can straddle a minute (the earlier tests take a while): then
+    // their stamps differ and neither needs one.
+    const sameMinute = files[0]!.slice(0, 16) === files[1]!.slice(0, 16)
+    expect(files.map((f) => f.slice(17)).sort()).toEqual(
+      sameMinute ? ['— Soil mix (2).md', '— Soil mix.md'] : ['— Soil mix.md', '— Soil mix.md'],
+    )
     const newest = fs.readFileSync(
-      path.join(
-        vault,
-        'chats',
-        'recto',
-        files.find((f) => f.includes('(2)'))!,
-      ),
+      path.join(vault, 'chats', 'recto', sameMinute ? files.find((f) => f.includes('(2)'))! : [...files].sort().at(-1)!),
       'utf8',
     )
     expect(newest).toMatch(/^---\nbot: recto\ncreated: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?\ntitle: Soil mix\n---/)

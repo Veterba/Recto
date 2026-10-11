@@ -39,12 +39,22 @@ async function open(vault: string): Promise<void> {
  * Bring the chunk vectors up to date with the vault. One run at a time; a
  * call during a run waits for that run. `exclude`: folders no bot may read.
  */
-export function syncVectors(exclude: readonly string[] = []): Promise<SyncResult> {
-  syncing ??= run(exclude).finally(() => (syncing = null))
-  return syncing
+/**
+ * Bring the vectors up to date: only notes changed since their last sync.
+ * One sync at a time - a second caller waits for the first, then runs its own
+ * (an answer must not take the result of a background sync that `signal`
+ * stopped halfway). The background passes `signal`; an answer does not.
+ */
+export async function syncVectors(exclude: readonly string[] = [], signal?: AbortSignal): Promise<SyncResult> {
+  while (syncing !== null) await syncing.catch(() => undefined)
+  const current = run(exclude, signal).finally(() => {
+    if (syncing === current) syncing = null
+  })
+  syncing = current
+  return current
 }
 
-async function run(exclude: readonly string[]): Promise<SyncResult> {
+async function run(exclude: readonly string[], signal?: AbortSignal): Promise<SyncResult> {
   const started = performance.now()
   const vault = currentVault()
   const none = { notes: 0, embedded: 0, removed: 0, ms: 0 }
@@ -61,6 +71,7 @@ async function run(exclude: readonly string[]): Promise<SyncResult> {
   let embedded = 0
   for (const note of notes) {
     if (known[note.path] === note.mtime) continue
+    if (signal?.aborted === true) break
     const read = await vaultFs.readFile(note.path)
     if (!read.ok) continue
     const title = path.basename(note.path).replace(/\.md$/i, '')

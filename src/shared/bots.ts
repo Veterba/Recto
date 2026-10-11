@@ -106,10 +106,34 @@ export type ModelChoice = {
 }
 
 /**
- * Note cards built in the background (Settings → Bots: "Note cards: 412/530"):
- * running, waiting for the user to step away, paused on a low battery, or done.
+ * The bots' background work - chunk vectors and note cards - as Settings →
+ * Bots shows it ("Note cards: 412/530"): running, waiting for the user to
+ * step away, waiting for the charger, or done. Both kinds run only on the
+ * charger with the Mac idle, and stop the moment someone types.
  */
-export type NoteCardsStatus = { done: number; total: number; state: 'idle' | 'running' | 'waiting' | 'paused-battery' | 'done' | 'off' }
+export type NoteCardsStatus = {
+  done: number
+  total: number
+  state: 'idle' | 'running' | 'waiting' | 'waiting-charger' | 'done' | 'off'
+}
+
+/** What the local model is doing to memory (Settings → Bots). */
+export type BotMemoryStatus = {
+  /** Models Ollama has in memory now. */
+  loaded: string[]
+  /**
+   * What Ollama's processes hold, in bytes: their resident memory. Not what
+   * /api/ps reports, which leaves out the mapped weights (0.3 GB for a model
+   * that takes 6.7).
+   */
+  bytes: number
+  /** Minutes without bot use before the model leaves memory; -1: kept while Recto is open. */
+  unloadAfterMinutes: number
+}
+
+/** The choices for "Unload the model after": minutes, or -1 to keep it loaded. */
+export const UNLOAD_CHOICES = [1, 5, 15, 30, -1] as const
+export const DEFAULT_UNLOAD_MINUTES = 5
 
 /**
  * An answer being worked on, owned by main (bots/jobs.ts): queued behind
@@ -192,6 +216,8 @@ export type BotSettings = {
   defaultModel: string
   /** A macOS notification when an answer finishes while its chat is out of sight. */
   notify: boolean
+  /** Minutes without bot use before the local model leaves memory; -1 keeps it while Recto is open. */
+  unloadAfterMinutes: number
   harness: BotHarness
 }
 

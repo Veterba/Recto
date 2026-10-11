@@ -1,6 +1,5 @@
+import { backgroundGate } from './background-gate'
 import { createHash } from 'node:crypto'
-import { execFile } from 'node:child_process'
-import { powerMonitor } from 'electron'
 import path from 'node:path'
 import { BOTS_FOLDER, CHATS_FOLDER, type NoteCardsStatus } from '../../shared/bots'
 import type { CatalogNote, StoredCard } from '../../shared/indexer-protocol'
@@ -131,21 +130,6 @@ export async function makeCard(
 
 export type CardsStatus = NoteCardsStatus
 
-const IDLE_SECONDS = 60
-const MIN_BATTERY = 20
-
-/** Battery level and charging, from pmset; null on a Mac without a battery. Cached for a minute. */
-let battery: { at: number; level: number | null; charging: boolean } | null = null
-async function batteryLow(): Promise<boolean> {
-  if (!powerMonitor.isOnBatteryPower()) return false
-  if (battery === null || Date.now() - battery.at > 60_000) {
-    const out = await new Promise<string>((resolve) => execFile('pmset', ['-g', 'batt'], (_e, stdout) => resolve(stdout ?? '')))
-    const m = /(\d+)%;\s*([^;]+);/.exec(out)
-    battery = { at: Date.now(), level: m === null ? null : Number(m[1]), charging: m !== null && /^charging|charged/i.test(m[2]!.trim()) }
-  }
-  return battery.level !== null && battery.level < MIN_BATTERY && !battery.charging
-}
-
 /** Notes that get cards: everything but chats, the app's state and the bots' excluded folders. */
 export const cardable = (notes: readonly CatalogNote[], exclude: readonly string[]): CatalogNote[] =>
   notes.filter((n) => !isExcluded(n.path, [CHATS_FOLDER, path.dirname(BOTS_FOLDER), ...exclude]))
@@ -195,8 +179,9 @@ export async function buildCards(o: BuildOptions): Promise<CardsStatus> {
   for (const note of todo) {
     if (o.signal.aborted) return status('idle')
     if (o.background) {
-      if (await batteryLow()) return status('paused-battery')
-      if (powerMonitor.getSystemIdleTime() < IDLE_SECONDS) return status('waiting')
+      const gate = backgroundGate()
+      if (gate === 'charger') return status('waiting-charger')
+      if (gate === 'idle') return status('waiting')
     }
     const card = await makeCard(note.path, note.content, o.provider, o.model, o.signal)
     if (card === null) continue

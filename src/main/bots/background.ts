@@ -4,14 +4,17 @@ import { IPC_EVENT } from '../../shared/ipc'
 import { sendEvent } from '../events'
 import { buildCards } from './cards'
 import { syncVectors } from './vectors'
+import { backgroundGate, shouldPause } from './background-gate'
 import type { BotModelProvider } from './provider'
 
 /**
- * What the bots keep up to date while the app is open: chunk vectors (cheap,
- * whenever notes change) and note cards (the local model, only while nobody
- * is using the app or a bot, and not on a low battery). Checked every two
- * minutes; a question to a bot stops a card in progress, and the next check
- * picks up where it left off.
+ * What the bots keep up to date while the app is open: chunk vectors (the
+ * embedder) and note cards (the local model). Both only on the charger, with
+ * nobody at the keyboard for a minute (background-gate.ts); a key pressed, the
+ * charger pulled or a question to a bot stops the work in progress, and the
+ * next check - every two minutes - picks up where it left off. An answer
+ * brings the vectors it needs up to date itself (answers.ts), so they are
+ * never stale for a question, on battery or not.
  */
 
 const TICK_MS = 2 * 60_000
@@ -43,27 +46,46 @@ async function tick(): Promise<void> {
   if (deps === null || running !== null) return
   const d = deps
   const on = d.enabled()
-  running = new AbortController()
+  if (!on.vectors && !on.cards) {
+    publish({ ...status, state: 'off' })
+    return
+  }
+  const gate = backgroundGate()
+  if (gate !== 'ok') {
+    publish({ ...status, state: gate === 'charger' ? 'waiting-charger' : on.cards ? 'waiting' : status.state })
+    return
+  }
+  const controller = new AbortController()
+  running = controller
+  // Someone starts typing, or pulls the charger: stop within two seconds,
+  // rather than at the end of a card that takes twenty.
+  let paused: 'waiting' | 'waiting-charger' | null = null
+  const watch = setInterval(() => {
+    if (!shouldPause()) return
+    paused = backgroundGate() === 'charger' ? 'waiting-charger' : 'waiting'
+    controller.abort()
+  }, 2000)
   try {
-    if (on.vectors) await syncVectors(d.exclude()).catch((err: unknown) => console.error('[bots] vectors', err))
+    if (on.vectors) await syncVectors(d.exclude(), controller.signal).catch((err: unknown) => console.error('[bots] vectors', err))
     if (!on.cards) {
       publish({ ...status, state: 'off' })
       return
     }
-    if (d.busy() || !(await d.ready())) return
-    publish(
-      await buildCards({
-        provider: d.provider(),
-        model: d.model(),
-        exclude: d.exclude(),
-        background: true,
-        signal: running.signal,
-        onProgress: publish,
-      }),
-    )
+    if (controller.signal.aborted || d.busy() || !(await d.ready())) return
+    const result = await buildCards({
+      provider: d.provider(),
+      model: d.model(),
+      exclude: d.exclude(),
+      background: true,
+      signal: controller.signal,
+      onProgress: publish,
+    })
+    publish(paused === null ? result : { ...result, state: paused })
   } catch (err) {
-    console.error('[bots] note cards', err)
+    if (paused !== null) publish({ ...status, state: paused })
+    else console.error('[bots] note cards', err)
   } finally {
+    clearInterval(watch)
     running = null
   }
 }
