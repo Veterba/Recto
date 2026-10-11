@@ -1,0 +1,78 @@
+/* ---------- the ⌘/ cheat sheet ---------- */
+
+.shortcut-sheet {
+  width: min(980px, calc(100vw - 2 * var(--size-6)));
+  max-height: min(84vh, 820px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.shortcut-sheet__head {
+  display: flex;
+  align-items: center;
+  gap: var(--size-3);
+  padding: var(--size-4) var(--size-5) var(--size-3);
+  border-bottom: 1px solid var(--border);
+}
+.shortcut-sheet__head .dialog__title {
+  flex: 1;
+  margin: 0;
+}
+.shortcut-sheet__search {
+  width: 220px;
+  padding-left: var(--size-2);
+}
+.shortcut-sheet__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--size-4) var(--size-5);
+  /* Groups flow into columns, so the whole set fits on a laptop screen. */
+  columns: 3 260px;
+  column-gap: var(--size-6);
+}
+.shortcut-sheet__group {
+  break-inside: avoid;
+  margin-bottom: var(--size-4);
+}
+.shortcut-sheet__grouphead {
+  margin: 0 0 var(--size-1);
+  font-size: var(--font-size-10-5);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.shortcut-sheet__list {
+  margin: 0;
+}
+.shortcut-sheet__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-2);
+  padding: 3px 0;
+  font-size: var(--font-size-12-5);
+}
+.shortcut-sheet__row dt {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+}
+.shortcut-sheet__row dd {
+  margin: 0;
+}
+.shortcut-sheet__row kbd {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-12);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.shortcut-sheet__empty {
+  color: var(--text-muted);
+}
+.shortcut-sheet__foot {
+  padding: var(--size-2) var(--size-5) var(--size-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}

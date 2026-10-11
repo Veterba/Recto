@@ -3,7 +3,8 @@
  */
 
 /** The one place the binding lives. */
-export const HOME_HOTKEY = 'Mod+Shift+H'
+/** ⌃⌘H: ⌘⇧H is the highlight's, as in most editors. */
+export const HOME_HOTKEY = 'Ctrl+Mod+H'
 
 /**
  * Is the keyboard busy typing into something?

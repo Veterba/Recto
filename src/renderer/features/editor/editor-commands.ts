@@ -1,9 +1,11 @@
 import { api } from '../../app/api'
 import * as md from './markdown-actions'
+import { HIGHLIGHT_COLOURS, setHighlightColour } from './highlights'
+import { openHighlightPicker } from './components/HighlightPicker'
 import { getActiveEditor } from './components/MarkdownView'
 import { getActiveCodeEditor } from './components/CodeView'
 import { convertHtmlTableAt } from './html-blocks'
-import { insertTableSpec } from './table-editor'
+import { inTable, insertTableSpec, runTableAction, TABLE_COMMANDS, type TableAction } from './table-editor'
 import type { Command, CommandRegistry } from '../../app/commands'
 import { toggleOutline } from './outline'
 import { setFocusUnit, toggleAuthors, toggleFocus, toggleStyle, toggleSyntax, toggleTypewriter } from './writing-modes'
@@ -45,11 +47,12 @@ function editorCommand(
   name: string,
   hotkey: string | undefined,
   action: Parameters<NonNullable<ReturnType<typeof getActiveEditor>>['run']>[0],
+  section = 'Formatting',
 ): Command {
   return {
     id,
     name,
-    section: 'Editor',
+    section,
     scope: 'editor',
     ...(hotkey === undefined ? {} : { hotkey }),
     isAvailable: editorHasFocus,
@@ -59,25 +62,68 @@ function editorCommand(
   }
 }
 
+const TABLE_NAMES: Record<TableAction, [name: string, hotkey: string]> = {
+  'row-up': ['Move row up', 'Alt+ArrowUp'],
+  'row-down': ['Move row down', 'Alt+ArrowDown'],
+  'column-left': ['Move column left', 'Alt+ArrowLeft'],
+  'column-right': ['Move column right', 'Alt+ArrowRight'],
+  'add-row-below': ['Add row below', 'Mod+Enter'],
+}
+
+/**
+ * The table's own keys, as commands: listed and rebindable like any other.
+ * The table reads them itself (TableController.onKeyDown), since it takes its
+ * keys before the window does; from the palette they act on the table with focus.
+ */
+function tableCommands(): Command[] {
+  return Object.entries(TABLE_COMMANDS).map(([id, action]) => ({
+    id,
+    name: TABLE_NAMES[action][0],
+    section: 'Tables',
+    scope: 'table' as const,
+    hotkey: TABLE_NAMES[action][1],
+    isAvailable: inTable,
+    run: () => {
+      runTableAction(action)
+    },
+  }))
+}
+
 export function registerEditorCommands(registry: CommandRegistry, onToggleLivePreview: () => void): () => void {
   const commands: Command[] = [
-    // Headings: Mod+Shift+1..6, matching the request.
+    // Headings: ⌘⌥1-6. Not ⌘⇧1-6: ⌘⇧3, 4 and 5 are macOS screenshots, which
+    // the system takes before any app sees them.
     ...([1, 2, 3, 4, 5, 6] as const).map((level) =>
-      editorCommand(`editor:heading-${level}`, `Heading ${level}`, `Mod+Shift+${level}`, (state) => md.toggleHeading(state, level)),
+      editorCommand(`editor:heading-${level}`, `Heading ${level}`, `Mod+Alt+${level}`, (state) => md.toggleHeading(state, level)),
     ),
     editorCommand('editor:bold', 'Bold', 'Mod+B', md.toggleBold),
     editorCommand('editor:italic', 'Italic', 'Mod+I', md.toggleItalic),
     editorCommand('editor:inline-code', 'Inline code', 'Mod+E', md.toggleInlineCode),
     editorCommand('editor:strikethrough', 'Strikethrough', 'Mod+Shift+X', md.toggleStrikethrough),
+    editorCommand('editor:insert-table', 'Insert table', 'Mod+Alt+T', (state) => insertTableSpec(state, 3, 3), 'Tables'),
     // A table pasted as HTML, made a markdown table: put the caret in it first.
-    editorCommand('editor:insert-table', 'Insert table', undefined, (state) => insertTableSpec(state, 3, 3)),
-    editorCommand('editor:convert-html-table', 'Convert HTML table to Markdown', undefined, convertHtmlTableAt),
-    // Mod+Alt+H, not Mod+Shift+H: the home overlay took that, and an
-    // editor-scoped binding wins whenever a note has focus - which would have
-    // made the overlay unreachable from the place you spend all your time. The
-    // letter is the part worth keeping.
-    editorCommand('editor:highlight', 'Highlight', 'Mod+Alt+H', md.toggleHighlight),
-    editorCommand('editor:checklist', 'Toggle checklist item', 'Mod+Shift+C', md.toggleChecklist),
+    editorCommand('editor:convert-html-table', 'Convert HTML table to Markdown', undefined, convertHtmlTableAt, 'Tables'),
+    // ⌘⇧H: a plain highlight on the selection, or off the highlight the caret is in.
+    editorCommand('editor:highlight', 'Highlight', 'Mod+Shift+H', md.toggleHighlight),
+    // ⌘⌥H: the colour picker (macOS's "Hide others" chord - the app takes it
+    // while a note has focus, which is where this is used).
+    {
+      id: 'editor:highlight-picker',
+      name: 'Highlight colour…',
+      section: 'Formatting',
+      scope: 'editor',
+      hotkey: 'Mod+Alt+H',
+      isAvailable: editorHasFocus,
+      run: () => openHighlightPicker(),
+    },
+    // Each colour (==🔴…==, as Obsidian writes it) by name, from the palette.
+    ...HIGHLIGHT_COLOURS.map((c) =>
+      editorCommand(`editor:highlight-${c.id}`, `Highlight ${c.label.toLowerCase()}`, undefined, (state) =>
+        setHighlightColour(state, c.id),
+      ),
+    ),
+    // ⌘L, as in Obsidian.
+    editorCommand('editor:checklist', 'Toggle checklist item', 'Mod+L', md.toggleChecklist),
     editorCommand('editor:bullet-list', 'Toggle bullet list', 'Mod+Shift+8', md.toggleBulletList),
     editorCommand('editor:numbered-list', 'Toggle numbered list', 'Mod+Shift+7', md.toggleNumberedList),
     editorCommand('editor:quote', 'Toggle blockquote', 'Mod+Shift+9', md.toggleQuote),
@@ -87,12 +133,13 @@ export function registerEditorCommands(registry: CommandRegistry, onToggleLivePr
     editorCommand('editor:math', 'Inline maths', 'Mod+Shift+M', md.toggleMath),
     editorCommand('editor:math-block', 'Maths block', 'Mod+Alt+M', md.insertMathBlock),
     editorCommand('editor:horizontal-rule', 'Insert horizontal rule', 'Mod+Shift+Minus', md.insertHorizontalRule),
-    editorCommand('editor:move-line-up', 'Move line up', 'Alt+ArrowUp', (state) => md.moveLines(state, -1)),
-    editorCommand('editor:move-line-down', 'Move line down', 'Alt+ArrowDown', (state) => md.moveLines(state, 1)),
+    ...tableCommands(),
+    editorCommand('editor:move-line-up', 'Move line up', 'Alt+ArrowUp', (state) => md.moveLines(state, -1), 'Editor'),
+    editorCommand('editor:move-line-down', 'Move line down', 'Alt+ArrowDown', (state) => md.moveLines(state, 1), 'Editor'),
     {
       id: 'editor:image',
       name: 'Insert image',
-      section: 'Editor',
+      section: 'Formatting',
       scope: 'editor',
       hotkey: 'Mod+Shift+I',
       isAvailable: editorHasFocus,
@@ -144,7 +191,7 @@ export function registerEditorCommands(registry: CommandRegistry, onToggleLivePr
       id: 'writing:toggle-typewriter',
       name: 'Toggle typewriter scrolling',
       section: 'Writing',
-      hotkey: 'Mod+Alt+T',
+      hotkey: 'Mod+Alt+Y',
       run: toggleTypewriter,
     },
     {

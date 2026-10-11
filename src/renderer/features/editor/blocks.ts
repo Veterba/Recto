@@ -1,3 +1,4 @@
+import { highlightsIn } from './highlights'
 import { syntaxTree } from '@codemirror/language'
 import { CALLOUT_HEAD } from './live-preview'
 import { isLivePreviewOn } from './live-preview-state'
@@ -26,11 +27,20 @@ const codeFirst = Decoration.line({ class: 'cm-codeblock cm-codeblock-first' })
 const codeLast = Decoration.line({ class: 'cm-codeblock cm-codeblock-last' })
 const codeOnly = Decoration.line({ class: 'cm-codeblock cm-codeblock-first cm-codeblock-last' })
 const quoteLine = Decoration.line({ class: 'cm-quoteblock' })
-const highlightMark = Decoration.mark({ class: 'cm-highlight' })
+/** The default highlight and one per colour (highlights.ts). */
+const highlightMarks = new Map<string, Decoration>()
+const highlightMark = (colour: string | null): Decoration => {
+  const key = colour ?? ''
+  let deco = highlightMarks.get(key)
+  if (deco === undefined) {
+    deco = Decoration.mark({ class: colour === null ? 'cm-highlight' : `cm-highlight cm-highlight--${colour}` })
+    highlightMarks.set(key, deco)
+  }
+  return deco
+}
 /** A nested item's leading whitespace: structure, drawn as a column instead. */
 const hideLead = Decoration.replace({})
 
-const HIGHLIGHT = /==([^=\n]+)==/g
 const QUOTE = /^\s*>\s?/
 
 /** Callout lines, cached by group, since a note may have many. */
@@ -254,9 +264,11 @@ function build(view: EditorView): DecorationSet {
         }
       }
 
-      for (const match of line.text.matchAll(HIGHLIGHT)) {
-        const start = line.from + (match.index ?? 0)
-        entries.push({ from: start, to: start + match[0].length, deco: highlightMark, sort: SORT.mark })
+      // The colour on the text alone, not on the marks or the emoji: hidden
+      // marks inside the coloured span split it into pieces, and the piece
+      // around them drew the background off the text (in dark especially).
+      for (const h of highlightsIn(line.text, line.from)) {
+        if (h.textFrom < h.textTo) entries.push({ from: h.textFrom, to: h.textTo, deco: highlightMark(h.colour), sort: SORT.mark })
       }
     }
   }

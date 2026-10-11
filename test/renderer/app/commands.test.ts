@@ -250,9 +250,13 @@ describe('chord conflicts between scopes', () => {
     await vi.waitFor(() => expect(ran).toEqual(['editor']))
   })
 
-  it('reports the conflict so a hotkey editor can show it', () => {
+  it('the same chord in two scopes is by design, not a conflict; twice in one scope is', () => {
     const reg = build(() => true)
-    expect(reg.conflicts()).toEqual([{ chord: 'meta+b', ids: ['editor:bold', 'app:sidebar'] }])
+    expect(reg.conflicts()).toEqual([])
+    expect(reg.usersOf('meta+b')).toEqual(['editor:bold', 'app:sidebar'])
+    expect(reg.usersOf('meta+b', 'editor')).toEqual(['editor:bold'])
+    reg.register({ id: 'app:other', name: 'Other', hotkey: 'Mod+B', run: () => {} })
+    expect(reg.conflicts()).toEqual([{ chord: 'meta+b', ids: ['app:sidebar', 'app:other'] }])
   })
 
   it('a chord with no available command falls through entirely', () => {

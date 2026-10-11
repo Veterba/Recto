@@ -80,7 +80,7 @@ export function NoteWindows({ windows, setWindows, area, onOpenInEditor, onOpenL
       commands.register({
         id: 'window:close-note-window',
         name: 'Close note window',
-        section: 'Workspace',
+        section: 'Panes',
         hotkey: CLOSE_HOTKEY,
         isAvailable: () => current.current.windows.length > 0,
         run: () => {

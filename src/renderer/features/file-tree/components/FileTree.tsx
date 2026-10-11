@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { commands } from '../../../app/commands'
 import type { FileNode } from '@shared/vault'
 import { api } from '../../../app/api'
 import { beginNativePaneDrag } from '../../../app/pane-drag'
@@ -280,7 +281,7 @@ export function FileTree({
   if (tree.roots.length === 0) {
     return (
       <p className="sidebar__empty">
-        This vault is empty. Press <kbd>⌘N</kbd> to make your first note.
+        This vault is empty. Press <kbd>{commands.label('vault:new-note') ?? '⌘N'}</kbd> to make your first note.
       </p>
     )
   }

@@ -43,7 +43,7 @@ export function normalizeChord(binding: string, isMac = IS_MAC): Chord {
         mods.add('shift')
         break
       default:
-        key = p
+        key = KEY_ALIASES[p] ?? p
     }
   }
 
@@ -51,6 +51,77 @@ export function normalizeChord(binding: string, isMac = IS_MAC): Chord {
   const order = ['ctrl', 'alt', 'shift', 'meta'].filter((m) => mods.has(m))
   return [...order, key].join('+')
 }
+
+/**
+ * Key names a binding may spell out, as the key an event reports: written as
+ * 'Mod+Shift+Minus', a binding used to wait for a key called "minus" that no
+ * keyboard sends, so it never fired.
+ */
+const KEY_ALIASES: Readonly<Record<string, string>> = {
+  minus: '-',
+  equal: '=',
+  plus: '=',
+  slash: '/',
+  backslash: '\\',
+  period: '.',
+  comma: ',',
+  semicolon: ';',
+  quote: "'",
+  backquote: '`',
+  bracketleft: '[',
+  bracketright: ']',
+  return: 'enter',
+  esc: 'escape',
+  up: 'arrowup',
+  down: 'arrowdown',
+  left: 'arrowleft',
+  right: 'arrowright',
+  space: ' ',
+}
+
+/**
+ * Chords macOS or the app's standard menu keep for themselves: a binding here
+ * would never reach the app (screenshots, Spotlight, app switching) or would
+ * fight a menu everyone knows (hide, minimise, quit, zoom, reload). Mapped to
+ * what they do, for the message when someone tries one.
+ */
+export const RESERVED: Readonly<Record<Chord, string>> = Object.fromEntries(
+  (
+    [
+      ['Mod+Shift+3', 'a macOS screenshot'],
+      ['Mod+Shift+4', 'a macOS screenshot'],
+      ['Mod+Shift+5', 'macOS screenshots and recording'],
+      ['Mod+Shift+6', 'a macOS screenshot of the Touch Bar'],
+      ['Mod+Space', 'Spotlight'],
+      ['Mod+Alt+Space', 'a Finder search'],
+      ['Ctrl+Space', 'switching input sources'],
+      ['Mod+Tab', 'switching apps'],
+      ['Mod+`', "switching an app's windows"],
+      ['Mod+Q', 'quitting Recto'],
+      ['Mod+H', 'hiding Recto'],
+      // Not ⌥⌘H ("Hide others"): the highlight colour picker takes it in a note.
+      ['Mod+M', 'minimising the window'],
+      ['Mod+Alt+D', 'showing and hiding the Dock'],
+      ['Mod+Alt+Escape', 'Force Quit'],
+      ['Ctrl+Mod+Q', 'locking the screen'],
+      ['Ctrl+Mod+F', 'full screen'],
+      ['Ctrl+Mod+Space', 'the emoji picker'],
+      ['Mod+R', 'reloading the window'],
+      ['Mod+Shift+R', 'reloading the window'],
+      ['Mod+Alt+I', 'the developer tools'],
+      ['Mod+=', 'zooming in'],
+      ['Mod+Shift+=', 'zooming in'],
+      ['Mod+-', 'zooming out'],
+      ['Mod+0', 'resetting the zoom'],
+      ['Mod+C', 'copy'],
+      ['Mod+V', 'paste'],
+      ['Mod+X', 'cut'],
+      ['Mod+Z', 'undo'],
+      ['Mod+Shift+Z', 'redo'],
+      ['Mod+A', 'select all'],
+    ] as const
+  ).map(([binding, what]) => [normalizeChord(binding), what]),
+)
 
 /** The chord a keyboard event represents, in the same canonical form. */
 export function chordFromEvent(ev: KeyboardEvent): Chord {

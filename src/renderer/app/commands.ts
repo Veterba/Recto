@@ -1,5 +1,5 @@
 import { Events } from './events'
-import { chordFromEvent, normalizeChord, type Chord } from './hotkeys'
+import { chordFromEvent, formatChord, normalizeChord, type Chord } from './hotkeys'
 
 /**
  * The command registry.
@@ -9,6 +9,8 @@ import { chordFromEvent, normalizeChord, type Chord } from './hotkeys'
  * handler in some component - which is the only way conflicting bindings stay
  * discoverable instead of mysterious.
  */
+
+export type CommandScope = 'app' | 'editor' | 'table'
 
 export type Command = {
   id: string
@@ -20,9 +22,11 @@ export type Command = {
   /**
    * Where the binding applies. An `editor` command wins its chord whenever the
    * editor has focus, which is how `⌘B` can mean bold in a note and "toggle
-   * sidebar" everywhere else.
+   * sidebar" everywhere else. A `table` command is read by the table being
+   * edited (table-editor.ts), which takes its keys before anything else.
+   * The same chord in two scopes is not a conflict; twice in one scope is.
    */
-  scope?: 'app' | 'editor'
+  scope?: CommandScope
   /** Default binding, e.g. 'Mod+Shift+1'. Overridable via hotkeys.json. */
   hotkey?: string
   /**
@@ -123,9 +127,40 @@ export class CommandRegistry extends Events<RegistryEvents> {
     return false
   }
 
-  /** Every command bound to a chord, for a hotkey editor to show conflicts. */
+  /** The binding in force for a command, as shown to people (⌘⇧D), or null. */
+  label(id: string): string | null {
+    const binding = this.bindingFor(id)
+    return binding === null ? null : formatChord(binding)
+  }
+
+  /** Does a key event match this command's binding? For code that reads keys itself (a table). */
+  matches(id: string, ev: KeyboardEvent): boolean {
+    const binding = this.bindingFor(id)
+    return binding !== null && normalizeChord(binding) === chordFromEvent(ev)
+  }
+
+  /** The commands bound to a chord, optionally only those in one scope. */
+  usersOf(chord: Chord, scope?: CommandScope): string[] {
+    const ids = this.chords.get(chord) ?? []
+    return scope === undefined ? ids : ids.filter((id) => (this.commands.get(id)?.scope ?? 'app') === scope)
+  }
+
+  /**
+   * Chords bound twice in one scope - a real conflict, since only one of the
+   * two can ever run. The same chord in two scopes (⌘B: bold in a note,
+   * the sidebar elsewhere) is by design and not listed.
+   */
   conflicts(): { chord: Chord; ids: string[] }[] {
-    return [...this.chords.entries()].filter(([, ids]) => ids.length > 1).map(([chord, ids]) => ({ chord, ids }))
+    const out: { chord: Chord; ids: string[] }[] = []
+    for (const [chord, ids] of this.chords) {
+      const byScope = new Map<string, string[]>()
+      for (const id of ids) {
+        const scope = this.commands.get(id)?.scope ?? 'app'
+        byScope.set(scope, [...(byScope.get(scope) ?? []), id])
+      }
+      for (const same of byScope.values()) if (same.length > 1) out.push({ chord, ids: same })
+    }
+    return out
   }
 
   private reindex(): void {
@@ -145,3 +180,6 @@ export class CommandRegistry extends Events<RegistryEvents> {
 }
 
 export const commands = new CommandRegistry()
+
+// For the e2e that presses every default hotkey (test/e2e/hotkeys.test.ts).
+if (typeof window !== 'undefined') (window as unknown as { __rectoCommands?: CommandRegistry }).__rectoCommands = commands

@@ -1,4 +1,5 @@
 import { FloatingWindow } from './FloatingWindow'
+import { commands } from '../commands'
 import { History } from '../../features/editor'
 import { getView } from '../view-registry'
 import type { WorkspaceApi } from '../hooks/use-workspace'
@@ -44,7 +45,7 @@ export function ShellWindows({
           geometry={graphWindow}
           onChange={setGraphWindow}
           onClose={() => setGraphWindow({ open: false })}
-          closeHint="Close graph (⌘G)"
+          closeHint={`Close graph${commands.label('graph:toggle') === null ? '' : ` (${commands.label('graph:toggle')})`}`}
         >
           {graphView?.render({
             state: { floating: true, maximized: graphWindow.maximized },

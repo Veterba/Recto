@@ -260,3 +260,93 @@
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+
+/* Highlight and its colour row: one button, a narrow chevron beside it. */
+.formatbar__split {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+.formatbar__btn.formatbar__more {
+  width: 14px;
+  margin-left: -2px;
+}
+
+.hl-pick {
+  position: fixed;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--radius-m);
+  outline: none;
+}
+.hl-pick__swatches {
+  display: flex;
+  gap: 2px;
+}
+.hl-pick__rows {
+  display: flex;
+  flex-direction: column;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.hl-pick__item {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+}
+.hl-pick__item--text {
+  display: flex;
+  justify-content: flex-start;
+  gap: var(--size-2);
+  width: auto;
+  padding: 0 6px;
+  font-size: var(--font-size-12-5);
+  color: var(--text-primary);
+}
+.hl-pick__item.is-focused:not(:disabled) {
+  background: var(--bg-hover);
+}
+.hl-pick__item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* The swatch is the highlight itself, so the picker shows exactly what you get. */
+.hl-pick__swatch,
+.hl-pick__mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  box-shadow: none;
+  color: var(--text-primary);
+}
+.hl-pick__swatch.cm-highlight,
+.hl-pick__mark.cm-highlight {
+  /* The highlight colour laid three times over: the soft tone that text
+     reads through is too faint to pick a colour by. */
+  background: linear-gradient(var(--hl), var(--hl)), linear-gradient(var(--hl), var(--hl)), var(--hl);
+  border-radius: 6px;
+  box-shadow: none;
+}
+.hl-pick__mark:not(.cm-highlight) {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+.hl-pick__label {
+  flex: 1;
+}
+.hl-pick__key {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-11);
+  color: var(--text-muted);
+}

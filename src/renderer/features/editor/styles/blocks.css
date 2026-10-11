@@ -92,12 +92,34 @@
 }
 
 .cm-highlight {
-  background: var(--highlight-bg);
+  --hl: var(--highlight-bg);
+  background: var(--hl);
   border-radius: 3px;
-  padding: 1px 2px;
-  /* Negative margin so a highlight does not widen the line it sits on. */
-  margin: 0 -1px;
+  /* A little colour past each end, drawn as a shadow: padding or margin here
+     moved the text itself, and the background started inside the first letter. */
+  box-shadow:
+    -2px 0 0 var(--hl),
+    2px 0 0 var(--hl);
   box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.cm-highlight--red {
+  --hl: var(--highlight-red);
+}
+.cm-highlight--orange {
+  --hl: var(--highlight-orange);
+}
+.cm-highlight--yellow {
+  --hl: var(--highlight-yellow);
+}
+.cm-highlight--green {
+  --hl: var(--highlight-green);
+}
+.cm-highlight--blue {
+  --hl: var(--highlight-blue);
+}
+.cm-highlight--purple {
+  --hl: var(--highlight-purple);
 }
 
 /* The drawn `---`. A real element rather than a border on the line, so it

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Icon } from '../../../ui/Icon'
 import { TablePicker } from './TablePicker'
+import { openHighlightPicker } from './HighlightPicker'
 import { Tip } from '../../../ui/Tip'
 import type { Format } from '../active-formats'
 
@@ -18,6 +19,8 @@ import type { Format } from '../active-formats'
 type Item =
   | { kind: 'sep' }
   | { kind: 'table' }
+  /** Highlight, with a colour row beside it. */
+  | { kind: 'highlight' }
   | {
       kind: 'button'
       commandId: string
@@ -39,7 +42,7 @@ const ITEMS: readonly Item[] = [
   { kind: 'button', commandId: 'editor:bold', label: 'Bold', icon: 'bold', format: 'bold' },
   { kind: 'button', commandId: 'editor:italic', label: 'Italic', icon: 'italic', format: 'italic' },
   { kind: 'button', commandId: 'editor:strikethrough', label: 'Strikethrough', icon: 'strikethrough', format: 'strikethrough' },
-  { kind: 'button', commandId: 'editor:highlight', label: 'Highlight', icon: 'highlighter', format: 'highlight' },
+  { kind: 'highlight' },
   { kind: 'button', commandId: 'editor:inline-code', label: 'Inline code', icon: 'code', format: 'code' },
   { kind: 'button', commandId: 'editor:math', label: 'Maths', hint: 'Wraps in $ … $', icon: 'sigma', format: 'math' },
   { kind: 'sep' },
@@ -90,9 +93,46 @@ export function FormatBar({ active, onRun, shortcutFor, onInsertTable, trailing 
       <div className="formatbar__scroll">
         {ITEMS.map((item, i) => {
           if (item.kind === 'sep') return <span key={`sep-${i}`} className="formatbar__sep" aria-hidden="true" />
+          if (item.kind === 'highlight') {
+            const shortcut = shortcutFor('editor:highlight')
+            return (
+              <span key="highlight" className="formatbar__split">
+                <Tip label="Highlight" hint={shortcut ?? undefined} placement="bottom">
+                  <button
+                    className={`formatbar__btn${active.has('highlight') ? ' is-active' : ''}`}
+                    aria-label="Highlight"
+                    aria-pressed={active.has('highlight')}
+                    onMouseDown={(ev) => {
+                      ev.preventDefault()
+                      onRun('editor:highlight')
+                    }}
+                  >
+                    <Icon name="highlighter" size={15} />
+                  </button>
+                </Tip>
+                <Tip label="Highlight colour" hint={shortcutFor('editor:highlight-picker') ?? undefined} placement="bottom">
+                  <button
+                    className="formatbar__btn formatbar__more"
+                    aria-label="Highlight colour"
+                    onMouseDown={(ev) => {
+                      ev.preventDefault()
+                      openHighlightPicker(ev.currentTarget.getBoundingClientRect())
+                    }}
+                  >
+                    <Icon name="chevron-down" size={11} />
+                  </button>
+                </Tip>
+              </span>
+            )
+          }
           if (item.kind === 'table') {
             return (
-              <Tip key="table" label="Table" hint="Pick a size" placement="bottom">
+              <Tip
+                key="table"
+                label="Table"
+                hint={['Pick a size', shortcutFor('editor:insert-table')].filter(Boolean).join(' · ')}
+                placement="bottom"
+              >
                 <button
                   className={`formatbar__btn${picker !== null ? ' is-active' : ''}`}
                   aria-label="Table"

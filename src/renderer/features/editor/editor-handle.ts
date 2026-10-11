@@ -55,6 +55,10 @@ export type EditorHandle = {
   setFolds: (lines: readonly number[]) => void
   /** Formats applying at the cursor, for the toolbar's pressed state. */
   getActiveFormats: () => ReadonlySet<Format>
+  /** The editor's state as it is now, for code that reads before it acts (the highlight picker). */
+  getState: () => EditorState
+  /** Where a position is on screen, or null when it is not drawn. */
+  coordsAt: (pos: number) => { left: number; top: number; bottom: number } | null
   focus: () => void
   undo: () => void
   redo: () => void

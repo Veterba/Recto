@@ -1,3 +1,4 @@
+import { highlightsIn } from './highlights'
 import katex from 'katex'
 import { EditorView, WidgetType } from '@codemirror/view'
 import { resolveVaultFile, vaultFileUrl } from '../../app/vault-url'
@@ -144,8 +145,9 @@ export function renderInline(text: string, into: HTMLElement): void {
       into.append(strong)
     } else if (token.startsWith('==')) {
       const mark = document.createElement('mark')
-      mark.className = 'cm-highlight'
-      renderInline(token.slice(2, -2), mark)
+      const h = highlightsIn(token)[0]
+      mark.className = h?.colour == null ? 'cm-highlight' : `cm-highlight cm-highlight--${h.colour}`
+      renderInline(h === undefined ? token.slice(2, -2) : token.slice(h.textFrom, h.textTo), mark)
       into.append(mark)
     } else if (token.startsWith('~~')) {
       const s = document.createElement('s')

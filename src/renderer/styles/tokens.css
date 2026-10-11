@@ -191,6 +191,12 @@
      is a yellow that survives both themes without being a marker pen. */
   --code-bg: #101010;
   --highlight-bg: rgb(255 214 102 / 0.26);
+  --highlight-red: rgb(255 107 107 / 0.3);
+  --highlight-orange: rgb(255 159 67 / 0.3);
+  --highlight-yellow: rgb(255 214 102 / 0.3);
+  --highlight-green: rgb(87 204 132 / 0.28);
+  --highlight-blue: rgb(92 157 255 / 0.32);
+  --highlight-purple: rgb(178 130 255 / 0.32);
   --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.35);
   --shadow-md: 0 8px 28px rgb(0 0 0 / 0.42);
   /* Translucent surfaces. `--chrome` is the window furniture that the desktop
@@ -255,6 +261,12 @@
     --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
     --code-bg: #f3f3f1;
     --highlight-bg: rgb(255 206 61 / 0.42);
+    --highlight-red: rgb(255 92 92 / 0.28);
+    --highlight-orange: rgb(255 150 50 / 0.32);
+    --highlight-yellow: rgb(255 206 61 / 0.42);
+    --highlight-green: rgb(52 190 105 / 0.26);
+    --highlight-blue: rgb(70 140 255 / 0.24);
+    --highlight-purple: rgb(160 100 250 / 0.24);
     --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
     --shadow-md: 0 6px 20px rgb(0 0 0 / 0.1);
     --chrome-rgb: 250 249 247;
@@ -301,6 +313,12 @@
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
   --code-bg: #f3f3f1;
   --highlight-bg: rgb(255 206 61 / 0.42);
+  --highlight-red: rgb(255 92 92 / 0.28);
+  --highlight-orange: rgb(255 150 50 / 0.32);
+  --highlight-yellow: rgb(255 206 61 / 0.42);
+  --highlight-green: rgb(52 190 105 / 0.26);
+  --highlight-blue: rgb(70 140 255 / 0.24);
+  --highlight-purple: rgb(160 100 250 / 0.24);
   --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
   --shadow-md: 0 6px 20px rgb(0 0 0 / 0.1);
   --chrome-rgb: 250 249 247;
@@ -345,6 +363,12 @@
      is a yellow that survives both themes without being a marker pen. */
   --code-bg: #101010;
   --highlight-bg: rgb(255 214 102 / 0.26);
+  --highlight-red: rgb(255 107 107 / 0.3);
+  --highlight-orange: rgb(255 159 67 / 0.3);
+  --highlight-yellow: rgb(255 214 102 / 0.3);
+  --highlight-green: rgb(87 204 132 / 0.28);
+  --highlight-blue: rgb(92 157 255 / 0.32);
+  --highlight-purple: rgb(178 130 255 / 0.32);
   --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.35);
   --shadow-md: 0 8px 28px rgb(0 0 0 / 0.42);
   /* Translucent surfaces. `--chrome` is the window furniture that the desktop

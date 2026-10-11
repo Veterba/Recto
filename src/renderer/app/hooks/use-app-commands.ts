@@ -30,6 +30,7 @@ export function useAppCommands({
   setSearchOpen,
   setSwitcherOpen,
   setHomeOpen,
+  setShortcutsOpen,
 }: {
   active: WorkspaceApi['active']
   openPalette: () => void
@@ -51,6 +52,7 @@ export function useAppCommands({
   setSearchOpen: (open: boolean) => void
   setSwitcherOpen: (open: boolean) => void
   setHomeOpen: React.Dispatch<React.SetStateAction<boolean>>
+  setShortcutsOpen: React.Dispatch<React.SetStateAction<boolean>>
 }): void {
   useEffect(() => {
     if (!active) return
@@ -67,6 +69,7 @@ export function useAppCommands({
       newNote: () => void createIn('file'),
       newFolder: () => void createIn('folder'),
       newFile: () => void createIn('named'),
+      toggleShortcuts: () => setShortcutsOpen((open) => !open),
       revealActive: () => {
         if (activePath !== null) void api.invoke(IPC.fsReveal, activePath)
       },

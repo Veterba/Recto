@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react'
+import { commands } from '../commands'
 import { getView, viewTitle } from '../view-registry'
 import type { SplitNode, TabsNode, Workspace, WorkspaceNode } from '../workspace'
 import { Icon } from '../../ui/Icon'
@@ -258,9 +259,9 @@ function EmptyPane(): React.ReactElement {
   return (
     <div className="pane-empty">
       <p>
-        Pick a note from the sidebar, or press <kbd>⌘N</kbd> for a new one.
+        Pick a note from the sidebar, or press <kbd>{commands.label('vault:new-note') ?? '⌘N'}</kbd> for a new one.
         <br />
-        <kbd>⌘P</kbd> opens the command palette.
+        <kbd>{commands.label('app:command-palette') ?? '⌘P'}</kbd> opens the command palette.
       </p>
     </div>
   )

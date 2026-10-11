@@ -6,6 +6,7 @@ import { Breadcrumb } from './Breadcrumb'
 import { CommandPalette } from './CommandPalette'
 import { ShellWindows } from './ShellWindows'
 import { Sidebar, SidebarStub } from './Sidebar'
+import { ShortcutSheet } from './ShortcutSheet'
 import { StatusBar } from './StatusBar'
 import { WorkspaceView } from './WorkspaceView'
 import { PaneDropOverlay } from './PaneDropOverlay'
@@ -82,6 +83,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const [settingsOpen, setSettingsOpen] = useState(false)
   /** "New file…" is asking for a name, to go in this folder. */
   const [newFileIn, setNewFileIn] = useState<string | null>(null)
+  /** The ⌘/ cheat sheet. */
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   /** The tab Settings opens on, when something asked for a particular one. */
   const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined)
   const [templatesOpen, setTemplatesOpen] = useState(false)
@@ -416,6 +419,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     setSearchOpen,
     setSwitcherOpen,
     setHomeOpen,
+    setShortcutsOpen,
   })
 
   usePeriodicNotesAutoCreate(templates, allNotes, refresh, settingsOpen)
@@ -425,7 +429,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       {
         id: 'daily:open',
         name: 'Open today',
-        section: 'Open',
+        section: 'Periodic notes',
         icon: 'calendar-days',
         hotkey: 'Mod+Shift+D',
         run: () => void openPeriodicNote('daily'),
@@ -433,21 +437,21 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       {
         id: 'weekly:open',
         name: 'Open this week',
-        section: 'Open',
+        section: 'Periodic notes',
         icon: 'calendar-range',
         run: () => void openPeriodicNote('weekly'),
       },
       {
         id: 'monthly:open',
         name: 'Open this month',
-        section: 'Open',
+        section: 'Periodic notes',
         icon: 'calendar',
         run: () => void openPeriodicNote('monthly'),
       },
       {
         id: 'yearly:open',
         name: 'Open this year',
-        section: 'Open',
+        section: 'Periodic notes',
         icon: 'calendar',
         run: () => void openPeriodicNote('yearly'),
       },
@@ -567,6 +571,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         onOpenDaily={() => void openPeriodicNote('daily')}
         onOpenPalette={openPalette}
       />
+      {shortcutsOpen && <ShortcutSheet onClose={() => setShortcutsOpen(false)} />}
       {newFileIn !== null && (
         <NameDialog
           title="New file"

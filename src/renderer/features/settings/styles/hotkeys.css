@@ -26,40 +26,80 @@
   list-style: none;
 }
 
-.hotkeys__row {
-  display: flex;
-  align-items: center;
-  gap: var(--size-2);
-  padding: var(--size-2) 0;
-  border-bottom: 1px solid var(--border);
+.hotkeys__group + .hotkeys__group {
+  margin-top: var(--size-4);
 }
-
-.hotkeys__name {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  font-size: var(--font-size-13);
-}
-
-.hotkeys__section {
+.hotkeys__grouphead {
+  margin: 0 0 var(--size-1);
   font-size: var(--font-size-10-5);
+  font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-/* Two commands may share a chord; the registry picks by context. Shown rather
-   than hidden, because a binding that quietly does nothing is the bad case. */
-.hotkeys__shared {
+.hotkeys__row {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.hotkeys__line {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+}
+
+.hotkeys__name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-13);
+}
+
+/* Two commands in one place on one chord: only one can ever run, so it is
+   marked until one of them changes. */
+.hotkeys__badge {
   flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 1px 6px;
   border-radius: 999px;
-  background: var(--bg-hover);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+  font-size: var(--font-size-10-5);
+}
+.hotkeys__row.is-conflict .hotkeys__chord {
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+  color: var(--danger);
+}
+
+.hotkeys__banner {
+  margin: 0 0 var(--size-3);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--text-primary);
+  font-size: var(--font-size-12-5);
+}
+
+/* The question when a new chord is taken or kept by macOS. */
+.hotkeys__ask {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  margin-top: 6px;
+  padding: 6px var(--size-2);
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+  font-size: var(--font-size-12-5);
+}
+.hotkeys__ask span {
+  flex: 1;
+}
+
+.hotkeys__empty {
   color: var(--text-muted);
-  font-size: var(--font-size-10);
-  cursor: help;
+  font-size: var(--font-size-13);
 }
 
 .hotkeys__chord {
@@ -104,7 +144,11 @@
   color: var(--text-muted);
   cursor: pointer;
 }
-.hotkeys__clear:hover {
+.hotkeys__clear:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.hotkeys__clear:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text-primary);
 }

@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { formatChord } from '../hotkeys'
+import { commands } from '../commands'
 import { SECTIONS, type SectionId } from '../sections'
 import { Icon } from '../../ui/Icon'
 import { Tip } from '../../ui/Tip'
@@ -111,7 +111,7 @@ export function Sidebar({
         <span className="sidebar__vault-name" title={vaultName}>
           {vaultName}
         </span>
-        <Tip label="Hide sidebar" hint={formatChord('Mod+B')}>
+        <Tip label="Hide sidebar" hint={commands.label('app:toggle-sidebar') ?? undefined}>
           <button className="icon-btn" onClick={onCollapse} aria-label="Hide sidebar">
             <Icon name="panel-left-close" size={15} />
           </button>
@@ -119,8 +119,8 @@ export function Sidebar({
       </header>
 
       <div className="segmented" role="tablist" aria-label="Workspace">
-        {SECTIONS.map((item, i) => (
-          <Tip key={item.id} label={item.label} hint={formatChord(`Mod+${i + 1}`)}>
+        {SECTIONS.map((item) => (
+          <Tip key={item.id} label={item.label} hint={commands.label(`section:${item.id}`) ?? undefined}>
             <button
               role="tab"
               aria-selected={item.id === activeSection}
@@ -222,7 +222,7 @@ export function Sidebar({
 export function SidebarStub({ onExpand }: { onExpand: () => void }): React.ReactElement {
   return (
     <div className="sidebar-stub">
-      <Tip label="Show sidebar" hint={formatChord('Mod+B')} placement="right">
+      <Tip label="Show sidebar" hint={commands.label('app:toggle-sidebar') ?? undefined} placement="right">
         <button className="icon-btn" onClick={onExpand} aria-label="Show sidebar">
           <Icon name="panel-left-open" size={16} />
         </button>

@@ -1,10 +1,12 @@
 import { defaultKeymap, history, historyKeymap, redo, undo } from '@codemirror/commands'
+import { commands } from '../../app/commands'
+import { normalizeChord } from '../../app/hotkeys'
 import { indentListItems, newlineFromIndent } from './list-indent'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { foldedRanges, indentOnInput, syntaxTree } from '@codemirror/language'
 import { Compartment, EditorState, type Extension } from '@codemirror/state'
-import { EditorView, drawSelection, dropCursor, highlightActiveLine, keymap, rectangularSelection } from '@codemirror/view'
+import { EditorView, drawSelection, dropCursor, highlightActiveLine, keymap, rectangularSelection, type KeyBinding } from '@codemirror/view'
 import { vim } from '@replit/codemirror-vim'
 import { activeFormats } from './active-formats'
 import { blockDecorations } from './blocks'
@@ -319,7 +321,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
               return true
             },
           })),
-          ...defaultKeymap,
+          ...yieldToCommands(defaultKeymap),
         ]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) options.onChange(update.state.doc.toString())
@@ -451,6 +453,8 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
     setFolds: (lines) => restoreFolds(view, lines),
 
     getActiveFormats: () => activeFormats(view.state),
+    getState: () => view.state,
+    coordsAt: (pos) => view.coordsAtPos(pos),
 
     setLivePreview: (on) => {
       view.dispatch({ effects: setLivePreview.of(on) })
@@ -470,4 +474,32 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
     openFind: (replace) => openFind(view, replace),
     destroy: () => view.destroy(),
   }
+}
+
+/**
+ * CodeMirror's default keys, each stepping aside when a command is bound to
+ * the same chord and can run right now.
+ *
+ * The editor sees a key before the window's command handler does, so its
+ * defaults used to win and the command ran as well: ⌘⇧K (wikilink) also
+ * deleted the line, ⌘/ (the shortcut sheet) also wrapped the line in a
+ * comment, ⌥↑ moved the line twice. Checked on every press rather than once,
+ * so a rebinding in Settings takes effect without rebuilding any editor.
+ */
+function yieldToCommands(bindings: readonly KeyBinding[]): KeyBinding[] {
+  const owned = (key: string): boolean =>
+    commands.usersOf(normalizeChord(key.replace(/-(?!$)/g, '+'))).some((id) => commands.get(id)?.isAvailable?.() ?? true)
+  type Run = NonNullable<KeyBinding['run']>
+  const wrap =
+    (key: string, run: Run): Run =>
+    (view) =>
+      owned(key) ? false : run(view)
+  return bindings.map((binding) => {
+    const key = binding.mac ?? binding.key
+    if (key === undefined) return binding
+    const out: KeyBinding = { ...binding }
+    if (binding.run !== undefined) out.run = wrap(key, binding.run)
+    if (binding.shift !== undefined) out.shift = wrap(`Shift-${key}`, binding.shift)
+    return out
+  })
 }

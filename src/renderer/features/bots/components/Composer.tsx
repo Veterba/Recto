@@ -1,4 +1,5 @@
 import { useLayoutEffect, useState } from 'react'
+import { commands } from '../../../app/commands'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { fuzzyFilter } from '../../../ui/fuzzy'
@@ -122,7 +123,7 @@ export function Composer(props: Props): React.ReactElement {
                 key: 'topic',
                 label: 'New topic',
                 mark: '+',
-                right: '⌘N',
+                right: commands.label('vault:new-note') ?? '',
                 run: () => {
                   setMenu(null)
                   props.onNewTopic()

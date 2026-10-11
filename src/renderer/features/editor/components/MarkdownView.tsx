@@ -375,7 +375,7 @@ function MarkdownEditor({
           onClick={toggleOutline}
           aria-pressed={outlineOpen}
           aria-label="Outline"
-          title={`Outline (${formatChord('Mod+Shift+O')})`}
+          title={`Outline${commands.label('editor:toggle-outline') === null ? '' : ` (${commands.label('editor:toggle-outline')})`}`}
         >
           <Icon name="list-tree" size={13} />
         </button>
@@ -464,7 +464,7 @@ export function registerMarkdownView(
         return (
           <div className="pane-empty">
             <p>
-              No note open. Pick one from the sidebar, or press <kbd>⌘N</kbd> to create one.
+              No note open. Pick one from the sidebar, or press <kbd>{commands.label('vault:new-note') ?? '⌘N'}</kbd> to create one.
             </p>
           </div>
         )

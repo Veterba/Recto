@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { commands } from '../../../app/commands'
 import type { Bot, BotSource, PullProgress } from '@shared/bots'
 import { createdStamp, fallbackTitle } from '@shared/chat-topics'
 import { IPC, IPC_EVENT } from '@shared/ipc'
@@ -374,7 +375,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
           )}
         </div>
         <div className="bot-chat__actions">
-          <Tip label="New topic" hint="⌘N">
+          <Tip label="New topic" hint={commands.label('vault:new-note') ?? undefined}>
             <button className="bot-chat__action" onClick={newTopic}>
               <Icon name="plus" size={14} />
               <span>New topic</span>

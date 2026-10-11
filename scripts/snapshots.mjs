@@ -350,7 +350,7 @@ async function screens(page, dir, vault) {
   await page.evaluate(() =>
     Promise.all(['italic 400 16px "Bodoni Moda"', '500 16px "Geist Sans"', '500 16px "Geist Mono"'].map((f) => document.fonts.load(f))),
   )
-  await key(page, 'Mod+Shift+H')
+  await key(page, 'Control+Mod+H')
   await pane('Recto')
   await shoot(page, dir, '17-home', 2500)
   await page.keyboard.press('ArrowRight')
@@ -827,6 +827,41 @@ async function periodicShots(dir, theme) {
 }
 
 /**
+ * Highlight colours (==🔴…==, as Obsidian writes them): all six and the
+ * default in Live Preview, then the toolbar's colour row open.
+ */
+async function highlightShots(dir, theme) {
+  const { base, vault, userData } = prepareVault(theme, `${theme}-highlights`)
+  fs.writeFileSync(
+    path.join(vault, 'Colours.md'),
+    '# Colours\n\nA ==plain highlight==, then ==🔴red==, ==🟠orange==, ==🟡yellow==, ==🟢green==, ==🔵blue== and ==🟣purple==.\n\n==Empty== at the start of a line, and a longer ==🔵highlight that runs on for a while to show how it sits in a sentence==.\n\nThe caret rests here.\n',
+  )
+  const { app, page } = await launch(userData)
+  try {
+    await page.locator('[role=treeitem]', { hasText: 'Colours' }).first().click()
+    await page.waitForSelector('.cm-highlight--purple')
+    await page.locator('.cm-line', { hasText: 'The caret rests here' }).click()
+    await shoot(page, dir, '29-highlight-colours', 900)
+    // The picker (⌘⌥H) above a selected word: six colours, Default, Remove.
+    await page.locator('.cm-line', { hasText: 'The caret rests here' }).dblclick({ position: { x: 60, y: 6 } })
+    await key(page, 'Mod+Alt+H')
+    await page.waitForSelector('.hl-pick')
+    await shoot(page, dir, '29b-highlight-picker', 600)
+    await page.keyboard.press('Escape')
+    // And on a highlight: the colour in force has its check.
+    await page.locator('.cm-highlight--blue').first().click()
+    await key(page, 'Mod+Alt+H')
+    await page.waitForSelector('.hl-pick')
+    await shoot(page, dir, '29c-highlight-picker-current', 600)
+    await page.keyboard.press('Escape')
+    console.log('  29-highlights')
+  } finally {
+    await app.close()
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
+/**
  * Editing tables, in their own run: the toolbar's size picker, a row's handle
  * with its menu, and a rectangle of selected cells (test/fixtures/table-edit).
  */
@@ -961,6 +996,7 @@ for (const theme of ['light', 'dark']) {
     await fileShots(dir, theme)
     await tableEditShots(dir, theme)
     await periodicShots(dir, theme)
+    await highlightShots(dir, theme)
     if (COMPARE !== null) {
       for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.png'))) {
         const old = path.join(COMPARE, theme, name)

@@ -13,6 +13,7 @@ import { syntaxTree } from '@codemirror/language'
 import { EditorView, showTooltip, ViewPlugin, WidgetType, type Tooltip } from '@codemirror/view'
 import { createElement } from 'react'
 import { openLayer } from '../../ui/menu-host'
+import { commands } from '../../app/commands'
 import { TableMenu, type IconAction, type MenuEntry } from './components/TableMenu'
 import { pressOrDrag } from '../../ui/press-or-drag'
 import { attachTip, type TipPlacement } from '../../ui/Tip'
@@ -159,6 +160,35 @@ function placeCaret(el: HTMLElement, where: 'start' | 'end' | 'all' | { x: numbe
   if (where !== 'all') range.collapse(where === 'start')
   selection.removeAllRanges()
   selection.addRange(range)
+}
+
+/** The table commands (editor-commands.ts): what each does, by its registry id. */
+export type TableAction = 'row-up' | 'row-down' | 'column-left' | 'column-right' | 'add-row-below'
+export const TABLE_COMMANDS: Readonly<Record<string, TableAction>> = {
+  'table:move-row-up': 'row-up',
+  'table:move-row-down': 'row-down',
+  'table:move-column-left': 'column-left',
+  'table:move-column-right': 'column-right',
+  'table:add-row-below': 'add-row-below',
+}
+
+/** A menu entry's shortcut: the command's binding in force, or none. */
+const shortcutOf = (id: string): { shortcut?: string } => {
+  const label = commands.label(id)
+  return label === null ? {} : { shortcut: label }
+}
+
+/** Run a table command on the table that has focus. False when no table has. */
+export function runTableAction(action: TableAction): boolean {
+  const wrap = document.activeElement?.closest<HTMLElement>('.cm-tbl')
+  const controller = wrap === null || wrap === undefined ? undefined : controllers.get(wrap)
+  return controller?.act(action) ?? false
+}
+
+/** Is a cell of a table being edited or selected? Where the table commands apply. */
+export const inTable = (): boolean => {
+  const wrap = document.activeElement?.closest<HTMLElement>('.cm-tbl')
+  return wrap !== null && wrap !== undefined && controllers.has(wrap)
 }
 
 class TableController {
@@ -632,6 +662,26 @@ class TableController {
     window.addEventListener('mouseup', up)
   }
 
+  /** A table command, on the cell being edited or the head of the selection. */
+  act(action: TableAction): boolean {
+    const at = this.editing?.cell ?? this.range?.head
+    if (at === undefined) return false
+    const base = this.edited() ?? this.model
+    const editing = this.editing !== null
+    const lastRow = base.rows.length - 1
+    const lastCol = base.align.length - 1
+    if (action === 'row-up' && at.row > 1) this.apply(moveRow(base, at.row, at.row - 1), { row: at.row - 1, col: at.col, edit: editing })
+    else if (action === 'row-down' && at.row > 0 && at.row < lastRow)
+      this.apply(moveRow(base, at.row, at.row + 1), { row: at.row + 1, col: at.col, edit: editing })
+    else if (action === 'column-left' && at.col > 0)
+      this.apply(moveColumn(base, at.col, at.col - 1), { row: at.row, col: at.col - 1, edit: editing })
+    else if (action === 'column-right' && at.col < lastCol)
+      this.apply(moveColumn(base, at.col, at.col + 1), { row: at.row, col: at.col + 1, edit: editing })
+    // Below the header too: a new first row.
+    else if (action === 'add-row-below') this.apply(insertRow(base, at.row + 1), { row: at.row + 1, col: at.col, edit: true })
+    return true
+  }
+
   private onKeyDown(event: KeyboardEvent): void {
     const mod = event.metaKey || event.ctrlKey
     const handled = (): void => {
@@ -652,24 +702,13 @@ class TableController {
       return
     }
 
-    // ⌥↑ ⌥↓ move the row, ⌥← ⌥→ the column - the cell goes along.
-    if (event.altKey && !mod && event.key.startsWith('Arrow')) {
-      const at = this.editing?.cell ?? this.range?.head
-      if (at !== undefined) {
-        handled()
-        const base = this.edited() ?? this.model
-        const editing = this.editing !== null
-        const lastRow = base.rows.length - 1
-        const lastCol = base.align.length - 1
-        if (event.key === 'ArrowUp' && at.row > 1)
-          this.apply(moveRow(base, at.row, at.row - 1), { row: at.row - 1, col: at.col, edit: editing })
-        else if (event.key === 'ArrowDown' && at.row > 0 && at.row < lastRow)
-          this.apply(moveRow(base, at.row, at.row + 1), { row: at.row + 1, col: at.col, edit: editing })
-        else if (event.key === 'ArrowLeft' && at.col > 0)
-          this.apply(moveColumn(base, at.col, at.col - 1), { row: at.row, col: at.col - 1, edit: editing })
-        else if (event.key === 'ArrowRight' && at.col < lastCol)
-          this.apply(moveColumn(base, at.col, at.col + 1), { row: at.row, col: at.col + 1, edit: editing })
-      }
+    // The table commands - ⌥↑ ⌥↓ move the row, ⌥← ⌥→ the column (the cell
+    // goes along), ⌘↵ adds a row below - by whatever they are bound to now.
+    // Through the registry, like every other command: runTableAction finds this table.
+    for (const id of Object.keys(TABLE_COMMANDS)) {
+      if (!commands.matches(id, event)) continue
+      handled()
+      void commands.run(id)
       return
     }
 
@@ -974,7 +1013,7 @@ class TableController {
         kind: 'item',
         icon: 'arrow-up',
         label: 'Move row up',
-        shortcut: '⌥↑',
+        ...shortcutOf('table:move-row-up'),
         disabled: row <= 1,
         run: () => go(moveRow(base, row, row - 1), row - 1),
       },
@@ -982,7 +1021,7 @@ class TableController {
         kind: 'item',
         icon: 'arrow-down',
         label: 'Move row down',
-        shortcut: '⌥↓',
+        ...shortcutOf('table:move-row-down'),
         disabled: !body || row >= last,
         run: () => go(moveRow(base, row, row + 1), row + 1),
       },
@@ -1068,7 +1107,7 @@ class TableController {
         kind: 'item',
         icon: 'arrow-left',
         label: 'Move column left',
-        shortcut: '⌥←',
+        ...shortcutOf('table:move-column-left'),
         disabled: col === 0,
         run: () => go(moveColumn(base, col, col - 1), col - 1),
       },
@@ -1076,7 +1115,7 @@ class TableController {
         kind: 'item',
         icon: 'arrow-right',
         label: 'Move column right',
-        shortcut: '⌥→',
+        ...shortcutOf('table:move-column-right'),
         disabled: col >= last,
         run: () => go(moveColumn(base, col, col + 1), col + 1),
       },
@@ -1264,6 +1303,7 @@ function focusTable(el: HTMLElement): void {
   el.focus({ preventScroll: true })
 }
 
+/** Each table on screen, by its outer element: how a widget, or a command, finds its controller. */
 const controllers = new WeakMap<HTMLElement, TableController>()
 
 /** A table in Live Preview you can edit in place. Read-only views keep `TableWidget`. */

@@ -1,3 +1,4 @@
+import { highlightsIn } from './highlights'
 import { syntaxTree } from '@codemirror/language'
 import { writingConfig } from './writing'
 import { Compartment, RangeSetBuilder, type Extension } from '@codemirror/state'
@@ -41,7 +42,6 @@ const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
 const EMBED = /!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g
 /** `> [!type]` with an optional fold sign and title. */
 export const CALLOUT_HEAD = /^(\s*>\s*)\[!([\w-]+)\]([+-]?)(.*)$/
-const HIGHLIGHT = /==([^=\n]+)==/g
 const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
 /**
  * `[text](a path with spaces.md)`.
@@ -252,11 +252,10 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
         })
       }
 
-      for (const match of line.text.matchAll(HIGHLIGHT)) {
-        const start = line.from + (match.index ?? 0)
-        const end = start + match[0].length
-        ranges.push({ from: start, to: start + 2, deco: hidden })
-        ranges.push({ from: end - 2, to: end, deco: hidden })
+      // The marks, and a colour's emoji with the opening ones (highlights.ts).
+      for (const h of highlightsIn(line.text, line.from)) {
+        ranges.push({ from: h.from, to: h.textFrom, deco: hidden })
+        ranges.push({ from: h.textTo, to: h.to, deco: hidden })
       }
 
       for (const match of line.text.matchAll(WIKILINK)) {

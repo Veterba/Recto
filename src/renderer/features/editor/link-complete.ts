@@ -1,5 +1,6 @@
 import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
 import type { Extension } from '@codemirror/state'
+import { highlightCompletion } from './highlights'
 
 /**
  * `[[` autocomplete for note names.
@@ -51,6 +52,8 @@ export function linkCompletion(getCandidates: () => readonly LinkCandidate[]): E
           validFor: /^[^\]\n#|]*$/,
         }
       },
+      // `==` offers the highlight colours (highlights.ts).
+      highlightCompletion,
     ],
     // The list is note names, not code: showing it on every keystroke outside a
     // link would be noise.

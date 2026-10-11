@@ -12,7 +12,7 @@ import { HOME_HOTKEY } from '../features/home'
  * showing the same truth.
  */
 
-type CommandContext = {
+export type CommandContext = {
   workspace: Workspace
   openPalette: () => void
   closeVault: () => void
@@ -21,6 +21,8 @@ type CommandContext = {
   newFolder: () => void
   /** A file of any type, named in a dialog. */
   newFile: () => void
+  /** The ⌘/ cheat sheet. */
+  toggleShortcuts: () => void
   revealActive: () => void
   setTheme: (theme: 'system' | 'light' | 'dark') => void
   cycleTheme: () => void
@@ -47,9 +49,17 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'app:command-palette',
       name: 'Open command palette',
-      section: 'App',
+      section: 'Navigation',
       hotkey: 'Mod+P',
       run: ctx.openPalette,
+    }),
+    registry.register({
+      id: 'app:shortcuts',
+      name: 'Keyboard shortcuts',
+      section: 'App',
+      icon: 'keyboard',
+      hotkey: 'Mod+/',
+      run: ctx.toggleShortcuts,
     }),
     registry.register({
       id: 'vault:new-note',
@@ -68,26 +78,28 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       id: 'vault:new-folder',
       name: 'New folder',
       section: 'Vault',
+      hotkey: 'Mod+Shift+N',
       run: ctx.newFolder,
     }),
     registry.register({
       id: 'vault:reveal',
       name: 'Show in Finder',
       section: 'Vault',
+      hotkey: 'Mod+Alt+R',
       isAvailable: () => typeof workspace.activeLeaf?.state['path'] === 'string',
       run: ctx.revealActive,
     }),
     registry.register({
       id: 'app:toggle-sidebar',
       name: 'Toggle sidebar',
-      section: 'App',
+      section: 'Panes',
       hotkey: 'Mod+B',
       run: ctx.toggleSidebar,
     }),
     registry.register({
       id: 'search:quick-switcher',
       name: 'Go to note',
-      section: 'Search',
+      section: 'Navigation',
       icon: 'search',
       hotkey: 'Mod+O',
       run: ctx.openSwitcher,
@@ -95,13 +107,13 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'links:unresolved',
       name: 'Show unresolved links',
-      section: 'Search',
+      section: 'Vault',
       run: () => ctx.openExtension('unresolved'),
     }),
     registry.register({
       id: 'search:open',
       name: 'Search all notes',
-      section: 'Search',
+      section: 'Navigation',
       icon: 'search',
       hotkey: 'Mod+Shift+F',
       run: ctx.openSearch,
@@ -109,17 +121,15 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'index:rebuild',
       name: 'Rebuild search index',
-      section: 'Search',
+      section: 'Vault',
       run: ctx.reindex,
     }),
     registry.register({
       id: 'history:toggle',
       name: 'Version history',
-      section: 'Vault',
+      section: 'Panes',
       icon: 'history',
-      // Not Mod+Shift+H: that is the editor's highlight command, and an
-      // editor-scoped binding wins whenever a note has focus - which is
-      // exactly when you would reach for version history.
+      // Not Mod+Shift+H: that is the highlight.
       hotkey: 'Mod+Shift+Y',
       isAvailable: () => typeof workspace.activeLeaf?.state['path'] === 'string',
       run: ctx.toggleHistory,
@@ -135,7 +145,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
        */
       id: 'app:home',
       name: 'Home',
-      section: 'Open',
+      section: 'Navigation',
       icon: 'sparkles',
       hotkey: HOME_HOTKEY,
       run: ctx.toggleHome,
@@ -143,7 +153,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'app:settings',
       name: 'Settings',
-      section: 'Open',
+      section: 'App',
       icon: 'settings',
       // The macOS convention. It is what people press without thinking.
       hotkey: 'Mod+,',
@@ -161,7 +171,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'graph:toggle',
       name: 'Toggle graph panel',
-      section: 'Graph',
+      section: 'Panes',
       icon: 'git-fork',
       hotkey: 'Mod+G',
       run: ctx.toggleGraph,
@@ -169,7 +179,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'graph:open-full',
       name: 'Open graph as a tab',
-      section: 'Graph',
+      section: 'Panes',
       icon: 'git-fork',
       run: ctx.openGraphFull,
     }),
@@ -207,7 +217,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'workspace:close-tab',
       name: 'Close current tab',
-      section: 'Workspace',
+      section: 'Panes',
       hotkey: 'Mod+W',
       isAvailable: hasActiveLeaf,
       run: () => {
@@ -218,7 +228,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'workspace:split-right',
       name: 'Split pane right',
-      section: 'Workspace',
+      section: 'Panes',
       hotkey: 'Mod+Alt+ArrowRight',
       isAvailable: hasActiveLeaf,
       run: () => {
@@ -229,7 +239,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'workspace:split-down',
       name: 'Split pane down',
-      section: 'Workspace',
+      section: 'Panes',
       hotkey: 'Mod+Alt+ArrowDown',
       isAvailable: hasActiveLeaf,
       run: () => {
@@ -240,7 +250,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'workspace:next-tab',
       name: 'Go to next tab',
-      section: 'Workspace',
+      section: 'Navigation',
       hotkey: 'Ctrl+Tab',
       isAvailable: hasActiveLeaf,
       run: () => cycleTab(workspace, 1),
@@ -248,7 +258,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
     registry.register({
       id: 'workspace:previous-tab',
       name: 'Go to previous tab',
-      section: 'Workspace',
+      section: 'Navigation',
       hotkey: 'Ctrl+Shift+Tab',
       isAvailable: hasActiveLeaf,
       run: () => cycleTab(workspace, -1),
@@ -262,7 +272,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       registry.register({
         id: `section:${section.id}`,
         name: `Go to ${section.label}`,
-        section: 'Workspace',
+        section: 'Navigation',
         icon: section.icon,
         hotkey: `Mod+${i + 1}`,
         run: () => ctx.goToSection(section.id),
@@ -280,7 +290,7 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       registry.register({
         id: `workspace:open-${view.type}`,
         name: `Open ${view.title}`,
-        section: 'Open',
+        section: 'Navigation',
         run: () => ctx.openExtension(view.type),
       }),
     )

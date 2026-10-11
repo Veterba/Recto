@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { commands } from '../../../app/commands'
 import { normaliseFolder, isInFolder } from '@shared/templates'
 import type { SettingsDeps } from '../settings-deps'
 import { SettingRow } from '../../../ui/SettingRow'
@@ -75,7 +76,7 @@ export function TemplateSettingsTab({ templates, updateTemplates, notes }: Setti
         hint={
           inFolder.length === 0
             ? 'In your vault, next to your notes. Empty so far — any note you put here becomes a template.'
-            : `${inFolder.length} ${inFolder.length === 1 ? 'template' : 'templates'} here. Insert one into any note with ⌘⇧T.`
+            : `${inFolder.length} ${inFolder.length === 1 ? 'template' : 'templates'} here. Insert one into any note${commands.label('editor:template') === null ? ' from the command palette' : ` with ${commands.label('editor:template')}`}.`
         }
       >
         <FolderField value={templates.folder} label="Templates folder" onCommit={(folder) => updateTemplates({ ...templates, folder })} />

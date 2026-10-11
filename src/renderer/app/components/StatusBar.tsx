@@ -1,4 +1,4 @@
-import { formatChord } from '../hotkeys'
+import { commands } from '../commands'
 import { viewTitle } from '../view-registry'
 import type { Workspace } from '../workspace'
 import { TopicsNotice } from '../../features/topics'
@@ -38,7 +38,7 @@ export function StatusBar({ workspace, vaultName, graphOpen, onToggleGraph, onOp
           toolbar, so they are there even with the toolbar hidden. */}
       <WritingButtons buttonClass="status__btn" iconSize={13} menuPlacement="above" />
       <TopicsNotice />
-      <Tip label="Today's note" hint={formatChord('Mod+Shift+D')} placement="top">
+      <Tip label="Today's note" hint={commands.label('daily:open') ?? undefined} placement="top">
         <button className="status__btn" onClick={onOpenDaily} aria-label="Daily note">
           <Icon name="calendar-days" size={13} />
         </button>
@@ -46,7 +46,7 @@ export function StatusBar({ workspace, vaultName, graphOpen, onToggleGraph, onOp
       <span className="status__item status__item--muted">
         {openCount} {openCount === 1 ? 'tab' : 'tabs'}
       </span>
-      <Tip label={graphOpen ? 'Hide graph' : 'Show graph'} hint={formatChord('Mod+G')} placement="top">
+      <Tip label={graphOpen ? 'Hide graph' : 'Show graph'} hint={commands.label('graph:toggle') ?? undefined} placement="top">
         <button
           className={`status__btn${graphOpen ? ' is-on' : ''}`}
           onClick={onToggleGraph}

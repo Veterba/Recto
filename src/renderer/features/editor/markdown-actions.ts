@@ -160,7 +160,8 @@ export const toggleBold = (state: EditorState): TransactionSpec => toggleWrap(st
 export const toggleItalic = (state: EditorState): TransactionSpec => toggleWrap(state, '*')
 export const toggleInlineCode = (state: EditorState): TransactionSpec => toggleWrap(state, '`')
 export const toggleStrikethrough = (state: EditorState): TransactionSpec => toggleWrap(state, '~~')
-export const toggleHighlight = (state: EditorState): TransactionSpec => toggleWrap(state, '==')
+/** Highlights, colours included, are in highlights.ts. */
+export { toggleHighlight } from './highlights'
 /** `$x^2$` — the syntax every markdown renderer with maths agrees on. */
 export const toggleMath = (state: EditorState): TransactionSpec => toggleWrap(state, '$')
 
