@@ -37,7 +37,7 @@ export function useAppCommands({
   setTemplatesOpen: (open: boolean) => void
   onCloseVault: () => void
   toggleSidebar: () => void
-  createIn: (kind: 'file' | 'folder') => Promise<void>
+  createIn: (kind: 'file' | 'folder' | 'named') => Promise<void>
   activePath: string | null
   update: (patch: Partial<Appearance>) => void
   livePreview: boolean
@@ -66,6 +66,7 @@ export function useAppCommands({
       toggleSidebar,
       newNote: () => void createIn('file'),
       newFolder: () => void createIn('folder'),
+      newFile: () => void createIn('named'),
       revealActive: () => {
         if (activePath !== null) void api.invoke(IPC.fsReveal, activePath)
       },

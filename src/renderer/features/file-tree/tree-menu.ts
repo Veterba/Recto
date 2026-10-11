@@ -26,7 +26,7 @@ export function treeMenu(
     archive,
   }: {
     vaultPath: string
-    onCreateIn: (parent: string, kind: 'file' | 'folder') => void
+    onCreateIn: (parent: string, kind: 'file' | 'folder' | 'named') => void
     rename: (path: string) => void
     archive: (node: FileNode) => void
   },
@@ -42,6 +42,12 @@ export function treeMenu(
       label: 'New note',
       icon: 'file-plus',
       run: () => onCreateIn(parent, 'file'),
+    },
+    {
+      kind: 'item',
+      label: 'New file…',
+      icon: 'file-code',
+      run: () => onCreateIn(parent, 'named'),
     },
     {
       kind: 'item',

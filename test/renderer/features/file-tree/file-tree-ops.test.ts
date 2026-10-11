@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  kindChange,
+  newFileName,
+  stemLength,
   allFolderPaths,
   applyChanges,
-  editableName,
   filterTree,
-  renamedName,
 } from '../../../../src/renderer/features/file-tree/file-tree-ops'
 import type { FileNode, VaultChange } from '../../../../src/shared/vault'
 
@@ -129,22 +130,27 @@ describe('filtering the tree', () => {
   })
 })
 
-describe('renaming keeps a note a note', () => {
-  it('edits a note without its .md', () => {
-    expect(editableName('index.md')).toBe('index')
-    expect(editableName('summary')).toBe('summary')
-    expect(editableName('photo.png')).toBe('photo.png')
+describe('renaming and the file type', () => {
+  it('says when a rename makes a note stop being one, or makes a file a note', () => {
+    expect(kindChange('py.py.md', 'py.py')).toBe('leaves-notes')
+    expect(kindChange('index.md', 'Overview')).toBe('leaves-notes')
+    expect(kindChange('todo.txt', 'todo.md')).toBe('becomes-note')
+    expect(kindChange('index.md', 'Overview.md')).toBe(null)
+    expect(kindChange('photo.png', 'cover.jpg')).toBe(null)
   })
 
-  it('gives .md back to a note renamed without it (regression: the note became a file that was no longer a note)', () => {
-    expect(renamedName('index.md', 'Overview')).toBe('Overview.md')
-    expect(renamedName('index.md', '  Overview  ')).toBe('Overview.md')
-    expect(renamedName('index.md', 'Overview.md')).toBe('Overview.md')
-    expect(renamedName('index.md', 'v1.2 notes')).toBe('v1.2 notes.md')
+  it('selects the part before the extension, all of a folder', () => {
+    expect(stemLength('index.md', false)).toBe(5)
+    expect(stemLength('py.py.md', false)).toBe(5)
+    expect(stemLength('.env', false)).toBe(4)
+    expect(stemLength('v1.2 notes', true)).toBe(10)
   })
 
-  it('leaves folders and other files as typed', () => {
-    expect(renamedName('summary', 'Summary notes')).toBe('Summary notes')
-    expect(renamedName('photo.png', 'cover.png')).toBe('cover.png')
+  it('a new file keeps its extension; a plain name becomes a note', () => {
+    expect(newFileName('data.json')).toBe('data.json')
+    expect(newFileName(' run.py ')).toBe('run.py')
+    expect(newFileName('Ideas')).toBe('Ideas.md')
+    expect(newFileName('v1.2 notes')).toBe('v1.2 notes.md')
+    expect(newFileName('Plan.md')).toBe('Plan.md')
   })
 })

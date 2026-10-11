@@ -4,6 +4,7 @@ import { IPC } from '@shared/ipc'
 import type { SectionId } from '../sections'
 import type { WorkspaceApi } from './use-workspace'
 import { createCard, type useBoards } from '../../features/boards'
+import { newFileName } from '../../features/file-tree'
 
 /** Making things: a note or folder in the tree, and the sidebar's New button per section. */
 export function useShellCreate({
@@ -17,6 +18,7 @@ export function useShellCreate({
   openBoardCard,
   active,
   viewType,
+  askFileName,
 }: {
   refresh: () => Promise<void>
   setExpanded: React.Dispatch<React.SetStateAction<Set<string>>>
@@ -28,25 +30,35 @@ export function useShellCreate({
   openBoardCard: (path: string) => void
   active: WorkspaceApi['active']
   viewType: string
+  /** "New file…": ask for the name, then `createNamed`. */
+  askFileName: (parent: string) => void
 }): {
-  createAt: (parent: string, kind: 'file' | 'folder') => Promise<void>
-  createIn: (kind: 'file' | 'folder') => Promise<void>
+  createAt: (parent: string, kind: 'file' | 'folder' | 'named') => Promise<void>
+  createIn: (kind: 'file' | 'folder' | 'named') => Promise<void>
+  createNamed: (parent: string, typed: string) => Promise<void>
   onNew: () => void
 } {
   const createAt = useCallback(
-    async (parent: string, kind: 'file' | 'folder') => {
-      const name = kind === 'file' ? 'Untitled.md' : 'New folder'
-      const result = await api.invoke(IPC.fsCreate, parent, name, kind)
+    async (parent: string, kind: 'file' | 'folder' | 'named', typed?: string) => {
+      if (kind === 'named' && typed === undefined) {
+        askFileName(parent)
+        return
+      }
+      const name = kind === 'named' ? newFileName(typed ?? '') : kind === 'file' ? 'Untitled.md' : 'New folder'
+      const result = await api.invoke(IPC.fsCreate, parent, name, kind === 'folder' ? 'folder' : 'file')
       if (!result.ok) return
       await refresh()
       // Expand the folder it went into, or the new thing is created somewhere
       // you cannot see.
       if (parent !== '') setExpanded((prev) => new Set(prev).add(parent))
-      if (kind === 'file') openFile(result.path)
-      else setExpanded((prev) => new Set(prev).add(result.path))
+      if (kind === 'folder') setExpanded((prev) => new Set(prev).add(result.path))
+      else openFile(result.path)
     },
-    [refresh, openFile],
+    [refresh, openFile, askFileName],
   )
+
+  /** A "New file…" name: as typed with an extension, a note without one (newFileName). */
+  const createNamed = useCallback((parent: string, typed: string) => createAt(parent, 'named', typed), [createAt])
 
   /**
    * New note / new folder from the sidebar button, ⌘N or the palette: always
@@ -57,7 +69,7 @@ export function useShellCreate({
    * The top level is where loose notes belong until they are filed, and Tidy
    * files them. Creating inside a specific folder is its right-click menu.
    */
-  const createIn = useCallback((kind: 'file' | 'folder') => createAt('', kind), [createAt])
+  const createIn = useCallback((kind: 'file' | 'folder' | 'named') => createAt('', kind), [createAt])
 
   /** The sidebar's bottom-left button means something different per section. */
   const onNew = useCallback(() => {
@@ -84,5 +96,5 @@ export function useShellCreate({
     active?.openView(viewType, { draft: Date.now() }, { reuse: false })
   }, [activeSection, createIn, active, viewType, boards, activeBoard, openBoardCard, newChat])
 
-  return { createAt, createIn, onNew }
+  return { createAt, createIn, createNamed, onNew }
 }

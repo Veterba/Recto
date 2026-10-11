@@ -35,8 +35,10 @@ type Props = {
   onToggleFolder: (path: string) => void
   onOpenFile: (path: string) => void
   onChanged: () => void
-  /** Create inside a specific folder, from the context menu. */
-  onCreateIn: (parent: string, kind: 'file' | 'folder') => void
+  /** Create inside a specific folder, from the context menu: a note, a folder, or a file named in a dialog. */
+  onCreateIn: (parent: string, kind: 'file' | 'folder' | 'named') => void
+  /** A file or folder was renamed here: open tabs follow it. */
+  onRenamed: (from: string, to: string) => void
   /** Absolute vault path, for "copy full path". */
   vaultPath: string
   /** The templates folder, which gets its own icon so it cannot pass for a normal one. */
@@ -63,6 +65,7 @@ export function FileTree({
   onOpenFile,
   onChanged,
   onCreateIn,
+  onRenamed,
   vaultPath,
   templateFolder,
   previewDelayMs,
@@ -131,13 +134,14 @@ export function FileTree({
         return
       }
       setSelected(result.path)
+      onRenamed(path, result.path)
       onChanged()
       // Renaming silently rewrote other notes. Tell the user, and offer undo.
       if (result.undoId !== undefined && result.rewrittenLinks > 0) {
         setRewrite({ files: result.rewrittenFiles, links: result.rewrittenLinks, undoId: result.undoId })
       }
     },
-    [onChanged],
+    [onChanged, onRenamed],
   )
 
   // Deleting archives rather than destroying: recoverable in-app for the
@@ -465,6 +469,7 @@ export function FileTree({
         <RenameDialog
           name={renaming.slice(renaming.lastIndexOf('/') + 1)}
           path={renaming}
+          folder={tree.byPath.get(renaming)?.kind === 'folder'}
           onCommit={(name) => void commitRename(renaming, name)}
           onCancel={() => setRenaming(null)}
         />

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../../../ui/Icon'
-import { editableName, renamedName } from '../file-tree-ops'
+import { ConfirmDialog } from '../../../ui/ConfirmDialog'
+import { kindChange, stemLength } from '../file-tree-ops'
 
 /**
  * Renaming a file or folder, in a dialog.
@@ -15,6 +16,10 @@ import { editableName, renamedName } from '../file-tree-ops'
  *
  * Portalled to the document body: the sidebar is an `overflow: auto` scroller,
  * so anything rendered inside it is clipped by it.
+ *
+ * The whole name is there to edit, extension included, so a file's type can
+ * be changed here - with a question first when that turns a note into
+ * something else or a file into a note (see kindChange).
  */
 
 type Props = {
@@ -22,31 +27,79 @@ type Props = {
   name: string
   /** Vault-relative path, shown so it is clear WHICH file this is. */
   path: string
+  /** A folder: no extension, the whole name selected, nothing to ask. */
+  folder?: boolean
   onCommit: (next: string) => void
   onCancel: () => void
 }
 
-export function RenameDialog({ name, path, onCommit, onCancel }: Props): React.ReactElement {
+export function RenameDialog({ name, path, folder = false, onCommit, onCancel }: Props): React.ReactElement {
+  const [asking, setAsking] = useState<{ next: string; change: 'leaves-notes' | 'becomes-note' } | null>(null)
+  if (asking !== null)
+    return (
+      <ConfirmDialog
+        title={asking.change === 'leaves-notes' ? 'Stop being a note?' : 'Make it a note?'}
+        body={
+          asking.change === 'leaves-notes'
+            ? `${asking.next} will stop being a note: its links, backlinks, search entry and what the bot reads change with it.`
+            : `${asking.next} will become a note: its links, backlinks, search entry and what the bot reads change with it.`
+        }
+        confirmLabel="Rename"
+        danger={false}
+        onConfirm={() => onCommit(asking.next)}
+        onCancel={() => setAsking(null)}
+      />
+    )
+  return (
+    <NameDialog
+      title="Rename"
+      submitLabel="Rename"
+      path={path}
+      initial={name}
+      select={stemLength(name, folder)}
+      onSubmit={(next) => {
+        const change = folder ? null : kindChange(name, next)
+        if (change === null) onCommit(next)
+        else setAsking({ next, change })
+      }}
+      onCancel={onCancel}
+    />
+  )
+}
+
+/** A name, typed in a dialog: renaming, and "New file…". */
+export function NameDialog({
+  title,
+  submitLabel,
+  path,
+  initial,
+  select,
+  onSubmit,
+  onCancel,
+}: {
+  title: string
+  submitLabel: string
+  /** Where it is, or where it goes. */
+  path: string
+  initial: string
+  /** How many characters, from the start, are selected. */
+  select: number
+  onSubmit: (name: string) => void
+  onCancel: () => void
+}): React.ReactElement {
   const input = useRef<HTMLInputElement | null>(null)
-  // A note is edited without its `.md`, which stays on: see renamedName.
-  const isNote = /\.md$/i.test(name)
-  const [value, setValue] = useState(editableName(name))
+  const [value, setValue] = useState(initial)
 
   useEffect(() => {
     const element = input.current
     if (element === null) return
     element.focus()
-    // Select the stem, not the extension - renaming almost never means
-    // renaming the extension, and having to skip past it every time is friction.
-    const shown = editableName(name)
-    const dot = isNote ? -1 : shown.lastIndexOf('.')
-    element.setSelectionRange(0, dot > 0 ? dot : shown.length)
-  }, [name, isNote])
+    element.setSelectionRange(0, select)
+  }, [select])
 
   const trimmed = value.trim()
   const submit = (): void => {
-    if (trimmed === '') return
-    onCommit(renamedName(name, trimmed))
+    if (trimmed !== '') onSubmit(trimmed)
   }
 
   return createPortal(
@@ -63,14 +116,14 @@ export function RenameDialog({ name, path, onCommit, onCancel }: Props): React.R
         className="dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={`Rename ${name}`}
+        aria-label={title}
         onKeyDown={(event) => {
           event.stopPropagation()
           if (event.key === 'Escape') onCancel()
         }}
       >
         <header className="dialog__head">
-          <h2 className="dialog__title">Rename</h2>
+          <h2 className="dialog__title">{title}</h2>
           <button className="dialog__close" onClick={onCancel} aria-label="Cancel">
             <Icon name="x" size={16} />
           </button>
@@ -93,12 +146,11 @@ export function RenameDialog({ name, path, onCommit, onCancel }: Props): React.R
             value={value}
             spellCheck={false}
             autoComplete="off"
-            aria-label="New name"
+            aria-label="Name"
             onChange={(event) => setValue(event.target.value)}
           />
-          {isNote && <span className="dialog__suffix">.md</span>}
           <button className="dialog__submit" type="submit" disabled={trimmed === ''}>
-            Rename
+            {submitLabel}
           </button>
         </form>
       </div>

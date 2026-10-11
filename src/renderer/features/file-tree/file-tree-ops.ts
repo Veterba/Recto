@@ -143,20 +143,41 @@ export function filterTree(roots: readonly FileNode[], query: string, match: (te
   return keep(roots)
 }
 
+const isNoteName = (name: string): boolean => /\.md$/i.test(name.trim())
+
 /**
- * The name a rename should give a file. A note keeps being a note: the
- * dialog edits its name without `.md`, and a name typed without it gets it
- * back - otherwise "index.md" renamed to "Overview" becomes a file that is no
- * longer a note, and seems to vanish while an odd new one appears.
+ * What a rename changes about a file beyond its name: a note that stops being
+ * one ("py.py.md" to "py.py"), or a file that becomes one ("todo.txt" to
+ * "todo.md"). Either is asked about first - the file's links, backlinks,
+ * search entry and what the bot reads all change with it.
+ *
+ * The dialog shows the whole name, extension included, with only the part
+ * before the extension selected: typing a new name keeps the extension, and
+ * changing it is a deliberate edit (once, a note renamed by typing over the
+ * whole name lost its `.md` without a word).
  */
-export function renamedName(current: string, typed: string): string {
-  const name = typed.trim()
-  if (!/\.md$/i.test(current)) return name
-  return /\.md$/i.test(name) ? name : `${name}.md`
+export function kindChange(current: string, next: string): 'leaves-notes' | 'becomes-note' | null {
+  const was = isNoteName(current)
+  const is = isNoteName(next)
+  if (was === is) return null
+  return was ? 'leaves-notes' : 'becomes-note'
 }
 
-/** What the rename dialog shows for editing: a note's name without `.md`, anything else as it is. */
-export const editableName = (current: string): string => current.replace(/\.md$/i, '')
+/** How much of a name the rename dialog selects: the part before the extension, or all of a folder's. */
+export function stemLength(name: string, folder: boolean): number {
+  const dot = name.lastIndexOf('.')
+  return folder || dot <= 0 ? name.length : dot
+}
+
+/**
+ * The file a "New file…" name makes: as typed when it has an extension
+ * ("data.json", "run.py"), a note when it has none ("Ideas" → "Ideas.md").
+ * A dot inside words ("v1.2 notes") is not an extension.
+ */
+export function newFileName(typed: string): string {
+  const name = typed.trim()
+  return /\.[A-Za-z0-9_-]{1,12}$/.test(name) ? name : `${name}.md`
+}
 
 /** Every folder path in the tree - what a search result expands to. */
 export function allFolderPaths(roots: readonly FileNode[], out: string[] = []): string[] {

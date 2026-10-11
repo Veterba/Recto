@@ -19,6 +19,8 @@ type CommandContext = {
   toggleSidebar: () => void
   newNote: () => void
   newFolder: () => void
+  /** A file of any type, named in a dialog. */
+  newFile: () => void
   revealActive: () => void
   setTheme: (theme: 'system' | 'light' | 'dark') => void
   cycleTheme: () => void
@@ -55,6 +57,12 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       section: 'Vault',
       hotkey: 'Mod+N',
       run: ctx.newNote,
+    }),
+    registry.register({
+      id: 'vault:new-file',
+      name: 'New file…',
+      section: 'Vault',
+      run: ctx.newFile,
     }),
     registry.register({
       id: 'vault:new-folder',

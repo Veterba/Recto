@@ -31,7 +31,7 @@ import { useAppCommands } from '../hooks/use-app-commands'
 import { useShellKeys } from '../hooks/use-shell-keys'
 import { useShellCreate } from '../hooks/use-shell-create'
 import { fuzzyMatch } from '../../ui/fuzzy'
-import { FileTree, allFilePaths, allFolderPaths, filterTree, noteEntries, notePaths } from '../../features/file-tree'
+import { FileTree, NameDialog, allFilePaths, allFolderPaths, filterTree, noteEntries, notePaths } from '../../features/file-tree'
 import { focusEditorOnOpen, type LinkCandidate } from '../../features/editor'
 import { QuickSwitcher, SearchPanel } from '../../features/search'
 import { SettingsDialog, SidebarThemePicker, type SettingsTab } from '../../features/settings'
@@ -80,6 +80,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const [searchOpen, setSearchOpen] = useState(false)
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  /** "New file…" is asking for a name, to go in this folder. */
+  const [newFileIn, setNewFileIn] = useState<string | null>(null)
   /** The tab Settings opens on, when something asked for a particular one. */
   const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined)
   const [templatesOpen, setTemplatesOpen] = useState(false)
@@ -343,7 +345,27 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     openPeriodicNote: (period: Period) => void openPeriodicNote(period),
   }
 
-  const { createAt, createIn, onNew } = useShellCreate({
+  /**
+   * A file or folder renamed from the tree: its open tabs follow it, and so
+   * does a tab of anything inside a renamed folder. They used to close, as for
+   * a deleted file. The tab shows what the file now is - a note renamed to
+   * "x.py" reopens in the code editor.
+   */
+  const followRename = useCallback(
+    (from: string, to: string) => {
+      if (sections === null) return
+      for (const workspace of Object.values(sections))
+        for (const leaf of workspace.leaves()) {
+          const path = leaf.state['path']
+          if (typeof path !== 'string') continue
+          if (path === from) workspace.setLeafState(leaf.id, { path: to })
+          else if (path.startsWith(`${from}/`)) workspace.setLeafState(leaf.id, { ...leaf.state, path: to + path.slice(from.length) })
+        }
+    },
+    [sections],
+  )
+
+  const { createAt, createIn, createNamed, onNew } = useShellCreate({
     refresh,
     setExpanded,
     openFile,
@@ -354,6 +376,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     openBoardCard,
     active,
     viewType: section.viewType,
+    askFileName: setNewFileIn,
   })
 
   const openExtension = useCallback(
@@ -478,6 +501,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
                 onOpenFile={openFile}
                 onChanged={() => void refresh()}
                 onCreateIn={(parent, kind) => void createAt(parent, kind)}
+                onRenamed={followRename}
                 vaultPath={vault.path}
                 templateFolder={templates.settings.folder}
                 previewDelayMs={appearance.previewDelay * 1000}
@@ -543,6 +567,21 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         onOpenDaily={() => void openPeriodicNote('daily')}
         onOpenPalette={openPalette}
       />
+      {newFileIn !== null && (
+        <NameDialog
+          title="New file"
+          submitLabel="Create"
+          path={newFileIn === '' ? `${vault.name}/` : `${newFileIn}/`}
+          initial=""
+          select={0}
+          onSubmit={(name) => {
+            const parent = newFileIn
+            setNewFileIn(null)
+            void createNamed(parent, name)
+          }}
+          onCancel={() => setNewFileIn(null)}
+        />
+      )}
       {templatesOpen && (
         <TemplatePicker
           notes={allNotes}
