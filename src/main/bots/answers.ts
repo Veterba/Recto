@@ -3,6 +3,7 @@ import type { AiMessage } from '../../shared/ai'
 import { botThreadFolder, isActive, type Bot, type BotJob, type BotMessage, type BotSource } from '../../shared/bots'
 import { appendTurns, createdStamp, parseTopic, topicFile, topicFileName, type ChatTopicMeta } from '../../shared/chat-topics'
 import { langOfText } from '../../shared/bot-status'
+import { answerLang, honestAnswer } from './honesty'
 import { IPC_EVENT } from '../../shared/ipc'
 import { sendEvent } from '../events'
 import { markSelfWrite } from '../watcher'
@@ -258,9 +259,14 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
           })
         : provider.stream(prepared.history, prepared.system, options)
     let joined = prepared.preface === null
+    // What the model says, and what is shown and saved: the same, except that
+    // a claim to have changed a note - Recto cannot - becomes the honest sentence.
+    let raw = text
+    const lang = answerLang(question ?? '')
     for await (const piece of reply) {
       if (first === 0) first = performance.now()
-      text += joined ? piece : `\n\n${piece.trimStart()}`
+      raw += joined ? piece : `\n\n${piece.trimStart()}`
+      text = honestAnswer(raw, lang)
       joined = true
       controls.update({ state: 'streaming', text })
       if (Date.now() - lastWrite > WRITE_EVERY_MS) {

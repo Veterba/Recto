@@ -10,6 +10,8 @@ import type { BotSource, BotStep } from '../../shared/bots'
 import { profileFor } from './models/profiles'
 import type { StreamStats } from './provider'
 import { answerWithTools } from './model-tools'
+import { answerLang, honestAnswer } from './honesty'
+import { writeBotsEnabled } from './enabled'
 import type { Route } from './router'
 import { DEFAULT_HARNESS, type BotHarness } from '../../shared/bots'
 
@@ -56,6 +58,8 @@ export type EvalCaseResult = {
   toolCalls: ToolCall[]
   /** What the harness wrote itself before the model's words (a task list). */
   preface: string | null
+  /** The model claimed to have changed a note (it cannot); the answer shown says so honestly instead. */
+  claimedAction?: boolean
   steps: BotStep[]
   /** The prompt the model answered from, for telling a quote from the notes apart from a claim. */
   contextText: string
@@ -73,6 +77,9 @@ export async function runEvalJob(jobPath: string): Promise<void> {
   const opened = openVault(job.vault)
   if (!opened.ok) throw new Error(`Could not open the eval vault: ${'error' in opened ? opened.error : 'cancelled'}`)
   await openIndexForVault()
+  // The eval vault is a throwaway copy; bots are what it is for, whatever a
+  // new vault would start with (bots/enabled.ts).
+  writeBotsEnabled(true)
 
   const recto = list().find((b) => b.id === 'recto')
   if (recto === undefined) throw new Error('The eval vault has no Recto bot.')
@@ -188,10 +195,15 @@ export async function runEvalJob(jobPath: string): Promise<void> {
               onStep: (st) => result.steps.push(st),
             })
           : provider.stream(prepared.history, prepared.system, options)
+      // What the user would see: claims of an action made honest (bots/honesty.ts).
+      let raw = result.answer
+      const lang = answerLang(item.messages.findLast((m) => m.role === 'user')?.content ?? '')
       for await (const text of reply) {
         result.ttftMs ??= performance.now() - started
-        result.answer += text
+        raw += text
       }
+      result.answer = honestAnswer(raw, lang)
+      result.claimedAction = result.answer !== raw
     } catch (err) {
       result.error = err instanceof Error ? err.message : String(err)
     }

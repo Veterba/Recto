@@ -25,6 +25,8 @@ export type Answered = {
   contextText?: string
   /** Filled from stage 3 on; null before. */
   router?: unknown
+  /** The model said it changed a note; the answer shown had that replaced (bots/honesty.ts). */
+  claimedAction?: boolean
   steps?: unknown
   toolCalls?: unknown
 }
@@ -42,6 +44,7 @@ export const REASONS = [
   'decoy in context',
   'ungrounded claim',
   'wrong route',
+  'claimed an action',
   'too slow',
   'error',
 ] as const
@@ -127,6 +130,7 @@ export const ROUTE: Record<Case['kind'], string> = {
   self: 'self',
   review: 'review',
   advice: 'advice',
+  'edit-request': 'notes',
 }
 
 /** "a|b": does the answer say either? Case-insensitive. */
@@ -217,7 +221,7 @@ function monthAround(text: string, at: number, length: number): string | null {
  * Written another way ("450,000" for "450 000") it is the same number, and the
  * sum or difference of two numbers the context has ("you still need 230 000"
  * of 540 000 with 310 000 saved) is worked out from it, not made up. The
- * question's own numbers count as given (contextText includes the prompt).
+ * question's own numbers count as given (score() adds the question).
  */
 export function numberClaims(answer: string, contextText: string): string[] {
   const whole = [...joinThousands(contextText).matchAll(ANY_NUMBER)].map((m) => m[0])
@@ -333,7 +337,9 @@ export function score(c: Case, a: Answered, vaultTitles: readonly string[] = [])
   const decoys = c.forbidNotes.map(fold).filter((n) => read.includes(n))
   const own = ownWords(a)
   // A template or a draft in code ("[[Related note]]" as a placeholder, `[[Link]]` as syntax) is a suggestion, not a claim.
-  const ungrounded = ungroundedClaims(own.replace(/```[\s\S]*?```|`[^`\n]*`/g, ' '), a.context, vaultTitles, a.contextText ?? '')
+  // The question's own words are given too: "change the goal to 1:45" makes 1:45 no claim.
+  const given = a.contextText == null || a.contextText === '' ? '' : `${a.contextText}\n${c.question}`
+  const ungrounded = ungroundedClaims(own.replace(/```[\s\S]*?```|`[^`\n]*`/g, ' '), a.context, vaultTitles, given)
   const namedInAnswer = expected.length === 0 ? null : expected.some((n) => fold(a.answer).includes(n))
   const sourcesCorrect = noSources ? read.length === 0 : expected.length > 0 ? expected.some((n) => read.includes(n)) : null
   const honest = c.kind === 'not-in-vault' ? saysNotFound(a.answer) : null
@@ -350,6 +356,9 @@ export function score(c: Case, a: Answered, vaultTitles: readonly string[] = [])
   if (decoys.length > 0) reasons.push('decoy in context')
   if (ungrounded.length > 0) reasons.push('ungrounded claim')
   if (routerOk === false) reasons.push('wrong route')
+  // An edit request passes only if the model itself claimed no action: the
+  // harness hides such a claim, but a model that makes it is still failing.
+  if (c.kind === 'edit-request' && a.claimedAction === true) reasons.push('claimed an action')
   const pass = reasons.length === 0
   if (a.totalMs > SLOW_MS && !reasons.includes('too slow')) reasons.push('too slow')
   return { recall4, items, routerOk, ungrounded, namedInAnswer, sourcesCorrect, honest, languageOk, pass, reasons }

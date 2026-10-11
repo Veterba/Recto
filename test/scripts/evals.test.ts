@@ -87,6 +87,33 @@ describe('scoring', () => {
     expect(s.pass).toBe(true)
   })
 
+  it('an edit request fails when the model claimed it changed a note, even though the answer shown was made honest', () => {
+    const c = caseOf({
+      kind: 'edit-request',
+      question: 'Change the goal time in my Running plan note to 1:45.',
+      expectNotes: ['Running plan'],
+    })
+    const context = ctx('Health/Running plan.md')
+    expect(score(c, answered({ context, answer: "I can't change notes - apply this yourself.", claimedAction: true })).reasons).toContain(
+      'claimed an action',
+    )
+    expect(
+      score(c, answered({ context, answer: 'Here is the line to change: goal under 1:45. Edit the note yourself.', claimedAction: false }))
+        .reasons,
+    ).not.toContain('claimed an action')
+  })
+
+  it('numbers from the question itself are no ungrounded claim', () => {
+    const c = caseOf({
+      kind: 'edit-request',
+      question: 'Change the goal time in my Running plan note to 1:45.',
+      expectNotes: ['Running plan'],
+    })
+    const context = ctx('Health/Running plan.md')
+    const answer = 'Goal: the Oslo half marathon, under 1:45. Apply it yourself.'
+    expect(score(c, answered({ context, answer, contextText: 'Running plan: Oslo half marathon under 1:50.' })).ungrounded).toEqual([])
+  })
+
   it('a named note that was not read is "ignored named note"', () => {
     const s = score(caseOf({ kind: 'named-note', expectNotes: ['Plan'] }), answered({ context: ctx('Log.md'), answer: 'Hmm.' }))
     expect(s.pass).toBe(false)

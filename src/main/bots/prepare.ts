@@ -8,6 +8,7 @@ import { send as indexer } from '../index-client'
 import * as vaultFs from '../vault-fs'
 import { cardsFor, type NoteCard } from './cards'
 import { chunkNote } from './chunks'
+import { asksAboutLinks, linkStatus, linkStatusText } from './links'
 import { byKind, classify, exampleTexts } from './classify'
 import { buildSystem, estimateTokens, fitHistory, isExcluded, rankNotes, type Chunk } from './context'
 import { CONTEXT_TOKENS, isApiModel, type BotModelProvider } from './provider'
@@ -406,6 +407,28 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
     if (!read.ok) {
       finish(i, n.title, 'failed')
       continue
+    }
+    // A question about its links: check them (link_status) rather than let the
+    // model guess - or say it cannot know.
+    if (asksAboutLinks(question)) {
+      const result = linkStatusText(
+        n.title,
+        linkStatus(
+          read.content,
+          catalog.map((c) => c.path),
+        ),
+      )
+      const j = step('read', ru ? 'Проверил ссылки' : 'Checked links', n.title, n.title)
+      add(`## Links in "${n.title}"\n\n${result}`, [])
+      toolCalls.push({
+        name: 'link_status',
+        args: { title: n.title },
+        by: 'harness',
+        summary: result.split('\n')[0]!,
+        notes: [n.title],
+        result,
+      })
+      finish(j, n.title)
     }
     const chunks = chunkNote(n.title, read.content)
     let chosen = chunks

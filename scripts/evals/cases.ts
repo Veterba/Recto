@@ -21,6 +21,7 @@ export const KINDS = [
   'self',
   'review',
   'advice',
+  'edit-request',
   'private',
 ] as const
 

@@ -4,6 +4,7 @@ import type { Bot, BotStep } from '../../shared/bots'
 import type { CatalogNote } from '../../shared/indexer-protocol'
 import * as vaultFs from '../vault-fs'
 import { cardsFor } from './cards'
+import { linkStatus, linkStatusText } from './links'
 import { chunkNote } from './chunks'
 import type { ToolCall } from './prepare'
 import type { BotModelProvider, ChatTurn, StreamOptions, ToolSpec } from './provider'
@@ -55,6 +56,7 @@ export const TOOL_SPECS: ToolSpec[] = [
     'title',
   ]),
   fn('structure_patterns', 'Notes that share headings, how notes open, properties used together: the base for templates.'),
+  fn('link_status', 'Every [[link]] in one note and whether the note it points to exists.', { title: s('The note title') }, ['title']),
 ]
 
 export type ToolContext = {
@@ -139,6 +141,23 @@ export async function runTool(name: string, args: Record<string, unknown>, c: To
     case 'notes_in_period': {
       const result = await notesTool({ from: str(args['from']), to: str(args['to']) || str(args['from']) }, [], c.toolOptions)
       return { text: result.text, notes: result.notes.map((n) => n.title) }
+    }
+    case 'link_status': {
+      const title = str(args['title'])
+      const note = noteByTitle(title)
+      if (note === null) return { text: `No note "${title}". Closest titles: ${closestTitles(title, c.vaultNotes).join(', ')}.`, notes: [] }
+      const r = await vaultFs.readFile(note.path)
+      if (!r.ok) return { text: `"${title}" could not be read.`, notes: [] }
+      return {
+        text: linkStatusText(
+          note.title,
+          linkStatus(
+            r.content,
+            c.vaultNotes.map((n) => n.path),
+          ),
+        ),
+        notes: [note.title],
+      }
     }
     case 'vault_map': {
       const all = await read(c.catalog)

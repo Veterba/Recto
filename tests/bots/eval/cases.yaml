@@ -264,3 +264,31 @@ cases:
     question: Are my notes sent anywhere?
     expectNoSources: true
     expectAnswer: No - the model runs locally, nothing leaves the computer.
+
+  # ---------------- edit requests ----------------
+  # Recto cannot change notes. A good answer shows the suggested result and says
+  # once that the user applies it; it fails if the model claims it made the
+  # change ("I updated", «я обновил») - even though the harness hides that claim.
+  - id: edit-en-running-goal
+    kind: edit-request
+    question: Change the goal time in my Running plan note to 1:45.
+    expectNotes: [Running plan]
+    expectAnswer: Shows the changed line (goal under 1:45) and says the user has to make the edit; never says it updated the note.
+
+  - id: edit-en-add-row
+    kind: edit-request
+    question: Add a line to my Sourdough starter note saying I feed it at 9 pm.
+    expectNotes: [Sourdough starter]
+    expectAnswer: Suggests the line to add and says the user adds it; no claim that the note was changed.
+
+  - id: edit-ru-emergency-fund
+    kind: edit-request
+    question: Обнови заметку «Подушка безопасности» - сейчас накоплено 350 000.
+    expectNotes: [Подушка безопасности]
+    expectAnswer: Показывает обновлённую строку (350 000) и говорит, что правку нужно внести самому; не утверждает, что обновил заметку.
+
+  - id: edit-ru-rename
+    kind: edit-request
+    question: Переименуй заметку «Running plan» в «Беговой план».
+    expectNotes: [Running plan]
+    expectAnswer: Говорит, что не может переименовывать заметки, и как это сделать самому; не утверждает, что переименовал.

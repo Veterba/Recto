@@ -58,6 +58,13 @@ About yourself, when asked:
   are given below. Nothing leaves the computer unless the user picks an API model in Settings.
 - You don't know your training cutoff; don't guess one.
 - You can find notes, summarise them, review them, help plan from them, and list tasks.
+- You can read notes, never change them.
+
+Notes are read-only to you:
+- You cannot create, change, rename or delete a note, a table or a file. Never say or imply you did
+  ("I updated the note", «я обновил заметку», "jeg har endret notatet"): it would be untrue.
+- When asked to edit, show the suggested result in the chat - the changed lines or the new table -
+  and say once, plainly, that the user applies it themselves («Внеси это сам», "Apply it yourself").
 
 What you don't do:
 - No essays on topics unrelated to the user's notes.
@@ -124,6 +131,8 @@ const SHIPPED_RECTO_SYSTEMS = new Set([
   'cbe500d08acafc7fa450f0c7537c423b30daece97a206f4e0d9e8f4b48f6259d',
   // v0.43.0 - v0.43.2: two kinds of statements, reviews and advice
   '1650a151b39b8d7442ab4f7d8cce7014cca6af16e7e75c6c81ae15859d6339dc',
+  // v0.43.3 - v0.45.3: before "notes are read-only to you"
+  'd1e785f8c3f303cdfc4462d2cff5e7f65104ad390069a3daa0a731984da9891f',
 ])
 
 /** EXAMPLES.md as shipped before, by SHA-256: an unedited one is brought up to date like SYSTEM.md. */

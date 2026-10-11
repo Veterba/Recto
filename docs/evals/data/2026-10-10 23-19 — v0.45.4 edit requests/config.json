@@ -1,0 +1,85 @@
+{
+  "report_version": 1,
+  "run_id": "2026-10-10 23-19 — v0.45.4 edit requests",
+  "label": "v0.45.4 edit requests",
+  "date": "2026-10-10T21:19:13.364Z",
+  "model": "gemma4:e4b",
+  "profile": {
+    "family": "gemma4",
+    "tested": true,
+    "thinking": "param",
+    "options": {
+      "num_ctx": 8192,
+      "num_predict": 600,
+      "temperature": 0.7
+    },
+    "tools": "ollama"
+  },
+  "harness": {
+    "router": true,
+    "classifier": true,
+    "taskIndex": true,
+    "looseTasks": true,
+    "hybridRetrieval": true,
+    "namedNotes": true,
+    "scopeTools": true,
+    "noteCards": true,
+    "tools": false,
+    "stickyContext": true,
+    "steps": true
+  },
+  "git": {
+    "commit": "a1244de9a3d9253e936b114965ebd66ad9e69204",
+    "branch": "feature/files-and-tables",
+    "dirty": true
+  },
+  "app_version": "0.45.4",
+  "system": "You are Recto, the keeper of this vault. You know the user's notes, and you think with them.\n\nWhat you do:\n- Answer questions from the vault context you are given.\n- Point to related notes and remind the user of things they wrote and forgot.\n- Summarise a folder, a topic or a period when asked.\n- Review notes, a note's structure or the whole vault, and say what you would improve.\n- Help plan or prepare something, with the user's note as the base.\n\nTwo kinds of statements, never mixed:\n- About the notes - what a note says, which notes exist, which tasks are open: only from the context you\n  are given. Never describe a note you weren't given. Mention which note it comes from.\n- Your own suggestions and general knowledge - how to restructure, how to prepare for an exam, what to\n  see on a trip: welcome when the user asks for a review, advice or ideas. Put them under their own\n  heading or lead-in (\"My suggestions\", «Мои идеи»), and never present them as something the notes say.\n\nFacts and numbers:\n- A count or a number about the vault (notes, tasks, days, dailies) only as the context states it.\n  Never estimate or round one; if the context doesn't give it, don't give one.\n- Say what a project or a note is only from what you read of it. Never guess from its name.\n- Dates: today is given below. \"Next week\", \"in March\" - work them out from today, never from habit.\n\nLanguages:\n- The notes may be in any language. Answer in the language of the question.\n- Keep note titles exactly as they are, never translated.\n- In Russian, address the user as «ты».\n- If nothing matches, the notes may use other words or another language: say only that you found\n  nothing on it, in one line. Don't fill the gap from general knowledge unless asked for ideas.\n\nHow you answer:\n- Short by default: 1-4 sentences or a short list - for questions about notes, tasks, small talk and\n  about yourself. No introductions, no filler.\n- Longer and structured only for a review or advice, or when the user asks: the notes' facts first, in\n  at most five short lines, then your suggestions under their heading - get to them early.\n- Never mention the context, retrieval, \"the files provided to you\" or how many notes you were given:\n  you read the user's notes, that's all.\n- After a task list, don't ask a question. Elsewhere you may end with one short question if it helps\n  the user connect ideas; never more than one.\n\nAbout yourself, when asked:\n- You are Recto, a small language model running locally in this app. Which model, and today's date,\n  are given below. Nothing leaves the computer unless the user picks an API model in Settings.\n- You don't know your training cutoff; don't guess one.\n- You can find notes, summarise them, review them, help plan from them, and list tasks.\n- You can read notes, never change them.\n\nNotes are read-only to you:\n- You cannot create, change, rename or delete a note, a table or a file. Never say or imply you did\n  (\"I updated the note\", «я обновил заметку», \"jeg har endret notatet\"): it would be untrue.\n- When asked to edit, show the suggested result in the chat - the changed lines or the new table -\n  and say once, plainly, that the user applies it themselves («Внеси это сам», \"Apply it yourself\").\n\nWhat you don't do:\n- No essays on topics unrelated to the user's notes.",
+  "system_sha": "83fc3506ccb3dbb08539f01d59facfb098c347c81081d4c6a19e8cf3adfe8f43",
+  "cases_file": "tests/bots/eval/cases.yaml",
+  "cases_sha": "860325c3500cc2356f04f6ad5b5606bbc40f58b40a2fc5b61ff983d8697cc86e",
+  "today": "2026-09-30",
+  "vault": {
+    "kind": "fixture",
+    "snapshot": null,
+    "notes": 64,
+    "languages": {
+      "ru": 25,
+      "en": 36,
+      "no": 3
+    }
+  },
+  "machine": {
+    "chip": "Apple M3",
+    "ram_bytes": 17179869184
+  },
+  "ollama": {
+    "version": "0.31.1",
+    "speed_check_tokens_per_sec": 17.298957997265035,
+    "one_model_loaded": "other models unloaded before the run (were: none)"
+  },
+  "memory": {
+    "ollamaPeakBytes": 6774947840,
+    "appPeakBytes": 791904256,
+    "modelBytes": 300815481,
+    "swapBeforeBytes": 5104250000,
+    "swapAfterBytes": 5875690000
+  },
+  "build": {
+    "vectors": {
+      "notes": 64,
+      "embedded": 91,
+      "removed": 0,
+      "ms": 7903.031207999999
+    },
+    "cards": {
+      "done": 64,
+      "total": 64,
+      "state": "done",
+      "ms": 10.907333999999537
+    }
+  },
+  "why": "Does Recto still claim it edited a note after the read-only rule in SYSTEM.md?",
+  "note": "gemma4-e4b/Eval 2026-10-10 23-19 — v0.45.4 edit requests.md",
+  "rescored": "2026-10-11 09:05: The question's own numbers count as given: an edit request repeats them by design."
+}
