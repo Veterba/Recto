@@ -112,16 +112,34 @@ describe('coerceTemplateSettings', () => {
   it('keeps the good fields and replaces only the bad ones', () => {
     expect(
       coerceTemplateSettings({ folder: '../nope', daily: { enabled: true, folder: 'Journal', template: 'templates/day.md' } }),
-    ).toEqual({ folder: 'templates', daily: { enabled: true, folder: 'Journal', template: 'templates/day.md' } })
+    ).toEqual({
+      folder: 'templates',
+      periodic: {
+        ...DEFAULT_TEMPLATE_SETTINGS.periodic,
+        folder: 'Journal',
+        daily: { enabled: true, template: 'templates/day.md', folder: null },
+      },
+    })
   })
 
   it('only switches the daily note on for a real true', () => {
-    expect(coerceTemplateSettings({ daily: { enabled: 'yes' } }).daily.enabled).toBe(false)
+    expect(coerceTemplateSettings({ daily: { enabled: 'yes' } }).periodic.daily.enabled).toBe(false)
   })
 
   it('drops a template path that is not a note', () => {
-    expect(coerceTemplateSettings({ daily: { template: 'templates/day.txt' } }).daily.template).toBe(null)
-    expect(coerceTemplateSettings({ daily: { template: '../day.md' } }).daily.template).toBe(null)
+    expect(coerceTemplateSettings({ daily: { template: 'templates/day.txt' } }).periodic.daily.template).toBe(null)
+    expect(coerceTemplateSettings({ periodic: { weekly: { template: '../day.md' } } }).periodic.weekly.template).toBe(null)
+  })
+
+  it('reads the periodic settings back field by field', () => {
+    const read = coerceTemplateSettings({
+      periodic: { folder: 'Journal', weekStart: 'sunday', groupByMonth: true, monthly: { enabled: true, folder: '../x' } },
+    }).periodic
+    expect(read.folder).toBe('Journal')
+    expect(read.weekStart).toBe('sunday')
+    expect(read.groupByMonth).toBe(true)
+    expect(read.monthly).toEqual({ enabled: true, template: null, folder: null })
+    expect(coerceTemplateSettings({ periodic: { weekStart: 'friday' } }).periodic.weekStart).toBe('monday')
   })
 })
 

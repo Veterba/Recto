@@ -124,7 +124,8 @@
 /* Settings is wider and taller than a prompt: it holds four tabs of content,
    and scrolling a settings panel in a 520px box is miserable. */
 .dialog--settings {
-  width: min(760px, calc(100vw - 2 * var(--size-6)));
+  /* Wide enough for every tab on one row. */
+  width: min(860px, calc(100vw - 2 * var(--size-6)));
   max-height: min(80vh, 720px);
   display: flex;
   flex-direction: column;

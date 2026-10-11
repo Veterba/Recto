@@ -29,7 +29,7 @@ type Props = {
   /** The button that opened it: a press on it is the button's to handle, not a click outside. */
   trigger?: HTMLElement | null
   /** `edge`: against the right side of the window, for focus mode where the text is centred. */
-  placement?: 'anchor' | 'edge'
+  placement?: 'anchor' | 'above' | 'edge'
   onClose: () => void
   onOpenSettings?: () => void
 }
@@ -102,6 +102,13 @@ export function WritingMenu({ anchor, trigger, placement = 'anchor', onClose, on
       placement === 'edge'
         ? window.innerWidth - element.offsetWidth - 16
         : Math.min(anchor.right - element.offsetWidth, window.innerWidth - element.offsetWidth - 8)
+    // Above a button at the bottom of the window (the status bar's), ending
+    // just over it.
+    if (placement === 'above') {
+      const maxHeight = Math.max(160, anchor.top - 14)
+      setAt({ left: Math.max(8, left), top: Math.max(8, anchor.top - 6 - Math.min(element.offsetHeight, maxHeight)), maxHeight })
+      return
+    }
     // Always below the button, never moved up over it: a menu nudged up to fit a
     // short window covered its own button, so the click meant to close it
     // landed on the menu instead. It scrolls inside when there is no room.

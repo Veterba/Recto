@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 import { _electron, type ElectronApplication, type Page } from 'playwright'
 import { createServer, type ViteDevServer } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { quitApp, removeDir } from './helpers/app'
 
 /**
  * One question to a bot gives exactly one answer: on screen, in the thread's
@@ -68,10 +69,10 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await app?.close()
+    await quitApp(app)
     await server?.close()
-    fs.rmSync(base, { recursive: true, force: true })
-  })
+    removeDir(base)
+  }, 30_000)
 
   it('one question, one answer - on screen and in the file', async () => {
     await openRecto()

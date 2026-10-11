@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { ELECTRON, freePort, removeDir, stopProcess } from './helpers/app'
 
 /**
  * Floating note windows: hover a link, click its preview, get a read-only
@@ -12,8 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const RUN = process.env['RECTO_E2E'] === '1'
 const ROOT = path.resolve(__dirname, '../..')
-const ELECTRON = path.join(ROOT, 'node_modules/.bin/electron')
-const PORT = 9420 + Math.floor(Math.random() * 400)
+let PORT = 0
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 type Cdp = {
@@ -103,11 +103,14 @@ describe.skipIf(!RUN)('floating note windows', () => {
     fs.writeFileSync(path.join(vault, '.recto', 'topics-settings.json'), JSON.stringify({ enabled: false }))
     // The shortest preview delay the setting allows.
     fs.writeFileSync(path.join(vault, '.recto', 'appearance.json'), JSON.stringify({ previewDelay: 0.5 }))
+    PORT = await freePort()
     app = spawn(
       ELECTRON,
       ['-r', path.join(ROOT, 'scripts/snapshot-isolate.cjs'), ROOT, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`],
       {
         stdio: 'ignore',
+        // Its own process group, so stopping it stops everything it started.
+        detached: true,
         env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
       },
     )
@@ -120,12 +123,12 @@ describe.skipIf(!RUN)('floating note windows', () => {
     await sleep(1000)
   }, 60_000)
 
-  afterAll(() => {
+  afterAll(async () => {
     cdp?.close()
-    app?.kill()
-    fs.rmSync(vault, { recursive: true, force: true })
-    fs.rmSync(userData, { recursive: true, force: true })
-  })
+    await stopProcess(app)
+    removeDir(vault)
+    removeDir(userData)
+  }, 30_000)
 
   it('hovering a link shows its preview', async () => {
     const [x, y] = await center("document.querySelector('.cm-wikilink')")

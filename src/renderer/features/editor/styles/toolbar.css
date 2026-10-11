@@ -10,6 +10,12 @@
   background: var(--tint);
 }
 
+/* "Show formatting toolbar" off: the row goes from every editor pane. The
+   focus bar's own copy stays - in focus mode it is the way out. */
+:root[data-formatbar='off'] .md > .formatbar {
+  display: none;
+}
+
 /* Only the formatting buttons scroll; what sits after them stays reachable. */
 .formatbar__scroll {
   flex: 1 1 auto;

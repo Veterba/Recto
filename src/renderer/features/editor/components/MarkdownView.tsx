@@ -7,7 +7,6 @@ import { FormatBar } from './FormatBar'
 import { Icon } from '../../../ui/Icon'
 import { Outline } from './Outline'
 import { FocusBar } from './FocusBar'
-import { WritingButtons } from './WritingButtons'
 import { useWriting } from '../writing-modes'
 import { flushAuthors, loadAuthors, saveAuthors } from '../authors-store'
 import { Properties } from './Properties'
@@ -353,7 +352,6 @@ function MarkdownEditor({
         onInsertTable={(columns, rows) => {
           handle.current?.run((state) => insertTableSpec(state, columns, rows))
         }}
-        trailing={<WritingButtons onAfter={() => handle.current?.focus()} />}
       />
       <Properties
         text={text}

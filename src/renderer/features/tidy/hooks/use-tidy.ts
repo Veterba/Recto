@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { ATTACHMENTS_FOLDER } from '@shared/vault'
-import type { TemplateSettings } from '@shared/templates'
+import { periodicFolders, type TemplateSettings } from '@shared/templates'
 import { IPC } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { noteIndexChanged } from '../../../app/note-bus'
@@ -38,7 +38,7 @@ export function useTidy(
         context: new Map(context.map((entry) => [entry.path, { tags: entry.tags, links: entry.links }])),
         // The board owns one of these and templates are not notes you file;
         // a stray note landing in either would turn up where nobody put it.
-        reserved: [CARD_FOLDER, CHAT_FOLDER, ATTACHMENTS_FOLDER, templates.folder, templates.daily.folder],
+        reserved: [CARD_FOLDER, CHAT_FOLDER, ATTACHMENTS_FOLDER, templates.folder, ...periodicFolders(templates.periodic)],
       }),
     )
   }, [allNotes, allFolders, templates])

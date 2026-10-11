@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { _electron, type ElectronApplication, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { quitApp, removeDir } from './helpers/app'
 
 /**
  * An answer belongs to main, not to the chat on screen: leaving the chat,
@@ -72,9 +73,9 @@ describe.skipIf(!RUN)('answers survive leaving the chat; the queue', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await app?.close()
-    fs.rmSync(base, { recursive: true, force: true })
-  })
+    await quitApp(app)
+    removeDir(base)
+  }, 30_000)
 
   it('send, switch to the Data tab, come back: the answer is still coming, then complete', async () => {
     await type('How do I mix soil?')

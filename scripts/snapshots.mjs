@@ -783,6 +783,50 @@ async function fileShots(dir, theme) {
 }
 
 /**
+ * Block 8, in its own run: the Periodic notes tab with Weekly, Monthly and
+ * Yearly switched on and its preview tree, a note with the formatting toolbar
+ * hidden, and the status bar's focus and writing-tools buttons.
+ */
+async function periodicShots(dir, theme) {
+  const { base, userData } = prepareVault(theme, `${theme}-periodic`)
+  const { app, page } = await launch(userData)
+  const dialog = page.getByRole('dialog', { name: 'Settings' })
+  try {
+    await key(page, 'Mod+,')
+    await page.waitForSelector('[role=dialog][aria-label=Settings]')
+    await dialog.getByRole('tab', { name: 'Periodic notes', exact: true }).click()
+    for (const period of ['Weekly', 'Monthly', 'Yearly']) await page.locator(`[aria-label="${period} notes"]`).click()
+    await page.waitForSelector('.periodic__tree')
+    await shoot(page, dir, '28-settings-periodic', 3000)
+    await page.evaluate(() => document.querySelector('.settings__body')?.scrollTo(0, 100_000))
+    await shoot(page, dir, '28b-settings-periodic-preview')
+
+    await dialog.getByRole('tab', { name: 'Editor', exact: true }).click()
+    await page.locator('[aria-label="Show formatting toolbar"]').click()
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('[role=dialog][aria-label=Settings]', { state: 'detached' })
+    await page.locator('[role=treeitem]', { hasText: 'Ideas' }).first().click()
+    await page.waitForSelector('.md .cm-content')
+    await page.evaluate(() => document.activeElement?.blur())
+    await shoot(page, dir, '28c-editor-no-toolbar', 1000)
+
+    await page.locator('.status [aria-label="Writing tools"]').hover()
+    await page.waitForSelector('.tip')
+    await sleep(700)
+    await page.screenshot({
+      path: path.join(dir, '28d-status-bar.png'),
+      clip: { x: WIDTH - 720, y: HEIGHT - 120, width: 720, height: 120 },
+      caret: 'hide',
+      animations: 'disabled',
+    })
+    console.log('  28-periodic')
+  } finally {
+    await app.close()
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
+/**
  * Editing tables, in their own run: the toolbar's size picker, a row's handle
  * with its menu, and a rectangle of selected cells (test/fixtures/table-edit).
  */
@@ -916,6 +960,7 @@ for (const theme of ['light', 'dark']) {
     await tableShots(dir, theme)
     await fileShots(dir, theme)
     await tableEditShots(dir, theme)
+    await periodicShots(dir, theme)
     if (COMPARE !== null) {
       for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.png'))) {
         const old = path.join(COMPARE, theme, name)

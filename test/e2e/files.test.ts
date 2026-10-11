@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { _electron, type ElectronApplication, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { quitApp, removeDir } from './helpers/app'
 
 /**
  * Files that are not notes open in the code editor, are edited and saved like
@@ -54,9 +55,9 @@ describe.skipIf(!RUN)('files that are not notes', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await app?.close()
-    fs.rmSync(base, { recursive: true, force: true })
-  })
+    await quitApp(app)
+    removeDir(base)
+  }, 30_000)
 
   it('opens a json file in the code editor: line numbers, no note panels', async () => {
     await open('data.json')

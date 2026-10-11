@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { _electron, type ElectronApplication, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { quitApp, removeDir } from './helpers/app'
 
 /**
  * Bots are experimental and off in a new vault: then nothing of theirs runs.
@@ -50,9 +51,9 @@ describe.skipIf(!RUN)('bots off', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await app?.close()
-    fs.rmSync(base, { recursive: true, force: true })
-  })
+    await quitApp(app)
+    removeDir(base)
+  }, 30_000)
 
   it('a new vault starts with bots off, and the AI tab says so in one line', async () => {
     expect(JSON.parse(fs.readFileSync(path.join(vault, '.recto', 'bots-settings.json'), 'utf8'))).toEqual({ enabled: false })

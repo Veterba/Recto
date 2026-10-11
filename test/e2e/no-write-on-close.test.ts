@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { ELECTRON, freePort, removeDir, stopProcess } from './helpers/app'
 
 /**
  * Open a note, move the cursor, close the tab: the file must not be written.
@@ -15,8 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const RUN = process.env['RECTO_E2E'] === '1'
 const ROOT = path.resolve(__dirname, '../..')
-const ELECTRON = path.join(ROOT, 'node_modules/.bin/electron')
-const PORT = 9420 + Math.floor(Math.random() * 400)
+let PORT = 0
 const OLD = new Date('2026-01-01T00:00:00Z')
 
 /** The shape of the note that was once rewritten: frontmatter, Cyrillic, a list, no newline at the end. */
@@ -87,11 +87,14 @@ describe.skipIf(!RUN)('closing a note it did not change', () => {
     // Topics off: this is about the editor alone.
     fs.mkdirSync(path.join(vault, '.recto'))
     fs.writeFileSync(path.join(vault, '.recto', 'topics-settings.json'), JSON.stringify({ enabled: false }))
+    PORT = await freePort()
     app = spawn(
       ELECTRON,
       ['-r', path.join(ROOT, 'scripts/snapshot-isolate.cjs'), ROOT, `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`],
       {
         stdio: 'ignore',
+        // Its own process group, so stopping it stops everything it started.
+        detached: true,
         // The test vault is already a throwaway copy: open it as it is.
         env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1' },
       },
@@ -100,12 +103,12 @@ describe.skipIf(!RUN)('closing a note it did not change', () => {
     await sleep(2500)
   }, 60_000)
 
-  afterAll(() => {
+  afterAll(async () => {
     cdp?.close()
-    app?.kill()
-    fs.rmSync(vault, { recursive: true, force: true })
-    fs.rmSync(userData, { recursive: true, force: true })
-  })
+    await stopProcess(app)
+    removeDir(vault)
+    removeDir(userData)
+  }, 30_000)
 
   it('leaves the bytes and the mtime of every note alone', async () => {
     const before = snapshot()

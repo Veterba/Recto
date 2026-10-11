@@ -36,6 +36,8 @@ export type Appearance = {
   vimMode: boolean
   /** The note's name, editable, centred above its text. */
   showNoteTitle: boolean
+  /** The formatting toolbar above each note. Off, formatting is shortcuts and the palette. */
+  showFormatBar: boolean
   /**
    * How big the sidebar's own text and rows are, as a multiplier.
    *
@@ -93,6 +95,7 @@ const DEFAULT_APPEARANCE: Appearance = {
   headingScale: 1.25,
   vimMode: false,
   showNoteTitle: true,
+  showFormatBar: true,
   sidebarScale: 1.05,
   sidebarBold: true,
   sidebarContrast: 70,
@@ -195,6 +198,10 @@ function applyAppearance(appearance: Appearance): void {
   // One ratio, six levels. H1 is scale^3 above the body, H3 is scale^1, and
   // H4-H6 sit at or below it - which is what those levels are for.
   root.style.setProperty('--heading-scale', String(appearance.headingScale))
+  // The stylesheet takes the toolbar row out of every editor pane at once,
+  // without any editor being rebuilt.
+  if (appearance.showFormatBar) root.removeAttribute('data-formatbar')
+  else root.setAttribute('data-formatbar', 'off')
 
   // Sidebar legibility. Three knobs because the three complaints were separate:
   // too small, too light in weight, and too grey against a busy backdrop.
@@ -267,6 +274,7 @@ function coerce(value: unknown): Appearance {
         : DEFAULT_APPEARANCE.headingScale,
     vimMode: typeof v.vimMode === 'boolean' ? v.vimMode : DEFAULT_APPEARANCE.vimMode,
     showNoteTitle: typeof v.showNoteTitle === 'boolean' ? v.showNoteTitle : DEFAULT_APPEARANCE.showNoteTitle,
+    showFormatBar: typeof v.showFormatBar === 'boolean' ? v.showFormatBar : DEFAULT_APPEARANCE.showFormatBar,
     sidebarScale:
       typeof v.sidebarScale === 'number' && Number.isFinite(v.sidebarScale)
         ? Math.min(1.25, Math.max(0.9, v.sidebarScale))

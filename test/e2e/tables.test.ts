@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { _electron, type ElectronApplication, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { quitApp, removeDir } from './helpers/app'
 
 /**
  * A wide table, like the eval reports' index: it grows past the text column
@@ -47,9 +48,9 @@ describe.skipIf(!RUN)('tables', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await app?.close()
-    fs.rmSync(base, { recursive: true, force: true })
-  })
+    await quitApp(app)
+    removeDir(base)
+  }, 30_000)
 
   it('grows past the text column, never breaks a short value, never scrolls the page sideways', async () => {
     const m = await page.evaluate(() => {

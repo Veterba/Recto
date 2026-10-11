@@ -1,19 +1,29 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { FileNode } from '@shared/vault'
 import { IPC } from '@shared/ipc'
-import { fillTemplate, mergeTemplateProperties, templateBody, type TemplateSettings } from '@shared/templates'
+import { fillTemplate, mergeTemplateProperties, PERIODS, templateBody, type Period, type TemplateSettings } from '@shared/templates'
 import { api } from '../../../app/api'
 import { noteIndexChanged } from '../../../app/note-bus'
 import { getActiveEditor } from '../../editor'
-import { dayKey, ensureDailyNote, retemplateDailyNote, type useTemplateSettings } from '../daily-note'
+import {
+  dayKey,
+  elsewhereNotice,
+  ensurePeriodicNote,
+  retemplatePeriodicNotes,
+  showPeriodicNotice,
+  type EnsureResult,
+  type useTemplateSettings,
+} from '../periodic-notes'
+import { periodNotePath } from '@shared/periodic'
 
 type Templates = ReturnType<typeof useTemplateSettings>
 
-/** What the shell does with templates: insert one, save the settings, open today's note. */
+/** What the shell does with templates: insert one, save the settings, open a periodic note. */
 export function useTemplateActions({
   activePath,
   closePicker,
   byPath,
+  notes,
   templates,
   refresh,
   openFile,
@@ -21,6 +31,8 @@ export function useTemplateActions({
   activePath: string | null
   closePicker: () => void
   byPath: ReadonlyMap<string, FileNode>
+  /** Every note in the vault, for the unique-name check. */
+  notes: readonly string[]
   templates: Templates
   refresh: () => Promise<void>
   /** Read at call time, so it is always the current opener. */
@@ -28,7 +40,7 @@ export function useTemplateActions({
 }): {
   insertTemplate: (templatePath: string) => Promise<void>
   updateTemplates: (requested: TemplateSettings) => Promise<void>
-  openDailyNote: () => Promise<void>
+  openPeriodicNote: (period: Period) => Promise<void>
 } {
   /**
    * Insert a template at the cursor.
@@ -104,42 +116,72 @@ export function useTemplateActions({
         await api.invoke(IPC.fsCreate, at === -1 ? '' : next.folder.slice(0, at), next.folder.slice(at + 1), 'folder')
         await refresh()
       }
-      if (await retemplateDailyNote(previous, next)) noteIndexChanged()
+      if (await retemplatePeriodicNotes(previous, next)) noteIndexChanged()
     },
     [templates, byPath, refresh],
   )
 
-  const openDailyNote = useCallback(async () => {
-    const result = await ensureDailyNote(templates.settings)
-    if (!result.ok) return
-    if (result.created) {
-      await refresh()
-      noteIndexChanged()
-    }
-    openFile.current(result.path)
-  }, [templates.settings, refresh])
+  /**
+   * Open the current day's, week's, month's or year's note, making it if
+   * needed - also when that period is switched off, since asking for it is
+   * asking for it. A note of that name elsewhere is opened instead, with a
+   * word about why it is not where the settings would put it.
+   */
+  const openPeriodicNote = useCallback(
+    async (period: Period) => {
+      const result = await ensurePeriodicNote(period, templates.settings, notes)
+      if (!result.ok) {
+        if ('elsewhere' in result) {
+          showPeriodicNotice(elsewhereNotice(periodNotePath(period, new Date(), templates.settings.periodic).key, result.elsewhere))
+          openFile.current(result.elsewhere)
+        }
+        return
+      }
+      if (result.created) {
+        await refresh()
+        noteIndexChanged()
+      }
+      openFile.current(result.path)
+    },
+    [templates.settings, notes, refresh],
+  )
 
-  return { insertTemplate, updateTemplates, openDailyNote }
+  return { insertTemplate, updateTemplates, openPeriodicNote }
 }
 
 /**
- * The daily note, made automatically.
+ * The periodic notes, made automatically.
  *
- * Checked when the vault opens, when the setting changes, when the window
+ * Checked when the vault opens, when the settings change, when the window
  * comes back into focus, and once a minute - and acted on only when the
- * calendar day has changed since the last check. So a laptop opened the next
- * morning gets its note within a minute without anyone doing anything, and
- * an app left running overnight rolls over at midnight.
+ * calendar day has changed since the last check (every period starts on a
+ * day boundary). So a laptop opened the next morning gets its notes within a
+ * minute without anyone doing anything, and an app left running overnight
+ * rolls over at midnight. Only the current period's note, never earlier ones:
+ * a month Recto was not open in gets no note afterwards.
  *
- * It creates the note; it does not open it. Taking over the editor on launch
- * would be the app deciding what you do first - "Open today's note" is one
+ * Not while Settings is open: switching Weekly on and then Monthly a second
+ * later would make this week's note where Weekly alone puts it, and then the
+ * month folder it belongs in would find the name taken. The notes are made
+ * when Settings closes, where its preview said.
+ *
+ * It creates the notes; it does not open them. Taking over the editor on
+ * launch would be the app deciding what you do first - "Open today" is one
  * command away for when you want it.
  */
-export function useDailyNoteAutoCreate(templates: Templates, refresh: () => Promise<void>): void {
+export function usePeriodicNotesAutoCreate(
+  templates: Templates,
+  notes: readonly string[],
+  refresh: () => Promise<void>,
+  paused: boolean,
+): void {
   const refreshRef = useRef(refresh)
   refreshRef.current = refresh
+  const notesRef = useRef(notes)
+  notesRef.current = notes
+  const on = templates.loaded && !paused && PERIODS.some((p) => templates.settings.periodic[p].enabled)
   useEffect(() => {
-    if (!templates.loaded || !templates.settings.daily.enabled) return
+    if (!on) return
     let lastDay = ''
     let running = false
     const check = async (): Promise<void> => {
@@ -147,13 +189,20 @@ export function useDailyNoteAutoCreate(templates: Templates, refresh: () => Prom
       if (today === lastDay || running) return
       running = true
       try {
-        const result = await ensureDailyNote(templates.settings)
-        if (result.ok) {
-          lastDay = today
-          if (result.created) {
-            await refreshRef.current()
-            noteIndexChanged()
-          }
+        const results: [Period, EnsureResult][] = []
+        for (const period of PERIODS) {
+          if (!templates.settings.periodic[period].enabled) continue
+          results.push([period, await ensurePeriodicNote(period, templates.settings, notesRef.current)])
+        }
+        // A name taken elsewhere is said once and not retried until tomorrow;
+        // an error is tried again at the next check.
+        for (const [period, result] of results)
+          if (!result.ok && 'elsewhere' in result)
+            showPeriodicNotice(elsewhereNotice(periodNotePath(period, new Date(), templates.settings.periodic).key, result.elsewhere))
+        if (results.every(([, r]) => r.ok || 'elsewhere' in r)) lastDay = today
+        if (results.some(([, r]) => r.ok && r.created)) {
+          await refreshRef.current()
+          noteIndexChanged()
         }
       } finally {
         running = false
@@ -167,5 +216,5 @@ export function useDailyNoteAutoCreate(templates: Templates, refresh: () => Prom
       window.clearInterval(timer)
       window.removeEventListener('focus', onFocus)
     }
-  }, [templates.loaded, templates.settings])
+  }, [on, templates.settings])
 }

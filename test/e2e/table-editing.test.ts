@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { _electron, type ElectronApplication, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { quitApp, removeDir } from './helpers/app'
 import { parseTableSource } from '../../src/renderer/features/editor/table-model'
 
 /**
@@ -87,9 +88,9 @@ describe.skipIf(!RUN)('editing tables', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await app?.close()
-    fs.rmSync(base, { recursive: true, force: true })
-  })
+    await quitApp(app)
+    removeDir(base)
+  }, 30_000)
 
   it('inserts a 3 × 4 table from the toolbar, keyboard in the first header cell', async () => {
     await page.locator('.cm-line', { hasText: 'Text.' }).click()

@@ -9,6 +9,7 @@ import type { SettingsDeps } from '../settings-deps'
 import { AppearanceSettings } from './AppearanceSettings'
 import { EditorSettings } from './EditorSettings'
 import { TemplateSettingsTab } from './TemplateSettings'
+import { PeriodicSettingsTab } from './PeriodicSettings'
 import { AiSettings } from './AiSettings'
 import { VaultSettings } from './VaultSettings'
 import { BotsSettings } from '../../bots'
@@ -23,13 +24,15 @@ import { BotsSettings } from '../../bots'
  * there is no "apply" button and nothing to get out of sync.
  */
 
-export type SettingsTab = 'appearance' | 'editor' | 'writing' | 'templates' | 'topics' | 'obsidian' | 'ai' | 'bots' | 'shortcuts' | 'vault'
+export type SettingsTab =
+  'appearance' | 'editor' | 'writing' | 'templates' | 'periodic' | 'topics' | 'obsidian' | 'ai' | 'bots' | 'shortcuts' | 'vault'
 
 const TABS: readonly { id: SettingsTab; label: string }[] = [
   { id: 'appearance', label: 'Appearance' },
   { id: 'editor', label: 'Editor' },
   { id: 'writing', label: 'Writing' },
   { id: 'templates', label: 'Templates' },
+  { id: 'periodic', label: 'Periodic notes' },
   { id: 'topics', label: 'Topics' },
   { id: 'obsidian', label: 'Obsidian' },
   { id: 'ai', label: 'AI' },
@@ -62,6 +65,7 @@ function Settings({ initialTab, ...deps }: SettingsDeps & { initialTab?: Setting
         {tab === 'editor' && <EditorSettings {...deps} />}
         {tab === 'writing' && <WritingSettingsTab />}
         {tab === 'templates' && <TemplateSettingsTab {...deps} />}
+        {tab === 'periodic' && <PeriodicSettingsTab {...deps} />}
         {tab === 'topics' && <TopicsSettingsTab />}
         {tab === 'obsidian' && <ObsidianSync />}
         {tab === 'ai' && <AiSettings {...deps} />}

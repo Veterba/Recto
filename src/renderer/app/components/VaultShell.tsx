@@ -35,14 +35,14 @@ import { FileTree, allFilePaths, allFolderPaths, filterTree, noteEntries, notePa
 import { focusEditorOnOpen, type LinkCandidate } from '../../features/editor'
 import { QuickSwitcher, SearchPanel } from '../../features/search'
 import { SettingsDialog, SidebarThemePicker, type SettingsTab } from '../../features/settings'
-import { TemplatePicker, useDailyNoteAutoCreate, useTemplateActions, useTemplateSettings } from '../../features/templates'
+import { TemplatePicker, usePeriodicNotesAutoCreate, useTemplateActions, useTemplateSettings } from '../../features/templates'
 import { TidyDialog, useTidy } from '../../features/tidy'
 import { CHAT_FOLDER } from '../../features/ai'
 import { BotList, MAIN_BOT, onOpenTopic, reloadBots, requestTopic, useBots, useBotsEnabled } from '../../features/bots'
 import { BoardList, CARD_FOLDER, useBoards } from '../../features/boards'
 import { registerArchiveView } from '../../features/archive'
 import { HomeOverlay } from '../../features/home'
-import type { TemplateSettings } from '@shared/templates'
+import type { Period, TemplateSettings } from '@shared/templates'
 
 type Props = {
   vault: VaultInfo
@@ -306,10 +306,11 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     update: updateRef,
   })
 
-  const { insertTemplate, updateTemplates, openDailyNote } = useTemplateActions({
+  const { insertTemplate, updateTemplates, openPeriodicNote } = useTemplateActions({
     activePath,
     closePicker: () => setTemplatesOpen(false),
     byPath: tree.byPath,
+    notes: allNotes,
     templates,
     refresh,
     openFile: openFileRef,
@@ -324,8 +325,9 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     templates: templates.settings,
     updateTemplates: (_next: TemplateSettings) => {},
     notes: [] as string[],
+    folders: [] as string[],
     attachments: [] as string[],
-    openDailyNote: () => {},
+    openPeriodicNote: (_period: Period) => {},
   })
   settingsDepsRef.current = {
     appearance,
@@ -336,8 +338,9 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     templates: templates.settings,
     updateTemplates: (next: TemplateSettings) => void updateTemplates(next),
     notes: allNotes,
+    folders: allFolders,
     attachments: attachmentFiles,
-    openDailyNote: () => void openDailyNote(),
+    openPeriodicNote: (period: Period) => void openPeriodicNote(period),
   }
 
   const { createAt, createIn, onNew } = useShellCreate({
@@ -392,20 +395,42 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     setHomeOpen,
   })
 
-  useDailyNoteAutoCreate(templates, refresh)
+  usePeriodicNotesAutoCreate(templates, allNotes, refresh, settingsOpen)
 
-  useEffect(
-    () =>
-      commands.register({
+  useEffect(() => {
+    const off = commands.registerAll([
+      {
         id: 'daily:open',
-        name: "Open today's daily note",
+        name: 'Open today',
         section: 'Open',
         icon: 'calendar-days',
         hotkey: 'Mod+Shift+D',
-        run: () => void openDailyNote(),
-      }),
-    [openDailyNote],
-  )
+        run: () => void openPeriodicNote('daily'),
+      },
+      {
+        id: 'weekly:open',
+        name: 'Open this week',
+        section: 'Open',
+        icon: 'calendar-range',
+        run: () => void openPeriodicNote('weekly'),
+      },
+      {
+        id: 'monthly:open',
+        name: 'Open this month',
+        section: 'Open',
+        icon: 'calendar',
+        run: () => void openPeriodicNote('monthly'),
+      },
+      {
+        id: 'yearly:open',
+        name: 'Open this year',
+        section: 'Open',
+        icon: 'calendar',
+        run: () => void openPeriodicNote('yearly'),
+      },
+    ])
+    return off
+  }, [openPeriodicNote])
 
   useShellKeys({
     paletteOpen,
@@ -515,7 +540,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         vaultName={vault.name}
         graphOpen={graphWindow.open}
         onToggleGraph={() => setGraphWindow({ open: !graphWindow.open })}
-        onOpenDaily={() => void openDailyNote()}
+        onOpenDaily={() => void openPeriodicNote('daily')}
         onOpenPalette={openPalette}
       />
       {templatesOpen && (

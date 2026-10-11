@@ -3,6 +3,8 @@ import { viewTitle } from '../view-registry'
 import type { Workspace } from '../workspace'
 import { TopicsNotice } from '../../features/topics'
 import { OutsideLinksNotice } from '../../features/file-tree'
+import { PeriodicNotice } from '../../features/templates'
+import { WritingButtons } from '../../features/editor'
 import { Icon } from '../../ui/Icon'
 import { Tip } from '../../ui/Tip'
 
@@ -31,6 +33,10 @@ export function StatusBar({ workspace, vaultName, graphOpen, onToggleGraph, onOp
       <span className="status__item">{leaf ? viewTitle(leaf.type, leaf.state) : 'Nothing open'}</span>
       <span className="status__spacer" />
       <OutsideLinksNotice />
+      <PeriodicNotice />
+      {/* Focus mode and the writing tools live here, not in the note's
+          toolbar, so they are there even with the toolbar hidden. */}
+      <WritingButtons buttonClass="status__btn" iconSize={13} menuPlacement="above" />
       <TopicsNotice />
       <Tip label="Today's note" hint={formatChord('Mod+Shift+D')} placement="top">
         <button className="status__btn" onClick={onOpenDaily} aria-label="Daily note">

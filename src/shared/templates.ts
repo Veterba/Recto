@@ -17,8 +17,34 @@ import { parseFrontmatter, setField } from './frontmatter'
 /** Where templates live when the vault has not said otherwise. */
 const TEMPLATE_FOLDER = 'templates'
 
-/** Where daily notes go when the vault has not said otherwise. */
-const DAILY_FOLDER = 'Daily'
+/** Where periodic notes go when the vault has not said otherwise: the daily notes' folder, as before. */
+const PERIODIC_FOLDER = 'Daily'
+
+export type Period = 'daily' | 'weekly' | 'monthly' | 'yearly'
+export const PERIODS: readonly Period[] = ['daily', 'weekly', 'monthly', 'yearly']
+
+export type PeriodSettings = {
+  enabled: boolean
+  /** Vault-relative path of the template to use, or null for the built-in one. */
+  template: string | null
+  /** "Use a separate folder": its own folder with its own year and month folders; null for the shared one. */
+  folder: string | null
+}
+
+export type WeekStart = 'monday' | 'sunday' | 'saturday'
+
+export type PeriodicSettings = {
+  /** The shared folder the year folders go under. */
+  folder: string
+  /** For display and templates; the week notes themselves are ISO weeks. */
+  weekStart: WeekStart
+  /** Weekly notes in a month folder even when nothing else needs one. */
+  groupByMonth: boolean
+  daily: PeriodSettings
+  weekly: PeriodSettings
+  monthly: PeriodSettings
+  yearly: PeriodSettings
+}
 
 /**
  * Per-vault template settings, in `.recto/templates.json`.
@@ -29,18 +55,22 @@ const DAILY_FOLDER = 'Daily'
 export type TemplateSettings = {
   /** Vault-relative folder holding the templates. */
   folder: string
-  daily: {
-    enabled: boolean
-    /** Vault-relative folder the year folders go under. */
-    folder: string
-    /** Vault-relative path of the template to use, or null for the built-in one. */
-    template: string | null
-  }
+  periodic: PeriodicSettings
 }
+
+const OFF: PeriodSettings = { enabled: false, template: null, folder: null }
 
 export const DEFAULT_TEMPLATE_SETTINGS: TemplateSettings = {
   folder: TEMPLATE_FOLDER,
-  daily: { enabled: false, folder: DAILY_FOLDER, template: null },
+  periodic: {
+    folder: PERIODIC_FOLDER,
+    weekStart: 'monday',
+    groupByMonth: false,
+    daily: OFF,
+    weekly: OFF,
+    monthly: OFF,
+    yearly: OFF,
+  },
 }
 
 /**
@@ -66,27 +96,59 @@ export function normaliseFolder(input: string): string | null {
   return segments.map((segment) => segment.trim()).join('/')
 }
 
-/** Read the settings file back, falling back field by field rather than wholesale. */
+const asTemplate = (value: unknown): string | null =>
+  typeof value === 'string' && normaliseFolder(value) !== null && /\.md$/i.test(value) ? value : null
+const asFolder = (value: unknown): string | null => (typeof value === 'string' ? normaliseFolder(value) : null)
+const asObject = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+
+function coercePeriod(value: unknown): PeriodSettings {
+  const v = asObject(value)
+  return { enabled: v['enabled'] === true, template: asTemplate(v['template']), folder: asFolder(v['folder']) }
+}
+
+/**
+ * Read the settings file back, falling back field by field rather than wholesale.
+ *
+ * A file from before periodic notes has `daily: { enabled, folder, template }`:
+ * its folder becomes the shared folder, so the daily notes keep going where
+ * they went.
+ */
 export function coerceTemplateSettings(value: unknown): TemplateSettings {
   if (typeof value !== 'object' || value === null) return DEFAULT_TEMPLATE_SETTINGS
-  const v = value as { folder?: unknown; daily?: unknown }
-  const daily = (typeof v.daily === 'object' && v.daily !== null ? v.daily : {}) as {
-    enabled?: unknown
-    folder?: unknown
-    template?: unknown
+  const v = value as { folder?: unknown; daily?: unknown; periodic?: unknown }
+  const folder = asFolder(v.folder) ?? DEFAULT_TEMPLATE_SETTINGS.folder
+  const fallback = DEFAULT_TEMPLATE_SETTINGS.periodic
+  if (v.periodic === undefined) {
+    const daily = asObject(v.daily)
+    return {
+      folder,
+      periodic: {
+        ...fallback,
+        folder: asFolder(daily['folder']) ?? fallback.folder,
+        daily: { enabled: daily['enabled'] === true, template: asTemplate(daily['template']), folder: null },
+      },
+    }
   }
-  const folder = typeof v.folder === 'string' ? normaliseFolder(v.folder) : null
-  const dailyFolder = typeof daily.folder === 'string' ? normaliseFolder(daily.folder) : null
-  const template =
-    typeof daily.template === 'string' && normaliseFolder(daily.template) !== null && /\.md$/i.test(daily.template) ? daily.template : null
+  const p = asObject(v.periodic)
+  const weekStart = p['weekStart']
   return {
-    folder: folder ?? DEFAULT_TEMPLATE_SETTINGS.folder,
-    daily: {
-      enabled: daily.enabled === true,
-      folder: dailyFolder ?? DEFAULT_TEMPLATE_SETTINGS.daily.folder,
-      template,
+    folder,
+    periodic: {
+      folder: asFolder(p['folder']) ?? fallback.folder,
+      weekStart: weekStart === 'sunday' || weekStart === 'saturday' ? weekStart : 'monday',
+      groupByMonth: p['groupByMonth'] === true,
+      daily: coercePeriod(p['daily']),
+      weekly: coercePeriod(p['weekly']),
+      monthly: coercePeriod(p['monthly']),
+      yearly: coercePeriod(p['yearly']),
     },
   }
+}
+
+/** Every folder periodic notes go in: the shared one and any separate ones. Kept out of topics and tidying. */
+export function periodicFolders(settings: PeriodicSettings): string[] {
+  return [...new Set([settings.folder, ...PERIODS.map((p) => settings[p].folder).filter((f): f is string => f !== null)])]
 }
 
 /** Is this path inside (or exactly) that folder? Segment-wise, not by prefix. */
@@ -134,6 +196,40 @@ export function dailyNotePath(date: Date, root: string): { folder: string; name:
   return { folder, name, path: `${folder}/${name}`, key }
 }
 
+/** The Thursday of the date's ISO week, which decides the week's year and month. */
+export function thursdayOf(date: Date): Date {
+  const day = date.getDay() === 0 ? 7 : date.getDay()
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 4 - day)
+}
+
+/**
+ * A period's note name, which is also its key: `2026-10-09`, `2026-W41`,
+ * `2026-10`, `2026`. Fixed, so a link to one always means the same note.
+ */
+export function periodKey(period: Period, date: Date): string {
+  switch (period) {
+    case 'daily':
+      return isoDate(date)
+    case 'weekly': {
+      const { year, week } = isoWeek(date)
+      return `${year}-W${pad(week)}`
+    }
+    case 'monthly':
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}`
+    case 'yearly':
+      return String(date.getFullYear())
+  }
+}
+
+const WEEK_START_DAY: Record<WeekStart, number> = { sunday: 0, monday: 1, saturday: 6 }
+
+/** The first and last day of the date's week, by the "week starts on" setting. */
+export function weekRange(date: Date, weekStart: WeekStart = 'monday'): { start: Date; end: Date } {
+  const back = (date.getDay() - WEEK_START_DAY[weekStart] + 7) % 7
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate() - back)
+  return { start, end: new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6) }
+}
+
 /** What a daily note contains when no template has been chosen. */
 export const BUILT_IN_DAILY = '# {{date}}\n\n'
 
@@ -144,6 +240,8 @@ type TemplateVars = {
   path: string
   /** For deterministic tests, and so every placeholder in one insert agrees. */
   now: Date
+  /** For `{{week_start}}` and `{{week_end}}`; Monday when not given. */
+  weekStart?: WeekStart
 }
 
 const pad = (value: number): string => String(value).padStart(2, '0')
@@ -155,14 +253,16 @@ const isoTime = (d: Date): string => `${pad(d.getHours())}:${pad(d.getMinutes())
 /**
  * `{{date}}`, `{{time}}`, `{{title}}`, `{{path}}`, and `{{date:+7}}` /
  * `{{date:-1}}` for a day offset - enough for a daily note, a meeting note and
- * a follow-up, which is what people actually write templates for.
+ * a follow-up, which is what people actually write templates for. For
+ * periodic notes: `{{week}}` (2026-W41), `{{month}}` (2026-10), `{{year}}`,
+ * and `{{week_start}}` / `{{week_end}}` by the "week starts on" setting.
  *
  * An unknown placeholder is left exactly as written rather than replaced with
  * an empty string: a silently vanished `{{attendees}}` looks like the template
  * was wrong, while the literal text shows you what to fix.
  */
 export function fillTemplate(body: string, vars: TemplateVars): string {
-  return body.replace(/\{\{\s*([a-z]+)(?::([+-]?\d+))?\s*\}\}/gi, (whole, rawName: string, offset?: string) => {
+  return body.replace(/\{\{\s*([a-z_]+)(?::([+-]?\d+))?\s*\}\}/gi, (whole, rawName: string, offset?: string) => {
     const name = rawName.toLowerCase()
     const shifted = new Date(vars.now)
     if (offset !== undefined) shifted.setDate(shifted.getDate() + Number(offset))
@@ -176,6 +276,16 @@ export function fillTemplate(body: string, vars: TemplateVars): string {
         return vars.title
       case 'path':
         return vars.path
+      case 'week':
+        return periodKey('weekly', shifted)
+      case 'month':
+        return periodKey('monthly', shifted)
+      case 'year':
+        return periodKey('yearly', shifted)
+      case 'week_start':
+        return isoDate(weekRange(shifted, vars.weekStart).start)
+      case 'week_end':
+        return isoDate(weekRange(shifted, vars.weekStart).end)
       default:
         return whole
     }

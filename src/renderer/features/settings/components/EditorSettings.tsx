@@ -62,6 +62,17 @@ export function EditorSettings({ appearance, update }: SettingsDeps): React.Reac
         />
       </SettingRow>
 
+      <SettingRow
+        label="Show formatting toolbar"
+        hint="The row of formatting buttons above each note. Off, formatting is still there by shortcut and in the command palette."
+      >
+        <Toggle
+          on={appearance.showFormatBar}
+          onChange={() => update({ showFormatBar: !appearance.showFormatBar })}
+          label="Show formatting toolbar"
+        />
+      </SettingRow>
+
       <SettingRow label="Vim mode" hint="Modal editing. Esc for normal mode, :w saves.">
         <Toggle on={appearance.vimMode} onChange={() => update({ vimMode: !appearance.vimMode })} />
       </SettingRow>

@@ -13,6 +13,10 @@
   gap: 2px;
   padding: var(--size-3) var(--size-6) 0;
   border-bottom: 1px solid var(--border);
+  /* One row, always: in a narrow window it scrolls rather than wrapping a tab
+     onto two lines or pushing the last one out of sight. */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .settings__tab {
@@ -22,6 +26,7 @@
   border-radius: var(--radius-s) var(--radius-s) 0 0;
   font-size: var(--font-size-13);
   color: var(--text-muted);
+  white-space: nowrap;
   cursor: pointer;
   transition: color var(--anim-fast) var(--ease);
 }
@@ -150,6 +155,48 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+/* ---------- periodic notes ---------- */
+
+.periodic__separate,
+.periodic__new-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2);
+}
+.periodic__preview {
+  margin-top: var(--size-4);
+}
+.periodic__tree {
+  margin: var(--size-2) 0 0;
+  padding: var(--size-2) var(--size-3);
+  list-style: none;
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12);
+}
+.periodic__line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+  color: var(--text-muted);
+}
+.periodic__line.is-file {
+  color: var(--text-primary);
+}
+.periodic__exists {
+  margin-left: var(--size-2);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-11);
+  color: var(--text-muted);
+}
+.periodic__none {
+  margin: var(--size-2) 0 0;
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
 }
 
 /* ---------- recent vaults ---------- */
