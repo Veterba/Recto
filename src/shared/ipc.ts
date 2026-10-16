@@ -251,7 +251,13 @@ export type IpcApi = Exhaustive<
     /** A file that is not a note, for the code editor: its text, or why it is not shown as text. */
     [IPC.fsReadText]: (path: string) => TextFileResult
     [IPC.fsWrite]: (path: string, content: string) => { ok: boolean; error?: string }
-    [IPC.fsCreate]: (parentPath: string, name: string, kind: 'file' | 'folder') => { ok: true; path: string } | { ok: false; error: string }
+    /** A file name taken anywhere in the vault is refused, or numbered with 'number' (see vault-fs `create`). */
+    [IPC.fsCreate]: (
+      parentPath: string,
+      name: string,
+      kind: 'file' | 'folder',
+      onTaken?: 'refuse' | 'number',
+    ) => { ok: true; path: string } | { ok: false; error: string }
     [IPC.fsRename]: (path: string, newName: string) => RenameOutcome | { ok: false; error: string }
     [IPC.fsTrash]: (path: string) => { ok: boolean; error?: string }
     [IPC.fsMove]: (path: string, newParent: string) => RenameOutcome | { ok: false; error: string }

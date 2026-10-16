@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isHidden, nameOf, parentOf, sortNodes, type FileNode } from '../../src/shared/vault'
+import { isHidden, nameOf, nameTaken, parentOf, sortNodes, type FileNode } from '../../src/shared/vault'
 
 describe('vault paths', () => {
   it('splits a path into its folder and its name', () => {
@@ -37,5 +37,19 @@ describe('sorting tree nodes', () => {
     const sorted = sortNodes(input)
     expect(sorted).not.toBe(input)
     expect(input.map((n) => n.name)).toEqual(['b.md', 'a.md'])
+  })
+})
+
+describe('nameTaken', () => {
+  const paths = ['Projects/Plan.md', 'Archive/Report.pdf']
+
+  it('matches whole file names in any folder and any case', () => {
+    expect(nameTaken('plan.MD', paths)).toBe('Projects/Plan.md')
+    expect(nameTaken('Inbox/report.pdf', paths)).toBe('Archive/Report.pdf')
+  })
+
+  it('lets a note and a file share a base name', () => {
+    expect(nameTaken('Plan.pdf', paths)).toBe(null)
+    expect(nameTaken('Report.md', paths)).toBe(null)
   })
 })

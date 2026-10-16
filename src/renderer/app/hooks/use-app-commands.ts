@@ -38,7 +38,7 @@ export function useAppCommands({
   setTemplatesOpen: (open: boolean) => void
   onCloseVault: () => void
   toggleSidebar: () => void
-  createIn: (kind: 'file' | 'folder' | 'named') => Promise<void>
+  createIn: (kind: 'file' | 'folder' | 'named') => Promise<string | null>
   activePath: string | null
   update: (patch: Partial<Appearance>) => void
   livePreview: boolean

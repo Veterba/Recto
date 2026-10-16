@@ -83,6 +83,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const [settingsOpen, setSettingsOpen] = useState(false)
   /** "New file…" is asking for a name, to go in this folder. */
   const [newFileIn, setNewFileIn] = useState<string | null>(null)
+  const [newFileError, setNewFileError] = useState<string | null>(null)
   /** The ⌘/ cheat sheet. */
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   /** The tab Settings opens on, when something asked for a particular one. */
@@ -595,12 +596,19 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
           path={newFileIn === '' ? `${vault.name}/` : `${newFileIn}/`}
           initial=""
           select={0}
+          error={newFileError}
           onSubmit={(name) => {
             const parent = newFileIn
-            setNewFileIn(null)
-            void createNamed(parent, name)
+            // Stays open on a taken name, saying which file has it.
+            void createNamed(parent, name).then((error) => {
+              setNewFileError(error)
+              if (error === null) setNewFileIn(null)
+            })
           }}
-          onCancel={() => setNewFileIn(null)}
+          onCancel={() => {
+            setNewFileIn(null)
+            setNewFileError(null)
+          }}
         />
       )}
       {templatesOpen && (

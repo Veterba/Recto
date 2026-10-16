@@ -4,6 +4,12 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.50.1 — 2026-10-16
+### Fixed
+- A file name is unique in the whole vault again, ignoring case: a second note called "Plan" in any folder is refused, and so is a second Plan.pdf. A note and a file may share a base name (Plan.md and Plan.pdf). This holds for new notes and files, New file…, renames (including changing the type), moves between folders, new cards and periodic notes. The error names the file that already has the name, and New file… stays open to show it.
+- "Untitled", the sidebar's "New task" and dropped or pasted files get a number that is free in the whole vault, not just in their folder.
+- Rename opened with a double-click on a note in the tree now keeps the cursor in the name field; the note that opened behind it took the focus, so typing went into the note.
+
 ## v0.50.0 — 2026-10-16
 ### Added
 - New widgets: Today (cards today falls inside, or due today), By priority (open cards per priority; click a row to filter the board, again to clear), Overdue (late cards, the oldest first) and Recently done (the last five cards to enter Done). "+ Widget" lists every widget, ticked when shown, so it always has something to offer.

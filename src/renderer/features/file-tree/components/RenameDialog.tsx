@@ -74,6 +74,7 @@ export function NameDialog({
   path,
   initial,
   select,
+  error = null,
   onSubmit,
   onCancel,
 }: {
@@ -84,6 +85,8 @@ export function NameDialog({
   initial: string
   /** How many characters, from the start, are selected. */
   select: number
+  /** Why the last name was refused, shown under the input. */
+  error?: string | null
   onSubmit: (name: string) => void
   onCancel: () => void
 }): React.ReactElement {
@@ -95,6 +98,14 @@ export function NameDialog({
     if (element === null) return
     element.focus()
     element.setSelectionRange(0, select)
+    // A modal keeps focus. A double-click opens the file on its first click,
+    // and the editor that mounts for it took focus after this, so typing went
+    // into the note. Focus comes back with the selection as it was.
+    const keep = (event: FocusEvent): void => {
+      if (!element.closest('.dialog')?.contains(event.target as Node)) element.focus()
+    }
+    document.addEventListener('focusin', keep)
+    return () => document.removeEventListener('focusin', keep)
   }, [select])
 
   const trimmed = value.trim()
@@ -153,6 +164,11 @@ export function NameDialog({
             {submitLabel}
           </button>
         </form>
+        {error !== null && (
+          <p className="dialog__error" role="alert">
+            {error}
+          </p>
+        )}
       </div>
     </div>,
     document.body,

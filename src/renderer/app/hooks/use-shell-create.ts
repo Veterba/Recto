@@ -33,26 +33,30 @@ export function useShellCreate({
   /** "New file…": ask for the name, then `createNamed`. */
   askFileName: (parent: string) => void
 }): {
-  createAt: (parent: string, kind: 'file' | 'folder' | 'named') => Promise<void>
-  createIn: (kind: 'file' | 'folder' | 'named') => Promise<void>
-  createNamed: (parent: string, typed: string) => Promise<void>
+  createAt: (parent: string, kind: 'file' | 'folder' | 'named') => Promise<string | null>
+  createIn: (kind: 'file' | 'folder' | 'named') => Promise<string | null>
+  /** Null when made, or why not ("taken" names the file that has the name). */
+  createNamed: (parent: string, typed: string) => Promise<string | null>
   onNew: () => void
 } {
   const createAt = useCallback(
-    async (parent: string, kind: 'file' | 'folder' | 'named', typed?: string) => {
+    async (parent: string, kind: 'file' | 'folder' | 'named', typed?: string): Promise<string | null> => {
       if (kind === 'named' && typed === undefined) {
         askFileName(parent)
-        return
+        return null
       }
       const name = kind === 'named' ? newFileName(typed ?? '') : kind === 'file' ? 'Untitled.md' : 'New folder'
-      const result = await api.invoke(IPC.fsCreate, parent, name, kind === 'folder' ? 'folder' : 'file')
-      if (!result.ok) return
+      // A typed name that is taken is refused; "Untitled" is ours, so it gets a number.
+      const onTaken = kind === 'named' ? 'refuse' : 'number'
+      const result = await api.invoke(IPC.fsCreate, parent, name, kind === 'folder' ? 'folder' : 'file', onTaken)
+      if (!result.ok) return result.error
       await refresh()
       // Expand the folder it went into, or the new thing is created somewhere
       // you cannot see.
       if (parent !== '') setExpanded((prev) => new Set(prev).add(parent))
       if (kind === 'folder') setExpanded((prev) => new Set(prev).add(result.path))
       else openFile(result.path)
+      return null
     },
     [refresh, openFile, askFileName],
   )
@@ -88,7 +92,7 @@ export function useShellCreate({
       const board = boards.boards.find((entry) => entry.id === activeBoard) ?? boards.boards[0]
       const column = board?.columns[0]
       if (board === undefined || column === undefined) return
-      void createCard(board.id, column.id, 'New task').then((created) => {
+      void createCard(board.id, column.id, 'New task', { onTaken: 'number' }).then((created) => {
         if (created.ok) openBoardCard(created.path)
       })
       return

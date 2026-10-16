@@ -143,6 +143,9 @@ describe('renaming and the file type', () => {
     expect(stemLength('index.md', false)).toBe(5)
     expect(stemLength('py.py.md', false)).toBe(5)
     expect(stemLength('.env', false)).toBe(4)
+    expect(stemLength('notes.v2.md', false)).toBe(8)
+    expect(stemLength('.gitignore', false)).toBe(10)
+    expect(stemLength('Makefile', false)).toBe(8)
     expect(stemLength('v1.2 notes', true)).toBe(10)
   })
 

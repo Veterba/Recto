@@ -118,6 +118,8 @@ describe.skipIf(!RUN)('renaming from the file tree', () => {
     fs.writeFileSync(path.join(vault, 'Sources', 'notes.md'), '# Notes\n')
     fs.writeFileSync(path.join(vault, 'Scripts', 'py.py.md'), 'print("hi")\n')
     fs.writeFileSync(path.join(vault, 'Scripts', 'todo.txt'), 'Ask about [[notes]] tomorrow.\n')
+    fs.writeFileSync(path.join(vault, 'Scripts', 'notes.v2.md'), '# v2\n')
+    fs.writeFileSync(path.join(vault, 'Scripts', 'Makefile'), 'all:\n')
     fs.writeFileSync(path.join(userData, 'app-state.json'), JSON.stringify({ lastVaultPath: vault }))
     fs.mkdirSync(path.join(vault, '.recto'))
     fs.writeFileSync(path.join(vault, '.recto', 'topics-settings.json'), JSON.stringify({ enabled: false }))
@@ -220,5 +222,38 @@ describe.skipIf(!RUN)('renaming from the file tree', () => {
     await menuOn('Scripts', 'New file')
     await typeAndEnter('Plain')
     await until(async () => fs.existsSync(path.join(vault, 'Scripts', 'Plain.md')))
+  }, 30_000)
+
+  /** The dialog's input: focused with nothing clicked, and what is selected. */
+  const opened = (): Promise<unknown> =>
+    evaluate(
+      "(() => { const i = document.querySelector('.dialog__input'); return i && { focused: document.activeElement === i, value: i.value, selected: i.value.slice(i.selectionStart, i.selectionEnd) } })()",
+    )
+  const escape = async (): Promise<void> => {
+    await cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await sleep(300)
+  }
+
+  it('every way of opening rename focuses the field with the name before the last dot selected', async () => {
+    if ((await rowAt('notes.v2')) === null) await click((await rowAt('Scripts'))!)
+    // Double-click: several dots, up to the last one.
+    await doubleClick((await rowAt('notes.v2'))!)
+    expect(await opened()).toEqual({ focused: true, value: 'notes.v2.md', selected: 'notes.v2' })
+    await escape()
+
+    // Context menu: no extension, the whole name.
+    await menuOn('Makefile', 'Rename')
+    expect(await opened()).toEqual({ focused: true, value: 'Makefile', selected: 'Makefile' })
+    await escape()
+
+    // F2 on the row under the cursor.
+    await click((await rowAt('notes.v2'))!)
+    await evaluate("document.querySelector('[role=tree]')?.focus() ?? null")
+    await cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'F2', code: 'F2', windowsVirtualKeyCode: 113 })
+    await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'F2', code: 'F2', windowsVirtualKeyCode: 113 })
+    await sleep(400)
+    expect(await opened()).toEqual({ focused: true, value: 'notes.v2.md', selected: 'notes.v2' })
+    await escape()
   }, 30_000)
 })

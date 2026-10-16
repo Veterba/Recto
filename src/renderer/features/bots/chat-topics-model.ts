@@ -195,7 +195,7 @@ export class ChatTopics {
     let topic = this.currentTopic()
     if (topic === null) {
       const meta: ChatTopicMeta = { bot: this.bot.id, created: createdStamp(new Date()), title: UNTITLED }
-      const created = await api.invoke(IPC.fsCreate, this.folder, topicFileName(meta.created, meta.title), 'file')
+      const created = await api.invoke(IPC.fsCreate, this.folder, topicFileName(meta.created, meta.title), 'file', 'number')
       if (!created.ok) return null
       topic = { path: created.path, meta, extra: [], body: '', messages: [] }
       this.loaded.set(topic.path, topic)
@@ -260,7 +260,7 @@ export class ChatTopics {
     this.emit()
     return async () => {
       if (content === null) return
-      const restored = await api.invoke(IPC.fsCreate, this.folder, basename(path), 'file')
+      const restored = await api.invoke(IPC.fsCreate, this.folder, basename(path), 'file', 'number')
       if (!restored.ok) return
       await api.invoke(IPC.fsWrite, restored.path, content)
       await this.refresh()

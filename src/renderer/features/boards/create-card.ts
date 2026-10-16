@@ -34,13 +34,17 @@ export async function createCard(
   board: string,
   column: string,
   title: string,
-  /** The card's order, when the caller has the column on screen; otherwise it goes last, asked of the index. */
-  options: { order?: number } = {},
+  /**
+   * The card's order, when the caller has the column on screen; otherwise it
+   * goes last, asked of the index. `onTaken: 'number'` for a name the app chose
+   * ("New task"); a typed name that is taken anywhere is refused by main.
+   */
+  options: { order?: number; onTaken?: 'refuse' | 'number' } = {},
 ): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   const name = title.trim()
   if (name === '') return { ok: false, error: 'A card needs a name.' }
 
-  const created = await api.invoke(IPC.fsCreate, CARD_FOLDER, `${name}.md`, 'file')
+  const created = await api.invoke(IPC.fsCreate, CARD_FOLDER, `${name}.md`, 'file', options.onTaken)
   if (!created.ok) return created
 
   let order = options.order

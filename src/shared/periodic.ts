@@ -84,17 +84,7 @@ export function parentLink(period: Period, date: Date, settings: PeriodicSetting
   return { key: PROPERTY[parent], value: `[[${periodKey(parent, at)}]]` }
 }
 
-const fileName = (path: string): string => path.slice(path.lastIndexOf('/') + 1).toLowerCase()
-
-/**
- * Another note with this one's name, if there is one: names are unique in a
- * vault (links go by name), so the periodic note is then not made. Compared
- * without case, as the Mac disk does.
- */
-export function nameTakenElsewhere(path: string, notes: readonly string[]): string | null {
-  const name = fileName(path)
-  return notes.find((other) => other !== path && fileName(other) === name) ?? null
-}
+export { nameTakenElsewhere } from './vault'
 
 export type TreeLine = { depth: number; name: string; file: boolean }
 

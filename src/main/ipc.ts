@@ -141,9 +141,9 @@ export function registerIpc(): void {
     markSelfWrite(p)
     return vaultFs.writeFile(p, content)
   })
-  handle(IPC.fsCreate, (parent, name, kind) => {
+  handle(IPC.fsCreate, (parent, name, kind, onTaken) => {
     markSelfWrite(parent === '' ? name : `${parent}/${name}`)
-    return vaultFs.create(parent, name, kind)
+    return vaultFs.create(parent, name, kind, onTaken)
   })
   /**
    * Rename and move are the same operation to a user: the note ends up

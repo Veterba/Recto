@@ -86,3 +86,25 @@ export const parentOf = (path: string): string => {
 
 /** The last segment of a vault path: 'a/b/c.md' -> 'c.md'. */
 export const nameOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
+
+/** A file name as compared for clashes: without case, as the Mac disk does, and in one Unicode form. */
+const nameKey = (path: string): string => nameOf(path).normalize('NFC').toLowerCase()
+
+/**
+ * Another file with this one's name anywhere in the vault, or null.
+ *
+ * A note is linked by name (`[[Plan]]`), so two notes of one name would make
+ * every link to it ambiguous; a file is linked by its full name
+ * (`[[Plan.pdf]]`). Comparing whole names, extension included, covers both:
+ * Plan.md and Plan.pdf may live side by side, two Plan.md or two Plan.pdf may
+ * not.
+ */
+export function nameTakenElsewhere(path: string, paths: readonly string[]): string | null {
+  return nameTaken(path, paths.filter((other) => other !== path))
+}
+
+/** The first of `paths` with this one's file name, or null. The path itself counts: leave it out to ignore it. */
+export function nameTaken(path: string, paths: readonly string[]): string | null {
+  const name = nameKey(path)
+  return paths.find((other) => nameKey(other) === name) ?? null
+}

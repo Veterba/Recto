@@ -9,7 +9,7 @@ import { rewriteWikiLinks } from './link-rewrite'
 import { leavesVault, resolveInVault } from './paths'
 import { currentVault } from './vault'
 import { notTextMessage, notTextReason } from './text-file'
-import { isHidden, sortNodes } from '../shared/vault'
+import { isHidden, nameOf, nameTaken, sortNodes } from '../shared/vault'
 
 /**
  * All vault file access. Every path arriving from the renderer goes through
@@ -169,15 +169,54 @@ export async function writeFile(relative: string, content: string): Promise<{ ok
   }
 }
 
-/** Append ' 2', ' 3'... until the name is free, rather than overwriting. */
-function uniquePath(absolute: string): string {
-  if (!fs.existsSync(absolute)) return absolute
+/**
+ * Every file in the vault, vault-relative: what a new file name is checked
+ * against. Hidden folders (`.recto`, `.git`) and symlinks are not part of it,
+ * as they are not part of the tree.
+ */
+function allFiles(root: string): string[] {
+  const out: string[] = []
+  const walk = (dir: string): void => {
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (isHidden(entry.name) || entry.isSymbolicLink()) continue
+      const absolute = path.join(dir, entry.name)
+      if (entry.isDirectory()) walk(absolute)
+      else if (entry.isFile()) out.push(toRelative(root, absolute))
+    }
+  }
+  walk(root)
+  return out
+}
+
+/**
+ * File names are unique in the whole vault, not just in their folder: links go
+ * by name, so a second `Plan.md` anywhere makes `[[Plan]]` ambiguous (see
+ * `nameTaken`). The message names the file that has it.
+ */
+function takenMessage(existing: string): string {
+  return `"${nameOf(existing)}" already exists: ${existing}`
+}
+
+/**
+ * Append ' 2', ' 3'... until the name is free, rather than overwriting. Free
+ * means nothing at this path and, for a file, no file of that name anywhere in
+ * `files`.
+ */
+function uniquePath(absolute: string, files: readonly string[] = []): string {
+  const free = (candidate: string): boolean => !fs.existsSync(candidate) && nameTaken(path.basename(candidate), files) === null
+  if (free(absolute)) return absolute
   const dir = path.dirname(absolute)
   const ext = path.extname(absolute)
   const base = path.basename(absolute, ext)
   for (let n = 2; n < 1000; n++) {
     const candidate = path.join(dir, `${base} ${n}${ext}`)
-    if (!fs.existsSync(candidate)) return candidate
+    if (free(candidate)) return candidate
   }
   throw new Error('could not find a free filename')
 }
@@ -195,7 +234,7 @@ export async function importFile(source: string, folder: string): Promise<{ ok: 
     const root = requireVault()
     const bare = sanitiseName(path.basename(source))
     if (bare.length === 0) return { ok: false, error: 'That file has no usable name.' }
-    const target = uniquePath(resolveInVault(root, path.join(folder, bare)))
+    const target = uniquePath(resolveInVault(root, path.join(folder, bare)), allFiles(root))
     await fsp.mkdir(path.dirname(target), { recursive: true })
     await fsp.copyFile(source, target)
     return { ok: true, path: toRelative(root, target) }
@@ -220,7 +259,7 @@ export async function importData(
     const root = requireVault()
     const bare = sanitiseName(name)
     if (bare.length === 0) return { ok: false, error: 'That file has no usable name.' }
-    const target = uniquePath(resolveInVault(root, path.join(folder, bare)))
+    const target = uniquePath(resolveInVault(root, path.join(folder, bare)), allFiles(root))
     await fsp.mkdir(path.dirname(target), { recursive: true })
     await fsp.writeFile(target, data)
     return { ok: true, path: toRelative(root, target) }
@@ -229,16 +268,32 @@ export async function importData(
   }
 }
 
+/**
+ * Make an empty file or a folder. A folder whose name is taken in its parent
+ * gets a number. A file whose name is taken anywhere in the vault is refused,
+ * naming the file that has it - unless `onTaken` is 'number', for names the
+ * app chose itself ("Untitled.md"), which get a free number instead.
+ */
 export async function create(
   parentRelative: string,
   name: string,
   kind: 'file' | 'folder',
+  onTaken: 'refuse' | 'number' = 'refuse',
 ): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   try {
     const root = requireVault()
     const bare = sanitiseName(name)
     if (bare.length === 0) return { ok: false, error: 'Name cannot be empty.' }
-    const target = uniquePath(resolveInVault(root, path.join(parentRelative, bare)))
+    let target = resolveInVault(root, path.join(parentRelative, bare))
+    if (kind === 'file') {
+      const files = allFiles(root)
+      if (onTaken === 'number') target = uniquePath(target, files)
+      else {
+        const existing = nameTaken(bare, files)
+        if (existing !== null) return { ok: false, error: takenMessage(existing) }
+        if (fs.existsSync(target)) return { ok: false, error: `"${bare}" already exists here.` }
+      }
+    } else target = uniquePath(target)
     if (kind === 'folder') {
       await fsp.mkdir(target, { recursive: true })
     } else {
@@ -259,6 +314,11 @@ export async function rename(relative: string, newName: string): Promise<{ ok: t
     if (bare.length === 0) return { ok: false, error: 'Name cannot be empty.' }
     const to = resolveInVault(root, path.join(path.dirname(relative), bare))
     if (from === to) return { ok: true, path: relative }
+    // A file's new name, type change included, must be free in the whole vault.
+    if (fs.statSync(from).isFile()) {
+      const existing = nameTaken(bare, allFiles(root).filter((other) => other !== relative))
+      if (existing !== null) return { ok: false, error: takenMessage(existing) }
+    }
     if (fs.existsSync(to)) return { ok: false, error: `"${bare}" already exists here.` }
     await fsp.rename(from, to)
     return { ok: true, path: toRelative(root, to) }
@@ -278,7 +338,8 @@ export async function move(relative: string, newParent: string): Promise<{ ok: t
     if (rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)) {
       return { ok: false, error: 'Cannot move a folder into itself.' }
     }
-    if (fs.existsSync(to)) return { ok: false, error: `"${path.basename(relative)}" already exists there.` }
+    // The name does not change, so only the folder it goes into can have it.
+    if (fs.existsSync(to)) return { ok: false, error: takenMessage(toRelative(root, to)) }
     await fsp.rename(from, to)
     return { ok: true, path: toRelative(root, to) }
   } catch (err) {

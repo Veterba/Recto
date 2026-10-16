@@ -91,13 +91,17 @@ export async function ensurePeriodicNote(
 
   // `fs:create` makes every missing folder on the way down, so the year, the
   // month and the week folders all appear from this one call.
+  // `fs:create` refuses a name taken anywhere in the vault, so it never
+  // overwrites. If something else made this very note between the read and
+  // the create, that note is the one to open; `notes` may also be a beat
+  // behind a note of this name elsewhere, and then main's refusal names it.
   const created = await api.invoke(IPC.fsCreate, target.folder, target.name, 'file')
-  if (!created.ok) return { ok: false, error: created.error }
+  if (!created.ok) {
+    const raced = await api.invoke(IPC.fsRead, target.path)
+    if (raced.ok) return { ok: true, path: target.path, created: false }
+    return { ok: false, error: created.error }
+  }
 
-  // If something else created the same file between the read and the create,
-  // `fs:create` picks a free name ("2026-09-14 2.md") rather than overwriting.
-  // A visible duplicate is the right failure: it can be deleted, and a
-  // clobbered note cannot be brought back.
   await api.invoke(IPC.fsWrite, created.path, text)
   return { ok: true, path: created.path, created: true }
 }
