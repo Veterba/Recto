@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { api } from '../../app/api'
 import { setField } from '@shared/frontmatter'
-import { nameTakenElsewhere, parentLink, periodNotePath } from '@shared/periodic'
+import { nameTakenElsewhere, parentLink, periodNotePath, todayPeriod } from '@shared/periodic'
 import {
   BUILT_IN_DAILY,
   coerceTemplateSettings,
@@ -102,6 +102,24 @@ export async function ensurePeriodicNote(
   return { ok: true, path: created.path, created: true }
 }
 
+/**
+ * Make sure "Today's note" exists: the note of the shortest period that is on
+ * (see `todayPeriod`). Null when no period is on, and then nothing is made -
+ * no note, no folder.
+ */
+export async function ensureTodayNote(
+  settings: TemplateSettings,
+  notes: readonly string[],
+  now: Date = new Date(),
+): Promise<{ period: Period; result: EnsureResult } | null> {
+  const period = todayPeriod(settings.periodic)
+  if (period === null) return null
+  return { period, result: await ensurePeriodicNote(period, settings, notes, now) }
+}
+
+/** What to say when "Today's note" has no period to open. */
+export const NO_PERIOD_NOTICE = "No periodic notes are on, so there is no today's note to open."
+
 /** The calendar day, as a key that changes exactly at local midnight - when any period can change. */
 export const dayKey = (date: Date = new Date()): string => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
 
@@ -167,13 +185,14 @@ export async function retemplatePeriodicNotes(
  * bar shows it and the periodic-note code that has something to say is not a
  * component.
  */
-let notice: string | null = null
+export type PeriodicNoticeState = { text: string; action?: { label: string; run: () => void } }
+let notice: PeriodicNoticeState | null = null
 const listeners = new Set<() => void>()
-export function showPeriodicNotice(text: string | null): void {
-  notice = text
+export function showPeriodicNotice(text: string | null, action?: PeriodicNoticeState['action']): void {
+  notice = text === null ? null : action === undefined ? { text } : { text, action }
   for (const listener of listeners) listener()
 }
-export function usePeriodicNotice(): string | null {
+export function usePeriodicNotice(): PeriodicNoticeState | null {
   return useSyncExternalStore(
     (listener) => {
       listeners.add(listener)

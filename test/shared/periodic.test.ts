@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { folderLayout, nameTakenElsewhere, parentLink, pathTree, periodNotePath } from '../../src/shared/periodic'
+import { folderLayout, nameTakenElsewhere, parentLink, pathTree, periodNotePath, todayPeriod } from '../../src/shared/periodic'
 import {
   DEFAULT_TEMPLATE_SETTINGS,
   fillTemplate,
@@ -169,5 +169,22 @@ describe('unique names', () => {
     expect(nameTakenElsewhere('Journal/2026/2026-w41.md', notes)).toBe('Old/2026-W41.md')
     expect(nameTakenElsewhere('Journal/2026/2026.md', notes)).toBe(null)
     expect(nameTakenElsewhere('Journal/2026/2026-10.md', notes)).toBe(null)
+  })
+})
+
+describe("today's note", () => {
+  it('is the shortest period that is on, for every combination', () => {
+    const all: Period[] = ['daily', 'weekly', 'monthly', 'yearly']
+    for (let mask = 0; mask < 16; mask++) {
+      const on = all.filter((_, i) => (mask & (1 << i)) !== 0)
+      expect(todayPeriod(settings(on))).toBe(on[0] ?? null)
+    }
+  })
+
+  it('with daily off and weekly on it is this week, 2026-W42 on 16 October 2026', () => {
+    const s = settings(['weekly', 'monthly'])
+    const period = todayPeriod(s)
+    expect(period).toBe('weekly')
+    expect(periodNotePath(period!, new Date(2026, 9, 16), s).key).toBe('2026-W42')
   })
 })

@@ -311,7 +311,11 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     update: updateRef,
   })
 
-  const { insertTemplate, updateTemplates, openPeriodicNote } = useTemplateActions({
+  const openPeriodicSettings = useCallback(() => {
+    setSettingsTab('periodic')
+    setSettingsOpen(true)
+  }, [])
+  const { insertTemplate, updateTemplates, openPeriodicNote, openTodayNote } = useTemplateActions({
     activePath,
     closePicker: () => setTemplatesOpen(false),
     byPath: tree.byPath,
@@ -319,6 +323,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     templates,
     refresh,
     openFile: openFileRef,
+    openPeriodicSettings,
   })
 
   const settingsDepsRef = useRef({
@@ -432,7 +437,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         section: 'Periodic notes',
         icon: 'calendar-days',
         hotkey: 'Mod+Shift+D',
-        run: () => void openPeriodicNote('daily'),
+        run: () => void openTodayNote(),
       },
       {
         id: 'weekly:open',
@@ -457,7 +462,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       },
     ])
     return off
-  }, [openPeriodicNote])
+  }, [openPeriodicNote, openTodayNote])
 
   useShellKeys({
     paletteOpen,
@@ -568,7 +573,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         vaultName={vault.name}
         graphOpen={graphWindow.open}
         onToggleGraph={() => setGraphWindow({ open: !graphWindow.open })}
-        onOpenDaily={() => void openPeriodicNote('daily')}
+        onOpenDaily={() => void openTodayNote()}
         onOpenPalette={openPalette}
       />
       {shortcutsOpen && <ShortcutSheet onClose={() => setShortcutsOpen(false)} />}

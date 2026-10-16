@@ -9,6 +9,8 @@ import {
   dayKey,
   elsewhereNotice,
   ensurePeriodicNote,
+  ensureTodayNote,
+  NO_PERIOD_NOTICE,
   retemplatePeriodicNotes,
   showPeriodicNotice,
   type EnsureResult,
@@ -27,6 +29,7 @@ export function useTemplateActions({
   templates,
   refresh,
   openFile,
+  openPeriodicSettings,
 }: {
   activePath: string | null
   closePicker: () => void
@@ -37,10 +40,13 @@ export function useTemplateActions({
   refresh: () => Promise<void>
   /** Read at call time, so it is always the current opener. */
   openFile: React.RefObject<(path: string) => void>
+  /** Settings, on the Periodic notes tab. */
+  openPeriodicSettings: () => void
 }): {
   insertTemplate: (templatePath: string) => Promise<void>
   updateTemplates: (requested: TemplateSettings) => Promise<void>
   openPeriodicNote: (period: Period) => Promise<void>
+  openTodayNote: () => Promise<void>
 } {
   /**
    * Insert a template at the cursor.
@@ -121,15 +127,9 @@ export function useTemplateActions({
     [templates, byPath, refresh],
   )
 
-  /**
-   * Open the current day's, week's, month's or year's note, making it if
-   * needed - also when that period is switched off, since asking for it is
-   * asking for it. A note of that name elsewhere is opened instead, with a
-   * word about why it is not where the settings would put it.
-   */
-  const openPeriodicNote = useCallback(
-    async (period: Period) => {
-      const result = await ensurePeriodicNote(period, templates.settings, notes)
+  /** Open a note `ensurePeriodicNote` answered with, or the note of that name elsewhere. */
+  const openEnsured = useCallback(
+    async (period: Period, result: EnsureResult) => {
       if (!result.ok) {
         if ('elsewhere' in result) {
           showPeriodicNotice(elsewhereNotice(periodNotePath(period, new Date(), templates.settings.periodic).key, result.elsewhere))
@@ -143,10 +143,35 @@ export function useTemplateActions({
       }
       openFile.current(result.path)
     },
-    [templates.settings, notes, refresh],
+    [templates.settings, refresh],
   )
 
-  return { insertTemplate, updateTemplates, openPeriodicNote }
+  /**
+   * Open the current day's, week's, month's or year's note, making it if
+   * needed - also when that period is switched off, since asking for it is
+   * asking for it. A note of that name elsewhere is opened instead, with a
+   * word about why it is not where the settings would put it.
+   */
+  const openPeriodicNote = useCallback(
+    async (period: Period) => openEnsured(period, await ensurePeriodicNote(period, templates.settings, notes)),
+    [templates.settings, notes, openEnsured],
+  )
+
+  /**
+   * "Today's note": the note of the shortest period that is on. The command,
+   * its hotkey and the status bar button all come here. With no period on,
+   * nothing is made and the notice offers the settings that would change that.
+   */
+  const openTodayNote = useCallback(async () => {
+    const today = await ensureTodayNote(templates.settings, notes)
+    if (today === null) {
+      showPeriodicNotice(NO_PERIOD_NOTICE, { label: 'Open settings', run: openPeriodicSettings })
+      return
+    }
+    await openEnsured(today.period, today.result)
+  }, [templates.settings, notes, openEnsured, openPeriodicSettings])
+
+  return { insertTemplate, updateTemplates, openPeriodicNote, openTodayNote }
 }
 
 /**

@@ -54,6 +54,15 @@ export function periodNotePath(period: Period, date: Date, settings: PeriodicSet
   return { folder, name, path: `${folder}/${name}`, key }
 }
 
+/**
+ * The period "Today's note" opens: the shortest one that is on, so with daily
+ * notes off it is this week's note, then this month's, then this year's. Null
+ * when none is on.
+ */
+export function todayPeriod(settings: PeriodicSettings): Period | null {
+  return PERIODS.find((p) => settings[p].enabled) ?? null
+}
+
 const PARENTS: Record<Period, readonly Period[]> = {
   daily: ['weekly', 'monthly', 'yearly'],
   weekly: ['monthly', 'yearly'],

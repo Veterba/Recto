@@ -39,7 +39,7 @@ export function StatusBar({ workspace, vaultName, graphOpen, onToggleGraph, onOp
       <WritingButtons buttonClass="status__btn" iconSize={13} menuPlacement="above" />
       <TopicsNotice />
       <Tip label="Today's note" hint={commands.label('daily:open') ?? undefined} placement="top">
-        <button className="status__btn" onClick={onOpenDaily} aria-label="Daily note">
+        <button className="status__btn" onClick={onOpenDaily} aria-label="Today's note">
           <Icon name="calendar-days" size={13} />
         </button>
       </Tip>

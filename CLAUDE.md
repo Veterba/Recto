@@ -34,21 +34,32 @@ Checks before saying something is done: `npm run typecheck`, `npm run lint`, `np
 
 ---
 
-## Real vault
-Never run the app, tests, indexing or evals against my real vault
-(/Users/veterba/Documents/Notes/Recto-vault). Use copies or the synthetic fixture vault.
-Private evals read a frozen snapshot, `~/Recto-eval-vaults/<snapshot>` (named by `snapshot:` in
-the private cases; `npm run bots:eval -- --private`). A new snapshot means re-checking the cases.
-The only places in the vault that may be written: the project log below, and the evals folder.
+## Vault
+My vault: "/Users/vellow13/Documents/Documents - Yaroslav’s MacBook Air/Recto Vault"
+(spaces and a curly apostrophe ’ in the path: always quote it).
+- Do not read, write or touch the vault unless I explicitly ask in the current task. Then write only
+  what I asked for, nothing else.
+- Never run the app, tests, indexing or evals against it. Use copies or the synthetic fixture vault.
+- When I ask you to write there: links are always `[[Note name]]`, never a path; every new note name
+  must be unique in the whole vault (check first, no generic names like `report`); machine data
+  (json, jsonl) never goes in the visible tree, only under `.recto/`.
 
-Evals folder: /Users/veterba/Documents/Notes/Recto-vault/Programming/Projects/Recto app/Evals Qwen
-(`npm run bots:eval` finds it by name). Only private runs go there; fixture runs go to the repo,
-`docs/evals/<model>/Eval <run id>.md` with raw data in `docs/evals/data/<run id>/`. Every private run is ONE note `Eval YYYY-MM-DD HH-mm — <label>.md` in
-`Evals Qwen/<model>/` (no folder per run); its raw `results.jsonl` and `config.json` go to the hidden
-`<vault>/.recto/evals/<run id>/` (never in the repo: they hold my answers), and so does `graded.jsonl`.
-In the vault, write only: a new run note, its new `.recto/evals/<run id>/` folder, `Recto evals.md` (the
-index), `Eval log.md` and `.recto/evals/graded.jsonl`. Never edit or delete an older run. Everything else
-in the vault stays untouched.
+## Evals
+All eval results live ONLY in the vault, unlike the changelog. Nothing new from eval runs goes in the repo
+(existing `docs/evals/` stays as history; don't add to it, don't delete it). Writing eval results is the
+one standing exception to "don't touch the vault", and only for a run I asked for.
+- Both fixture and private runs: ONE note per run, `Eval YYYY-MM-DD HH-mm — <fixture|private> <label>.md`, in
+  `<vault>/Programming/Projects/Recto app/Evals Qwen/<model>/` (no folder per run). Raw `results.jsonl`
+  and `config.json` go to `<vault>/.recto/evals/<run id>/`.
+- Besides that, write only: `Recto evals.md` (the index), `Eval log.md` and `.recto/evals/graded.jsonl`.
+  Never edit or delete an older run. Everything else in the vault stays untouched.
+- Every run note starts with the numbers: date, app version, model, score, ungrounded claims, latency,
+  memory. Then the details.
+- Private runs read a frozen snapshot, `~/Recto-eval-vaults/<snapshot>` (named by `snapshot:` in the
+  private cases; `npm run bots:eval -- --private`). The old snapshots are lost; make a new one only when
+  I ask. A new snapshot means re-checking the cases.
+- Private eval content (my questions, note excerpts, answers) never goes in the repo, in code comments,
+  in test fixtures or in commit messages.
 
 ---
 
@@ -61,26 +72,24 @@ in the vault stays untouched.
 - When a feature is ready, tell me and suggest a commit message. Remind me if a finished branch
   hasn't been deleted.
 - Commit messages: `v0.MINOR.PATCH: what changed`. MINOR = feature or substantial change,
-  PATCH = fix or small change
+  PATCH = fix or small change. The CHANGELOG entry is part of the same change, staged with it.
 
 ---
 
-## Project log
-Never create log, draft or report files inside the repo.
-Write the log only to: /Users/veterba/Documents/Notes/Recto-vault/Programming/Projects/Recto app/Recto log/
-- One note per version: `YYYY-MM-DD — v0.X.Y.md` (em dash with spaces).
-- Format: frontmatter `tags: [log]`, then `## YYYY-MM-DD — <short title>`, then the entry.
-- Every log note ends with a section "## How it works (for vell)": in plain words, how the feature works end to end, which files do what (with paths), why this design was chosen over the alternatives, and which eval report or test shows it works.
-  Write it for someone who knows programming basics but hasn't read this code.
-- Add every new note to the list at the end of `Recto log.md` in that folder: `- [[YYYY-MM-DD — v0.X.Y]]`.
-- Only create a new note, append to the current version's note, or add it to that list.
-  Never touch anything else in the vault.
+## Changelog
+The project history lives in `CHANGELOG.md` in the repo root. There is no log in the vault any more.
+- Every version bump adds an entry, newest first: `## v0.X.Y — YYYY-MM-DD`, then `### Added`,
+  `### Changed`, `### Fixed`, `### Removed` as needed.
+- One line per change, written for a user: what it does, or what was broken and works now. Numbers
+  (tests, eval scores, memory) only if measured. No merges, no internal chores.
+- Keep `package.json` "version" in sync with the entry.
+- Other than `CHANGELOG.md` and `docs/ARCHITECTURE.md`, never create log, draft or report files inside the repo.
 
-## Notes and links in the vault
-- Links are always `[[Note name]]`, never a path (`[[Recto log/…]]`, `[[Programming/…/report|report]]`).
-- Every note you create must have a name that is unique in the whole vault (Recto forbids duplicates):
-  check before writing. No generic names like `report`.
-- Machine data (json, jsonl) never goes in the visible tree: it lives under `.recto/`.
+## How it works (for vell)
+Every finished feature's final report in chat ends with "How it works (for vell)": in plain words, how
+the feature works end to end, which files do what (with paths), why this design was chosen over the
+alternatives, and which eval report or test shows it works. Write it for someone who knows programming
+basics but hasn't read this code. If the architecture changed, update `docs/ARCHITECTURE.md` too.
 
 ---
 

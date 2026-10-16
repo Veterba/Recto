@@ -119,6 +119,28 @@ describe.skipIf(!RUN)('periodic notes and the hideable toolbar', () => {
     )
   }, 20_000)
 
+  it("Today's note opens this week with daily notes off, and with nothing on makes nothing", async () => {
+    const week = periodNotePath('weekly', now, on({ weekly: true, monthly: true, yearly: true }))
+    const before = fs.readdirSync(path.join(vault, path.dirname(week.path))).sort()
+    await page.locator(".status [aria-label=\"Today's note\"]").click()
+    await page.locator('.status__item', { hasText: week.key }).waitFor()
+    // Nothing new on disk: the week note was already there, and no day folder appears.
+    expect(fs.readdirSync(path.join(vault, path.dirname(week.path))).sort()).toEqual(before)
+
+    await openTab('Periodic notes')
+    for (const name of ['Weekly notes', 'Monthly notes', 'Yearly notes']) await page.locator(`[aria-label="${name}"]`).click()
+    await page.keyboard.press('Escape')
+    const listing = (): string[] => fs.readdirSync(vault, { recursive: true }).map(String).sort()
+    const vaultBefore = listing()
+    await page.locator(".status [aria-label=\"Today's note\"]").click()
+    await page.locator('.status__notice', { hasText: 'No periodic notes are on' }).waitFor()
+    await sleep(500)
+    expect(listing()).toEqual(vaultBefore)
+    await page.locator('.status__notice button', { hasText: 'Open settings' }).click()
+    await page.locator('.dialog--settings .settings__tab.is-active', { hasText: 'Periodic notes' }).waitFor()
+    await page.keyboard.press('Escape')
+  }, 30_000)
+
   it('with the toolbar hidden, focus mode works from the status bar', async () => {
     await openTab('Editor')
     await page.locator('[aria-label="Show formatting toolbar"]').click()
