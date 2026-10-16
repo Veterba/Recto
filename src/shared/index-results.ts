@@ -16,11 +16,16 @@ export type GraphInfo = { nodes: GraphNodeInfo[]; edges: GraphEdgeInfo[] }
 export type BoardCardInfo = {
   path: string
   title: string
-  preview: string
+  description: string
   status: string | null
   order: number | null
+  start: string | null
   due: string | null
+  completed: string | null
   priority: string | null
+  tags: string | null
+  checklist: { done: number; total: number }
+  links: number
 }
 
 /** A note's own signals about where it belongs, for Tidy. */

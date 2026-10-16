@@ -35,8 +35,8 @@ Checks before saying something is done: `npm run typecheck`, `npm run lint`, `np
 ---
 
 ## Vault
-My vault: "/Users/vellow13/Documents/Documents - Yaroslav’s MacBook Air/Recto Vault"
-(spaces and a curly apostrophe ’ in the path: always quote it).
+My vault: "/Users/vellow13/Documents/Recto Vault"
+(a space in the path: always quote it).
 - Do not read, write or touch the vault unless I explicitly ask in the current task. Then write only
   what I asked for, nothing else.
 - Never run the app, tests, indexing or evals against it. Use copies or the synthetic fixture vault.

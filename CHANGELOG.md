@@ -4,6 +4,23 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.49.0 — 2026-10-16
+### Added
+- Task cards show a priority label (High, Medium, Low, No priority), their date or date range (red when late, amber when due within two days), two lines of description, checklist progress, the link count and a tag. All of it is plain frontmatter and text in the card's note: `priority`, `start`, `due`, `tags`.
+- Clicking a card opens it in a panel beside the board. Status, priority, dates and tag can be edited there, checklist items ticked, and "Open as note" opens the note. A start date after the due date is not saved. Esc or ✕ closes the panel.
+- Each column's menu holds rename, colour, a WIP limit (the count turns amber when reached) and a date range. "+" in the header jumps to the column's "New card" field.
+- Widgets above the board: a week calendar (cards and column date ranges as bars, a line on today, click a bar to open the card), Done this week (cards per day) and Due soon (late and the next three days). Add and remove them with "+ Widget" and ✕, or hide the strip with the Widgets button. Each board remembers its choice.
+- A card moved into the Done column gets `completed: <date>`, which is removed when it moves out. Done this week counts these dates, so it starts counting from this version.
+- Toolbar: filter cards by text, show High only, sort by priority, due date or title.
+### Changed
+- Columns are glass panels that run the full height of the board, with their cards scrolling inside, over a soft wash instead of a flat background.
+- "Add column" is a slim strip at the end of the row that no longer looks like it runs off the window. A new column gets a unique name and opens for renaming.
+- "New card" is always at the bottom of each column. Enter creates the card and keeps the cursor there for the next one.
+- Dragging a card fades it and shows a line where it will land; the target column is highlighted.
+- A card whose status names no column now shows in an "Unknown status" column at the end, instead of passing for a card in the first column.
+- Deleting a column that has cards asks which column they move to. Their notes are never deleted.
+- Editing a card from the board changes only the key being edited, keeps key order and comments, and keeps `tags` in the form it was written (`tags: ui`, `[ui]` or a list). Dates are written as `YYYY-MM-DD`; a date with a time is shown as its date and left as it is unless you edit it.
+
 ## v0.48.0 — 2026-10-16
 ### Changed
 - Settings is a floating glass panel over the app instead of a modal: no dimmed backdrop, and the app stays usable behind it, so changes show as you make them. It is solid with Translucency off.

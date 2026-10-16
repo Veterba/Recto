@@ -38,13 +38,22 @@ export type Backlink = {
 export type BoardCard = {
   path: string
   title: string
-  /** First line of the note's body, for the card. Empty when there is none. */
-  preview: string
+  /** The first paragraph of the note's body, Markdown stripped. Empty when there is none. */
+  description: string
   status: string | null
   /** Fractional index within its column; null for a card never dragged. */
   order: number | null
+  /** `start`, `due` and `completed` as written - a datetime stays one; readers take its date. */
+  start: string | null
   due: string | null
+  completed: string | null
   priority: string | null
+  /** As written: a string, or the index's comma-joined copy of a list. */
+  tags: string | null
+  /** The note's checkboxes: how many, and how many are ticked. */
+  checklist: { done: number; total: number }
+  /** Wikilinks in the note's body. */
+  links: number
 }
 
 /** What Tidy reasons over: a note's own signals about where it belongs. */

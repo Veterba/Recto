@@ -1,31 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { BoardCardInfo } from '@shared/index-results'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { isoDay } from '@shared/card-fields'
+import { IPC } from '@shared/ipc'
 import { api } from '../../../app/api'
+import { noteIndexChanged } from '../../../app/note-bus'
 import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
-import { Tip } from '../../../ui/Tip'
-import { setField } from '@shared/frontmatter'
-import { noteIndexChanged, useNoteBus } from '../../../app/note-bus'
-import { columnId, columnOf, type Board, type Column } from '../boards'
+import { columnId, newColumnName, UNKNOWN_COLUMN, type Board, type Column } from '../boards'
+import { filterCards, sortCards, SORTS, type CardView, type SortKey } from '../board-view'
 import { CARD_FOLDER, createCard } from '../create-card'
-import { placeAt, sortColumn } from '../ordering'
-import { IPC } from '@shared/ipc'
+import { useBoardCards, type Drop } from '../hooks/use-board-cards'
+import { WidgetStrip } from '../widgets/WidgetStrip'
+import { widgetsOf } from '../widgets/registry'
+import { BoardColumn } from './BoardColumn'
+import { CardPanel } from './CardPanel'
 
 /**
  * The kanban board.
  *
- * A card IS a note. `board`, `status` and `order` are frontmatter on that note,
- * so the board has no store of its own: it queries the property index for
- * cards, and a drag writes one field into one file. That is why clicking a card
- * opens the ordinary editor - there is nothing else to open.
+ * A card IS a note. Its fields are frontmatter on that note (`board`,
+ * `status`, `order`, `priority`, `start`, `due`, `tags`, `completed`), so the
+ * board has no store of its own: it queries the index for cards, and every
+ * change writes the keys it changes into that one file.
  *
- * Columns are the exception and live in `boards.json`, because an empty column
- * has to be able to exist. Deriving columns from the statuses present in the
- * vault would delete "Done" the moment you dragged the last card out of it.
+ * Columns, their settings and the widgets are the exception and live in
+ * `boards.json`, because an empty column has to be able to exist.
  */
-
-/** How long to trust our own write over what the index says. */
-const OVERRIDE_TTL_MS = 15_000
 
 type Props = {
   board: Board
@@ -33,184 +33,87 @@ type Props = {
   onEditBoard: (next: Board) => void
 }
 
-type Card = BoardCardInfo & { column: string }
-
-/** A drag in flight: which card, and where it would land. */
-type Drop = { column: string; index: number }
-
 export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.ReactElement {
-  const [cards, setCards] = useState<Card[] | null>(null)
+  const { cards, error, clearError, reload, editCard, move } = useBoardCards(board)
   const [dragging, setDragging] = useState<string | null>(null)
   const [drop, setDrop] = useState<Drop | null>(null)
-  const [adding, setAdding] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const { revision } = useNoteBus()
-  const contextMenu = useContextMenu<Card>()
+  const [selected, setSelected] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [highOnly, setHighOnly] = useState(false)
+  const [sort, setSort] = useState<SortKey>('manual')
+  const [deleting, setDeleting] = useState<Column | null>(null)
+  const columnsRow = useRef<HTMLDivElement | null>(null)
+  const root = useRef<HTMLDivElement | null>(null)
+  const cardMenu = useContextMenu<CardView>()
+  const sortMenu = useContextMenu<null>()
+  const today = isoDay(new Date())
+  const widgets = widgetsOf(board)
 
-  /**
-   * Cards we have written but the index has not caught up with yet.
-   *
-   * A drag writes a file; the indexer sees it a moment later. Reloading in
-   * between hands back the OLD status and the card snaps back to the column it
-   * came from - which is exactly what happened the first time this ran. So a
-   * write records what it expects, every reload re-applies it, and the entry is
-   * dropped the moment the index agrees (or after a timeout, so a write that
-   * silently failed cannot pin the board to a lie forever).
-   */
-  const overrides = useRef(new Map<string, { status: string | null; order: number; at: number }>())
+  const all = useMemo(() => cards ?? [], [cards])
+  const visible = useMemo(() => filterCards(all, { query, highOnly }), [all, query, highOnly])
+  const columnCards = (id: string): CardView[] =>
+    sortCards(
+      visible.filter((card) => card.column === id),
+      sort,
+    )
+  const totalOf = (id: string): number => all.filter((card) => card.column === id).length
+  const unknown = all.filter((card) => card.column === UNKNOWN_COLUMN)
+  const open = selected === null ? undefined : all.find((card) => card.path === selected)
 
-  const load = useCallback(() => {
-    void api.invoke(IPC.indexBoard, board.id).then((rows) => {
-      const now = Date.now()
-      const next = rows.map((row) => {
-        const pending = overrides.current.get(row.path)
-        if (pending === undefined) return { ...row, column: columnOf(row.status, board.columns) }
-        if (row.status === pending.status && row.order === pending.order) {
-          overrides.current.delete(row.path)
-          return { ...row, column: columnOf(row.status, board.columns) }
-        }
-        if (now - pending.at > OVERRIDE_TTL_MS) {
-          overrides.current.delete(row.path)
-          return { ...row, column: columnOf(row.status, board.columns) }
-        }
-        return {
-          ...row,
-          status: pending.status,
-          order: pending.order,
-          column: columnOf(pending.status, board.columns),
-        }
-      })
-      setCards(next)
-    })
-  }, [board.id, board.columns])
-
+  // Esc closes the open card - from anywhere on this board or with nothing
+  // focused, but not from a field, which has its own use for Esc.
   useEffect(() => {
-    load()
-    // The indexer is a process behind. A second pass a moment later picks up
-    // whatever it has since seen and retires the optimistic override, instead
-    // of leaving it to time out.
-    const timer = window.setTimeout(load, 1200)
-    return () => window.clearTimeout(timer)
-  }, [load, revision])
-
-  const byColumn = useMemo(() => {
-    const out = new Map<string, Card[]>(board.columns.map((column) => [column.id, []]))
-    for (const card of cards ?? []) out.get(card.column)?.push(card)
-    for (const [id, list] of out) out.set(id, sortColumn(list))
-    return out
-  }, [cards, board.columns])
-
-  // --- writing ------------------------------------------------------------
-
-  /** Apply frontmatter edits to a note, leaving everything else untouched. */
-  const writeFields = useCallback(async (path: string, fields: Record<string, string | number>): Promise<boolean> => {
-    const read = await api.invoke(IPC.fsRead, path)
-    if (!read.ok) {
-      setError(read.error)
-      return false
+    if (selected === null) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      const target = event.target as HTMLElement
+      if (target.closest('input, select, textarea, [contenteditable="true"]') !== null) return
+      if (target !== document.body && root.current?.contains(target) !== true) return
+      event.preventDefault()
+      setSelected(null)
     }
-    let text = read.content
-    for (const [key, value] of Object.entries(fields)) text = setField(text, key, value)
-    const written = await api.invoke(IPC.fsWrite, path, text)
-    if (!written.ok) setError(written.error ?? 'Could not save the card.')
-    return written.ok
-  }, [])
-
-  const move = useCallback(
-    async (path: string, target: Drop) => {
-      const card = cards?.find((entry) => entry.path === path)
-      if (card === undefined) return
-
-      // The column as it will be WITHOUT the card being moved, which is what
-      // the drop index refers to.
-      const column = (byColumn.get(target.column) ?? []).filter((entry) => entry.path !== path)
-      const orders = column.map((entry) => entry.order).filter((order): order is number => order !== null)
-      const index = Math.max(0, Math.min(orders.length, target.index))
-      const placed = placeAt(orders, index)
-
-      // Optimistic: the board moves now, the file catches up. A kanban that
-      // waits for a disk write and a reindex before the card moves feels broken.
-      const order = placed.kind === 'order' ? placed.order : placed.orders[index]!
-      setCards((prev) =>
-        (prev ?? []).map((entry) => (entry.path === path ? { ...entry, column: target.column, status: target.column, order } : entry)),
-      )
-
-      overrides.current.set(path, { status: target.column, order, at: Date.now() })
-      await writeFields(path, { status: target.column, order })
-
-      if (placed.kind === 'renumber') {
-        // The gap between two cards got too small to halve. Rewrite the whole
-        // column once - the only time this board touches more than one file for
-        // one gesture.
-        const rest = [...column]
-        rest.splice(index, 0, { ...card, order })
-        for (const [position, entry] of rest.entries()) {
-          const next = placed.orders[position]!
-          if (entry.path === path || entry.order === next) continue
-          // Only `order` is written for these, so the override has to claim the
-          // status the file already has, or it would never agree with the index.
-          overrides.current.set(entry.path, { status: entry.status, order: next, at: Date.now() })
-          await writeFields(entry.path, { order: next })
-        }
-        setCards((prev) =>
-          (prev ?? []).map((entry) => {
-            const pending = overrides.current.get(entry.path)
-            return pending === undefined ? entry : { ...entry, order: pending.order }
-          }),
-        )
-      }
-
-      noteIndexChanged()
-    },
-    [cards, byColumn, writeFields],
-  )
-
-  const addCard = useCallback(
-    async (column: string, title: string) => {
-      setAdding(null)
-      if (title.trim() === '') return
-      const created = await createCard(board.id, column, title)
-      if (!created.ok) setError(created.error)
-      load()
-    },
-    [board.id, load],
-  )
-
-  // --- columns ------------------------------------------------------------
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected])
 
   const setColumns = (columns: Column[]): void => onEditBoard({ ...board, columns })
 
-  const addColumn = (name: string): void => {
-    const trimmed = name.trim()
-    if (trimmed === '') return
-    setColumns([...board.columns, { id: columnId(trimmed, board.columns), name: trimmed }])
+  const addColumn = (): void => {
+    const name = newColumnName(board.columns)
+    const id = columnId(name, board.columns)
+    setColumns([...board.columns, { id, name }])
+    setRenaming(id)
+    requestAnimationFrame(() => columnsRow.current?.scrollTo({ left: columnsRow.current.scrollWidth, behavior: 'smooth' }))
   }
 
-  const removeColumn = (id: string): void => {
-    if (board.columns.length <= 1) return
-    // The cards keep their `status`. They reappear in the first column, because
-    // that is where an unrecognised status lands - nothing is lost, and putting
-    // the column back puts them back.
-    setColumns(board.columns.filter((column) => column.id !== id))
+  const removeColumn = (column: Column): void => {
+    // A column with cards asks where they go; an empty one just goes.
+    if (totalOf(column.id) > 0) setDeleting(column)
+    else setColumns(board.columns.filter((entry) => entry.id !== column.id))
   }
 
-  /** Right-click on a card. A card is a note, so the note actions apply. */
-  const menuFor = (card: Card): MenuItem[] => [
+  const addCard = async (column: string, title: string): Promise<void> => {
+    const created = await createCard(board.id, column, title)
+    if (!created.ok) window.alert(created.error)
+    reload()
+  }
+
+  const finishDrag = (): void => {
+    setDragging(null)
+    setDrop(null)
+  }
+
+  const cardMenuItems = (card: CardView): MenuItem[] => [
     { kind: 'heading', label: 'This card' },
-    { kind: 'item', label: 'Open', icon: 'file-text', run: () => onOpenNote(card.path) },
+    { kind: 'item', label: 'Open as note', icon: 'file-text', run: () => onOpenNote(card.path) },
     {
       kind: 'item',
       label: 'Copy relative path',
       icon: 'copy',
       run: () => void navigator.clipboard.writeText(card.path).catch(() => undefined),
     },
-    {
-      kind: 'item',
-      label: 'Reveal in Finder',
-      icon: 'external-link',
-      run: () => void api.invoke(IPC.fsReveal, card.path),
-    },
+    { kind: 'item', label: 'Reveal in Finder', icon: 'external-link', run: () => void api.invoke(IPC.fsReveal, card.path) },
     { kind: 'separator' },
     { kind: 'heading', label: 'Move to' },
     ...board.columns
@@ -228,172 +131,220 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
       icon: 'trash',
       danger: true,
       run: () => {
+        if (selected === card.path) setSelected(null)
         void api.invoke(IPC.archiveAdd, card.path).then(() => {
           noteIndexChanged()
-          load()
+          reload()
         })
       },
     },
   ]
 
-  // --- rendering ----------------------------------------------------------
-
-  const onDropInto = (column: string, index: number) => (event: React.DragEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const path = event.dataTransfer.getData('text/plain')
-    setDragging(null)
-    setDrop(null)
-    if (path !== '') void move(path, { column, index })
-  }
-
-  const allowDrop = (column: string, index: number) => (event: React.DragEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    event.dataTransfer.dropEffect = 'move'
-    if (drop?.column !== column || drop.index !== index) setDrop({ column, index })
+  const columnProps = (column: Column | null) => {
+    const id = column?.id ?? UNKNOWN_COLUMN
+    return {
+      column,
+      today,
+      selected,
+      dragging,
+      dropIndex: drop?.column === id ? drop.index : null,
+      renaming: renaming === id,
+      setRenaming: (on: boolean) => setRenaming(on ? id : null),
+      onDragStart: (path: string) => setDragging(path),
+      onDragEnd: finishDrag,
+      onDragOver: (index: number) => setDrop({ column: id, index }),
+      onDrop: (path: string, index: number) => {
+        finishDrag()
+        void move(path, { column: id, index })
+      },
+      onOpenCard: setSelected,
+      onCardMenu: (event: React.MouseEvent, card: CardView) => cardMenu.open(event, card),
+      onAddCard: (title: string) => addCard(id, title),
+      onEdit: (next: Column) => setColumns(board.columns.map((entry) => (entry.id === next.id ? next : entry))),
+      onDelete: () => column !== null && removeColumn(column),
+    }
   }
 
   return (
-    <div className="board">
-      {error !== null && (
-        <p className="board__error" role="alert" onClick={() => setError(null)}>
-          {error}
-        </p>
-      )}
+    <div className="board" ref={root}>
+      <div className="board__main">
+        <div className="board__toolbar">
+          <h1 className="board__name">{board.name}</h1>
+          <label className="board__filter">
+            <Icon name="search" size={12} />
+            <input
+              value={query}
+              placeholder="Filter cards"
+              aria-label="Filter cards"
+              spellCheck={false}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                event.stopPropagation()
+                if (event.key === 'Escape') setQuery('')
+              }}
+            />
+          </label>
+          <button className={`board__tool${highOnly ? ' is-on' : ''}`} aria-pressed={highOnly} onClick={() => setHighOnly(!highOnly)}>
+            High only
+          </button>
+          <span className="board__spacer" />
+          <button
+            className={`board__tool${widgets.shown ? ' is-on' : ''}`}
+            aria-pressed={widgets.shown}
+            onClick={() => onEditBoard({ ...board, widgets: { ...widgets, shown: !widgets.shown } })}
+          >
+            <Icon name="grid-3x3" size={12} />
+            Widgets
+          </button>
+          <button className="board__tool" aria-label="Sort" onClick={(event) => sortMenu.open(event, null)}>
+            <Icon name="arrow-down-a-z" size={12} />
+            {SORTS.find((s) => s.key === sort)!.label}
+          </button>
+        </div>
 
-      <div className="board__columns">
-        {board.columns.map((column) => {
-          const list = byColumn.get(column.id) ?? []
-          return (
-            <section
-              className={`board__col${drop?.column === column.id ? ' is-target' : ''}`}
-              key={column.id}
-              // A note dragged onto a column becomes a card, not a new pane.
-              data-accepts-drop
-              onDragOver={allowDrop(column.id, list.length)}
-              onDrop={onDropInto(column.id, list.length)}
-            >
-              <header className="board__colhead">
-                {renaming === column.id ? (
-                  <input
-                    className="board__rename"
-                    defaultValue={column.name}
-                    autoFocus
-                    onBlur={(event) => {
-                      setRenaming(null)
-                      const name = event.target.value.trim()
-                      if (name !== '' && name !== column.name) {
-                        // The id is left alone on rename: it is what the notes
-                        // say, and rewriting it would mean editing every card.
-                        setColumns(board.columns.map((entry) => (entry.id === column.id ? { ...entry, name } : entry)))
-                      }
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') event.currentTarget.blur()
-                      if (event.key === 'Escape') setRenaming(null)
-                    }}
-                  />
-                ) : (
-                  <button className="board__colname" onDoubleClick={() => setRenaming(column.id)}>
-                    {column.name}
-                  </button>
-                )}
-                <span className="board__count">{list.length}</span>
-                {board.columns.length > 1 && (
-                  <Tip label="Remove column" hint="Its cards move to the first column">
-                    <button className="board__colremove" aria-label={`Remove ${column.name}`} onClick={() => removeColumn(column.id)}>
-                      <Icon name="x" size={12} />
-                    </button>
-                  </Tip>
-                )}
-              </header>
+        {error !== null && (
+          <p className="board__error" role="alert" onClick={clearError}>
+            {error}
+          </p>
+        )}
 
-              <div className="board__cards">
-                {list.map((card, index) => (
-                  <article
-                    className={`board__card${dragging === card.path ? ' is-dragging' : ''}${
-                      drop?.column === column.id && drop.index === index ? ' is-before' : ''
-                    }`}
-                    key={card.path}
-                    draggable
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData('text/plain', card.path)
-                      event.dataTransfer.effectAllowed = 'move'
-                      setDragging(card.path)
-                    }}
-                    onDragEnd={() => {
-                      setDragging(null)
-                      setDrop(null)
-                    }}
-                    onDragOver={allowDrop(column.id, index)}
-                    onDrop={onDropInto(column.id, index)}
-                    onClick={() => onOpenNote(card.path)}
-                    onContextMenu={(event) => contextMenu.open(event, card)}
-                  >
-                    <h3 className="board__title">{card.title}</h3>
-                    {(card.due !== null || card.priority !== null) && (
-                      <p className="board__meta">
-                        {card.priority !== null && (
-                          <span className={`board__pri board__pri--${card.priority.toLowerCase()}`}>{card.priority}</span>
-                        )}
-                        {card.due !== null && (
-                          <span className="board__due">
-                            <Icon name="calendar" size={11} />
-                            {card.due.slice(0, 10)}
-                          </span>
-                        )}
-                      </p>
-                    )}
-                    {card.preview !== '' && <p className="board__preview">{card.preview}</p>}
-                  </article>
-                ))}
+        {widgets.shown && <WidgetStrip board={board} cards={all} today={today} onOpenCard={setSelected} onEditBoard={onEditBoard} />}
 
-                {adding === column.id ? (
-                  <input
-                    className="board__new"
-                    placeholder="Card title"
-                    autoFocus
-                    onBlur={(event) => void addCard(column.id, event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') event.currentTarget.blur()
-                      if (event.key === 'Escape') setAdding(null)
-                    }}
-                  />
-                ) : (
-                  <button className="board__add" onClick={() => setAdding(column.id)}>
-                    <Icon name="plus" size={13} />
-                    Add card
-                  </button>
-                )}
-              </div>
-            </section>
-          )
-        })}
+        <div className="board__columns" ref={columnsRow}>
+          {board.columns.map((column) => (
+            <BoardColumn key={column.id} {...columnProps(column)} cards={columnCards(column.id)} total={totalOf(column.id)} />
+          ))}
+          {unknown.length > 0 && (
+            <BoardColumn {...columnProps(null)} cards={sortCards(filterCards(unknown, { query, highOnly }), sort)} total={unknown.length} />
+          )}
+          <button className="board__addcol" aria-label="Add column" title="Add column" onClick={addColumn}>
+            <Icon name="plus" size={14} />
+          </button>
+        </div>
 
-        <section className="board__col board__col--ghost">
-          <input
-            className="board__newcol"
-            placeholder="+ Column"
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter') return
-              addColumn(event.currentTarget.value)
-              event.currentTarget.value = ''
-            }}
-          />
-        </section>
+        {cards !== null && cards.length === 0 && (
+          <p className="board__empty">
+            No cards on <strong>{board.name}</strong> yet. Every card you add is a real note in <code>{CARD_FOLDER}/</code>.
+          </p>
+        )}
       </div>
 
-      {contextMenu.menu !== null && (
-        <ContextMenu items={menuFor(contextMenu.menu.subject)} at={contextMenu.menu.at} onClose={contextMenu.close} />
+      {open !== undefined && (
+        <CardPanel
+          key={open.path}
+          board={board}
+          card={open}
+          editCard={editCard}
+          move={move}
+          onOpenNote={onOpenNote}
+          onClose={() => setSelected(null)}
+        />
       )}
 
-      {cards !== null && cards.length === 0 && (
-        <p className="board__empty">
-          No cards on <strong>{board.name}</strong> yet. Every card you add is a real note in <code>{CARD_FOLDER}/</code> — open it and it
-          is an ordinary editor.
-        </p>
+      {cardMenu.menu !== null && (
+        <ContextMenu items={cardMenuItems(cardMenu.menu.subject)} at={cardMenu.menu.at} onClose={cardMenu.close} />
+      )}
+      {sortMenu.menu !== null && (
+        <ContextMenu
+          items={[
+            { kind: 'heading', label: 'Sort cards by' },
+            ...SORTS.map<MenuItem>((s) => ({
+              kind: 'item',
+              label: s.label,
+              icon: s.key === sort ? 'check' : 'circle-dashed',
+              run: () => setSort(s.key),
+            })),
+          ]}
+          at={sortMenu.menu.at}
+          onClose={sortMenu.close}
+        />
+      )}
+      {deleting !== null && (
+        <DeleteColumnDialog
+          column={deleting}
+          others={board.columns.filter((c) => c.id !== deleting.id)}
+          count={totalOf(deleting.id)}
+          onCancel={() => setDeleting(null)}
+          onConfirm={async (target) => {
+            const column = deleting
+            setDeleting(null)
+            // The cards move first, one note at a time; the column goes once they are out.
+            for (const card of all.filter((c) => c.column === column.id))
+              await move(card.path, { column: target, index: Number.MAX_SAFE_INTEGER })
+            setColumns(board.columns.filter((entry) => entry.id !== column.id))
+          }}
+        />
       )}
     </div>
+  )
+}
+
+/** Deleting a column that holds cards: where they go. Notes are never deleted. */
+function DeleteColumnDialog({
+  column,
+  others,
+  count,
+  onCancel,
+  onConfirm,
+}: {
+  column: Column
+  others: Column[]
+  count: number
+  onCancel: () => void
+  onConfirm: (target: string) => void
+}): React.ReactElement {
+  const [target, setTarget] = useState(others[0]?.id ?? '')
+  return createPortal(
+    <div
+      className="dialog__backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onCancel()
+      }}
+    >
+      <form
+        className="dialog"
+        role="dialog"
+        aria-label={`Delete ${column.name}`}
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (target !== '') onConfirm(target)
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation()
+          if (event.key === 'Escape') onCancel()
+        }}
+      >
+        <h2 className="dialog__title">Delete “{column.name}”?</h2>
+        <p className="dialog__lede">
+          It has {count} {count === 1 ? 'card' : 'cards'}. They stay notes; choose the column they move to.
+        </p>
+        <label className="board-field">
+          <span>Move them to</span>
+          <select
+            className="setting__select"
+            value={target}
+            autoFocus
+            aria-label="Move cards to"
+            onChange={(e) => setTarget(e.target.value)}
+          >
+            {others.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <footer className="dialog__actions">
+          <button type="button" className="dialog__ghost" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="submit" className="dialog__submit dialog__submit--danger" disabled={target === ''}>
+            Move cards and delete
+          </button>
+        </footer>
+      </form>
+    </div>,
+    document.body,
   )
 }

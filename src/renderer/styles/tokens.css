@@ -186,6 +186,8 @@
   --text-secondary: #a9a9a9;
   --text-muted: #737373;
   --danger: #f0736b;
+  --warning: #e2aa4f;
+  --success: #5fc98d;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.45);
   /* Code panels read darker than the page, the way an editor does. Highlight
      is a yellow that survives both themes without being a marker pen. */
@@ -258,6 +260,8 @@
     --text-secondary: #57574f;
     --text-muted: #85847c;
     --danger: #c2352b;
+    --warning: #a96a12;
+    --success: #2e8550;
     --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
     --code-bg: #f3f3f1;
     --highlight-bg: rgb(255 206 61 / 0.42);
@@ -310,6 +314,8 @@
   --text-secondary: #57574f;
   --text-muted: #85847c;
   --danger: #c2352b;
+  --warning: #a96a12;
+  --success: #2e8550;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
   --code-bg: #f3f3f1;
   --highlight-bg: rgb(255 206 61 / 0.42);
@@ -358,6 +364,8 @@
   --text-secondary: #a9a9a9;
   --text-muted: #737373;
   --danger: #f0736b;
+  --warning: #e2aa4f;
+  --success: #5fc98d;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.45);
   /* Code panels read darker than the page, the way an editor does. Highlight
      is a yellow that survives both themes without being a marker pen. */

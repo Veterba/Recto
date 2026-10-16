@@ -14,8 +14,27 @@
  * invited to edit it, so every field may be missing or the wrong type.
  */
 
-export type Column = { id: string; name: string }
-export type Board = { id: string; name: string; columns: Column[] }
+/** Colours a column can wear: names of theme tokens, never raw colours. */
+export const COLUMN_COLORS = ['gray', 'blue', 'green', 'yellow', 'orange', 'red', 'purple'] as const
+export type ColumnColor = (typeof COLUMN_COLORS)[number]
+
+export type Column = {
+  id: string
+  name: string
+  color?: ColumnColor
+  /** Work-in-progress limit: the count is shown against it and warns when reached. */
+  wip?: number
+  /** A date range the column is planned for, shown on the calendar. `YYYY-MM-DD`. */
+  start?: string
+  due?: string
+  /** The column that means finished: entering it writes `completed` on the card. */
+  done?: boolean
+}
+
+/** The widget strip above a board: whether it shows, and which widgets, in order. */
+export type BoardWidgets = { shown: boolean; list: string[] }
+
+export type Board = { id: string; name: string; columns: Column[]; widgets?: BoardWidgets }
 export type BoardsFile = { boards: Board[] }
 
 /** A sensible first board, so the Tasks section is never an empty room. */
@@ -38,12 +57,28 @@ const ID = /^[\p{L}\p{N}][\p{L}\p{N}_-]{0,63}$/u
 
 const isId = (value: unknown): value is string => typeof value === 'string' && ID.test(value)
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+
 function parseColumn(raw: unknown): Column | null {
   if (raw === null || typeof raw !== 'object') return null
   const record = raw as Record<string, unknown>
   if (!isId(record['id'])) return null
   const name = record['name']
-  return { id: record['id'], name: typeof name === 'string' && name !== '' ? name : record['id'] }
+  const column: Column = { id: record['id'], name: typeof name === 'string' && name !== '' ? name : record['id'] }
+  const { color, wip, start, due, done } = record
+  if (typeof color === 'string' && (COLUMN_COLORS as readonly string[]).includes(color)) column.color = color as ColumnColor
+  if (typeof wip === 'number' && Number.isInteger(wip) && wip > 0) column.wip = wip
+  if (typeof start === 'string' && DAY.test(start)) column.start = start
+  if (typeof due === 'string' && DAY.test(due)) column.due = due
+  if (done === true) column.done = true
+  return column
+}
+
+function parseWidgets(raw: unknown): BoardWidgets | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined
+  const record = raw as Record<string, unknown>
+  const list = Array.isArray(record['list']) ? record['list'].filter((id): id is string => typeof id === 'string') : []
+  return { shown: record['shown'] !== false, list: [...new Set(list)] }
 }
 
 function parseBoard(raw: unknown): Board | null {
@@ -61,11 +96,14 @@ function parseBoard(raw: unknown): Board | null {
   if (columns.length === 0) return null
 
   const name = record['name']
-  return {
+  const board: Board = {
     id: record['id'],
     name: typeof name === 'string' && name !== '' ? name : record['id'],
     columns,
   }
+  const widgets = parseWidgets(record['widgets'])
+  if (widgets !== undefined) board.widgets = widgets
+  return board
 }
 
 export function parseBoards(raw: unknown): BoardsFile {
@@ -82,16 +120,37 @@ export function parseBoards(raw: unknown): BoardsFile {
 }
 
 /**
+ * The column for cards whose `status` names no column. Not a real id - ids
+ * cannot start with `?` - so it can never collide with one.
+ */
+export const UNKNOWN_COLUMN = '?unknown'
+
+/**
  * Which column a card belongs to.
  *
- * A card whose `status` matches no column - hand-typed, or left behind when a
- * column was renamed - goes into the first column rather than vanishing. A card
+ * A card with no `status` yet starts in the first column. One whose status
+ * matches no column - hand-typed, left behind by a deleted column, or a
+ * boards.json that was lost or edited - goes to "Unknown status" at the end
+ * rather than vanishing or passing for a card in the first column. A card
  * that cannot be seen cannot be fixed.
  */
 export function columnOf(status: string | null, columns: readonly Column[]): string {
-  const first = columns[0]?.id ?? ''
-  if (status === null) return first
-  return columns.some((column) => column.id === status) ? status : first
+  if (status === null) return columns[0]?.id ?? UNKNOWN_COLUMN
+  return columns.some((column) => column.id === status) ? status : UNKNOWN_COLUMN
+}
+
+/** The column that means done: the one marked so, else the one called `done`, else the last. */
+export function doneColumn(columns: readonly Column[]): string | null {
+  return (columns.find((c) => c.done === true) ?? columns.find((c) => c.id === 'done') ?? columns.at(-1))?.id ?? null
+}
+
+/** A name for a new column that no column on the board has yet: "New column", "New column 2"… */
+export function newColumnName(columns: readonly Column[]): string {
+  const taken = new Set(columns.map((c) => c.name.toLowerCase()))
+  if (!taken.has('new column')) return 'New column'
+  let n = 2
+  while (taken.has(`new column ${n}`)) n++
+  return `New column ${n}`
 }
 
 /** A unique column id derived from a display name the user typed. */

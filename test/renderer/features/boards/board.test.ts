@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { MIN_GAP, placeAt, sortColumn } from '../../../../src/renderer/features/boards/ordering'
-import { DEFAULT_BOARDS, columnId, columnOf, parseBoards } from '../../../../src/renderer/features/boards/boards'
+import {
+  DEFAULT_BOARDS,
+  UNKNOWN_COLUMN,
+  columnId,
+  columnOf,
+  doneColumn,
+  newColumnName,
+  parseBoards,
+} from '../../../../src/renderer/features/boards/boards'
 
 describe('fractional ordering', () => {
   it('gives the first card in an empty column a real number', () => {
@@ -115,10 +123,80 @@ describe('placing a card in a column', () => {
     expect(columnOf('done', columns)).toBe('done')
   })
 
-  it('falls back to the first column for a status nobody recognises', () => {
-    // A card that cannot be seen cannot be fixed, so it must not vanish.
-    expect(columnOf('in-limbo', columns)).toBe('todo')
+  it('puts a status nobody recognises in Unknown status, and no status in the first column', () => {
+    // A card that cannot be seen cannot be fixed, so it must not vanish -
+    // nor pass for a card that is really in the first column.
+    expect(columnOf('in-limbo', columns)).toBe(UNKNOWN_COLUMN)
+    expect(columnOf('done', [])).toBe(UNKNOWN_COLUMN)
     expect(columnOf(null, columns)).toBe('todo')
+  })
+})
+
+describe('the done column', () => {
+  it('is the one marked done, else the one with id done, else the last', () => {
+    expect(
+      doneColumn([
+        { id: 'a', name: 'A' },
+        { id: 'done', name: 'Done' },
+        { id: 'b', name: 'B', done: true },
+      ]),
+    ).toBe('b')
+    expect(
+      doneColumn([
+        { id: 'a', name: 'A' },
+        { id: 'done', name: 'Done' },
+        { id: 'b', name: 'B' },
+      ]),
+    ).toBe('done')
+    expect(
+      doneColumn([
+        { id: 'a', name: 'A' },
+        { id: 'shipped', name: 'Shipped' },
+      ]),
+    ).toBe('shipped')
+  })
+})
+
+describe('column settings in boards.json', () => {
+  it('reads colour, WIP limit, date range, done and widgets; drops what is malformed', () => {
+    const file = parseBoards({
+      boards: [
+        {
+          id: 'b',
+          widgets: { shown: false, list: ['calendar', 3, 'calendar', 'due-soon'] },
+          columns: [
+            { id: 'todo', color: 'blue', wip: 3, start: '2026-10-12', due: '2026-10-18' },
+            { id: 'x', color: '#ff0000', wip: -1, start: 'soon', done: 'yes' },
+            { id: 'done', done: true },
+          ],
+        },
+      ],
+    })
+    const board = file.boards[0]!
+    expect(board.widgets).toEqual({ shown: false, list: ['calendar', 'due-soon'] })
+    expect(board.columns[0]).toEqual({ id: 'todo', name: 'todo', color: 'blue', wip: 3, start: '2026-10-12', due: '2026-10-18' })
+    expect(board.columns[1]).toEqual({ id: 'x', name: 'x' })
+    expect(board.columns[2]).toEqual({ id: 'done', name: 'done', done: true })
+  })
+
+  it('a file without the new keys reads as before', () => {
+    expect(parseBoards({ boards: [{ id: 'b', columns: [{ id: 'todo', name: 'To do' }] }] }).boards[0]).toEqual({
+      id: 'b',
+      name: 'b',
+      columns: [{ id: 'todo', name: 'To do' }],
+    })
+  })
+})
+
+describe('a new column name', () => {
+  it('is unique on the board', () => {
+    expect(newColumnName([{ id: 'a', name: 'To do' }])).toBe('New column')
+    expect(
+      newColumnName([
+        { id: 'a', name: 'New column' },
+        { id: 'b', name: 'new column 2' },
+      ]),
+    ).toBe('New column 3')
   })
 })
 

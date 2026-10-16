@@ -180,7 +180,7 @@ test/            the same folders as src/
 | `file-tree` | the Data tree, drag and drop, context menu, note preview card | `tree`, `note-peek` |
 | `search` | full-text search, quick switcher | `search-result` (inside the shared `palette`) |
 | `graph` | the link graph and its settings panel | `graph`, `gset`, `gwheel`, `glegend` |
-| `boards` | kanban boards over notes | `board`, `boards` |
+| `boards` | kanban boards over notes: full-height glass columns, a card panel that edits the note's frontmatter one key at a time (`shared/card-fields.ts`), and a widget strip (`widgets/registry.ts`: one component and one entry per widget) | `board`, `board-col`, `board-card`, `board-pri`, `board-cal`, `board-done`, `board-due`, `board-widget`, `card-panel`, `boards` |
 | `topics` | topics settings and the run notice | `topics` |
 | `tidy` | filing loose notes | `tidy` |
 | `home` | the home overlay and statistics | `home` |
@@ -205,12 +205,12 @@ In the vault:
 | `**/*.md` | markdown with optional YAML-ish frontmatter; unrecognised frontmatter is kept byte for byte | the user |
 | `attachments/` | images pasted or dropped into notes | editor |
 | `templates/`, `Daily/` (configurable) | ordinary notes | templates |
-| `tasks/` | cards: notes whose frontmatter has `board`, `status`, `order` | boards |
+| `tasks/` | cards: notes whose frontmatter has `board`, `status`, `order`, and optionally `priority`, `start`, `due`, `tags`, `completed` (set on entering the Done column, removed on leaving it); the description and checklist are the note's own text | boards |
 | `chats/<bot>/` | a bot's chat topics, one note each: `YYYY-MM-DD HH-mm — <title>.md`, frontmatter `bot`, `created`, `title`; `## You` / `## <Bot>` turns (an old main-chat answer keeps `## Claude`), each answer's sources in a `<!-- recto:sources … -->` comment; turns are appended, never rewritten (`shared/chat-topics.ts`) | bots |
 | `.recto/chats-migration.json`, `.recto/backups/chats-<date>/` | the one-time move of the old main chats and first bot threads into Recto's topics: what moved, and a copy of `chats/` from before (`main/bots/migration.ts`) | `main/bots` |
 | `.recto/bots/<id>/` | a bot: `bot.json` (name, specialty, look, personality, model, excluded folders), `SYSTEM.md` and `EXAMPLES.md` (one example answer per kind); Recto is written once into a vault with no `bots` folder, and an unedited SYSTEM.md or EXAMPLES.md is brought up to date | `main/bots` |
 | `.recto/evals/<run id>/` | an eval run's `config.json` and `results.jsonl`, and `graded.jsonl` beside them; the run's report is a note in the evals folder | `scripts/evals` |
-| `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `boards`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive` | `main/state.ts` |
+| `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `boards`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive`. `boards` holds each board's columns (with optional `color`, `wip`, `start`/`due`, `done`) and its `widgets` | `main/state.ts` |
 | `.recto/index.db` | SQLite (WAL): the index, tasks, version snapshots, usage events, topic vectors, the bots' piece vectors, note cards and tasks read from plain text | indexer, embedder |
 | `.recto/archive/` | archived files until retention runs out | `main/archive.ts` |
 | `.recto/.gitignore` | keeps `index.db`, `.trash/` and `archive/` out of git | written once |

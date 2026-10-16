@@ -326,8 +326,14 @@ async function screens(page, dir, vault) {
   await key(page, 'Mod+3')
   await page.waitForSelector('.boards__row')
   await page.locator('.boards__row', { hasText: 'Launch' }).first().click()
-  await page.waitForSelector('.board__card')
+  await page.waitForSelector('.board-card')
   await shoot(page, dir, '07-board', 1800)
+  // A card opened beside the board: its fields, checklist and the comments placeholder.
+  await page.locator('.board-card', { hasText: 'Fix the export bug' }).click()
+  await page.waitForSelector('.card-panel .card-panel__check')
+  await shoot(page, dir, '07b-board-card-panel', 600)
+  await page.locator('.card-panel [aria-label="Close card"]').click()
+  await page.waitForSelector('.card-panel', { state: 'detached' })
   await key(page, 'Mod+1')
   await page.waitForSelector('[role=treeitem]')
 

@@ -15,6 +15,7 @@ import type {
 } from '../../shared/indexer-protocol'
 import { requireDb } from './db'
 import { pathsByName, resolveLink } from '../../shared/parse'
+import { cardDescription, checklist } from '../../shared/card-fields'
 
 export function search(query: string, limit: number): SearchHit[] {
   const handle = requireDb()
@@ -193,53 +194,38 @@ export function graph(autoProperty: string | null): GraphData {
  * into a column still appears somewhere stable rather than jumping about.
  */
 export function board(name: string): BoardCard[] {
+  const field = (key: string, as: string): string =>
+    `(SELECT value FROM properties WHERE properties.path = n.path AND properties.key = '${key}') AS ${as}`
   const rows = requireDb()
     .prepare(
       `SELECT n.path                       AS path,
               COALESCE(n.title, n.name)    AS title,
               s.value                      AS status,
               o.num                        AS "order",
-              d.value                      AS due,
-              p.value                      AS priority,
+              ${field('start', 'start')},
+              ${field('due', 'due')},
+              ${field('completed', 'completed')},
+              ${field('priority', 'priority')},
+              ${field('tags', 'tags')},
+              (SELECT COUNT(*) FROM links WHERE links.source_path = n.path AND links.property IS NULL) AS links,
               (SELECT body FROM notes_fts WHERE notes_fts.path = n.path) AS body
        FROM notes n
        JOIN properties b ON b.path = n.path AND b.key = 'board' AND b.value = ?
        LEFT JOIN properties s ON s.path = n.path AND s.key = 'status'
        LEFT JOIN properties o ON o.path = n.path AND o.key = 'order'
-       LEFT JOIN properties d ON d.path = n.path AND d.key = 'due'
-       LEFT JOIN properties p ON p.path = n.path AND p.key = 'priority'
        ORDER BY o.num IS NULL, o.num, n.name`,
     )
-    .all(name) as (BoardCard & { body: string | null })[]
+    .all(name) as (Omit<BoardCard, 'description' | 'checklist'> & { body: string | null })[]
 
-  return rows.map(({ body, ...row }) => ({
-    ...row,
-    title: row.title.replace(/\.md$/i, ''),
-    preview: previewOf(body, row.title),
-  }))
-}
-
-/**
- * The first real line of a note, for the card's second line.
- *
- * The card used to show its file path, which is the one thing about a task
- * nobody needs on a board. Headings are skipped because the topmost one is
- * already the card's title, and repeating it says nothing.
- */
-function previewOf(body: string | null, title: string): string {
-  if (body === null) return ''
-  for (const raw of body.split('\n')) {
-    const line = raw.trim()
-    if (line === '') continue
-    if (line.startsWith('#')) {
-      // Skip a heading, but only while it is still just restating the title.
-      const text = line.replace(/^#+\s*/, '')
-      if (text === title || text === '') continue
-      return text.slice(0, 160)
+  return rows.map(({ body, ...row }) => {
+    const items = checklist(body ?? '')
+    return {
+      ...row,
+      title: row.title.replace(/\.md$/i, ''),
+      description: cardDescription(body ?? ''),
+      checklist: { done: items.filter((item) => item.done).length, total: items.length },
     }
-    return line.replace(/^[-*+]\s+(\[[ xX]\]\s+)?/, '').slice(0, 160)
-  }
-  return ''
+  })
 }
 
 /** Board names that actually occur in the vault, with their card counts. */

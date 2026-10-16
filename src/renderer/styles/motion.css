@@ -7,7 +7,7 @@
  */
 .tree__row,
 .boards__row,
-.board__card,
+.board-card,
 .tab,
 .segmented__tab,
 .footer-btn,
@@ -25,13 +25,13 @@
 
 /* A card lifts while you hold it, so the board reads as physical for the one
    gesture where that helps: knowing which card you have. */
-.board__card:active {
+.board-card:active {
   transform: scale(0.995);
 }
-.board__card.is-dragging {
-  transform: rotate(-0.6deg) scale(1.02);
-  box-shadow: var(--shadow-md);
-  opacity: 0.85;
+/* What stays behind while it is dragged: faded, so the copy under the pointer
+   is the one that reads as the card. */
+.board-card.is-dragging {
+  opacity: 0.35;
 }
 
 .cm-task-checkbox {
