@@ -78,8 +78,8 @@ describe.skipIf(!RUN)('hotkeys', () => {
   const saved = (): Record<string, string | null> => JSON.parse(fs.readFileSync(path.join(vault, '.recto', 'hotkeys.json'), 'utf8'))
   const shortcutsTab = async (): Promise<void> => {
     await page.keyboard.press('Meta+,')
-    await page.waitForSelector('.dialog--settings')
-    await page.locator('.dialog--settings .settings__tab', { hasText: 'Shortcuts' }).click()
+    await page.waitForSelector('.settings-panel')
+    await page.locator('.settings-panel .settings__tab', { hasText: 'Shortcuts' }).click()
   }
 
   it('a new binding works, is saved, and survives a reload', async () => {

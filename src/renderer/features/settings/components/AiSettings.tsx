@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../../../app/api'
 import { IPC } from '@shared/ipc'
 import { SettingRow } from '../../../ui/SettingRow'
+import { SettingGroup } from '../../../ui/SettingGroup'
 import { Icon } from '../../../ui/Icon'
 import { UTILITY_MODEL } from '@shared/ai'
 
@@ -47,7 +48,7 @@ export function AiSettings(_: SettingsDeps): React.ReactElement {
   }
 
   return (
-    <>
+    <SettingGroup title="Anthropic">
       <SettingRow
         label="Anthropic API key"
         hint={
@@ -58,6 +59,14 @@ export function AiSettings(_: SettingsDeps): React.ReactElement {
               : status.available
                 ? 'Bring your own key. It is encrypted into your login keychain and never leaves this machine.'
                 : 'This system has no secure storage, so a key cannot be saved here.'
+        }
+        more={
+          <>
+            <Icon name="sparkles" size={13} />
+            Every conversation is saved as a markdown note in <code>chats/</code>, so it is searchable, linkable and readable without this
+            app. Nothing is sent anywhere until you send it: there is no telemetry, and the key goes straight from this machine to Anthropic
+            over TLS with no relay of ours in between.
+          </>
         }
       >
         {status?.present === true ? (
@@ -117,13 +126,6 @@ export function AiSettings(_: SettingsDeps): React.ReactElement {
           {result.text}
         </p>
       )}
-
-      <p className="setting__note">
-        <Icon name="sparkles" size={13} />
-        Every conversation is saved as a markdown note in <code>chats/</code>, so it is searchable, linkable and readable without this app.
-        Nothing is sent anywhere until you send it: there is no telemetry, and the key goes straight from this machine to Anthropic over TLS
-        with no relay of ours in between.
-      </p>
-    </>
+    </SettingGroup>
   )
 }

@@ -35,7 +35,7 @@ import { fuzzyMatch } from '../../ui/fuzzy'
 import { FileTree, NameDialog, allFilePaths, allFolderPaths, filterTree, noteEntries, notePaths } from '../../features/file-tree'
 import { focusEditorOnOpen, type LinkCandidate } from '../../features/editor'
 import { QuickSwitcher, SearchPanel } from '../../features/search'
-import { SettingsDialog, SidebarThemePicker, type SettingsTab } from '../../features/settings'
+import { SettingsPanel, SidebarThemePicker, type SettingsTab } from '../../features/settings'
 import { TemplatePicker, usePeriodicNotesAutoCreate, useTemplateActions, useTemplateSettings } from '../../features/templates'
 import { TidyDialog, useTidy } from '../../features/tidy'
 import { CHAT_FOLDER } from '../../features/ai'
@@ -87,6 +87,13 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   /** The tab Settings opens on, when something asked for a particular one. */
   const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined)
+  /** Counts requests to open Settings: one while it is open focuses it. */
+  const [settingsRequest, setSettingsRequest] = useState(0)
+  const openSettings = useCallback((tab?: SettingsTab) => {
+    setSettingsTab(tab)
+    setSettingsOpen(true)
+    setSettingsRequest((n) => n + 1)
+  }, [])
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [themePicker, setThemePicker] = useState<{ x: number; y: number } | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -311,10 +318,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     update: updateRef,
   })
 
-  const openPeriodicSettings = useCallback(() => {
-    setSettingsTab('periodic')
-    setSettingsOpen(true)
-  }, [])
+  const openPeriodicSettings = useCallback(() => openSettings('periodic'), [openSettings])
   const { insertTemplate, updateTemplates, openPeriodicNote, openTodayNote } = useTemplateActions({
     activePath,
     closePicker: () => setTemplatesOpen(false),
@@ -406,7 +410,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   useAppCommands({
     active,
     openPalette,
-    setSettingsOpen,
+    setSettingsOpen: (open: boolean) => (open ? openSettings() : setSettingsOpen(false)),
     setTemplatesOpen,
     onCloseVault,
     toggleSidebar,
@@ -497,7 +501,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
             onToggleFolders={activeSection === 'data' ? () => setExpanded(expanded.size > 0 ? new Set() : new Set(allFolders)) : undefined}
             onTidy={activeSection === 'data' ? () => void openTidy() : undefined}
             onOpenArchive={() => openExtension('archive')}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenSettings={() => openSettings()}
             onCollapse={toggleSidebar}
             onThemePick={setThemePicker}
           >
@@ -521,13 +525,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
             ) : botsOn === false ? (
               <p className="bots-off">
                 Bots are off ·{' '}
-                <button
-                  className="bots-off__link"
-                  onClick={() => {
-                    setSettingsTab('bots')
-                    setSettingsOpen(true)
-                  }}
-                >
+                <button className="bots-off__link" onClick={() => openSettings('bots')}>
                   Turn on in Settings
                 </button>
               </p>
@@ -604,9 +602,10 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         <SidebarThemePicker at={themePicker} appearance={appearance} update={update} onClose={() => setThemePicker(null)} />
       )}
       {settingsOpen && (
-        <SettingsDialog
+        <SettingsPanel
           {...settingsDepsRef.current}
           initialTab={settingsTab}
+          focusRequest={settingsRequest}
           onClose={() => {
             setSettingsOpen(false)
             setSettingsTab(undefined)

@@ -73,6 +73,11 @@ export type Appearance = {
    * genuinely divisive.
    */
   translucent: boolean
+  /**
+   * Where the Settings panel floats and how big it is, in CSS px inside the
+   * window. Null until it is first moved or resized: then it opens centred.
+   */
+  settingsPanel: { x: number; y: number; width: number; height: number } | null
 }
 
 /**
@@ -102,6 +107,7 @@ const DEFAULT_APPEARANCE: Appearance = {
   previewDelay: 2,
   sidebarTheme: NO_THEME,
   translucent: true,
+  settingsPanel: null,
 }
 
 /**
@@ -290,9 +296,21 @@ function coerce(value: unknown): Appearance {
         ? Math.min(PREVIEW_DELAY_MAX, Math.max(PREVIEW_DELAY_MIN, v.previewDelay))
         : DEFAULT_APPEARANCE.previewDelay,
     translucent: typeof v.translucent === 'boolean' ? v.translucent : DEFAULT_APPEARANCE.translucent,
+    settingsPanel: coerceRect(v.settingsPanel),
     editorFont:
       v.editorFont === 'mono' || v.editorFont === 'sans' || v.editorFont === 'serif' ? v.editorFont : DEFAULT_APPEARANCE.editorFont,
   }
+}
+
+function coerceRect(value: unknown): Appearance['settingsPanel'] {
+  if (typeof value !== 'object' || value === null) return null
+  const r = value as Record<string, unknown>
+  const n = (key: string): number | null => (typeof r[key] === 'number' && Number.isFinite(r[key]) ? (r[key] as number) : null)
+  const x = n('x')
+  const y = n('y')
+  const width = n('width')
+  const height = n('height')
+  return x === null || y === null || width === null || height === null ? null : { x, y, width, height }
 }
 
 export function useAppearance(): {

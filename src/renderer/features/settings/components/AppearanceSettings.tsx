@@ -2,49 +2,51 @@ import type { SettingsDeps } from '../settings-deps'
 import { SettingRow } from '../../../ui/SettingRow'
 import { Toggle } from '../../../ui/Toggle'
 import { Icon } from '../../../ui/Icon'
-import { SettingGroup } from './SettingGroup'
+import { SettingGroup } from '../../../ui/SettingGroup'
 import { PREVIEW_DELAY_MIN, PREVIEW_DELAY_MAX } from '../../../app/appearance'
 
 export function AppearanceSettings({ appearance, update }: SettingsDeps): React.ReactElement {
   return (
     <>
-      <SettingRow label="Theme" hint="System follows macOS; a choice here overrides it.">
-        <div className="segmented segmented--inline">
-          {(['system', 'light', 'dark'] as const).map((theme) => (
-            <button
-              key={theme}
-              className={`segmented__tab${appearance.theme === theme ? ' is-active' : ''}`}
-              onClick={() => update({ theme })}
-            >
-              <span>{theme}</span>
-            </button>
-          ))}
-        </div>
-      </SettingRow>
+      <SettingGroup title="Theme">
+        <SettingRow label="Theme" hint="System follows macOS; a choice here overrides it.">
+          <div className="segmented segmented--inline">
+            {(['system', 'light', 'dark'] as const).map((theme) => (
+              <button
+                key={theme}
+                className={`segmented__tab${appearance.theme === theme ? ' is-active' : ''}`}
+                onClick={() => update({ theme })}
+              >
+                <span>{theme}</span>
+              </button>
+            ))}
+          </div>
+        </SettingRow>
 
-      <SettingRow
-        label="Translucency"
-        hint={
-          /Mac OS X/.test(navigator.userAgent)
-            ? 'Blur the desktop through the sidebar. How far it goes is set by the theme.'
-            : 'macOS only — this platform has no window vibrancy.'
-        }
-      >
-        <Toggle
-          on={appearance.translucent}
-          onChange={() => update({ translucent: !appearance.translucent })}
-          disabled={!/Mac OS X/.test(navigator.userAgent)}
-        />
-      </SettingRow>
-
-      {appearance.translucent && (
-        <p className="setting__note">
-          <Icon name="panel-left-close" size={13} />
-          How far it goes is the theme's call, not a slider: a dark panel on a light page can be almost entirely backdrop and still read, a
-          light panel on a dark one cannot. Full screen switches it off while it lasts — there is no desktop behind a full-screen window,
-          only a black space.
-        </p>
-      )}
+        <SettingRow
+          label="Translucency"
+          hint={
+            /Mac OS X/.test(navigator.userAgent)
+              ? 'Blur the desktop through the sidebar. How far it goes is set by the theme.'
+              : 'macOS only — this platform has no window vibrancy.'
+          }
+          more={
+            <>
+              <Icon name="panel-left-close" size={13} />
+              How far it goes is the theme's call, not a slider: a dark panel on a light page can be almost entirely backdrop and still
+              read, a light panel on a dark one cannot. Full screen switches it off while it lasts — there is no desktop behind a
+              full-screen window, only a black space.
+            </>
+          }
+        >
+          <Toggle
+            on={appearance.translucent}
+            onChange={() => update({ translucent: !appearance.translucent })}
+            disabled={!/Mac OS X/.test(navigator.userAgent)}
+            label="Translucency"
+          />
+        </SettingRow>
+      </SettingGroup>
 
       <SettingGroup title="Sidebar">
         <SettingRow

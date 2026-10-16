@@ -5,6 +5,8 @@ import { Icon } from '../../../ui/Icon'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { Toggle } from '../../../ui/Toggle'
 import { SettingRow } from '../../../ui/SettingRow'
+import { SettingGroup } from '../../../ui/SettingGroup'
+import { useSettingSearch } from '../../../ui/setting-search'
 
 /**
  * Settings → Topics.
@@ -134,13 +136,15 @@ export function TopicsSettingsTab(): React.ReactElement {
   const [advanced, setAdvanced] = useState(false)
 
   const refresh = (): void => void api.invoke(IPC.topicsList).then(setTopics)
+  /** Shown among search results: looked at in passing, so the first run is not marked seen. */
+  const searching = useSettingSearch() !== ''
 
   useEffect(() => {
     void api.invoke(IPC.topicsSettings).then(setSettings)
     void api.invoke(IPC.topicsStatus).then((next) => {
       setStatus(next)
       // Seen: nothing is written until the next scheduled run after this.
-      if (next.review.pending) {
+      if (next.review.pending && !searching) {
         setFirstLook(next.review.notes)
         void api.invoke(IPC.topicsSeen)
       }
@@ -150,6 +154,8 @@ export function TopicsSettingsTab(): React.ReactElement {
       setStatus(next)
       refresh()
     })
+    // Read once, on mount: a search result that becomes the section remounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (settings === null || status === null) return <p className="setting__hint">Reading…</p>
@@ -197,65 +203,64 @@ export function TopicsSettingsTab(): React.ReactElement {
         </div>
       )}
 
-      <SettingRow
-        label={
-          <>
-            Topics <span className="topics__badge">Experimental</span>
-          </>
-        }
-        hint="Groups similar notes under a topic in their topics property."
-      >
-        <Toggle on={settings.enabled} onChange={() => update({ enabled: !settings.enabled })} label="Topics" />
-      </SettingRow>
-      {status.eligible < WORKS_BEST_FROM && (
-        <div className="setting">
-          <span className="setting__hint">
-            Works best from about {WORKS_BEST_FROM} notes. You have {status.eligible}.
-          </span>
-        </div>
-      )}
-
-      <SettingRow label="Status" hint={statusLine(status)}>
-        {(status.model.state === 'missing' || status.model.state === 'error') && (
-          <button className="btn btn--sm" onClick={() => void api.invoke(IPC.topicsDownload)}>
-            Download
-          </button>
+      <SettingGroup title="Topics">
+        <SettingRow label="Topics" badge="Experimental" hint="Groups similar notes under a topic in their topics property.">
+          <Toggle on={settings.enabled} onChange={() => update({ enabled: !settings.enabled })} label="Topics" />
+        </SettingRow>
+        {status.eligible < WORKS_BEST_FROM && (
+          <div className="setting">
+            <span className="setting__hint">
+              Works best from about {WORKS_BEST_FROM} notes. You have {status.eligible}.
+            </span>
+          </div>
         )}
-      </SettingRow>
-      {status.model.state === 'downloading' && (
-        <div className="topics__bar" aria-hidden>
-          <span style={{ width: `${(status.model.received / status.model.bytes) * 100}%` }} />
-        </div>
-      )}
 
-      {topics.length > 0 && (
-        <div className="topics__list" role="list" aria-label="Topics">
-          {topics.map((t) => (
-            <TopicRow key={t.id} topic={t} onChanged={refresh} />
-          ))}
-        </div>
-      )}
+        <SettingRow label="Status" hint={statusLine(status)}>
+          {(status.model.state === 'missing' || status.model.state === 'error') && (
+            <button className="btn btn--sm" onClick={() => void api.invoke(IPC.topicsDownload)}>
+              Download
+            </button>
+          )}
+        </SettingRow>
+        {status.model.state === 'downloading' && (
+          <div className="topics__bar" aria-hidden>
+            <span style={{ width: `${(status.model.received / status.model.bytes) * 100}%` }} />
+          </div>
+        )}
 
-      <SettingRow
-        label="Undo last run"
-        hint={status.lastRun === null ? 'Nothing to undo.' : `Last run: ${status.lastRun.notes} notes, ${when(status.lastRun.at)}`}
-      >
-        <button
-          className="btn btn--ghost btn--sm"
-          disabled={status.lastRun === null}
-          onClick={() => void api.invoke(IPC.topicsUndoLastRun).then(refresh)}
+        {topics.length > 0 && (
+          <div className="topics__list" role="list" aria-label="Topics">
+            {topics.map((t) => (
+              <TopicRow key={t.id} topic={t} onChanged={refresh} />
+            ))}
+          </div>
+        )}
+
+        <SettingRow
+          label="Undo last run"
+          hint={status.lastRun === null ? 'Nothing to undo.' : `Last run: ${status.lastRun.notes} notes, ${when(status.lastRun.at)}`}
         >
-          Undo
-        </button>
-      </SettingRow>
+          <button
+            className="btn btn--ghost btn--sm"
+            disabled={status.lastRun === null}
+            onClick={() => void api.invoke(IPC.topicsUndoLastRun).then(refresh)}
+          >
+            Undo
+          </button>
+        </SettingRow>
+      </SettingGroup>
 
       <button className="topics__advanced" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}>
         <span className={`backlinks__chevron${advanced ? ' is-open' : ''}`}>{'›'}</span>
         Advanced
       </button>
       {advanced && (
-        <>
-          <SettingRow label="Quiet period" hint={`A note is looked at ${settings.quietMinutes} min after its last edit.`}>
+        <SettingGroup title="Advanced">
+          <SettingRow
+            disabled={!settings.enabled}
+            label="Quiet period"
+            hint={`A note is looked at ${settings.quietMinutes} min after its last edit.`}
+          >
             <input
               className="slider"
               type="range"
@@ -266,7 +271,11 @@ export function TopicsSettingsTab(): React.ReactElement {
               onChange={(event) => update({ quietMinutes: Number(event.target.value) })}
             />
           </SettingRow>
-          <SettingRow label="Minimum words" hint={`Notes under ${settings.minWords} words of their own get no topic.`}>
+          <SettingRow
+            disabled={!settings.enabled}
+            label="Minimum words"
+            hint={`Notes under ${settings.minWords} words of their own get no topic.`}
+          >
             <input
               className="slider"
               type="range"
@@ -277,7 +286,11 @@ export function TopicsSettingsTab(): React.ReactElement {
               onChange={(event) => update({ minWords: Number(event.target.value) })}
             />
           </SettingRow>
-          <SettingRow label="Excluded folders" hint="Comma separated. Daily notes and templates are always out.">
+          <SettingRow
+            disabled={!settings.enabled}
+            label="Excluded folders"
+            hint="Comma separated. Daily notes and templates are always out."
+          >
             <CommitField
               value={settings.excluded.join(', ')}
               label="Excluded folders"
@@ -292,12 +305,16 @@ export function TopicsSettingsTab(): React.ReactElement {
               }
             />
           </SettingRow>
-          <SettingRow label="Rebuild topics" hint="Groups every note again; topics that continue keep their names.">
+          <SettingRow
+            disabled={!settings.enabled}
+            label="Rebuild topics"
+            hint="Groups every note again; topics that continue keep their names."
+          >
             <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke(IPC.topicsRebuild).then(refresh)}>
               Rebuild
             </button>
           </SettingRow>
-        </>
+        </SettingGroup>
       )}
     </>
   )

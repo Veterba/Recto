@@ -334,8 +334,12 @@ async function screens(page, dir, vault) {
   await key(page, 'Mod+,')
   await page.waitForSelector('[role=dialog][aria-label=Settings]')
   for (const [i, tab] of SETTINGS_TABS.entries()) {
-    await page.getByRole('dialog', { name: 'Settings' }).getByRole('tab', { name: tab, exact: true }).click()
-    // The first tab waits out the dialog's own entrance.
+    // A section's name can be followed by a badge ("Bots Beta").
+    await page
+      .getByRole('dialog', { name: 'Settings' })
+      .getByRole('tab', { name: new RegExp(`^${tab}`) })
+      .click()
+    // The first tab waits out the panel's own entrance.
     await shoot(page, dir, `${String(8 + i).padStart(2, '0')}-settings-${tab.toLowerCase()}`, i === 0 ? 3000 : 700)
   }
   await page.keyboard.press('Escape')
@@ -800,6 +804,12 @@ async function periodicShots(dir, theme) {
     await shoot(page, dir, '28-settings-periodic', 3000)
     await page.evaluate(() => document.querySelector('.settings__body')?.scrollTo(0, 100_000))
     await shoot(page, dir, '28b-settings-periodic-preview')
+
+    // Search: matching rows from every section, the words marked.
+    await page.getByRole('textbox', { name: 'Search settings' }).fill('folder')
+    await page.waitForSelector('.settings-results .setting mark')
+    await shoot(page, dir, '28d-settings-search')
+    await page.getByRole('textbox', { name: 'Search settings' }).fill('')
 
     await dialog.getByRole('tab', { name: 'Editor', exact: true }).click()
     await page.locator('[aria-label="Show formatting toolbar"]').click()

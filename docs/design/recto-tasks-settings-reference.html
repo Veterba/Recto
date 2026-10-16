@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recto settings and tasks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one mock window per variant on a soft desk; window chrome is glass over a blurred wash so the effect reads. */
+:root{
+  --desk:#dcdad4; --wash1:#c9d3dc; --wash2:#e2d6c8;
+  --bg:#f6f5f2; --side:rgba(239,238,234,.62); --paper:#fbfbfa;
+  --line:rgba(24,24,27,.09); --ink:#18181b; --soft:#5d5d63; --muted:#8a8a90;
+  --chip:rgba(24,24,27,.055); --hover:rgba(24,24,27,.06); --sel:rgba(24,24,27,.085);
+  --glass:rgba(255,255,255,.62); --glass-strong:rgba(255,255,255,.8); --glass-edge:rgba(255,255,255,.7);
+  --accent:#18181b; --on-accent:#fff;
+  --ok:#3f8f5a; --warn:#b7791f; --bad:#c2453d; --blue:#3d6fb0; --violet:#7a5cc4;
+  --shadow:0 30px 80px -30px rgba(30,28,24,.45),0 2px 6px rgba(30,28,24,.08);
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter Tight","Helvetica Neue",Arial,sans-serif;
+  --mono:"SF Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --desk:#09090b; --wash1:#1d2433; --wash2:#2a2019;
+  --bg:#141318; --side:rgba(24,23,29,.6); --paper:#1b1a20;
+  --line:rgba(236,235,242,.09); --ink:#ecebf2; --soft:#b4b2bd; --muted:#8b8996;
+  --chip:rgba(236,235,242,.07); --hover:rgba(236,235,242,.06); --sel:rgba(236,235,242,.1);
+  --glass:rgba(36,34,42,.58); --glass-strong:rgba(36,34,42,.82); --glass-edge:rgba(255,255,255,.08);
+  --accent:#ecebf2; --on-accent:#141318;
+  --ok:#6cc08a; --warn:#e0a84a; --bad:#e57068; --blue:#7fa6e0; --violet:#a98ef0;
+  --shadow:0 30px 80px -30px rgba(0,0,0,.8),0 2px 6px rgba(0,0,0,.4); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --desk:#09090b; --wash1:#1d2433; --wash2:#2a2019;
+  --bg:#141318; --side:rgba(24,23,29,.6); --paper:#1b1a20;
+  --line:rgba(236,235,242,.09); --ink:#ecebf2; --soft:#b4b2bd; --muted:#8b8996;
+  --chip:rgba(236,235,242,.07); --hover:rgba(236,235,242,.06); --sel:rgba(236,235,242,.1);
+  --glass:rgba(36,34,42,.58); --glass-strong:rgba(36,34,42,.82); --glass-edge:rgba(255,255,255,.08);
+  --accent:#ecebf2; --on-accent:#141318;
+  --ok:#6cc08a; --warn:#e0a84a; --bad:#e57068; --blue:#7fa6e0; --violet:#a98ef0;
+  --shadow:0 30px 80px -30px rgba(0,0,0,.8),0 2px 6px rgba(0,0,0,.4); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--desk);color:var(--ink);font:13px/1.45 var(--ui);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between}
+header.top h1{font-size:20px;margin:0;font-weight:650;letter-spacing:-.2px;text-wrap:balance}
+header.top p{margin:2px 0 0;color:var(--soft);max-width:62ch}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;background:var(--chip);padding:3px;border-radius:10px}
+.tabs button{border:0;background:none;color:var(--soft);font:inherit;font-weight:550;padding:6px 12px;border-radius:7px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.tabs button:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.note{color:var(--soft);font-size:12.5px;max-width:80ch;margin:0}
+.note b{color:var(--ink);font-weight:600}
+
+/* stage */
+.stage{position:relative;border-radius:18px;overflow-x:auto;padding:28px;
+  background:radial-gradient(60% 80% at 15% 20%,var(--wash1),transparent 70%),radial-gradient(50% 70% at 85% 80%,var(--wash2),transparent 70%),var(--desk)}
+.win{min-width:860px;height:600px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;
+  background:var(--bg);box-shadow:var(--shadow);border:1px solid var(--line)}
+.titlebar{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid var(--line);flex:none;background:var(--paper)}
+.dots{display:flex;gap:7px}.dots i{width:11px;height:11px;border-radius:50%;background:var(--chip);display:block}
+.titlebar .ttl{flex:1;text-align:center;color:var(--muted);font-size:12px;margin-right:50px}
+
+/* ===== Settings A: glass sheet with sidebar ===== */
+.appbg{flex:1;position:relative;display:flex;min-height:0}
+.ghost-app{position:absolute;inset:0;display:grid;grid-template-columns:200px 1fr;opacity:.9}
+.ghost-app .gs{background:var(--side);border-right:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:9px}
+.ghost-app .gs span,.ghost-app .ge span{display:block;height:8px;border-radius:4px;background:var(--chip)}
+.ghost-app .ge{padding:40px 60px;display:flex;flex-direction:column;gap:12px}
+.ghost-app .ge h3{margin:0 0 8px;font-size:22px;color:var(--ink);opacity:.5}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.08);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.sheet{position:relative;margin:auto;width:760px;height:500px;display:grid;grid-template-columns:200px 1fr;border-radius:14px;overflow:hidden;
+  background:var(--glass);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  border:1px solid var(--glass-edge);box-shadow:var(--shadow)}
+.snav{padding:12px 8px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:1px;overflow:auto}
+.search{display:flex;align-items:center;gap:6px;margin:0 4px 10px;padding:6px 9px;border-radius:8px;background:var(--chip);color:var(--muted)}
+.search input{border:0;background:none;font:inherit;color:var(--ink);width:100%;outline:none}
+.snav .grp{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:10px 10px 4px}
+.snav button{display:flex;align-items:center;gap:9px;border:0;background:none;font:inherit;color:var(--ink);text-align:left;padding:6px 10px;border-radius:7px;cursor:pointer}
+.snav button:hover{background:var(--hover)}
+.snav button[aria-current="true"]{background:var(--sel);font-weight:600}
+.snav svg{width:15px;height:15px;flex:none;color:var(--soft)}
+.badge{margin-left:auto;font-size:10px;padding:1px 6px;border-radius:99px;background:var(--chip);color:var(--soft);font-weight:500}
+.spane{overflow:auto;padding:22px 26px 30px;display:flex;flex-direction:column;gap:18px;min-width:0}
+.spane h2{margin:0;font-size:18px;font-weight:650;letter-spacing:-.2px}
+.spane .lead{margin:-12px 0 0;color:var(--soft);font-size:12.5px}
+.group{display:flex;flex-direction:column;gap:6px}
+.group > .gl{font-size:11.5px;color:var(--muted);font-weight:550;padding-left:2px}
+.card{background:var(--glass-strong);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:flex;align-items:center;gap:16px;padding:10px 14px;min-height:46px}
+.row + .row{border-top:1px solid var(--line)}
+.row .lab{flex:1;min-width:0}
+.row .lab b{display:block;font-weight:550}
+.row .lab small{display:block;color:var(--muted);font-size:11.5px;margin-top:1px}
+.row.dim{opacity:.45}
+.tog{position:relative;width:32px;height:19px;border-radius:99px;background:var(--chip);border:0;cursor:pointer;flex:none;transition:background .18s}
+.tog::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--paper);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .18s}
+.tog[aria-checked="true"]{background:var(--ok)}
+.tog[aria-checked="true"]::after{transform:translateX(13px)}
+.sel,.txt{font:inherit;color:var(--ink);background:var(--chip);border:1px solid transparent;border-radius:7px;padding:5px 9px}
+.txt{font-family:var(--mono);font-size:12px;width:190px}
+.seg{display:flex;background:var(--chip);border-radius:8px;padding:2px}
+.seg button{border:0;background:none;font:inherit;font-size:12px;color:var(--soft);padding:4px 10px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.preview{font-family:var(--mono);font-size:11.5px;color:var(--soft);background:var(--chip);border-radius:6px;padding:3px 8px}
+.kbd{font-family:var(--mono);font-size:11px;padding:2px 6px;border-radius:5px;background:var(--chip);border:1px solid var(--line)}
+.meter{width:150px;height:6px;border-radius:99px;background:var(--chip);overflow:hidden}.meter i{display:block;height:100%;background:var(--ink);opacity:.7}
+.tag-exp{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--violet);border:1px solid currentColor;border-radius:99px;padding:1px 7px;margin-left:6px;vertical-align:1px}
+
+/* ===== Settings B: one-column command-style ===== */
+.pal{position:relative;margin:auto;width:620px;height:520px;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;
+  background:var(--glass);backdrop-filter:blur(30px) saturate(1.8);-webkit-backdrop-filter:blur(30px) saturate(1.8);border:1px solid var(--glass-edge);box-shadow:var(--shadow)}
+.pal .phead{padding:14px 16px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+.pal .bigsearch{display:flex;align-items:center;gap:10px;font-size:15px}
+.pal .bigsearch input{flex:1;border:0;background:none;font:inherit;color:var(--ink);outline:none}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border:1px solid var(--line);background:none;font:inherit;font-size:12px;color:var(--soft);padding:3px 10px;border-radius:99px;cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.pal .pbody{flex:1;overflow:auto;padding:8px 10px 16px}
+.pal .sec{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:12px 8px 4px;display:flex;gap:8px;align-items:center}
+.pal .row{border-radius:9px;padding:8px 10px}
+.pal .row + .row{border-top:0}
+.pal .row:hover{background:var(--hover)}
+.pal .row .path{font-size:11px;color:var(--muted)}
+.pal mark{background:rgba(183,121,31,.22);color:inherit;border-radius:3px;padding:0 1px}
+.pal .pfoot{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:11.5px}
+
+/* ===== Kanban shared ===== */
+.kapp{flex:1;display:grid;grid-template-columns:196px 1fr;min-height:0}
+.kside{background:var(--side);border-right:1px solid var(--line);padding:12px 8px;display:flex;flex-direction:column;gap:1px;font-size:12.5px}
+.kside div{padding:5px 10px;border-radius:7px;color:var(--soft);display:flex;gap:8px;align-items:center}
+.kside .on{background:var(--sel);color:var(--ink);font-weight:600}
+.kmain{display:flex;flex-direction:column;min-width:0;min-height:0}
+.ktool{display:flex;align-items:center;gap:8px;padding:12px 18px 10px;flex-wrap:wrap}
+.ktool h3{margin:0 10px 0 0;font-size:17px;font-weight:650;letter-spacing:-.2px}
+.pill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:99px;padding:3px 10px;font-size:12px;color:var(--soft);background:none;font-family:inherit;cursor:pointer}
+.pill[aria-pressed="true"]{background:var(--sel);color:var(--ink)}
+.ktool .sp{flex:1}
+.cols{flex:1;display:flex;gap:12px;padding:4px 18px 18px;overflow-x:auto;min-height:0;align-items:flex-start}
+.col{width:244px;flex:none;display:flex;flex-direction:column;max-height:100%;border-radius:12px}
+.colh{display:flex;align-items:center;gap:8px;padding:8px 8px;font-weight:600;font-size:12.5px;position:sticky;top:0}
+.colh .n{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
+.colh .dot{width:8px;height:8px;border-radius:50%}
+.colh .more{margin-left:auto;color:var(--muted);letter-spacing:1px}
+.list{display:flex;flex-direction:column;gap:7px;padding:2px 4px 6px;min-height:40px;overflow:auto;border-radius:10px;transition:background .15s}
+.list.over{background:var(--hover)}
+.kc{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 11px;display:flex;flex-direction:column;gap:7px;cursor:grab;
+  box-shadow:0 1px 1px rgba(0,0,0,.03);transition:box-shadow .15s,transform .15s}
+.kc:hover{box-shadow:0 6px 16px -8px rgba(0,0,0,.25)}
+.kc.drag{opacity:.35}
+.kc .t{font-weight:550;line-height:1.35}
+.kc .ex{color:var(--soft);font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.tg{padding:1px 7px;border-radius:99px;background:var(--chip);color:var(--soft)}
+.due{display:inline-flex;gap:4px;align-items:center}
+.due.late{color:var(--bad)}.due.soon{color:var(--warn)}
+.prog{display:flex;align-items:center;gap:6px}
+.prog .bar{width:46px;height:4px;border-radius:99px;background:var(--chip);overflow:hidden}.prog .bar i{display:block;height:100%;background:var(--ok)}
+.add{display:flex;align-items:center;gap:6px;color:var(--muted);padding:7px 10px;border-radius:8px;font-size:12.5px;cursor:text}
+.add:hover{background:var(--hover);color:var(--soft)}
+.add input{border:0;background:none;font:inherit;color:var(--ink);outline:none;width:100%}
+
+/* Kanban A: quiet glass columns */
+.va .col{background:var(--glass);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);border:1px solid var(--line)}
+.va .stagebg{background:radial-gradient(70% 60% at 30% 0%,var(--wash1),transparent 70%),radial-gradient(60% 60% at 90% 100%,var(--wash2),transparent 70%),var(--bg)}
+
+/* Kanban B: dense lanes + priority stripe */
+.vb .col{background:none}
+.vb .colh{border-bottom:1px solid var(--line);margin-bottom:6px;padding:6px 4px}
+.vb .kc{padding:8px 10px 8px 12px;gap:5px;position:relative;border-radius:8px}
+.vb .kc::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--pri,transparent)}
+.vb .kc .ex{display:none}
+.vb .kc:hover .ex{display:-webkit-box}
+.lane{display:flex;align-items:center;gap:8px;padding:10px 18px 4px;font-size:12px;color:var(--soft);font-weight:600}
+.lane .ln{flex:1;height:1px;background:var(--line)}
+.vb .cols{flex:none;padding-bottom:8px}
+.vb .kscroll{flex:1;overflow:auto;min-height:0}
+
+/* detail drawer for B */
+.drawer{width:270px;flex:none;border-left:1px solid var(--line);background:var(--glass);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:16px;display:flex;flex-direction:column;gap:12px;font-size:12.5px}
+.drawer h4{margin:0;font-size:15px}
+.drawer .kv{display:grid;grid-template-columns:78px 1fr;gap:6px 8px;color:var(--soft)}
+.drawer .kv span:nth-child(odd){color:var(--muted)}
+.chk{display:flex;gap:7px;align-items:flex-start}.chk i{width:13px;height:13px;border:1.5px solid var(--muted);border-radius:4px;flex:none;margin-top:2px}
+.chk.done i{background:var(--ok);border-color:var(--ok)}.chk.done span{color:var(--muted);text-decoration:line-through}
+
+.verdict{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.verdict div{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--soft)}
+.verdict b{color:var(--ink);display:block;margin-bottom:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ===== v2 overrides ===== */
+.tog[aria-checked="true"]{background:var(--accent)}
+.tog[aria-checked="true"]::after{background:var(--on-accent)}
+.spane mark{background:rgba(183,121,31,.22);color:inherit;border-radius:3px;padding:0 1px}
+.spane .hitsec{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;gap:8px;align-items:center;cursor:pointer}
+.spane .hitsec:hover{color:var(--ink)}
+
+/* Tasks v2 */
+.tboard{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;
+  background:radial-gradient(70% 60% at 25% 0%,var(--wash1),transparent 70%),radial-gradient(60% 60% at 95% 100%,var(--wash2),transparent 70%),var(--bg)}
+.tbar{display:flex;align-items:center;gap:8px;padding:12px 18px 8px;flex-wrap:wrap}
+.tbar h3{margin:0 8px 0 0;font-size:17px;font-weight:650;letter-spacing:-.2px}
+.tbar .sp{flex:1}
+.tsearch{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:var(--glass);border:1px solid var(--line);color:var(--muted);font-size:12px}
+.tsearch input{border:0;background:none;outline:none;font:inherit;color:var(--ink);width:120px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;color:var(--ink);background:var(--glass);cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn[aria-pressed="true"]{background:var(--sel)}
+
+/* widgets strip */
+.widgets{display:flex;gap:10px;padding:2px 18px 10px;overflow-x:auto;flex:none}
+.widgets[hidden]{display:none!important}
+.wdg{flex:none;background:var(--glass);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.wdg .wh{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.wdg .wh .x{margin-left:auto;cursor:pointer;letter-spacing:0}
+.cal{width:520px}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:0;position:relative;font-size:11px}
+.calgrid .d{padding:2px 0 4px;color:var(--muted);text-align:left;border-left:1px solid var(--line);padding-left:5px;font-variant-numeric:tabular-nums}
+.calgrid .d.today{color:var(--ink);font-weight:650}
+.calbars{display:grid;grid-template-columns:repeat(7,1fr);row-gap:4px;grid-auto-rows:18px;position:relative}
+.calbars::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px calc(100%/7))}
+.calbars .today-line{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--bad);border-radius:2px;opacity:.7}
+.bar{position:relative;border-radius:5px;padding:0 7px;font-size:11px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink);background:var(--sel);border:1px solid var(--line);cursor:pointer}
+.bar.col{background:none;border:1px dashed var(--muted);color:var(--soft)}
+.bar.p-high{box-shadow:inset 3px 0 0 var(--bad)}.bar.p-mid{box-shadow:inset 3px 0 0 var(--warn)}.bar.p-low{box-shadow:inset 3px 0 0 var(--ok)}
+.prgw{width:200px}
+.big{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+.big small{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:0}
+.spark{display:flex;align-items:flex-end;gap:3px;height:30px}
+.spark i{flex:1;background:var(--sel);border-radius:2px}.spark i:last-child{background:var(--accent)}
+.dueW{width:210px;font-size:12px;display:flex;flex-direction:column;gap:5px}
+.dueW .li{display:flex;gap:8px;align-items:center}.dueW .li span:last-child{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+.addw{width:150px;align-items:center;justify-content:center;color:var(--muted);border-style:dashed;cursor:pointer;background:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.addw:hover{color:var(--ink)}
+.wmenu{position:absolute;z-index:5;background:var(--glass-strong);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:5px;display:flex;flex-direction:column;min-width:220px}
+.wmenu button{border:0;background:none;font:inherit;color:var(--ink);text-align:left;padding:6px 9px;border-radius:6px;cursor:pointer;display:flex;flex-direction:column}
+.wmenu button small{color:var(--muted);font-size:11px}
+.wmenu button:hover{background:var(--hover)}
+.wmenu button[disabled]{opacity:.45;cursor:default}
+
+/* board */
+.tcols{flex:1;display:flex;gap:12px;padding:0 18px 16px;overflow-x:auto;min-height:0}
+.tcol{width:262px;flex:none;display:flex;flex-direction:column;min-height:0;border-radius:14px;
+  background:var(--glass);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);border:1px solid var(--line)}
+.tcol .colh{padding:10px 10px 6px 12px}
+.tcol .colh .wip{font-size:11px;color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums;padding:0 6px;border-radius:99px;background:var(--chip)}
+.tcol .colh .wip.full{color:var(--warn)}
+.ib{border:0;background:none;color:var(--muted);font:inherit;cursor:pointer;padding:2px 5px;border-radius:5px}
+.ib:hover{background:var(--hover);color:var(--ink)}
+.tcol .colh .acts{margin-left:auto;display:flex;gap:2px}
+.tcol .list{flex:1;padding:2px 8px 8px;gap:8px}
+.tcol .add{margin:0 8px 8px}
+.newcol{width:44px;flex:none;border-radius:14px;border:1px dashed var(--line);display:flex;align-items:flex-start;justify-content:center;padding-top:12px;color:var(--muted);cursor:pointer;background:none;font:inherit;font-size:16px}
+.newcol:hover{color:var(--ink);border-color:var(--muted)}
+.kc .top{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.kc .top .when{margin-left:auto;font-variant-numeric:tabular-nums}
+.kc .top .when.late{color:var(--bad)}.kc .top .when.soon{color:var(--warn)}
+.prio{font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:5px;letter-spacing:.01em}
+.prio.high{color:var(--bad);background:color-mix(in srgb,var(--bad) 13%,transparent)}
+.prio.mid{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.prio.low{color:var(--ok);background:color-mix(in srgb,var(--ok) 13%,transparent)}
+.prio.none{color:var(--muted);background:var(--chip)}
+.kc .foot{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted)}
+.kc .foot .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+.kc.sel{outline:2px solid var(--accent);outline-offset:-1px}
+.kc .later{opacity:.45}
+
+/* side panel */
+.tpanel{width:300px;flex:none;border-left:1px solid var(--line);background:var(--glass-strong);backdrop-filter:blur(26px) saturate(1.6);-webkit-backdrop-filter:blur(26px) saturate(1.6);display:flex;flex-direction:column;min-height:0}
+.tpanel[hidden]{display:none!important}
+.tpanel .ph{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+.tpanel .ph .ib{margin-left:auto}
+.tpanel .pb{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px;font-size:12.5px}
+.tpanel h4{margin:0;font-size:16px;line-height:1.3}
+.fields{display:grid;grid-template-columns:72px 1fr;gap:8px 10px;align-items:center}
+.fields > span:nth-child(odd){color:var(--muted)}
+.fields .sel{padding:3px 7px;font-size:12px}
+.desc{color:var(--soft);line-height:1.55}
+.sub{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.comment{display:flex;gap:8px;opacity:.5}
+.av{width:22px;height:22px;border-radius:50%;background:var(--sel);display:grid;place-items:center;font-size:10px;font-weight:650;flex:none}
+.soonnote{font-size:11px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:6px 8px}
+
+/* settings v3: floating glass window + app accents */
+:root{--acc:#2f62dc;--acc-soft:rgba(47,98,220,.12)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--acc:#8b5cf6;--acc-soft:rgba(139,92,246,.18)}}
+:root[data-theme="dark"]{--acc:#8b5cf6;--acc-soft:rgba(139,92,246,.18)}
+#fwin .tog[aria-checked="true"]{background:var(--acc)}
+#fwin .tog[aria-checked="true"]::after{background:#fff}
+#fwin .seg button[aria-pressed="true"]{color:var(--acc)}
+#fwin .snav button[aria-current="true"]{background:var(--acc-soft);color:var(--acc)}
+#fwin .snav button{padding:6px 12px}
+.fwin{position:absolute;left:120px;top:40px;width:680px;height:470px;min-width:460px;min-height:300px;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;
+  background:var(--glass);backdrop-filter:blur(26px) saturate(1.7);-webkit-backdrop-filter:blur(26px) saturate(1.7);border:1px solid var(--glass-edge);box-shadow:var(--shadow)}
+.fhead{display:flex;align-items:center;gap:10px;padding:9px 10px 9px 16px;border-bottom:1px solid var(--line);cursor:grab;user-select:none;flex:none}
+.fhead:active{cursor:grabbing}
+.fttl{font-weight:650;font-size:14px}
+.fhint{font-size:11px;color:var(--muted)}
+.fclose{margin-left:auto}
+.fbody{flex:1;display:grid;grid-template-columns:180px 1fr;min-height:0}
+.fwin .card{background:color-mix(in srgb,var(--paper) 55%,transparent)}
+.rz{position:absolute;z-index:3}
+.rz-e{right:0;top:12px;bottom:12px;width:7px;cursor:ew-resize}.rz-w{left:0;top:12px;bottom:12px;width:7px;cursor:ew-resize}
+.rz-s{bottom:0;left:12px;right:12px;height:7px;cursor:ns-resize}
+.rz-se{right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 55%,var(--muted) 55% 62%,transparent 62% 72%,var(--muted) 72% 79%,transparent 79%);opacity:.6}
+.rng{-webkit-appearance:none;appearance:none;width:160px;height:5px;border-radius:99px;background:linear-gradient(90deg,var(--acc) var(--v),var(--chip) var(--v));outline-offset:4px}
+.rng::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--acc);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.rng::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--acc);border:2px solid #fff}
+</style></head><body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Recto settings and tasks</h1>
+      <p>Second round: one direction for each screen, built from your references and the parts you liked. Everything is clickable.</p>
+    </div>
+    <div class="tabs" role="tablist" id="tabs">
+      <button role="tab" aria-selected="true" data-v="tk">Tasks</button>
+      <button role="tab" aria-selected="false" data-v="sa">Settings</button>
+    </div>
+  </header>
+
+  <section data-view="tk">
+    <p class="note"><b>Tasks.</b> Columns run the full height of the window, and adding a column is a slim dashed strip at the end of the row, so nothing looks like it falls off the edge. Cards show priority, dates, two lines of description and a footer with checklist and links. Click a card to open it in the side panel. Widgets above the board can be added or removed: a week calendar with date ranges for tasks and whole columns, progress, and what is due soon. Comments and co-authors are shown faded: they are for later.</p>
+    <div class="stage" style="margin-top:12px">
+      <div class="win" style="height:680px;min-width:1140px">
+        <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div><div class="ttl">Tasks — Recto</div></div>
+        <div class="kapp" style="grid-template-columns:186px 1fr auto">
+          <div class="kside"><div>▸ Notes</div><div class="on">▦ Tasks</div><div>◷ Today</div><div>◎ Graph</div></div>
+          <div class="tboard">
+            <div class="tbar">
+              <h3>Recto</h3>
+              <label class="tsearch">⌕ <input id="tk-search" placeholder="Filter cards"></label>
+              <button class="btn" aria-pressed="false" data-f="high">High only</button>
+              <span class="sp"></span>
+              <button class="btn" id="wtoggle" aria-pressed="true">Widgets</button>
+              <button class="btn">Sort ▾</button>
+            </div>
+            <div class="widgets" id="widgets"></div>
+            <div class="tcols" id="tcols"></div>
+          </div>
+          <aside class="tpanel" id="tpanel" hidden></aside>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+    <section data-view="sa" hidden>
+    <p class="note"><b>Settings as a floating glass window.</b> Drag it by the title bar, resize it from any edge or the corner, double-click the title bar to put it back in the middle. It stays translucent, so you see the change land in the app behind it while it is open. Sections sit in a sidebar instead of the top tab row, which already runs off the edge. Accent is blue in light theme and violet in dark, like the app.</p>
+    <div class="stage" style="margin-top:12px">
+      <div class="win" style="height:640px">
+        <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div><div class="ttl">Recto Vault</div></div>
+        <div class="appbg" id="sa-app">
+          <div class="ghost-app" aria-hidden="true">
+            <div class="gs"><span style="width:70%"></span><span style="width:55%"></span><span style="width:80%"></span><span style="width:60%"></span><span style="width:75%"></span><span style="width:50%"></span><span style="width:66%"></span></div>
+            <div class="ge"><h3>Norsk eksamen — plan</h3><span style="width:90%"></span><span style="width:84%"></span><span style="width:70%"></span><span style="width:88%"></span><span style="width:62%"></span><span style="width:80%"></span><span style="width:74%"></span></div>
+          </div>
+          <div class="fwin" id="fwin" role="dialog" aria-label="Settings">
+            <div class="fhead" id="fhead"><span class="fttl">Settings</span><span class="fhint">drag · double-click to center</span><button class="ib fclose" title="Close (Esc)">✕</button></div>
+            <div class="fbody">
+            <nav class="snav" id="snav">
+              <label class="search"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" width="13" height="13"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="sa-search" placeholder="Search settings"></label>
+              <div class="grp">App</div>
+              <button data-s="appearance" aria-current="true">Appearance</button>
+              <button data-s="editor">Editor</button>
+              <button data-s="writing">Writing</button>
+              <button data-s="hotkeys">Shortcuts</button>
+              <div class="grp">Vault</div>
+              <button data-s="vault">Vault</button>
+              <button data-s="templates">Templates</button>
+              <button data-s="periodic">Periodic notes</button>
+              <button data-s="topics">Topics</button>
+              <div class="grp">Connections</div>
+              <button data-s="obsidian">Obsidian</button>
+              <button data-s="ai">AI</button>
+              <button data-s="bots">Bots<span class="badge">Beta</span></button>
+            </nav>
+            <div class="spane" id="spane"></div>
+            </div>
+            <span class="rz rz-e" data-rz="e"></span><span class="rz rz-s" data-rz="s"></span><span class="rz rz-w" data-rz="w"></span><span class="rz rz-se" data-rz="se"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(()=>{
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+$$('#tabs button').forEach(b=>b.onclick=()=>{
+  $$('#tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  $$('section[data-view]').forEach(s=>s.hidden=s.dataset.view!==b.dataset.v);
+  try{localStorage.setItem('recto-mock-tab2',b.dataset.v)}catch(e){}
+});
+try{const t=localStorage.getItem('recto-mock-tab2');if(t)$(`#tabs button[data-v="${t}"]`)?.click()}catch(e){}
+const tog=(on,id)=>`<button class="tog" role="switch" aria-checked="${on}" ${id?`data-dep="${id}"`:''} aria-label="toggle"></button>`;
+const row=(name,desc,ctrl,cls='',key='')=>`<div class="row ${cls}" ${key?`data-k="${key}"`:''}><div class="lab"><b>${name}</b>${desc?`<small>${desc}</small>`:''}</div>${ctrl}</div>`;
+const seg=(opts,on)=>`<div class="seg">${opts.map(o=>`<button aria-pressed="${o===on}">${o}</button>`).join('')}</div>`;
+const colDot={Backlog:'var(--muted)','To do':'var(--blue)','In progress':'var(--warn)',Done:'var(--ok)'};
+let dragI=null;
+const sld=(v,max=100)=>`<input type="range" class="rng" min="0" max="${max}" value="${v}" style="--v:${v/max*100}%">`;
+const S={
+ appearance:{t:'Appearance',l:'Theme, translucency and the sidebar.',g:[
+  ['Theme',[row('Theme','System follows macOS; a choice here overrides it.',seg(['System','Light','Dark'],'System')),row('Translucency','Blur the desktop through the sidebar. How far it goes is set by the theme.',tog(true,'tr')),row('Settings window','Glass over the app while it is open',tog(true),'','tr')]],
+  ['Sidebar',[row('Text size','14px file names. The editor’s own size is under Editor.',sld(40)),row('Note preview delay','2.0 s resting on a note before its preview opens',sld(35)),row('Bolder text','A frosted panel eats stroke weight; this puts it back.',tog(true)),row('Brightness','70%: how white the file names are against the panel',sld(70))]]]},
+ editor:{t:'Editor',l:'How notes look while you edit them.',g:[
+  ['Display',[row('Live preview','Formatting shows as you type; raw Markdown on the active line',tog(true)),row('Font size','16px',sld(50)),row('Readable line length','Keep lines around 70 characters',tog(true))]],
+  ['Markdown',[row('Highlight colours','==🔴text== colours, same as Obsidian',`<span class="preview">==🔴 ==🟡 ==🟢</span>`),row('Tables','Spreadsheet-style editing',tog(true))]]]},
+ writing:{t:'Writing',l:'Focus mode and writing tools.',g:[
+  ['Focus',[row('Focus mode','Hide everything but the note',`<span class="kbd">⌘ ⇧ F</span>`),row('Show toolbar','Writing tools above the editor',tog(false)),row('Spellcheck','',tog(true))]]]},
+ hotkeys:{t:'Shortcuts',l:'Every command can have a key. Conflicts are shown before you save.',g:[
+  ['Most used',[row('Command palette','',`<span class="kbd">⌘ P</span>`),row('Today’s note','',`<span class="kbd">⌘ T</span>`),row('Highlight colour picker','',`<span class="kbd">⌘ ⌥ H</span>`),row('Open settings','',`<span class="kbd">⌘ ,</span>`)]]]},
+ vault:{t:'Vault',l:'Files, links and where things go.',g:[
+  ['Links',[row('Link style','Recto always writes [[Note name]]',`<span class="preview">[[Note name]]</span>`),row('Update links on rename','',tog(true))]],
+  ['Files',[row('Attachments folder','',`<input class="txt" value="Attachments">`),row('Show hidden files','.recto and other dot folders',tog(false))]]]},
+ templates:{t:'Templates',l:'Notes that new notes start from.',g:[
+  ['Folder',[row('Templates folder','',`<input class="txt" value="Templates">`),row('Date format in templates','',`<input class="txt" value="YYYY-MM-DD">`)]]]},
+ periodic:{t:'Periodic notes',l:'Turn on the periods you use. “Today’s note” opens the shortest one that is on.',g:[
+  ['Daily',[row('Daily notes','',tog(true,'d')),row('Folder','Folders are created only when the note is created',`<input class="txt" value="Daily/YYYY/MM">`,'','d'),row('File name','',`<input class="txt" value="YYYY-MM-DD">`,'','d')]],
+  ['Weekly',[row('Weekly notes','',tog(true,'w')),row('File name','Preview: 2026-W42',`<input class="txt" value="gggg-[W]ww">`,'','w')]],
+  ['Monthly and yearly',[row('Monthly notes','',tog(false)),row('Yearly notes','',tog(false))]]]},
+ topics:{t:'Topics',l:'Groups of related notes, found from their meaning.',g:[
+  ['Topics',[row('Find topics','Runs in the background on the charger',tog(true)),row('Minimum notes per topic','',`<select class="sel"><option>3</option><option>5</option></select>`)]]]},
+ obsidian:{t:'Obsidian',l:'Stay compatible with an Obsidian vault in the same folder.',g:[
+  ['Compatibility',[row('Read .obsidian settings','Use Obsidian’s attachment folder and templates',tog(true)),row('Write Obsidian-style highlights','',tog(true))]]]},
+ ai:{t:'AI',l:'Local models through Ollama. Notes never leave this Mac.',g:[
+  ['Model',[row('Model','qwen3.5:9b is the default; gemma4:e4b is faster',`<select class="sel"><option>qwen3.5:9b</option><option>gemma4:e4b</option></select>`),row('Unload after','Frees memory when you are not chatting',`<select class="sel"><option>5 min</option><option>15 min</option></select>`)]]]},
+ bots:{t:'Bots <span class="tag-exp">Experimental</span>',l:'Assistants that read your vault.',g:[
+  ['Bots',[row('Bots','',tog(true,'b')),row('Background work','Vectors and note cards only on the charger and idle',tog(true),'','b'),row('Memory in use','0.09 GB idle',`<div class="meter"><i style="width:4%"></i></div>`,'','b')]]]}
+};
+function renderA(k){
+  const s=S[k];
+  $('#spane').innerHTML=`<h2>${s.t}</h2><p class="lead">${s.l}</p>`+s.g.map(([gl,rows])=>`<div class="group"><div class="gl">${gl}</div><div class="card">${rows.join('')}</div></div>`).join('');
+  wire($('#spane'));
+}
+function wire(root){
+  root.querySelectorAll('.tog').forEach(t=>t.onclick=()=>{
+    const v=t.getAttribute('aria-checked')!=='true';t.setAttribute('aria-checked',v);
+    const d=t.dataset.dep;if(d)root.querySelectorAll(`.row[data-k="${d}"]`).forEach(r=>r.classList.toggle('dim',!v));
+  });
+  root.querySelectorAll('.seg').forEach(g=>g.querySelectorAll('button').forEach(b=>b.onclick=()=>g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b))));
+}
+$$('#snav button').forEach(b=>b.onclick=()=>{$$('#snav button').forEach(x=>x.setAttribute('aria-current',x===b));renderA(b.dataset.s)});
+$('#sa-search').oninput=e=>{const q=e.target.value.toLowerCase();$$('#snav button').forEach(b=>{const s=S[b.dataset.s];const hit=!q||(s.t+s.l+s.g.flat(2).join(' ')).toLowerCase().includes(q);b.style.opacity=hit?1:.3})};
+renderA('appearance');
+
+// ---- settings search inside A (B's idea): results across all sections
+const flatA=[];Object.entries(S).forEach(([k,s])=>s.g.forEach(([gl,rows])=>rows.forEach(r=>flatA.push({k,sec:s.t.replace(/<[^>]+>/g,'').trim(),html:r}))));
+let curA='appearance';
+$$('#snav button').forEach(b=>b.addEventListener('click',()=>{curA=b.dataset.s;$('#sa-search').value=''}));
+$('#sa-search').oninput=e=>{
+  const q=e.target.value.trim().toLowerCase();
+  $$('#snav button').forEach(b=>b.style.opacity=1);
+  if(!q){renderA(curA);return}
+  const esc=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const hits=flatA.filter(f=>f.html.replace(/<[^>]+>/g,' ').toLowerCase().includes(q));
+  const by={};hits.forEach(h=>(by[h.k]??=[]).push(h));
+  $('#spane').innerHTML=`<h2>Results for “${e.target.value}”</h2><p class="lead">${hits.length} settings in ${Object.keys(by).length} sections</p>`+
+   (hits.length?Object.entries(by).map(([k,arr])=>`<div class="group"><div class="hitsec" data-go="${k}">${arr[0].sec} →</div><div class="card">${arr.map(h=>h.html.replace(/(<b>)([^<]*)(<\/b>)/,(m,a,t,c)=>a+t.replace(new RegExp(esc,'ig'),x=>`<mark>${x}</mark>`)+c)).join('')}</div></div>`).join(''):'<p class="lead" style="margin:0">Nothing matches. Try another word.</p>');
+  wire($('#spane'));
+  $$('#spane .hitsec').forEach(h=>h.onclick=()=>$(`#snav button[data-s="${h.dataset.go}"]`).click());
+};
+
+// ---- tasks
+const days=['Mon 12','Tue 13','Wed 14','Thu 15','Fri 16','Sat 17','Sun 18'];const TODAY=4;
+const T=[
+ {c:'Backlog',t:'Suggested edits: Apply / Discard',d:'The bot proposes a change as a diff inside the note. Nothing is written until you press Apply.',p:'low',tag:'bot',links:2},
+ {c:'Backlog',t:'Folder templates',d:'A new note in “Norsk” starts from the Norsk template.',p:'none',tag:'editor'},
+ {c:'Backlog',t:'Graph view rework',d:'Topics as clusters, fewer lines, labels on hover.',p:'mid',tag:'ui',ck:[0,4]},
+ {c:'To do',t:'Today’s note opens the active period',d:'Don’t create Daily/ folders when daily notes are off. Open the shortest period that is on.',p:'high',tag:'bug',s:3,e:4,when:'Fri',wc:'soon',ck:[0,3]},
+ {c:'To do',t:'Settings redesign',d:'Glass sheet with sidebar; search shows results across sections.',p:'mid',tag:'ui',s:4,e:6,when:'Sun',ck:[1,5],links:3},
+ {c:'In progress',t:'Tasks board redesign',d:'Full-height columns, priority, dates, side panel, widgets.',p:'high',tag:'ui',s:0,e:2,when:'Wed',wc:'late',ck:[2,6],links:2},
+ {c:'In progress',t:'Bot: one language per answer',d:'Answer in the language of the question even when sources mix bokmål, nynorsk and Russian.',p:'mid',tag:'bot',s:1,e:5,when:'Fri',wc:'soon',ck:[1,2]},
+ {c:'Done',t:'Hotkeys for every command',d:'Grouped, searchable, rebindable, ⌘/ cheat sheet.',p:'mid',tag:'editor',done:1},
+ {c:'Done',t:'Model unloads when idle',d:'Idle memory 6.5 GB → 0.09 GB.',p:'high',tag:'bot',done:1},
+];
+let COLS=['Backlog','To do','In progress','Done'];
+const WIP={'In progress':3};
+const colRange={'To do':[3,6]};
+const PL={high:'High',mid:'Medium',low:'Low',none:'No priority'};
+let sel=null,filt={q:'',high:false},widgets=['cal','prog','due'];
+const visible=x=>(!filt.high||x.p==='high')&&(!filt.q||(x.t+x.d).toLowerCase().includes(filt.q));
+function tcard(x,i){return `<article class="kc${sel===i?' sel':''}" draggable="true" data-i="${i}">
+ <div class="top"><span class="prio ${x.p}">${PL[x.p]}</span>${x.when?`<span class="when ${x.wc||''}">◷ ${x.s!=null&&x.e!==x.s?days[x.s].split(' ')[1]+'–'+days[x.e].split(' ')[1]+' Oct':x.when}</span>`:''}</div>
+ <div class="t">${x.done?'<span style="color:var(--ok)">✓</span> ':''}${x.t}</div>
+ <div class="ex">${x.d}</div>
+ <div class="foot">${x.ck?`<span class="prog"><span class="bar"><i style="width:${x.ck[0]/x.ck[1]*100}%"></i></span>${x.ck[0]}/${x.ck[1]}</span>`:''}${x.links?`<span>⇄ ${x.links}</span>`:''}<span class="later" title="Comments, later"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:-1px"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg> 0</span><span class="r"><span class="tg">#${x.tag}</span></span></div></article>`}
+function renderCols(){
+  $('#tcols').innerHTML=COLS.map(c=>{const arr=T.map((x,i)=>[x,i]).filter(([x])=>x.c===c&&visible(x));const all=T.filter(x=>x.c===c).length;
+   const w=WIP[c];
+   return `<div class="tcol"><div class="colh"><span class="dot" style="background:${colDot[c]||'var(--muted)'}"></span>${c}<span class="n">${all}</span>${w?`<span class="wip ${all>=w?'full':''}" title="Work-in-progress limit">${all}/${w}</span>`:''}<span class="acts"><button class="ib" title="Add card" data-addc="${c}">＋</button><button class="ib" title="Column menu">···</button></span></div>
+   <div class="list" data-c="${c}">${arr.map(([x,i])=>tcard(x,i)).join('')}</div>
+   <label class="add">＋ <input placeholder="New card" data-c="${c}"></label></div>`}).join('')+`<button class="newcol" id="newcol" title="Add column">＋</button>`;
+  // dnd
+  $$('#tcols .kc').forEach(el=>{
+    el.ondragstart=e=>{dragI=+el.dataset.i;el.classList.add('drag');try{e.dataTransfer.setData('text/plain',el.dataset.i)}catch(_){}};
+    el.ondragend=()=>el.classList.remove('drag');
+    el.onclick=()=>{sel=+el.dataset.i;renderCols();panel()};
+  });
+  $$('#tcols .list').forEach(l=>{
+    l.ondragover=e=>{e.preventDefault();l.classList.add('over')};l.ondragleave=()=>l.classList.remove('over');
+    l.ondrop=e=>{e.preventDefault();l.classList.remove('over');if(dragI==null)return;T[dragI].c=l.dataset.c;T[dragI].done=l.dataset.c==='Done'?1:0;dragI=null;renderAll()};
+  });
+  $$('#tcols .add input').forEach(inp=>inp.onkeydown=e=>{if(e.key==='Enter'&&inp.value.trim()){T.push({c:inp.dataset.c,t:inp.value.trim(),d:'New note in Tasks/.',p:'none',tag:'ui'});renderAll();$(`#tcols .add input[data-c="${inp.dataset.c}"]`).focus()}});
+  $$('#tcols [data-addc]').forEach(b=>b.onclick=()=>$(`#tcols .add input[data-c="${b.dataset.addc}"]`).focus());
+  $('#newcol').onclick=()=>{let n='New column',k=2;while(COLS.includes(n))n='New column '+k++;COLS.push(n);renderAll();$('#tcols').scrollLeft=9999};
+}
+function renderWidgets(){
+  const W={
+   cal:()=>{const rows=[];Object.entries(colRange).forEach(([c,[s,e]])=>rows.push(`<div class="bar col" style="grid-column:${s+1}/${e+2}">Column: ${c}</div>`));
+     T.forEach((x,i)=>{if(x.s!=null)rows.push(`<div class="bar p-${x.p}" data-i="${i}" style="grid-column:${x.s+1}/${x.e+2}">${x.t}</div>`)});
+     return `<div class="wdg cal"><div class="wh">Week 42 · Oct 12–18<span class="x" data-x="cal">✕</span></div>
+     <div class="calgrid">${days.map((d,i)=>`<div class="d ${i===TODAY?'today':''}">${d}</div>`).join('')}</div>
+     <div class="calbars">${rows.join('')}<span class="today-line" style="left:calc(${TODAY}/7*100% + 100%/14)"></span></div></div>`},
+   prog:()=>{const done=T.filter(x=>x.c==='Done').length;return `<div class="wdg prgw"><div class="wh">Done this week<span class="x" data-x="prog">✕</span></div><div class="big">${done} <small>of ${T.length} cards</small></div><div class="spark">${[1,0,2,1,3,2,done].map(v=>`<i style="height:${8+v*7}px"></i>`).join('')}</div></div>`},
+   due:()=>{const arr=T.filter(x=>x.when&&x.c!=='Done');return `<div class="wdg dueW"><div class="wh">Due soon<span class="x" data-x="due">✕</span></div>${arr.map(x=>`<div class="li"><span class="prio ${x.p}" style="padding:0 5px">${x.p==='high'?'!':'·'}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">${x.t}</span><span style="${x.wc==='late'?'color:var(--bad)':''}">${x.when}</span></div>`).join('')}</div>`}
+  };
+  $('#widgets').innerHTML=widgets.map(w=>W[w]()).join('')+`<button class="wdg addw" id="addw">＋ Widget</button>`;
+  $$('#widgets [data-x]').forEach(x=>x.onclick=()=>{widgets=widgets.filter(w=>w!==x.dataset.x);renderWidgets()});
+  $$('#widgets .bar[data-i]').forEach(b=>b.onclick=()=>{sel=+b.dataset.i;renderCols();panel()});
+  $('#addw').onclick=e=>{
+    document.querySelector('.wmenu')?.remove();
+    const m=document.createElement('div');m.className='wmenu';
+    const opts=[['cal','Calendar','Date ranges for tasks and whole columns'],['prog','Progress','Cards done per day this week'],['due','Due soon','Late and upcoming cards'],['wip','Column limits','Warn when a column has too many cards'],['focus','Today','Cards you planned for today'],['links','Linked notes','Notes that mention cards on this board']];
+    m.innerHTML=opts.map(([k,n,d])=>`<button data-w="${k}" ${widgets.includes(k)||!['cal','prog','due'].includes(k)?'disabled':''}>${n}<small>${d}${['wip','focus','links'].includes(k)?' · idea':''}</small></button>`).join('');
+    const r=e.currentTarget.getBoundingClientRect(),pr=$('.tboard').getBoundingClientRect();
+    m.style.left=Math.min(r.left-pr.left,pr.width-240)+'px';m.style.top=(r.bottom-pr.top+6)+'px';$('.tboard').appendChild(m);
+    m.querySelectorAll('button:not([disabled])').forEach(b=>b.onclick=()=>{widgets.push(b.dataset.w);m.remove();renderWidgets()});
+    setTimeout(()=>document.addEventListener('click',function h(ev){if(!m.contains(ev.target)){m.remove();document.removeEventListener('click',h)}}),0);
+  };
+}
+function panel(){
+  const p=$('#tpanel');if(sel==null){p.hidden=true;return}
+  const x=T[sel];p.hidden=false;
+  const steps=['Full-height columns','Priority labels','Dates and ranges','Side panel','Widgets strip','Slim add-column strip'];
+  const n=x.ck?x.ck[1]:0,d=x.ck?x.ck[0]:0;
+  p.innerHTML=`<div class="ph">Tasks/${x.t.replace(/[:\/’]/g,'')}.md<button class="ib" id="pclose" title="Close">✕</button></div>
+  <div class="pb"><h4>${x.t}</h4>
+   <div class="fields">
+    <span>Status</span><select class="sel" id="f-status">${COLS.map(c=>`<option ${c===x.c?'selected':''}>${c}</option>`).join('')}</select>
+    <span>Priority</span><select class="sel" id="f-prio">${Object.entries(PL).map(([k,v])=>`<option value="${k}" ${k===x.p?'selected':''}>${v}</option>`).join('')}</select>
+    <span>Dates</span><span>${x.s!=null?`${days[x.s]} → ${days[x.e]} Oct`:'<span style="color:var(--muted)">Add dates</span>'}</span>
+    <span>Tag</span><span><span class="tg">#${x.tag}</span></span>
+   </div>
+   <div class="desc">${x.d}</div>
+   ${n?`<div class="sub">Checklist · ${d}/${n}</div><div style="display:flex;flex-direction:column;gap:6px">${steps.slice(0,n).map((s,i)=>`<div class="chk ${i<d?'done':''}"><i></i><span>${s}</span></div>`).join('')}</div>`:''}
+   <div class="sub">Comments</div>
+   <div class="comment"><span class="av">V</span><span>Comments and co-authors come with shared vaults.</span></div>
+   <div class="soonnote">Later: several people in one vault. Each comment is stored in the note itself.</div>
+  </div>`;
+  $('#pclose').onclick=()=>{sel=null;renderCols();panel()};
+  $('#f-status').onchange=e=>{x.c=e.target.value;x.done=x.c==='Done'?1:0;renderAll()};
+  $('#f-prio').onchange=e=>{x.p=e.target.value;renderAll()};
+}
+function renderAll(){renderCols();renderWidgets();panel()}
+$('#tk-search').oninput=e=>{filt.q=e.target.value.trim().toLowerCase();renderCols()};
+$('.tbar [data-f="high"]').onclick=e=>{filt.high=!filt.high;e.currentTarget.setAttribute('aria-pressed',filt.high);renderCols()};
+$('#wtoggle').onclick=e=>{const w=$('#widgets');w.hidden=!w.hidden;e.currentTarget.setAttribute('aria-pressed',!w.hidden)};
+sel=4;renderAll();
+// ---- floating settings window: drag, resize, center
+(()=>{const w=$('#fwin'),app=$('#sa-app');if(!w)return;
+ const clamp=()=>{const a=app.getBoundingClientRect();let l=w.offsetLeft,t=w.offsetTop;l=Math.max(-w.offsetWidth+80,Math.min(l,a.width-80));t=Math.max(0,Math.min(t,a.height-40));w.style.left=l+'px';w.style.top=t+'px'};
+ const center=()=>{const a=app.getBoundingClientRect();w.style.left=(a.width-w.offsetWidth)/2+'px';w.style.top=Math.max(0,(a.height-w.offsetHeight)/2)+'px'};
+ $('#fhead').addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;const sx=e.clientX-w.offsetLeft,sy=e.clientY-w.offsetTop;
+  const mv=ev=>{w.style.left=ev.clientX-sx+'px';w.style.top=ev.clientY-sy+'px'};const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);clamp()};
+  addEventListener('pointermove',mv);addEventListener('pointerup',up)});
+ $('#fhead').ondblclick=center;
+ $$('#fwin .rz').forEach(h=>h.addEventListener('pointerdown',e=>{e.preventDefault();const d=h.dataset.rz,x0=e.clientX,y0=e.clientY,W=w.offsetWidth,H=w.offsetHeight,L=w.offsetLeft;
+  const mv=ev=>{const dx=ev.clientX-x0,dy=ev.clientY-y0;
+   if(d.includes('e'))w.style.width=Math.max(460,W+dx)+'px';
+   if(d==='w'){const nw=Math.max(460,W-dx);w.style.width=nw+'px';w.style.left=L+(W-nw)+'px'}
+   if(d.includes('s'))w.style.height=Math.max(300,H+dy)+'px'};
+  const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up)};addEventListener('pointermove',mv);addEventListener('pointerup',up)}));
+ $('#fwin .fclose').onclick=()=>{w.style.opacity=.0;setTimeout(()=>{w.style.opacity=1;center()},500)};
+ document.addEventListener('input',e=>{if(e.target.classList.contains('rng'))e.target.style.setProperty('--v',(e.target.value/e.target.max*100)+'%')});
+})();
+
+
+})();
+</script>
+</body></html>

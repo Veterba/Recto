@@ -4,6 +4,17 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.48.0 — 2026-10-16
+### Changed
+- Settings is a floating glass panel over the app instead of a modal: no dimmed backdrop, and the app stays usable behind it, so changes show as you make them. It is solid with Translucency off.
+- Drag the panel by its title bar, double-click the title bar to centre it, and resize it from the left, right and bottom edges or the corner (460×300 at least). Its place and size are kept between launches, and it stays inside the window when the window shrinks.
+- ⌘, while Settings is open brings focus back to it. Esc closes it, except in a field that uses Esc. Focus goes back to where it was when it closes.
+- Sections are in a sidebar grouped as App, Vault and Connections, replacing the tab row that ran off the edge. Each section has a title and a one-line description, and its settings sit in labelled cards.
+- Long explanations sit behind an ⓘ next to the setting they explain.
+- Settings that depend on another one stay visible but dim and disabled while it is off, for example a period's template and folder under Periodic notes.
+### Added
+- Search in Settings: shows the matching settings from every section with the words marked, and you can change them right there. A section's heading opens that section.
+
 ## v0.47.2 — 2026-10-16
 ### Fixed
 - "Today's note" (the command, ⌘⇧D and the status bar button) opens the note of the shortest period that is on: with daily notes off and weekly on, it opens this week's note. It no longer makes a daily note and its folders when daily notes are off.

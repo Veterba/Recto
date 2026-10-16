@@ -1,49 +1,214 @@
-/* ---------- settings ---------- */
+/* ---------- the settings panel: glass floating over the app ---------- */
 
-.settings {
-  height: 100%;
+.settings-panel {
+  position: fixed;
+  z-index: 95; /* over the workspace and its popovers, under the palette (100) and menus */
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-width: 0;
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  outline: none;
+  /* It can sit over the window's title bar, which drags the window. */
+  -webkit-app-region: no-drag;
+  animation: note-window-in 160ms var(--ease) both;
 }
 
-.settings__tabs {
+.settings-panel__head {
   flex: none;
   display: flex;
-  gap: 2px;
-  padding: var(--size-3) var(--size-6) 0;
-  border-bottom: 1px solid var(--border);
-  /* One row, always: in a narrow window it scrolls rather than wrapping a tab
-     onto two lines or pushing the last one out of sight. */
-  overflow-x: auto;
-  scrollbar-width: none;
+  align-items: center;
+  gap: var(--size-2);
+  height: 40px;
+  padding: 0 var(--size-2) 0 var(--size-4);
+  border-bottom: 1px solid var(--glass-border);
+  cursor: grab;
+  user-select: none;
+}
+.settings-panel__title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-14);
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+/* Resize handles: both sides, the bottom, and the bottom-right corner. */
+.settings-panel__edge {
+  position: absolute;
+  z-index: 2;
+}
+.settings-panel__edge--left,
+.settings-panel__edge--right {
+  top: 12px;
+  bottom: 12px;
+  width: 7px;
+  cursor: ew-resize;
+}
+.settings-panel__edge--left {
+  left: 0;
+}
+.settings-panel__edge--right {
+  right: 0;
+}
+.settings-panel__edge--bottom {
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 7px;
+  cursor: ns-resize;
+}
+.settings-panel__edge--corner {
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+
+/* ---------- settings: sections on the left, the chosen one on the right ---------- */
+
+.settings {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 184px 1fr;
+}
+
+.settings__nav {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--size-3) var(--size-2);
+  border-right: 1px solid var(--glass-border);
+}
+
+.settings__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 var(--size-1) var(--size-2);
+  padding: 6px var(--size-2);
+  border-radius: var(--radius-s);
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+.settings__search:focus-within {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.settings__search input {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-13);
+  color: var(--text-primary);
+}
+.settings__search input::placeholder {
+  color: var(--text-muted);
+}
+
+.settings__navhead {
+  padding: var(--size-3) 10px var(--size-1);
+  font-size: var(--font-size-10-5);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .settings__tab {
   all: unset;
   box-sizing: border-box;
-  padding: var(--size-2) var(--size-3);
-  border-radius: var(--radius-s) var(--radius-s) 0 0;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--radius-s);
   font-size: var(--font-size-13);
-  color: var(--text-muted);
-  white-space: nowrap;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: color var(--anim-fast) var(--ease);
+  transition:
+    background var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease);
 }
 .settings__tab:hover {
-  color: var(--text-secondary);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 .settings__tab.is-active {
-  color: var(--text-primary);
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-weight: 600;
+}
+.settings__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.settings__navbadge {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  font-size: var(--font-size-10);
   font-weight: 500;
-  box-shadow: inset 0 -2px 0 var(--accent);
+  color: var(--text-muted);
 }
 
 .settings__body {
-  flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
-  padding: var(--size-6);
+  padding: var(--size-6) var(--size-6) var(--size-8);
+}
+
+.settings__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.settings__lead {
+  margin: var(--size-1) 0 0;
+  font-size: var(--font-size-12-5);
+  color: var(--text-muted);
+}
+
+/* ---------- search results: every section's matching rows ---------- */
+
+.settings-results__head {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--size-6);
+  font-size: var(--font-size-13);
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.settings-results__head:hover,
+.settings-results__head:focus-visible {
+  color: var(--accent);
+}
+/* Only the rows that match: not the previews, lists and status lines between
+   them, not a group none of whose rows match, not a section with nothing. */
+.settings-results__section > :not(.settings-results__head, .settings__group),
+.settings-results .settings__card > :not(.setting),
+.settings-results .setting:not(:has(.setting__text)),
+.settings-results .settings__group:not(:has(.setting:not([hidden]) .setting__text)),
+.settings-results__section:not(:has(.setting:not([hidden]) .setting__text)) {
+  display: none;
+}
+.settings-results .settings__group {
+  margin-top: var(--size-2);
+}
+.settings-results__empty {
+  display: none;
+  margin: var(--size-4) 0 0;
+  color: var(--text-muted);
+}
+.settings-results:not(:has(.setting:not([hidden]) .setting__text)) .settings-results__empty {
+  display: block;
 }
 
 .setting__buttons {
@@ -68,21 +233,45 @@
   margin-right: var(--size-1);
 }
 
-/* A named group inside a settings tab. The heading earns its keep once a tab
-   holds two unrelated things - window translucency and sidebar legibility are
-   both "appearance" and neither explains the other. */
+/* A named group: a label over a card of rows, one hairline between rows. */
 .settings__group {
-  display: contents;
+  margin-top: var(--size-6);
 }
 .settings__grouphead {
-  margin: var(--size-4) 0 0;
-  padding-top: var(--size-3);
-  border-top: 1px solid var(--border);
-  font-size: var(--font-size-11);
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  margin: 0 0 6px 2px;
+  font-size: var(--font-size-11-5);
+  font-weight: 550;
   color: var(--text-muted);
+}
+.settings__card {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+  overflow: hidden;
+}
+.settings__card > * + * {
+  border-top: 1px solid var(--glass-border);
+}
+/* What sits in a card between rows - a preview, a list, a status line, a
+   message - lines up with the rows rather than floating as a box of its own. */
+.settings__card > :not(.setting) {
+  max-width: none;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 0;
+  background: transparent;
+}
+.settings__card > .topics__bar {
+  padding: 0;
+  border-top: 0;
+}
+
+/* Sections that are not rows (Shortcuts, Obsidian) start below the lead too. */
+.settings__section > .hotkeys,
+.settings__section > .osync,
+.settings__section > .topics__first {
+  max-width: none;
+  margin: var(--size-6) 0 0;
 }
 
 /* An inline variant of the sidebar's segmented control. */

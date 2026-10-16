@@ -130,3 +130,16 @@ describe('note windows: persistence', () => {
     expect(kept.map((w) => w.path)).toEqual(['a.md'])
   })
 })
+
+describe('with another minimum (the Settings panel)', () => {
+  const min = { width: 460, height: 300 }
+  it('resizing stops at that minimum, and the result stays inside', () => {
+    const start = { x: 100, y: 100, width: 600, height: 400 }
+    expect(resizeFrom(start, { right: true, bottom: true }, -500, -500, area, min)).toEqual({ x: 100, y: 100, width: 460, height: 300 })
+    expect(resizeFrom(start, { left: true }, 400, 0, area, min)).toEqual({ x: 240, y: 100, width: 460, height: 400 })
+  })
+
+  it('a rectangle left off-screen by a smaller window comes back inside it', () => {
+    expect(clampInside({ x: 1400, y: 900, width: 780, height: 560 }, area, min)).toEqual({ x: 220, y: 140, width: 780, height: 560 })
+  })
+})

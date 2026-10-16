@@ -168,8 +168,8 @@ src/renderer/
   features/      one folder per feature, each with components/, hooks/, styles/ and an index.ts
                  that is its public entry and imports its CSS
   ui/            primitives with no feature knowledge: icons, tooltips, menus, dialogs, the
-                 colour editor, sliders, toggle, setting row, chip styles, tints, the fuzzy
-                 matcher and picker keys
+                 colour editor, sliders, toggle, setting row and group, settings search
+                 matching, chip styles, tints, the fuzzy matcher and picker keys
   styles/        tokens, element rules, layout, motion
 test/            the same folders as src/
 ```
@@ -184,7 +184,7 @@ test/            the same folders as src/
 | `topics` | topics settings and the run notice | `topics` |
 | `tidy` | filing loose notes | `tidy` |
 | `home` | the home overlay and statistics | `home` |
-| `settings` | the settings dialog and its tabs | `settings`, `setting` notes, `osync`, `hotkeys`, `vault-recent`, `daily`, `note-error` |
+| `settings` | the Settings panel: floating glass over the app, moved and resized with the note-window geometry (`app/note-windows.ts`), kept in `appearance.json` as `settingsPanel`; a sidebar of sections, search across them (rows hide themselves via `ui/setting-search.ts`) | `settings-panel`, `settings`, `settings-results`, `setting` notes, `osync`, `hotkeys`, `vault-recent`, `daily`, `note-error` |
 | `ai` | the chat's parts every conversation is built from: its turns and its composer | `chat` |
 | `templates` | template picker, daily notes | (uses `palette`) |
 | `archive` | archived notes | `archive` |

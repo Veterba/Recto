@@ -6,6 +6,7 @@ import { updateWriting, useWriting, type WritingSettings } from '../../editor'
 import type { FocusUnit } from '../../editor'
 import { Toggle } from '../../../ui/Toggle'
 import { SettingRow } from '../../../ui/SettingRow'
+import { SettingGroup } from '../../../ui/SettingGroup'
 
 /**
  * Settings → Writing: iA Writer's tools in full, with the parts a menu has no
@@ -54,158 +55,171 @@ export function WritingSettingsTab(): React.ReactElement {
 
   return (
     <>
-      <h3 className="settings__grouphead">Focus</h3>
-      <SettingRow
-        label="Focus mode"
-        hint={`Everything but the text you are writing fades away${key('writing:toggle-focus')} · Esc to leave`}
-      >
-        <Toggle label="Focus mode" on={writing.focus} onChange={() => updateWriting((s) => ({ ...s, focus: !s.focus }))} />
-      </SettingRow>
-      <SettingRow label="Keep lit" hint="What stays bright around the cursor.">
-        <div className="segmented segmented--inline">
-          {(['line', 'sentence', 'paragraph'] as FocusUnit[]).map((unit) => (
-            <button
-              key={unit}
-              className={`segmented__tab${writing.focusUnit === unit ? ' is-active' : ''}`}
-              onClick={() => updateWriting((s) => ({ ...s, focusUnit: unit }))}
-            >
-              <span>{unit}</span>
-            </button>
-          ))}
-        </div>
-      </SettingRow>
-      <SettingRow
-        label="Typewriter scrolling"
-        hint={`Keep the line you write in the middle of the window, even outside focus mode${key('writing:toggle-typewriter')}`}
-      >
-        <Toggle
+      <SettingGroup title="Focus">
+        <SettingRow
+          label="Focus mode"
+          hint={`Everything but the text you are writing fades away${key('writing:toggle-focus')} · Esc to leave`}
+        >
+          <Toggle label="Focus mode" on={writing.focus} onChange={() => updateWriting((s) => ({ ...s, focus: !s.focus }))} />
+        </SettingRow>
+        <SettingRow label="Keep lit" hint="What stays bright around the cursor.">
+          <div className="segmented segmented--inline">
+            {(['line', 'sentence', 'paragraph'] as FocusUnit[]).map((unit) => (
+              <button
+                key={unit}
+                className={`segmented__tab${writing.focusUnit === unit ? ' is-active' : ''}`}
+                onClick={() => updateWriting((s) => ({ ...s, focusUnit: unit }))}
+              >
+                <span>{unit}</span>
+              </button>
+            ))}
+          </div>
+        </SettingRow>
+        <SettingRow
           label="Typewriter scrolling"
-          on={writing.typewriter}
-          onChange={() => updateWriting((s) => ({ ...s, typewriter: !s.typewriter }))}
-        />
-      </SettingRow>
-      <SettingRow label="Text size" hint={`${writing.fontSize}px in focus mode — the editor keeps its own size`}>
-        <input
-          className="slider"
-          type="range"
-          min={12}
-          max={32}
-          step={1}
-          value={writing.fontSize}
-          onChange={(event) => updateWriting((s) => ({ ...s, fontSize: Number(event.target.value) }))}
-        />
-      </SettingRow>
-      <SettingRow label="Faded text" hint={`${Math.round(writing.dim * 100)}% — how visible the rest of the note stays`}>
-        <input
-          className="slider"
-          type="range"
-          min={0.1}
-          max={0.6}
-          step={0.02}
-          value={writing.dim}
-          onChange={(event) => updateWriting((s) => ({ ...s, dim: Number(event.target.value) }))}
-        />
-      </SettingRow>
+          hint={`Keep the line you write in the middle of the window, even outside focus mode${key('writing:toggle-typewriter')}`}
+        >
+          <Toggle
+            label="Typewriter scrolling"
+            on={writing.typewriter}
+            onChange={() => updateWriting((s) => ({ ...s, typewriter: !s.typewriter }))}
+          />
+        </SettingRow>
+        <SettingRow label="Text size" hint={`${writing.fontSize}px in focus mode — the editor keeps its own size`}>
+          <input
+            className="slider"
+            type="range"
+            min={12}
+            max={32}
+            step={1}
+            value={writing.fontSize}
+            onChange={(event) => updateWriting((s) => ({ ...s, fontSize: Number(event.target.value) }))}
+          />
+        </SettingRow>
+        <SettingRow label="Faded text" hint={`${Math.round(writing.dim * 100)}% — how visible the rest of the note stays`}>
+          <input
+            className="slider"
+            type="range"
+            min={0.1}
+            max={0.6}
+            step={0.02}
+            value={writing.dim}
+            onChange={(event) => updateWriting((s) => ({ ...s, dim: Number(event.target.value) }))}
+          />
+        </SettingRow>
+      </SettingGroup>
 
-      <h3 className="settings__grouphead">Syntax highlight</h3>
-      <SettingRow
-        label="Colour parts of speech"
-        hint={`See how you write: too many adjectives, weak verbs, a run of “and”s${key('writing:toggle-syntax')}`}
-      >
-        <Toggle label="Syntax highlight" on={writing.syntax.on} onChange={() => set('syntax', { on: !writing.syntax.on })} />
-      </SettingRow>
-      <SettingRow label="Highlight">
-        <Chips
-          items={[
-            { key: 'adjectives', label: 'Adjectives', colour: 'var(--pos-adjective)' },
-            { key: 'nouns', label: 'Nouns', colour: 'var(--pos-noun)' },
-            { key: 'adverbs', label: 'Adverbs', colour: 'var(--pos-adverb)' },
-            { key: 'verbs', label: 'Verbs', colour: 'var(--pos-verb)' },
-            { key: 'conjunctions', label: 'Conjunctions', colour: 'var(--pos-conjunction)' },
-          ]}
-          isOn={(k) => writing.syntax[k]}
-          onToggle={(k) => set('syntax', { [k]: !writing.syntax[k] })}
-        />
-      </SettingRow>
-      <p className="setting__note">
-        <Icon name="highlighter" size={13} />
-        English is tagged by a real part-of-speech tagger that runs on this computer. Russian is tagged by word endings and is approximate —
-        conjunctions are exact, the rest is right most of the time.
-      </p>
-
-      <h3 className="settings__grouphead">Style check</h3>
-      <SettingRow label="Strike through weak words" hint={`Nothing is changed — the words are only marked${key('writing:toggle-style')}`}>
-        <Toggle label="Style check" on={writing.style.on} onChange={() => set('style', { on: !writing.style.on })} />
-      </SettingRow>
-      <SettingRow label="Check for">
-        <Chips
-          items={[
-            { key: 'fillers', label: 'Fillers' },
-            { key: 'cliches', label: 'Clichés' },
-            { key: 'redundancies', label: 'Redundancies' },
-            { key: 'custom', label: 'Your words' },
-          ]}
-          isOn={(k) => writing.style[k]}
-          onToggle={(k) => set('style', { [k]: !writing.style[k] })}
-        />
-      </SettingRow>
-      <div className="setting setting--stack">
-        <div className="setting__text">
-          <span className="setting__label">Your words</span>
-          <span className="setting__hint">One word or phrase per line — the habits you want to catch.</span>
-        </div>
-        <textarea
-          className="writing-words"
-          value={words}
-          rows={5}
-          spellCheck={false}
-          placeholder={'synergy\nleverage\nв рамках'}
-          onChange={(event) => setWords(event.target.value)}
-          onBlur={() =>
-            set('style', {
-              customWords: [
-                ...new Set(
-                  words
-                    .split('\n')
-                    .map((w) => w.trim())
-                    .filter((w) => w !== ''),
-                ),
-              ],
-            })
+      <SettingGroup title="Syntax highlight">
+        <SettingRow
+          label="Colour parts of speech"
+          hint={`See how you write: too many adjectives, weak verbs, a run of “and”s${key('writing:toggle-syntax')}`}
+          more={
+            <>
+              <Icon name="highlighter" size={13} />
+              English is tagged by a real part-of-speech tagger that runs on this computer. Russian is tagged by word endings and is
+              approximate — conjunctions are exact, the rest is right most of the time.
+            </>
           }
-        />
-      </div>
+        >
+          <Toggle label="Syntax highlight" on={writing.syntax.on} onChange={() => set('syntax', { on: !writing.syntax.on })} />
+        </SettingRow>
+        <SettingRow label="Highlight" disabled={!writing.syntax.on}>
+          <Chips
+            items={[
+              { key: 'adjectives', label: 'Adjectives', colour: 'var(--pos-adjective)' },
+              { key: 'nouns', label: 'Nouns', colour: 'var(--pos-noun)' },
+              { key: 'adverbs', label: 'Adverbs', colour: 'var(--pos-adverb)' },
+              { key: 'verbs', label: 'Verbs', colour: 'var(--pos-verb)' },
+              { key: 'conjunctions', label: 'Conjunctions', colour: 'var(--pos-conjunction)' },
+            ]}
+            isOn={(k) => writing.syntax[k]}
+            onToggle={(k) => set('syntax', { [k]: !writing.syntax[k] })}
+          />
+        </SettingRow>
+      </SettingGroup>
 
-      <h3 className="settings__grouphead">Authors</h3>
-      <SettingRow label="Show authors" hint={`Colour text by who wrote it — you, an AI, or a reference${key('writing:toggle-authors')}`}>
-        <Toggle label="Show authors" on={writing.authors.on} onChange={() => set('authors', { on: !writing.authors.on })} />
-      </SettingRow>
-      <SettingRow label="Show">
-        <Chips
-          items={[
-            { key: 'human', label: 'Human' },
-            { key: 'ai', label: 'AI', colour: 'var(--author-ai)' },
-            { key: 'reference', label: 'Reference', colour: 'var(--author-reference)' },
-          ]}
-          isOn={(k) => writing.authors[k]}
-          onToggle={(k) => set('authors', { [k]: !writing.authors[k] })}
-        />
-      </SettingRow>
-      <p className="setting__note">
-        <Icon name="bot" size={13} />
-        Text is yours unless marked. Paste as AI{key('writing:paste-ai')}, or select text and choose Mark selection as… from the writing
-        menu. Anything you type inside an AI passage becomes yours. Marks are kept in <code>.recto/authors.json</code>, not in the note, so
-        the file stays plain markdown.
-      </p>
+      <SettingGroup title="Style check">
+        <SettingRow label="Strike through weak words" hint={`Nothing is changed — the words are only marked${key('writing:toggle-style')}`}>
+          <Toggle label="Style check" on={writing.style.on} onChange={() => set('style', { on: !writing.style.on })} />
+        </SettingRow>
+        <SettingRow label="Check for" disabled={!writing.style.on}>
+          <Chips
+            items={[
+              { key: 'fillers', label: 'Fillers' },
+              { key: 'cliches', label: 'Clichés' },
+              { key: 'redundancies', label: 'Redundancies' },
+              { key: 'custom', label: 'Your words' },
+            ]}
+            isOn={(k) => writing.style[k]}
+            onToggle={(k) => set('style', { [k]: !writing.style[k] })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Your words"
+          hint="One word or phrase per line — the habits you want to catch."
+          stack
+          disabled={!writing.style.on}
+        >
+          <textarea
+            className="writing-words"
+            value={words}
+            rows={5}
+            spellCheck={false}
+            placeholder={'synergy\nleverage\nв рамках'}
+            onChange={(event) => setWords(event.target.value)}
+            onBlur={() =>
+              set('style', {
+                customWords: [
+                  ...new Set(
+                    words
+                      .split('\n')
+                      .map((w) => w.trim())
+                      .filter((w) => w !== ''),
+                  ),
+                ],
+              })
+            }
+          />
+        </SettingRow>
+      </SettingGroup>
 
-      <h3 className="settings__grouphead">Spelling</h3>
-      <SettingRow label="Check spelling" hint="Underline misspelt words; right-click one for suggestions.">
-        <Toggle
-          label="Check spelling"
-          on={writing.spellcheck}
-          onChange={() => updateWriting((s) => ({ ...s, spellcheck: !s.spellcheck }))}
-        />
-      </SettingRow>
+      <SettingGroup title="Authors">
+        <SettingRow
+          label="Show authors"
+          hint={`Colour text by who wrote it — you, an AI, or a reference${key('writing:toggle-authors')}`}
+          more={
+            <>
+              <Icon name="bot" size={13} />
+              Text is yours unless marked. Paste as AI{key('writing:paste-ai')}, or select text and choose Mark selection as… from the
+              writing menu. Anything you type inside an AI passage becomes yours. Marks are kept in <code>.recto/authors.json</code>, not in
+              the note, so the file stays plain markdown.
+            </>
+          }
+        >
+          <Toggle label="Show authors" on={writing.authors.on} onChange={() => set('authors', { on: !writing.authors.on })} />
+        </SettingRow>
+        <SettingRow label="Show" disabled={!writing.authors.on}>
+          <Chips
+            items={[
+              { key: 'human', label: 'Human' },
+              { key: 'ai', label: 'AI', colour: 'var(--author-ai)' },
+              { key: 'reference', label: 'Reference', colour: 'var(--author-reference)' },
+            ]}
+            isOn={(k) => writing.authors[k]}
+            onToggle={(k) => set('authors', { [k]: !writing.authors[k] })}
+          />
+        </SettingRow>
+      </SettingGroup>
+
+      <SettingGroup title="Spelling">
+        <SettingRow label="Check spelling" hint="Underline misspelt words; right-click one for suggestions.">
+          <Toggle
+            label="Check spelling"
+            on={writing.spellcheck}
+            onChange={() => updateWriting((s) => ({ ...s, spellcheck: !s.spellcheck }))}
+          />
+        </SettingRow>
+      </SettingGroup>
     </>
   )
 }

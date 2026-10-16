@@ -20,6 +20,9 @@ export type NoteWindowState = {
 
 export type Bounds = { width: number; height: number }
 
+/** A rectangle that floats over the app: a note window, or the Settings panel. */
+export type Rect = { x: number; y: number; width: number; height: number }
+
 /** Which sides a resize drags: an edge moves one, a corner two. */
 export type Edges = { left?: boolean; right?: boolean; top?: boolean; bottom?: boolean }
 
@@ -34,9 +37,9 @@ const nextId = (): string => `note-window-${(++counter).toString(36)}${Date.now(
  * than the minimum, never larger than the bounds (unless the bounds are
  * smaller than the minimum, when it sits at the top left).
  */
-export function clampInside(w: NoteWindowState, bounds: Bounds): NoteWindowState {
-  const width = Math.max(Math.min(NOTE_WINDOW_MIN.width, bounds.width), Math.min(w.width, bounds.width))
-  const height = Math.max(Math.min(NOTE_WINDOW_MIN.height, bounds.height), Math.min(w.height, bounds.height))
+export function clampInside<R extends Rect>(w: R, bounds: Bounds, min: Bounds = NOTE_WINDOW_MIN): R {
+  const width = Math.max(Math.min(min.width, bounds.width), Math.min(w.width, bounds.width))
+  const height = Math.max(Math.min(min.height, bounds.height), Math.min(w.height, bounds.height))
   return {
     ...w,
     width,
@@ -51,21 +54,28 @@ export function clampInside(w: NoteWindowState, bounds: Bounds): NoteWindowState
  * opposite edges stay put - a left edge dragged past the minimum stops there
  * rather than pushing the whole window - and the result stays inside.
  */
-export function resizeFrom(start: NoteWindowState, edges: Edges, dx: number, dy: number, bounds: Bounds): NoteWindowState {
+export function resizeFrom<R extends Rect>(
+  start: R,
+  edges: Edges,
+  dx: number,
+  dy: number,
+  bounds: Bounds,
+  min: Bounds = NOTE_WINDOW_MIN,
+): R {
   let { x, y, width, height } = start
   const right = start.x + start.width
   const bottom = start.y + start.height
-  if (edges.right === true) width = Math.min(bounds.width - x, Math.max(NOTE_WINDOW_MIN.width, start.width + dx))
-  if (edges.bottom === true) height = Math.min(bounds.height - y, Math.max(NOTE_WINDOW_MIN.height, start.height + dy))
+  if (edges.right === true) width = Math.min(bounds.width - x, Math.max(min.width, start.width + dx))
+  if (edges.bottom === true) height = Math.min(bounds.height - y, Math.max(min.height, start.height + dy))
   if (edges.left === true) {
-    x = Math.max(0, Math.min(right - NOTE_WINDOW_MIN.width, start.x + dx))
+    x = Math.max(0, Math.min(right - min.width, start.x + dx))
     width = right - x
   }
   if (edges.top === true) {
-    y = Math.max(0, Math.min(bottom - NOTE_WINDOW_MIN.height, start.y + dy))
+    y = Math.max(0, Math.min(bottom - min.height, start.y + dy))
     height = bottom - y
   }
-  return clampInside({ ...start, x, y, width, height }, bounds)
+  return clampInside({ ...start, x, y, width, height }, bounds, min)
 }
 
 /** Move a window to the top of the stack. */

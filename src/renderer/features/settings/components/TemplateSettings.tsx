@@ -3,6 +3,7 @@ import { commands } from '../../../app/commands'
 import { normaliseFolder, isInFolder } from '@shared/templates'
 import type { SettingsDeps } from '../settings-deps'
 import { SettingRow } from '../../../ui/SettingRow'
+import { SettingGroup } from '../../../ui/SettingGroup'
 import { Icon } from '../../../ui/Icon'
 
 /**
@@ -70,7 +71,7 @@ export function TemplateSettingsTab({ templates, updateTemplates, notes }: Setti
   const inFolder = notes.filter((path) => isInFolder(path, templates.folder))
 
   return (
-    <>
+    <SettingGroup title="Folder">
       <SettingRow
         label="Templates folder"
         hint={
@@ -78,17 +79,18 @@ export function TemplateSettingsTab({ templates, updateTemplates, notes }: Setti
             ? 'In your vault, next to your notes. Empty so far — any note you put here becomes a template.'
             : `${inFolder.length} ${inFolder.length === 1 ? 'template' : 'templates'} here. Insert one into any note${commands.label('editor:template') === null ? ' from the command palette' : ` with ${commands.label('editor:template')}`}.`
         }
+        more={
+          <>
+            <Icon name="layout-template" size={13} />
+            Changing the folder points Recto at a different one; it does not move the templates you already have. Placeholders filled in on
+            insert: <code>{'{{date}}'}</code>, <code>{'{{time}}'}</code>, <code>{'{{title}}'}</code>, <code>{'{{date:+7}}'}</code>,{' '}
+            <code>{'{{week}}'}</code>, <code>{'{{month}}'}</code>, <code>{'{{year}}'}</code>, <code>{'{{week_start}}'}</code>,{' '}
+            <code>{'{{week_end}}'}</code>. Daily, weekly, monthly and yearly notes are under Periodic notes.
+          </>
+        }
       >
         <FolderField value={templates.folder} label="Templates folder" onCommit={(folder) => updateTemplates({ ...templates, folder })} />
       </SettingRow>
-
-      <p className="setting__note">
-        <Icon name="layout-template" size={13} />
-        Changing the folder points Recto at a different one; it does not move the templates you already have. Placeholders filled in on
-        insert: <code>{'{{date}}'}</code>, <code>{'{{time}}'}</code>, <code>{'{{title}}'}</code>, <code>{'{{date:+7}}'}</code>,{' '}
-        <code>{'{{week}}'}</code>, <code>{'{{month}}'}</code>, <code>{'{{year}}'}</code>, <code>{'{{week_start}}'}</code>,{' '}
-        <code>{'{{week_end}}'}</code>. Daily, weekly, monthly and yearly notes are under Periodic notes.
-      </p>
-    </>
+    </SettingGroup>
   )
 }

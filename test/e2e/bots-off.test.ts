@@ -93,8 +93,8 @@ describe.skipIf(!RUN)('bots off', () => {
   it('Settings shows the switch, marked Experimental', async () => {
     await page.locator('[role=tab]', { hasText: 'AI' }).first().click()
     await page.locator('.bots-off__link').click()
-    await page.waitForSelector('.dialog--settings')
-    expect(await page.locator('.dialog--settings .settings__tab.is-active').textContent()).toBe('Bots')
-    expect(await page.locator('.dialog--settings').textContent()).toContain('Experimental')
+    await page.waitForSelector('.settings-panel')
+    expect(await page.locator('.settings-panel .settings__tab.is-active').textContent()).toMatch(/^Bots/)
+    expect(await page.locator('.settings-panel').textContent()).toContain('Experimental')
   }, 15_000)
 })

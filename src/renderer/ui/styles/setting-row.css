@@ -1,15 +1,20 @@
 /* One setting (ui/SettingRow): label and hint on the left, the control on the right. */
 
 .setting {
-  max-width: 72ch;
-  margin: 0 auto var(--size-4);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--size-6);
+  gap: var(--size-4);
+  min-height: 46px;
+  box-sizing: border-box;
+  padding: 10px 14px;
+}
+.setting[hidden] {
+  display: none;
 }
 
 .setting__text {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -21,6 +26,18 @@
   font-weight: 500;
 }
 
+.setting__badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: var(--font-size-10-5);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  vertical-align: 1px;
+  color: var(--text-muted);
+}
+
 .setting__hint {
   font-size: var(--font-size-11-5);
   line-height: 1.5;
@@ -28,6 +45,57 @@
   word-break: break-word;
 }
 
+/* The ⓘ after a hint, and the long explanation it opens. */
+.setting__more {
+  all: unset;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  border-radius: 50%;
+  vertical-align: -3px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.setting__more:hover,
+.setting__more[aria-expanded='true'] {
+  color: var(--accent);
+}
+.setting__more:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.setting__more-text {
+  margin-top: var(--size-1);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-s);
+  background: var(--bg-hover);
+  font-size: var(--font-size-11-5);
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.setting__more-text svg {
+  vertical-align: -2px;
+  margin-right: var(--size-1);
+}
+
 .setting__control {
   flex: none;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* A setting whose parent is off: shown, dim, out of reach. */
+.setting.is-disabled .setting__text,
+.setting.is-disabled .setting__control {
+  opacity: 0.45;
+}
+
+/* The words being searched for. */
+.setting mark {
+  border-radius: 2px;
+  background: var(--accent-muted);
+  color: inherit;
 }

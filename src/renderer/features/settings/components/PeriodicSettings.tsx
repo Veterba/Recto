@@ -7,7 +7,7 @@ import { api } from '../../../app/api'
 import { SettingRow } from '../../../ui/SettingRow'
 import { Icon } from '../../../ui/Icon'
 import { Toggle } from '../../../ui/Toggle'
-import { SettingGroup } from './SettingGroup'
+import { SettingGroup } from '../../../ui/SettingGroup'
 import { FolderField } from './TemplateSettings'
 
 const NAMES: Record<Period, { title: string; unit: string; every: string; open: string; hint: string }> = {
@@ -161,61 +161,61 @@ function PeriodGroup({
       >
         <Toggle on={own.enabled} onChange={() => patch({ enabled: !own.enabled })} label={`${names.title} notes`} />
       </SettingRow>
-      {own.enabled && (
-        <>
-          <SettingRow
-            label="Template"
-            hint={
-              own.template !== null && empty
-                ? `${templateName(own.template)} is empty — the built-in heading is used until you write something in it.`
-                : `Which template the ${names.unit}'s note starts from.`
-            }
-          >
-            <TemplateSelect
-              value={own.template}
-              templates={templates}
-              label={`${names.title} note template`}
-              onChange={(template) => patch({ template })}
+      <SettingRow
+        disabled={!own.enabled}
+        label="Template"
+        hint={
+          own.template !== null && empty
+            ? `${templateName(own.template)} is empty — the built-in heading is used until you write something in it.`
+            : `Which template the ${names.unit}'s note starts from.`
+        }
+      >
+        <TemplateSelect
+          value={own.template}
+          templates={templates}
+          label={`${names.title} note template`}
+          onChange={(template) => patch({ template })}
+        />
+      </SettingRow>
+      {period === 'weekly' && (
+        <SettingRow
+          disabled={!own.enabled}
+          label="Group by month"
+          hint="Put weekly notes in month folders even when nothing else needs them. A week belongs to the month of its Thursday."
+        >
+          <Toggle
+            on={settings.groupByMonth}
+            onChange={() => set({ ...settings, groupByMonth: !settings.groupByMonth })}
+            label="Group weekly notes by month"
+          />
+        </SettingRow>
+      )}
+      <SettingRow disabled={!own.enabled} label="Use a separate folder" hint="Its own folder, with its own year and month folders.">
+        <span className="periodic__separate">
+          {own.folder !== null && (
+            <FolderSelect
+              value={own.folder}
+              folders={folders}
+              label={`${names.title} notes folder`}
+              onChange={(folder) => patch({ folder })}
             />
-          </SettingRow>
-          {period === 'weekly' && (
-            <SettingRow
-              label="Group by month"
-              hint="Put weekly notes in month folders even when nothing else needs them. A week belongs to the month of its Thursday."
-            >
-              <Toggle
-                on={settings.groupByMonth}
-                onChange={() => set({ ...settings, groupByMonth: !settings.groupByMonth })}
-                label="Group weekly notes by month"
-              />
-            </SettingRow>
           )}
-          <SettingRow label="Use a separate folder" hint="Its own folder, with its own year and month folders.">
-            <span className="periodic__separate">
-              {own.folder !== null && (
-                <FolderSelect
-                  value={own.folder}
-                  folders={folders}
-                  label={`${names.title} notes folder`}
-                  onChange={(folder) => patch({ folder })}
-                />
-              )}
-              <Toggle
-                on={own.folder !== null}
-                onChange={() => patch({ folder: own.folder === null ? settings.folder : null })}
-                label={`Separate folder for ${names.title.toLowerCase()} notes`}
-              />
-            </span>
-          </SettingRow>
-          <div className="daily__preview">
-            <span className="daily__label">Current note</span>
-            <code className="daily__path">{path}</code>
-            <button className="btn btn--ghost btn--sm" onClick={onOpen}>
-              <Icon name={period === 'daily' ? 'calendar-days' : period === 'weekly' ? 'calendar-range' : 'calendar'} size={13} />
-              {names.open}
-            </button>
-          </div>
-        </>
+          <Toggle
+            on={own.folder !== null}
+            onChange={() => patch({ folder: own.folder === null ? settings.folder : null })}
+            label={`Separate folder for ${names.title.toLowerCase()} notes`}
+          />
+        </span>
+      </SettingRow>
+      {own.enabled && (
+        <div className="daily__preview">
+          <span className="daily__label">Current note</span>
+          <code className="daily__path">{path}</code>
+          <button className="btn btn--ghost btn--sm" onClick={onOpen}>
+            <Icon name={period === 'daily' ? 'calendar-days' : period === 'weekly' ? 'calendar-range' : 'calendar'} size={13} />
+            {names.open}
+          </button>
+        </div>
       )}
     </SettingGroup>
   )
@@ -238,38 +238,41 @@ export function PeriodicSettingsTab({ templates, updateTemplates, notes, folders
 
   return (
     <>
-      <SettingRow
-        label="Folder"
-        hint="Shared by every period that has no separate folder. Year, month and week folders are made inside it as needed."
-      >
-        <FolderSelect
-          value={settings.folder}
-          folders={folders}
-          label="Periodic notes folder"
-          onChange={(folder) => set({ ...settings, folder })}
-        />
-      </SettingRow>
-      <SettingRow
-        label="Week starts on"
-        hint="For {{week_start}} and {{week_end}} in templates. Week notes are ISO weeks, Monday to Sunday."
-      >
-        <select
-          className="setting__select"
-          value={settings.weekStart}
-          aria-label="Week starts on"
-          onChange={(event) => set({ ...settings, weekStart: event.target.value as WeekStart })}
+      <SettingGroup title="Folder">
+        <SettingRow
+          label="Folder"
+          hint="Shared by every period that has no separate folder. Year, month and week folders are made inside it as needed."
+          more={
+            <>
+              <Icon name="info" size={13} />
+              Changing these settings never moves notes you already have: only new notes go where the settings say. Each note links to the
+              one above it (day → week → month → year, skipping periods that are off) with a property.
+            </>
+          }
         >
-          <option value="monday">Monday</option>
-          <option value="sunday">Sunday</option>
-          <option value="saturday">Saturday</option>
-        </select>
-      </SettingRow>
-
-      <p className="setting__note">
-        <Icon name="info" size={13} />
-        Changing these settings never moves notes you already have: only new notes go where the settings say. Each note links to the one
-        above it (day → week → month → year, skipping periods that are off) with a property.
-      </p>
+          <FolderSelect
+            value={settings.folder}
+            folders={folders}
+            label="Periodic notes folder"
+            onChange={(folder) => set({ ...settings, folder })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Week starts on"
+          hint="For {{week_start}} and {{week_end}} in templates. Week notes are ISO weeks, Monday to Sunday."
+        >
+          <select
+            className="setting__select"
+            value={settings.weekStart}
+            aria-label="Week starts on"
+            onChange={(event) => set({ ...settings, weekStart: event.target.value as WeekStart })}
+          >
+            <option value="monday">Monday</option>
+            <option value="sunday">Sunday</option>
+            <option value="saturday">Saturday</option>
+          </select>
+        </SettingRow>
+      </SettingGroup>
 
       {PERIODS.map((period) => (
         <PeriodGroup
