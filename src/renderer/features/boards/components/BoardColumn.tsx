@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { COLUMN_COLORS, type Column, type ColumnColor } from '../boards'
-import type { CardView } from '../board-view'
+import { spanLabel, type CardView } from '../board-view'
 import { BoardCard } from './BoardCard'
 
 type Props = {
@@ -26,7 +26,8 @@ type Props = {
   onDrop: (path: string, index: number) => void
   onOpenCard: (path: string) => void
   onCardMenu: (event: React.MouseEvent, card: CardView) => void
-  onAddCard: (title: string) => Promise<void>
+  /** The header's "+": open the new-card popover inside this column. */
+  onNewCard: (anchor: DOMRect) => void
   onEdit: (next: Column) => void
   onDelete: () => void
 }
@@ -44,7 +45,6 @@ const COLOR_LABEL: Record<ColumnColor, string> = {
 /** A column: a glass panel the full height of the board, its cards scrolling inside it. */
 export function BoardColumn(props: Props): React.ReactElement {
   const { column, cards, total, dropIndex } = props
-  const addField = useRef<HTMLInputElement | null>(null)
   const [form, setForm] = useState<'wip' | 'dates' | null>(null)
   const menu = useContextMenu<null>()
   const known = column !== null
@@ -122,7 +122,8 @@ export function BoardColumn(props: Props): React.ReactElement {
             {name}
           </h2>
         )}
-        <span className="board-col__count">{total}</span>
+        {/* With a WIP limit the count is in the limit's pill; once is enough. */}
+        {column?.wip === undefined && <span className="board-col__count">{total}</span>}
         {column?.wip !== undefined && (
           <span className={`board-col__wip${full ? ' is-full' : ''}`} title="Work-in-progress limit">
             {total}/{column.wip}
@@ -131,7 +132,11 @@ export function BoardColumn(props: Props): React.ReactElement {
         {column !== null && (
           <span className="board-col__acts">
             <Tip label="New card">
-              <button className="icon-btn board-col__btn" aria-label={`New card in ${name}`} onClick={() => addField.current?.focus()}>
+              <button
+                className="icon-btn board-col__btn"
+                aria-label={`New card in ${name}`}
+                onClick={(event) => props.onNewCard(event.currentTarget.closest('.board-col')!.getBoundingClientRect())}
+              >
                 <Icon name="plus" size={14} />
               </button>
             </Tip>
@@ -146,8 +151,7 @@ export function BoardColumn(props: Props): React.ReactElement {
       {column !== null && column.start !== undefined && (
         <p className="board-col__range">
           <Icon name="calendar-range" size={11} />
-          {column.start}
-          {column.due !== undefined && column.due !== column.start ? ` → ${column.due}` : ''}
+          {spanLabel({ from: column.start, to: column.due !== undefined && column.due > column.start ? column.due : column.start }, props.today)}
         </p>
       )}
 
@@ -174,31 +178,8 @@ export function BoardColumn(props: Props): React.ReactElement {
         ))}
         {dropIndex === cards.length && <div className="board-col__dropline" aria-hidden="true" />}
         {!known && <p className="board-col__note">Their status names no column. Drag a card to a column, or set its status.</p>}
+        {known && total === 0 && dropIndex === null && <p className="board-col__note">No cards. + above adds one.</p>}
       </div>
-
-      {column !== null && (
-        <label className="board-col__new">
-          <Icon name="plus" size={13} />
-          <input
-            ref={addField}
-            placeholder="New card"
-            aria-label={`New card in ${name}`}
-            onKeyDown={(event) => {
-              event.stopPropagation()
-              const input = event.currentTarget
-              if (event.key === 'Escape') {
-                input.value = ''
-                input.blur()
-              }
-              if (event.key !== 'Enter' || input.value.trim() === '') return
-              const title = input.value
-              input.value = ''
-              // Focus stays here, for the next card.
-              void props.onAddCard(title)
-            }}
-          />
-        </label>
-      )}
 
       {menu.menu !== null && column !== null && <ContextMenu items={menuItems(column)} at={menu.menu.at} onClose={menu.close} />}
     </section>

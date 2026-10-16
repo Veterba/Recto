@@ -13,7 +13,7 @@ import {
   PRIORITIES,
 } from '@shared/card-fields'
 import { api } from '../../../app/api'
-import { noteIndexChanged, useNoteBus } from '../../../app/note-bus'
+import { useNoteBus } from '../../../app/note-bus'
 import { Icon } from '../../../ui/Icon'
 import { UNKNOWN_COLUMN, type Board } from '../boards'
 import type { CardView } from '../board-view'
@@ -24,6 +24,8 @@ type Props = {
   card: CardView
   editCard: (path: string, edit: (text: string) => string) => Promise<boolean>
   move: (path: string, target: Drop) => Promise<void>
+  /** Rename the card's note: its title is its file name. */
+  onRename: (name: string) => Promise<void>
   onOpenNote: (path: string) => void
   onClose: () => void
 }
@@ -38,7 +40,7 @@ const raw = (text: string, key: string): unknown => parseFrontmatter(text).field
  * or text, read from the file itself and written back one key at a time; the
  * board stays where it was.
  */
-export function CardPanel({ board, card, editCard, move, onOpenNote, onClose }: Props): React.ReactElement {
+export function CardPanel({ board, card, editCard, move, onRename, onOpenNote, onClose }: Props): React.ReactElement {
   const [text, setText] = useState<string | null>(null)
   const [dateError, setDateError] = useState(false)
   const { revision } = useNoteBus()
@@ -49,16 +51,13 @@ export function CardPanel({ board, card, editCard, move, onOpenNote, onClose }: 
   useEffect(read, [read, revision])
 
   /**
-   * One edit to the note: shown here at once, then written, then everyone -
-   * this panel, the board - reads it again. A failed write is undone by that
-   * read, since the file still says what it said.
+   * One edit to the note: shown here and on the board at once, then written.
+   * A failed write is undone on the board by `editCard`, and here by reading
+   * the file again, which still says what it said.
    */
   const edit = async (change: (text: string) => string): Promise<void> => {
     setText((current) => (current === null ? current : change(current)))
-    if (await editCard(card.path, change)) {
-      noteIndexChanged()
-    }
-    read()
+    if (!(await editCard(card.path, change))) read()
   }
 
   const status = card.column === UNKNOWN_COLUMN ? (card.status ?? '') : card.column
@@ -94,7 +93,29 @@ export function CardPanel({ board, card, editCard, move, onOpenNote, onClose }: 
       </header>
 
       <div className="card-panel__body">
-        <h2 className="card-panel__title">{card.title}</h2>
+        <input
+          key={card.title}
+          className="card-panel__title"
+          defaultValue={card.title}
+          aria-label="Card title"
+          spellCheck={false}
+          onBlur={(event) => {
+            const name = event.target.value.trim()
+            if (name === '' || name === card.title) {
+              event.target.value = card.title
+              return
+            }
+            void onRename(name)
+          }}
+          onKeyDown={(event) => {
+            event.stopPropagation()
+            if (event.key === 'Enter') event.currentTarget.blur()
+            if (event.key === 'Escape') {
+              event.currentTarget.value = card.title
+              event.currentTarget.blur()
+            }
+          }}
+        />
 
         <div className="card-panel__fields">
           <label htmlFor="card-status">Status</label>

@@ -8,19 +8,34 @@ import { IPC } from '@shared/ipc'
  * Create a card, which means: create a note and put three keys in its
  * frontmatter.
  *
- * Shared by the board's "Add card" and the sidebar's new-task button so the two
- * cannot produce differently-shaped cards. It asks the index for the column's
- * current orders rather than taking them as an argument, so a caller that has
- * no board on screen (the sidebar) can use it too.
+ * Shared by the board's new-card popover and the sidebar's new-task button so
+ * the two cannot produce differently-shaped cards. The note has no H1: a card's
+ * title is its file name, as everywhere else in Recto, and a heading repeating
+ * it would show the name twice.
  */
 
 /** Where new cards are written. A folder, not a database. */
 export const CARD_FOLDER = 'tasks'
 
+/**
+ * The note a new card's name would collide with, or null. A link resolves by
+ * name across the vault, so a second note of that name anywhere is a clash;
+ * the file check covers a card the index has not seen yet.
+ */
+export async function cardExists(name: string): Promise<string | null> {
+  const resolved = await api.invoke(IPC.indexResolveLink, name)
+  if (resolved !== null) return resolved
+  const path = `${CARD_FOLDER}/${name}.md`
+  const read = await api.invoke(IPC.fsRead, path)
+  return read.ok ? path : null
+}
+
 export async function createCard(
   board: string,
   column: string,
   title: string,
+  /** The card's order, when the caller has the column on screen; otherwise it goes last, asked of the index. */
+  options: { order?: number } = {},
 ): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   const name = title.trim()
   if (name === '') return { ok: false, error: 'A card needs a name.' }
@@ -28,21 +43,28 @@ export async function createCard(
   const created = await api.invoke(IPC.fsCreate, CARD_FOLDER, `${name}.md`, 'file')
   if (!created.ok) return created
 
-  const cards = await api.invoke(IPC.indexBoard, board)
-  const orders = cards
-    .filter((card) => card.status === column)
-    .map((card) => card.order)
-    .filter((order): order is number => order !== null)
-  const placed = placeAt(orders, orders.length)
-  const order = placed.kind === 'order' ? placed.order : placed.orders.at(-1)!
+  let order = options.order
+  if (order === undefined) {
+    const cards = await api.invoke(IPC.indexBoard, board)
+    const orders = cards
+      .filter((card) => card.status === column)
+      .map((card) => card.order)
+      .filter((value): value is number => value !== null)
+    const placed = placeAt(orders, orders.length)
+    order = placed.kind === 'order' ? placed.order : placed.orders.at(-1)!
+  }
 
   let text = ''
   text = setField(text, 'board', board)
   text = setField(text, 'status', column)
   text = setField(text, 'order', order)
 
-  const written = await api.invoke(IPC.fsWrite, created.path, `${text}# ${name}\n`)
-  if (!written.ok) return { ok: false, error: written.error ?? 'Could not write the card.' }
+  const written = await api.invoke(IPC.fsWrite, created.path, text)
+  if (!written.ok) {
+    // An empty note that is no card helps nobody.
+    await api.invoke(IPC.fsTrash, created.path)
+    return { ok: false, error: written.error ?? 'Could not write the card.' }
+  }
 
   noteIndexChanged()
   return { ok: true, path: created.path }

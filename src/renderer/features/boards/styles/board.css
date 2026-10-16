@@ -1,4 +1,4 @@
-/* ---------- board: glass columns over a soft wash, a card panel beside them ---------- */
+/* ---------- board: glass columns on the plain page, a card panel beside them ---------- */
 
 .board {
   /* Column colours: the highlight tokens, made solid. */
@@ -13,10 +13,8 @@
   height: 100%;
   min-height: 0;
   display: flex;
-  /* Not one flat colour: a wash of the accent behind the glass. */
-  background:
-    radial-gradient(70% 60% at 22% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%),
-    radial-gradient(60% 60% at 95% 100%, color-mix(in srgb, var(--col-green) 9%, transparent), transparent 70%), var(--bg-primary);
+  /* The page itself, no wash: the columns and widgets carry the material. */
+  background: var(--bg-primary);
 }
 
 .board__main {
@@ -47,14 +45,26 @@
 .board__spacer {
   flex: 1;
 }
-.board__filter {
-  display: flex;
+/* The filter, High only, Widgets and Sort are one family: one height, radius and border. */
+.board__filter,
+.board__tool {
+  box-sizing: border-box;
+  height: 28px;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: 999px;
-  background: var(--glass-surface-bg);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-elevated);
+  font-size: var(--font-size-12);
+  color: var(--text-secondary);
+  transition:
+    background var(--anim-fast) var(--ease),
+    border-color var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease);
+}
+.board__filter {
   color: var(--text-muted);
 }
 .board__filter input {
@@ -67,36 +77,35 @@
   border-color: var(--accent);
 }
 .board__tool {
-  all: unset;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-s);
-  background: var(--glass-surface-bg);
+  font: inherit;
   font-size: var(--font-size-12);
-  color: var(--text-secondary);
   cursor: pointer;
 }
 .board__tool:hover {
+  border-color: var(--border-strong);
   color: var(--text-primary);
 }
 .board__tool.is-on {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
   background: var(--accent-muted);
-  border-color: transparent;
   color: var(--accent);
 }
 .board__tool:focus-visible {
   outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
-.board__error {
+/* A write that failed and was undone: said here, gone after a few seconds or a click. */
+.board__notice {
   flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 var(--size-4) var(--size-2);
   padding: var(--size-2) var(--size-3);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
   border-radius: var(--radius-s);
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, var(--bg-elevated));
   color: var(--danger);
   font-size: var(--font-size-12);
   cursor: pointer;
@@ -270,7 +279,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--size-2);
-  padding: 2px 8px 8px;
+  /* Room above the first card for the drop line, which sits 6px over it. */
+  padding: 6px 8px 8px;
   overflow-y: auto;
 }
 .board-col__dropline {
@@ -285,29 +295,6 @@
   padding: 0 4px;
   font-size: var(--font-size-11-5);
   color: var(--text-muted);
-}
-
-.board-col__new {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 8px 8px;
-  padding: 7px 10px;
-  border-radius: var(--radius-s);
-  color: var(--text-muted);
-  cursor: text;
-}
-.board-col__new:hover,
-.board-col__new:focus-within {
-  background: var(--bg-hover);
-}
-.board-col__new input {
-  all: unset;
-  flex: 1;
-  min-width: 0;
-  font-size: var(--font-size-12-5);
-  color: var(--text-primary);
 }
 
 /* "Add column": a slim dashed strip the height of the columns, never wider. */
@@ -349,10 +336,14 @@
 .board-card:hover {
   box-shadow: var(--shadow-md);
 }
+/* Drawn inside the card - border plus an inset half pixel - so the column's
+   scrolling list can never clip it. */
 .board-card:focus-visible,
 .board-card.is-selected {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow:
+    inset 0 0 0 0.5px var(--accent),
+    var(--shadow-sm);
 }
 /* Where a drop would land: a line just above this card. */
 .board-card.is-before::before {
@@ -481,8 +472,19 @@
   padding: 10px 12px;
   border-radius: 12px;
 }
+/* Glass fill and rim, but none of a floating layer's shadow: they sit on the page. */
+.board-widget.glass-surface {
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-surface-highlight);
+}
+.board-widget.is-dragging {
+  opacity: 0.5;
+}
+.board-widget.is-drop {
+  border-color: var(--accent);
+}
 .board-widget--wide {
-  width: 520px;
+  width: auto;
 }
 .board-widget--narrow {
   width: 220px;
@@ -490,6 +492,8 @@
 .board-widget__head {
   display: flex;
   align-items: center;
+  min-height: 20px;
+  cursor: grab;
 }
 .board-widget__head h3 {
   margin: 0;
@@ -519,44 +523,107 @@
   color: var(--text-muted);
   cursor: pointer;
 }
-.board-widget--add:hover:not(:disabled) {
+.board-widget--add:hover,
+.board-widget--add:focus-visible {
   border-color: var(--accent);
   color: var(--accent);
 }
-.board-widget--add:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
 
 /* Calendar */
+.board-cal {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 520px;
+}
+.board-cal[data-view='2weeks'] {
+  width: 680px;
+}
+.board-cal[data-view='month'] {
+  width: 820px;
+}
 .board-cal__nav {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: -4px;
+  gap: 2px;
+  margin: -4px 0 4px;
 }
 .board-cal__nav .icon-btn {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 .board-cal__week {
+  margin: 0 6px 0 4px;
   font-size: var(--font-size-12);
+  font-weight: 550;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.board-cal__today-btn,
+.board-seg__btn {
+  all: unset;
+  box-sizing: border-box;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: var(--font-size-11-5);
+  line-height: 22px;
   color: var(--text-secondary);
+  cursor: pointer;
+}
+.board-cal__today-btn {
+  border: 1px solid var(--border);
+  line-height: 20px;
+}
+.board-cal__today-btn:hover:not(:disabled),
+.board-seg__btn:hover {
+  color: var(--text-primary);
+}
+.board-cal__today-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.board-cal__today-btn:focus-visible,
+.board-seg__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.board-seg {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--bg-hover);
+}
+.board-seg__btn.is-on {
+  background: var(--bg-elevated);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
 }
 .board-cal__days,
 .board-cal__bars {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
 }
 .board-cal__day {
+  min-width: 0;
+  overflow: hidden;
   padding: 2px 0 4px 5px;
   border-left: 1px solid var(--glass-border);
   font-size: var(--font-size-11);
+  white-space: nowrap;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
+.board-cal[data-view='month'] .board-cal__day {
+  padding-left: 3px;
+  font-size: var(--font-size-10-5);
+}
+.board-cal__day.is-weekend {
+  color: color-mix(in srgb, var(--text-muted) 70%, transparent);
+}
 .board-cal__day.is-today {
-  color: var(--text-primary);
+  color: var(--danger);
   font-weight: 650;
 }
 .board-cal__bars {
@@ -566,35 +633,59 @@
   min-height: 44px;
   max-height: 140px;
   overflow-y: auto;
-  background: repeating-linear-gradient(90deg, var(--glass-border) 0 1px, transparent 1px calc(100% / 7));
+  background: repeating-linear-gradient(90deg, var(--glass-border) 0 1px, transparent 1px calc(100% / var(--cal-days, 7)));
+  cursor: grab;
+  touch-action: pan-y;
 }
+.board-cal__bars.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+/* Today: a line behind the bars, never over their words. */
 .board-cal__today {
   position: absolute;
+  z-index: 0;
   top: 0;
   bottom: 0;
   width: 2px;
   margin-left: -1px;
   border-radius: 1px;
   background: var(--danger);
-  opacity: 0.7;
+  opacity: 0.55;
   pointer-events: none;
 }
 .board-cal__bar {
   all: unset;
+  position: relative;
+  z-index: 1;
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
   margin: 0 2px;
   padding: 0 7px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
   border-radius: 5px;
-  background: var(--accent-muted);
+  /* Opaque, so the today line passes under the words rather than through them. */
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated));
   font-size: var(--font-size-11);
   line-height: 18px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--text-primary);
   cursor: pointer;
+}
+.board-cal__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board-cal__end {
+  flex: none;
+  margin-left: auto;
+  font-size: var(--font-size-10-5);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 button.board-cal__bar:hover,
 button.board-cal__bar:focus-visible {
@@ -610,20 +701,25 @@ button.board-cal__bar:focus-visible {
   box-shadow: inset 3px 0 0 var(--success);
 }
 .board-cal__bar.is-cut-start {
+  border-left-style: dashed;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
 }
 .board-cal__bar.is-cut-end {
+  border-right-style: dashed;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
 .board-cal__bar.is-column {
   border: 1px dashed var(--text-muted);
-  background: none;
+  background: var(--bg-elevated);
   color: var(--text-secondary);
   cursor: default;
 }
 .board-cal__empty {
+  position: relative;
+  z-index: 1;
+  justify-self: start;
   grid-column: 1 / -1;
   align-self: center;
   padding-left: 6px;
@@ -740,6 +836,113 @@ button.board-cal__bar:focus-visible {
   color: var(--text-muted);
 }
 
+/* By priority */
+.board-pris {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.board-pris__row {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 76px 1fr 24px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 4px;
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-12);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.board-pris__row:hover,
+.board-pris__row:focus-visible {
+  background: var(--bg-hover);
+}
+.board-pris__row.is-on {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.board-pris__track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+.board-pris__track i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+.board-pris__track i.is-high {
+  background: var(--danger);
+}
+.board-pris__track i.is-medium {
+  background: var(--warning);
+}
+.board-pris__track i.is-low {
+  background: var(--success);
+}
+.board-pris__n {
+  text-align: right;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- new card: a title field hanging from a column's "+" ---------- */
+
+.new-card {
+  position: fixed;
+  z-index: 90;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--radius-m);
+  animation: card-panel-in 120ms var(--ease) backwards;
+}
+.new-card__title,
+.new-card__column {
+  box-sizing: border-box;
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-elevated);
+  font: inherit;
+  font-size: var(--font-size-13);
+  color: var(--text-primary);
+  outline: none;
+}
+.new-card__title:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+.new-card__taken {
+  margin: 0;
+  font-size: var(--font-size-11-5);
+  color: var(--danger);
+}
+.new-card__link {
+  all: unset;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.new-card__hint {
+  margin: 0;
+  padding: 0 2px;
+  font-size: var(--font-size-10-5);
+  color: var(--text-muted);
+}
+
 /* ---------- the card panel ---------- */
 
 .card-panel {
@@ -787,11 +990,24 @@ button.board-cal__bar:focus-visible {
   font-size: var(--font-size-12-5);
 }
 .card-panel__title {
-  margin: 0;
+  all: unset;
+  box-sizing: border-box;
+  width: calc(100% + 12px);
+  margin: -4px -6px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
   font-size: 16px;
   font-weight: 650;
   line-height: 1.3;
   color: var(--text-primary);
+}
+.card-panel__title:hover {
+  border-color: var(--border);
+}
+.card-panel__title:focus {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
 }
 .card-panel__fields {
   display: grid;

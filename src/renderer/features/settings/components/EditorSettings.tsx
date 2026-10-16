@@ -56,7 +56,7 @@ export function EditorSettings({ appearance, update }: SettingsDeps): React.Reac
               <button
                 key={font}
                 className={`segmented__tab${appearance.headingFont === font ? ' is-active' : ''}`}
-                onClick={() => update({ headingFont: font })}
+                onClick={() => update({ headingFont: font, headingFontChosen: true })}
               >
                 <span>{font}</span>
               </button>

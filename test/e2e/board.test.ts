@@ -7,10 +7,12 @@ import { quitApp, removeDir } from './helpers/app'
 
 /**
  * The Tasks board on a copy of the fixture vault: drag and drop writes the
- * status (and `completed` in and out of Done), the WIP limit warns, cards and
- * columns are added, the panel edits frontmatter one key at a time, an
- * unknown status gets its own column, deleting a column moves its cards, and
- * the widgets are placed and remembered. Runs with `npm run test:e2e`.
+ * status (and `completed` in and out of Done), the WIP limit warns, cards are
+ * added from a column's "+" or the palette, columns are added, the panel edits
+ * frontmatter one key at a time and renames the note from its title, an
+ * unknown status gets its own column, deleting a column moves its cards, the
+ * calendar moves through weeks and months, and the widgets are placed,
+ * reordered and remembered. Runs with `npm run test:e2e`.
  */
 
 const RUN = process.env['RECTO_E2E'] === '1'
@@ -95,14 +97,62 @@ describe.skipIf(!RUN)('the tasks board', () => {
     expect(file('Record the demo')).not.toContain('completed:')
   }, 30_000)
 
-  it('a new card is a note, and focus stays in the field for the next one', async () => {
-    const field = column('To do').getByRole('textbox', { name: 'New card in To do' })
-    await field.fill('Plan the release')
-    await field.press('Enter')
-    await until(() => fs.existsSync(path.join(vault, 'tasks', 'Plan the release.md')) && file('Plan the release') !== '')
-    expect(file('Plan the release')).toMatch(/board: launch\nstatus: todo\norder: /)
-    expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('New card in To do')
+  it("a column's + opens one field: Enter adds and closes, ⌘Enter adds and stays, a taken name is refused", async () => {
+    // The old field at the bottom of each column is gone.
+    expect(await page.locator('.board-col__new').count()).toBe(0)
+    const popover = page.getByRole('dialog', { name: 'New card' })
+    const title = popover.getByRole('textbox', { name: 'Card title' })
+
+    await column('To do').getByRole('button', { name: 'New card in To do' }).click()
+    await popover.waitFor()
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('Card title')
+    const started = Date.now()
+    await title.fill('Plan the release')
+    await title.press('Enter')
     await card('Plan the release').waitFor()
+    // On the board before the note is written, and well before the index has it.
+    expect(Date.now() - started).toBeLessThan(1000)
+    await popover.waitFor({ state: 'detached' })
+    await until(() => fs.existsSync(path.join(vault, 'tasks', 'Plan the release.md')) && file('Plan the release') !== '')
+    expect(file('Plan the release')).toMatch(/^---\nboard: launch\nstatus: todo\norder: [\d.]+\n---\n\n?$/)
+
+    await column('To do').getByRole('button', { name: 'New card in To do' }).click()
+    await title.fill('Draft notes')
+    await title.press('Meta+Enter')
+    await card('Draft notes').waitFor()
+    expect(await title.inputValue()).toBe('')
+    // Enter twice, quickly: one card.
+    await title.fill('Only once')
+    await title.press('Enter')
+    await page.keyboard.press('Enter')
+    await until(() => fs.existsSync(path.join(vault, 'tasks', 'Only once.md')))
+    await sleep(600)
+    expect(fs.readdirSync(path.join(vault, 'tasks')).filter((f) => f.startsWith('Only once'))).toEqual(['Only once.md'])
+    expect(await card('Only once').count()).toBe(1)
+
+    await column('To do').getByRole('button', { name: 'New card in To do' }).click()
+    await title.fill('Handbook')
+    await title.press('Enter')
+    await popover.getByText('A note with that name exists').waitFor()
+    expect(fs.existsSync(path.join(vault, 'tasks', 'Handbook.md'))).toBe(false)
+    // Esc closes; an empty title makes nothing.
+    await title.fill('')
+    await title.press('Enter')
+    await title.press('Escape')
+    await popover.waitFor({ state: 'detached' })
+  }, 30_000)
+
+  it('"New card" in the palette opens the same field, with the column to choose', async () => {
+    await page.keyboard.press('Meta+P')
+    await page.keyboard.type('New card')
+    await page.keyboard.press('Enter')
+    const popover = page.getByRole('dialog', { name: 'New card' })
+    await popover.waitFor()
+    await popover.getByRole('combobox', { name: 'Column' }).selectOption('done')
+    await popover.getByRole('textbox', { name: 'Card title' }).fill('From the palette')
+    await popover.getByRole('textbox', { name: 'Card title' }).press('Enter')
+    await column('Done').locator('.board-card', { hasText: 'From the palette' }).waitFor()
+    await until(() => fs.existsSync(path.join(vault, 'tasks', 'From the palette.md')) && /status: done/.test(file('From the palette')))
   }, 20_000)
 
   it('a new column gets a unique name and is renamed in place', async () => {
@@ -151,16 +201,68 @@ describe.skipIf(!RUN)('the tasks board', () => {
     await page.locator('.card-panel [aria-label="Close card"]').click()
   }, 30_000)
 
+  it("the panel's title is the file name, and renaming it renames the note", async () => {
+    await card('Draft notes').click()
+    const name = page.locator('.card-panel').getByRole('textbox', { name: 'Card title' })
+    expect(await name.inputValue()).toBe('Draft notes')
+    await name.fill('Draft the notes')
+    await name.press('Enter')
+    await card('Draft the notes').waitFor()
+    await until(() => fs.existsSync(path.join(vault, 'tasks', 'Draft the notes.md')))
+    expect(fs.existsSync(path.join(vault, 'tasks', 'Draft notes.md'))).toBe(false)
+    // The panel follows the card.
+    expect(await page.locator('.card-panel code').textContent()).toBe('tasks/Draft the notes.md')
+    await page.locator('.card-panel [aria-label="Close card"]').click()
+  }, 20_000)
+
   it('the calendar places a card on its days, and clicking the bar opens it', async () => {
     const bar = page.locator('[data-widget="calendar"] .board-cal__bar[data-path="tasks/This week.md"]')
     await bar.waitFor()
     // Its span is two days, unless the week started today - then only today is in this week.
     const columns = await bar.evaluate((el) => (el as HTMLElement).style.gridColumn)
     expect(columns).toMatch(/^\d \/ \d$/)
+    expect(await bar.getAttribute('title')).toMatch(/^This week · /)
     await bar.click()
-    await page.locator('.card-panel .card-panel__title', { hasText: 'This week' }).waitFor()
+    await sleep(300)
+    expect(await page.locator('.card-panel .card-panel__title').inputValue()).toBe('This week')
     await page.locator('.card-panel [aria-label="Close card"]').click()
   }, 20_000)
+
+  it('the calendar steps by week and month, comes back with Today, and a long range says where it ends', async () => {
+    const cal = page.locator('[data-widget="calendar"]')
+    const title = (): Promise<string | null> => cal.locator('.board-cal__week').textContent()
+    const now = await title()
+    await cal.getByRole('button', { name: 'Next', exact: true }).click()
+    expect(await title()).not.toBe(now)
+    expect(await cal.getByRole('button', { name: 'Today', exact: true }).isDisabled()).toBe(false)
+    await cal.getByRole('button', { name: 'Previous', exact: true }).click()
+    await cal.getByRole('button', { name: 'Previous', exact: true }).click()
+    await cal.getByRole('button', { name: 'Today', exact: true }).click()
+    expect(await title()).toBe(now)
+    expect(await cal.getByRole('button', { name: 'Today', exact: true }).isDisabled()).toBe(true)
+
+    await cal.getByRole('button', { name: '2 weeks', exact: true }).click()
+    expect(await cal.locator('.board-cal__day').count()).toBe(14)
+    await cal.getByRole('button', { name: 'Month', exact: true }).click()
+    expect(await cal.locator('.board-cal__day').count()).toBeGreaterThanOrEqual(28)
+    expect(await title()).toMatch(/^[A-Z][a-z]+ \d{4}$/)
+    await cal.getByRole('button', { name: 'Week', exact: true }).click()
+
+    // A card running into next week: cut at Sunday, with its end date on the edge.
+    fs.writeFileSync(
+      path.join(vault, 'tasks', 'Long haul.md'),
+      `---\nboard: launch\nstatus: todo\norder: 9\nstart: ${day()}\ndue: ${day(9)}\n---\n`,
+    )
+    const bar = cal.locator('.board-cal__bar[data-path="tasks/Long haul.md"]')
+    await bar.waitFor({ timeout: 15_000 })
+    expect(await bar.locator('.board-cal__end').textContent()).toMatch(/^→ \d+ [A-Z][a-z]{2}/)
+    // The today line is drawn under the bars.
+    const z = await cal.evaluate((el) => [
+      getComputedStyle(el.querySelector('.board-cal__today')!).zIndex,
+      getComputedStyle(el.querySelector('.board-cal__bar')!).zIndex,
+    ])
+    expect(Number(z[0])).toBeLessThan(Number(z[1]))
+  }, 30_000)
 
   it('widgets are removed, added back and hidden, and the board remembers', async () => {
     await page.locator('[data-widget="due-soon"] [aria-label="Remove Due soon"]').click()
@@ -168,9 +270,34 @@ describe.skipIf(!RUN)('the tasks board', () => {
     expect(await page.locator('[data-widget="due-soon"]').count()).toBe(0)
 
     await page.locator('.board-widget--add').click()
-    await page.getByText('Due soon — Late cards and the next three days').click()
+    await page.getByText('Due soon — Due today and the next three days').click()
     await until(() => boards().boards[0]!.widgets?.list.at(-1) === 'due-soon')
     await page.locator('[data-widget="due-soon"]').waitFor()
+
+    // Every new widget can be added; with all of them on, "+ Widget" still offers them, to take off.
+    for (const name of ['Today', 'Overdue', 'By priority', 'Recently done']) {
+      await page.locator('.board-widget--add').click()
+      await page.getByText(new RegExp(`^${name} — `)).click()
+      await page.locator(`.board-widget[aria-label="${name}"]`).waitFor()
+    }
+    expect(await page.locator('.board-widget--add').isDisabled()).toBe(false)
+    await page.locator('[data-widget="overdue"]').getByText('Record the demo').waitFor()
+    await page.locator('[data-widget="recently-done"]').getByText('Choose a name').waitFor()
+    // A priority row filters the board; again clears it.
+    await page.locator('[data-widget="by-priority"]').getByRole('button', { name: /^High/ }).click()
+    await sleep(300)
+    expect(await page.locator('.board-card .board-pri--medium').count()).toBe(0)
+    await page.locator('[data-widget="by-priority"]').getByRole('button', { name: /^High/ }).click()
+
+    // Dragged by its header, a widget moves.
+    const before = boards().boards[0]!.widgets!.list
+    // Seven widgets overflow the strip: back to its start, where both are on screen.
+    await page.locator('.board-widgets').evaluate((el) => el.scrollTo({ left: 0 }))
+    await page.locator('[data-widget="done-week"] .board-widget__head').dragTo(page.locator('[data-widget="calendar"]'), {
+      targetPosition: { x: 5, y: 40 },
+    })
+    await until(() => boards().boards[0]!.widgets!.list[0] === 'done-week')
+    expect([...boards().boards[0]!.widgets!.list].sort()).toEqual([...before].sort())
 
     await page.getByRole('button', { name: 'Widgets' }).click()
     await until(() => boards().boards[0]!.widgets?.shown === false)

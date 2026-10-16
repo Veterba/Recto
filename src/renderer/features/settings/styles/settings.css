@@ -11,7 +11,16 @@
   outline: none;
   /* It can sit over the window's title bar, which drags the window. */
   -webkit-app-region: no-drag;
-  animation: note-window-in 160ms var(--ease) both;
+  /* Backwards, not both: a fill that outlives the entrance keeps a transform
+     on the panel for as long as it is open, and the blur is drawn from the
+     backdrop of an element at rest. */
+  animation: note-window-in 160ms var(--ease) backwards;
+}
+
+/* Frosted in both themes: one blur over whatever is behind, the theme's tinted
+   fill on top so text reads. Translucency off leaves the solid tokens alone. */
+:root:not([data-translucent='off']) .settings-panel {
+  --glass-surface-blur: blur(24px) saturate(170%);
 }
 
 .settings-panel__head {
@@ -59,10 +68,11 @@
   cursor: ns-resize;
 }
 .settings-panel__edge--corner {
+  /* Big enough that the part the rounded corner clips away is not most of it. */
   right: 0;
   bottom: 0;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   cursor: nwse-resize;
 }
 

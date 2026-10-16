@@ -180,7 +180,7 @@ test/            the same folders as src/
 | `file-tree` | the Data tree, drag and drop, context menu, note preview card | `tree`, `note-peek` |
 | `search` | full-text search, quick switcher | `search-result` (inside the shared `palette`) |
 | `graph` | the link graph and its settings panel | `graph`, `gset`, `gwheel`, `glegend` |
-| `boards` | kanban boards over notes: full-height glass columns, a card panel that edits the note's frontmatter one key at a time (`shared/card-fields.ts`), and a widget strip (`widgets/registry.ts`: one component and one entry per widget) | `board`, `board-col`, `board-card`, `board-pri`, `board-cal`, `board-done`, `board-due`, `board-widget`, `card-panel`, `boards` |
+| `boards` | kanban boards over notes: full-height glass columns, a card panel that edits the note's frontmatter one key at a time (`shared/card-fields.ts`), and a widget strip (`widgets/registry.ts`: one component and one entry per widget). Every change is shown first and written second (`hooks/use-board-cards.ts`): the card is re-read from the text being written (`cardFields`) and kept over the index's row until the index draws the same card; a failed write is undone with a notice. A card's title is its file name; new cards are added from a column's "+" (`NewCardPopover`) | `board`, `board-col`, `board-card`, `board-pri`, `board-cal`, `board-seg`, `board-done`, `board-due`, `board-pris`, `board-widget`, `card-panel`, `new-card`, `boards` |
 | `topics` | topics settings and the run notice | `topics` |
 | `tidy` | filing loose notes | `tidy` |
 | `home` | the home overlay and statistics | `home` |

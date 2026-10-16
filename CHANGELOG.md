@@ -4,6 +4,30 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.50.0 — 2026-10-16
+### Added
+- New widgets: Today (cards today falls inside, or due today), By priority (open cards per priority; click a row to filter the board, again to clear), Overdue (late cards, the oldest first) and Recently done (the last five cards to enter Done). "+ Widget" lists every widget, ticked when shown, so it always has something to offer.
+- Drag a widget by its header to move it in the strip.
+- The calendar shows a week, two weeks or a month. Arrows step a whole view, a sideways scroll or a drag on the grid moves a day at a time, and Today comes back. A bar that runs past the visible days ends in an arrow with its end date ("→ 25 Oct"), and hovering any bar shows its full range.
+- "New card" in the command palette opens the new-card field with the column to choose.
+### Changed
+- Cards are added one way: "+" in a column's header opens a title field over the column. Enter adds the card and closes it, ⌘Enter adds it and stays open for the next one, Esc or a click outside closes it. A name that is already a note is shown under the field and nothing is made. The "New card" field at the bottom of each column is gone.
+- Every change on the board shows at once and is written to the note after: new cards, status, priority, dates, tag, checklist ticks and renames. If the write fails, the change is undone and a notice says so.
+- A card's title is its file name, like every note in Recto. New cards are made without an H1. Renaming the title in the card panel renames the note, and links follow. Older cards keep their H1; one that repeats the name is not shown as the description.
+- Headings in the editor use the heading font, sans by default, like the note's name above them. They used to follow the editor's mono font. A heading font you picked in Settings → Editor is kept.
+- The board's background is the plain page in both themes, with no colour wash. Widgets sit on it without a floating shadow.
+- The filter field, High only, Widgets and Sort share one height, radius and border; a tool that is on is tinted with the accent.
+- Due soon lists today and the next three days; late cards are under Overdue.
+- A column's date range reads like the cards' ("16–22 Sep"), and a column with a WIP limit shows its count once, in the limit.
+- Empty columns say that "+" adds a card.
+- Settings is frosted glass in both themes: what is behind it is blurred (24 px) and saturated under a tinted fill.
+- Switches are a size smaller, with the knob 2 px inside the track as on macOS, everywhere in the app. An off switch's track is easier to see in the dark theme.
+### Fixed
+- Pressing Enter twice while a card was being made could make it twice.
+- A selected card's outline is drawn inside the card, so the column's scrolling no longer clips its left edge or date.
+- The calendar's today line runs under the bars instead of across their text.
+- The Settings panel's bottom-right corner can be grabbed right up to its edge to resize it.
+
 ## v0.49.0 — 2026-10-16
 ### Added
 - Task cards show a priority label (High, Medium, Low, No priority), their date or date range (red when late, amber when due within two days), two lines of description, checklist progress, the link count and a tag. All of it is plain frontmatter and text in the card's note: `priority`, `start`, `due`, `tags`.

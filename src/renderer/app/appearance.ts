@@ -27,6 +27,12 @@ export type Appearance = {
   /** Headings can use a different family from the body - a serif over a sans. */
   headingFont: 'match' | 'mono' | 'sans' | 'serif'
   /**
+   * The heading font was picked in Settings. Before it was, 'match' was the
+   * default, which over the default mono body made every heading mono while
+   * the note's title above it was sans. An unpicked 'match' now reads as sans.
+   */
+  headingFontChosen: boolean
+  /**
    * How much bigger headings are than body text, as a ratio between levels.
    * One number drives H1-H6, so the document's structure gets louder or
    * quieter as a whole instead of six sliders that can disagree.
@@ -96,7 +102,8 @@ const DEFAULT_APPEARANCE: Appearance = {
   livePreview: true,
   fontSize: 14,
   editorFont: 'mono',
-  headingFont: 'match',
+  headingFont: 'sans',
+  headingFontChosen: false,
   headingScale: 1.25,
   vimMode: false,
   showNoteTitle: true,
@@ -260,7 +267,8 @@ function applyAppearance(appearance: Appearance): void {
   }
 }
 
-function coerce(value: unknown): Appearance {
+/** Saved appearance, read defensively; exported for its tests. */
+export function coerce(value: unknown): Appearance {
   if (typeof value !== 'object' || value === null) return DEFAULT_APPEARANCE
   const v = value as Partial<Appearance>
   const theme: Theme = v.theme === 'light' || v.theme === 'dark' || v.theme === 'system' ? v.theme : DEFAULT_APPEARANCE.theme
@@ -271,9 +279,12 @@ function coerce(value: unknown): Appearance {
     livePreview: typeof v.livePreview === 'boolean' ? v.livePreview : DEFAULT_APPEARANCE.livePreview,
     fontSize: typeof v.fontSize === 'number' && v.fontSize >= 11 && v.fontSize <= 24 ? v.fontSize : DEFAULT_APPEARANCE.fontSize,
     headingFont:
-      v.headingFont === 'mono' || v.headingFont === 'sans' || v.headingFont === 'serif' || v.headingFont === 'match'
-        ? v.headingFont
-        : DEFAULT_APPEARANCE.headingFont,
+      v.headingFont === 'match' && v.headingFontChosen !== true
+        ? DEFAULT_APPEARANCE.headingFont
+        : v.headingFont === 'mono' || v.headingFont === 'sans' || v.headingFont === 'serif' || v.headingFont === 'match'
+          ? v.headingFont
+          : DEFAULT_APPEARANCE.headingFont,
+    headingFontChosen: v.headingFontChosen === true,
     headingScale:
       typeof v.headingScale === 'number' && Number.isFinite(v.headingScale)
         ? Math.min(1.6, Math.max(1, v.headingScale))

@@ -15,6 +15,7 @@ export const SECTION_ORDER = [
   'Panes',
   'Vault',
   'Periodic notes',
+  'Tasks',
   'Bots',
   'Writing',
   'Appearance',

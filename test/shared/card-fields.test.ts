@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cardDescription,
+  cardFields,
   cardSpan,
   checklist,
   dateOnly,
@@ -100,5 +101,27 @@ describe('writing a card', () => {
     expect(toggleCheck(text, 1)).toBe(note('status: todo', '# Card\n\n- [ ] one\n```\n- [ ] code\n```\n- [ ] two\r\n'))
     expect(toggleCheck(text, 0)).toBe(note('status: todo', '# Card\n\n- [x] one\n```\n- [ ] code\n```\n- [x] two\r\n'))
     expect(toggleCheck(text, 5)).toBe(text)
+  })
+})
+
+describe("a card's fields from its text", () => {
+  it('reads what the board shows, the way the index keeps it', () => {
+    const text = '---\nboard: launch\nstatus: todo\norder: 2.5\npriority: High\nstart: 2026-10-14\ndue: 2026-10-16\ntags: [ui, docs]\n---\n\nFirst words.\n\n- [x] a\n- [ ] b\n'
+    expect(cardFields(text)).toEqual({
+      status: 'todo',
+      order: 2.5,
+      start: '2026-10-14',
+      due: '2026-10-16',
+      completed: null,
+      priority: 'High',
+      tags: 'ui,docs',
+      description: 'First words.',
+      checklist: { done: 1, total: 2 },
+    })
+  })
+
+  it('an old card whose first line is an H1 repeating its name does not use it as description', () => {
+    expect(cardDescription('# Ship it\n\nThe real description.')).toBe('The real description.')
+    expect(cardFields('---\nstatus: todo\n---\n# Ship it\n').description).toBe('')
   })
 })

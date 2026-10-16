@@ -40,7 +40,7 @@ import { TemplatePicker, usePeriodicNotesAutoCreate, useTemplateActions, useTemp
 import { TidyDialog, useTidy } from '../../features/tidy'
 import { CHAT_FOLDER } from '../../features/ai'
 import { BotList, MAIN_BOT, onOpenTopic, reloadBots, requestTopic, useBots, useBotsEnabled } from '../../features/bots'
-import { BoardList, CARD_FOLDER, useBoards } from '../../features/boards'
+import { BoardList, CARD_FOLDER, requestNewCard, useBoards } from '../../features/boards'
 import { registerArchiveView } from '../../features/archive'
 import { HomeOverlay } from '../../features/home'
 import type { Period, TemplateSettings } from '@shared/templates'
@@ -464,9 +464,22 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         icon: 'calendar',
         run: () => void openPeriodicNote('yearly'),
       },
+      {
+        id: 'tasks:new-card',
+        name: 'New card',
+        section: 'Tasks',
+        icon: 'square-kanban',
+        // The board on screen, or the first one; the popover there asks for the column.
+        run: () => {
+          const id = activeBoard ?? boards.boards[0]?.id
+          if (id === undefined) return
+          openBoard(id)
+          requestNewCard()
+        },
+      },
     ])
     return off
-  }, [openPeriodicNote, openTodayNote])
+  }, [openPeriodicNote, openTodayNote, activeBoard, boards, openBoard])
 
   useShellKeys({
     paletteOpen,

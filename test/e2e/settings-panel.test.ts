@@ -196,16 +196,55 @@ describe.skipIf(!RUN)('the settings panel', () => {
     await toggle.click()
   }, 30_000)
 
-  it('is glass with translucency on, and solid with it off', async () => {
-    const look = (): Promise<{ filter: string; background: string }> =>
+  it('is frosted glass with translucency on - what is behind it blurred - and solid with it off', async () => {
+    const look = (): Promise<{ filter: string; background: string; transform: string }> =>
       page.evaluate(() => {
         const style = getComputedStyle(document.querySelector('.settings-panel')!)
-        return { filter: style.backdropFilter, background: style.backgroundColor }
+        return { filter: style.backdropFilter, background: style.backgroundColor, transform: style.transform }
       })
+    /** How much the pixels of a region vary: hard black/yellow stripes are ~100, blurred ones a few. */
+    const roughness = async (clip: Box): Promise<number> => {
+      const png = (await page.screenshot({ clip })).toString('base64')
+      return page.evaluate(async (data) => {
+        const image = new Image()
+        image.src = `data:image/png;base64,${data}`
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = image.width
+        canvas.height = image.height
+        const context = canvas.getContext('2d')!
+        context.drawImage(image, 0, 0)
+        const pixels = context.getImageData(0, 0, image.width, image.height).data
+        const lum: number[] = []
+        for (let i = 0; i < pixels.length; i += 4) lum.push(0.299 * pixels[i]! + 0.587 * pixels[i + 1]! + 0.114 * pixels[i + 2]!)
+        const mean = lum.reduce((a, b) => a + b, 0) / lum.length
+        return Math.sqrt(lum.reduce((a, b) => a + (b - mean) ** 2, 0) / lum.length)
+      }, png)
+    }
     await section('Appearance')
     const translucency = panel().getByRole('switch', { name: 'Translucency' })
     if ((await translucency.getAttribute('aria-checked')) !== 'true') await translucency.click()
-    expect((await look()).filter).toContain('blur')
+    const glass = await look()
+    expect(glass.filter).toMatch(/blur\(24px\) saturate/)
+    // A tinted fill, not a clear one and not an opaque one.
+    expect(glass.background).toMatch(/^rgba\(\d+, \d+, \d+, 0\.\d+\)$/)
+    // The entrance animation leaves nothing behind on the panel at rest.
+    expect(glass.transform).toBe('none')
+
+    // Hard stripes behind the panel's header, and beside it as a control.
+    const head = (await panel().locator('.settings-panel__head').boundingBox())!
+    await page.evaluate((r) => {
+      const stripes = document.createElement('div')
+      stripes.id = 'e2e-stripes'
+      stripes.style.cssText = `position:fixed;left:${r.x - 120}px;top:${r.y}px;width:${r.width + 240}px;height:${r.height}px;z-index:50;background:repeating-linear-gradient(90deg,#000 0 6px,#ff0 6px 12px)`
+      document.body.append(stripes)
+    }, head)
+    await sleep(200)
+    const behind = await roughness({ x: head.x + head.width / 2 - 60, y: head.y + 6, width: 120, height: head.height - 12 })
+    const beside = await roughness({ x: head.x - 110, y: head.y + 6, width: 90, height: head.height - 12 })
+    expect(beside).toBeGreaterThan(60)
+    expect(behind).toBeLessThan(beside / 4)
+    await page.evaluate(() => document.getElementById('e2e-stripes')?.remove())
 
     await translucency.click()
     await page.waitForFunction(() => document.documentElement.getAttribute('data-translucent') === 'off')

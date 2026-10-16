@@ -9,7 +9,7 @@
  * the rest of the file.
  */
 
-import { parseFrontmatter, removeField, setField } from './frontmatter'
+import { bodyOf, parseFrontmatter, removeField, setField } from './frontmatter'
 
 export type Priority = 'high' | 'medium' | 'low'
 export const PRIORITIES: readonly Priority[] = ['high', 'medium', 'low']
@@ -193,4 +193,45 @@ export function setCardTags(text: string, tags: readonly string[]): string {
   const lines = text.split('\n')
   lines[field.line + 1] = `tags: ${bare}${comment}`
   return lines.join('\n')
+}
+
+/** What a card shows, read from its note's text the way the index reads it. */
+export type CardFields = {
+  status: string | null
+  order: number | null
+  start: string | null
+  due: string | null
+  completed: string | null
+  priority: string | null
+  /** Comma-joined, as the index keeps a list. */
+  tags: string | null
+  description: string
+  checklist: { done: number; total: number }
+}
+
+/**
+ * A card's fields straight from the text being written, so the board can show
+ * an edit before the index has seen the file.
+ */
+export function cardFields(text: string): CardFields {
+  const fields = parseFrontmatter(text).fields
+  const value = (key: string): string | null => {
+    const raw = fields.find((f) => f.key === key)?.value ?? null
+    if (raw === null) return null
+    return Array.isArray(raw) ? raw.join(',') : String(raw)
+  }
+  const order = Number(value('order') ?? Number.NaN)
+  const body = bodyOf(text)
+  const items = checklist(body)
+  return {
+    status: value('status'),
+    order: Number.isFinite(order) ? order : null,
+    start: value('start'),
+    due: value('due'),
+    completed: value('completed'),
+    priority: value('priority'),
+    tags: value('tags'),
+    description: cardDescription(body),
+    checklist: { done: items.filter((item) => item.done).length, total: items.length },
+  }
 }

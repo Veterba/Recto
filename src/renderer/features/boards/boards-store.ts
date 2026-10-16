@@ -48,3 +48,37 @@ export function useBoards(): BoardsFile {
 
 /** Read without subscribing, for code that runs outside a render. */
 export const currentBoards = (): BoardsFile => file
+
+/**
+ * "New card" from the command palette: a request the board on screen takes
+ * up. Pending rather than an event, because the command may have to open the
+ * board first and the board is not listening yet.
+ */
+let newCardPending = false
+let newCardTick = 0
+const newCardListeners = new Set<() => void>()
+
+export function requestNewCard(): void {
+  newCardPending = true
+  newCardTick++
+  for (const listener of newCardListeners) listener()
+}
+
+/** Changes whenever a request is made; read it, then `takeNewCardRequest`. */
+export function useNewCardRequest(): number {
+  return useSyncExternalStore(
+    (listener) => {
+      newCardListeners.add(listener)
+      return () => newCardListeners.delete(listener)
+    },
+    () => newCardTick,
+    () => newCardTick,
+  )
+}
+
+/** True once per request: the first board to ask gets it. */
+export function takeNewCardRequest(): boolean {
+  const pending = newCardPending
+  newCardPending = false
+  return pending
+}

@@ -190,6 +190,8 @@ export function graph(autoProperty: string | null): GraphData {
  * file deletes the card. `board` is the required key: a note without it is not
  * on any board, which is what keeps the board from swallowing the whole vault.
  *
+ * A card's title is its file name, like every note's in Recto - not its H1.
+ *
  * Cards with no `order` sort last, by name, so a note that was hand-written
  * into a column still appears somewhere stable rather than jumping about.
  */
@@ -199,7 +201,7 @@ export function board(name: string): BoardCard[] {
   const rows = requireDb()
     .prepare(
       `SELECT n.path                       AS path,
-              COALESCE(n.title, n.name)    AS title,
+              n.name                       AS title,
               s.value                      AS status,
               o.num                        AS "order",
               ${field('start', 'start')},

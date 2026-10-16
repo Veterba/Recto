@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { isoDay } from '@shared/card-fields'
+import { isoDay, type Priority } from '@shared/card-fields'
 import { IPC } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { noteIndexChanged } from '../../../app/note-bus'
@@ -8,12 +8,16 @@ import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextM
 import { Icon } from '../../../ui/Icon'
 import { columnId, newColumnName, UNKNOWN_COLUMN, type Board, type Column } from '../boards'
 import { filterCards, sortCards, SORTS, type CardView, type SortKey } from '../board-view'
-import { CARD_FOLDER, createCard } from '../create-card'
+import { takeNewCardRequest, useNewCardRequest } from '../boards-store'
+import { CARD_FOLDER } from '../create-card'
 import { useBoardCards, type Drop } from '../hooks/use-board-cards'
 import { WidgetStrip } from '../widgets/WidgetStrip'
 import { widgetsOf } from '../widgets/registry'
 import { BoardColumn } from './BoardColumn'
 import { CardPanel } from './CardPanel'
+import { NewCardPopover } from './NewCardPopover'
+
+const LEVEL_LABEL = { high: 'High', medium: 'Medium', low: 'Low', none: 'No priority' } as const
 
 /**
  * The kanban board.
@@ -34,13 +38,14 @@ type Props = {
 }
 
 export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.ReactElement {
-  const { cards, error, clearError, reload, editCard, move } = useBoardCards(board)
+  const { cards, notice, clearNotice, reload, editCard, move, addCard, renameCard } = useBoardCards(board)
   const [dragging, setDragging] = useState<string | null>(null)
   const [drop, setDrop] = useState<Drop | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [highOnly, setHighOnly] = useState(false)
+  const [priority, setPriority] = useState<Priority | 'none' | null>(null)
+  const [newCard, setNewCard] = useState<{ column: string; anchor: DOMRect | null; choose: boolean } | null>(null)
   const [sort, setSort] = useState<SortKey>('manual')
   const [deleting, setDeleting] = useState<Column | null>(null)
   const columnsRow = useRef<HTMLDivElement | null>(null)
@@ -51,7 +56,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
   const widgets = widgetsOf(board)
 
   const all = useMemo(() => cards ?? [], [cards])
-  const visible = useMemo(() => filterCards(all, { query, highOnly }), [all, query, highOnly])
+  const visible = useMemo(() => filterCards(all, { query, priority }), [all, query, priority])
   const columnCards = (id: string): CardView[] =>
     sortCards(
       visible.filter((card) => card.column === id),
@@ -77,6 +82,13 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
     return () => window.removeEventListener('keydown', onKey)
   }, [selected])
 
+  // "New card" from the palette: the popover, with the column to choose.
+  const request = useNewCardRequest()
+  useEffect(() => {
+    const first = board.columns[0]
+    if (first !== undefined && takeNewCardRequest()) setNewCard({ column: first.id, anchor: null, choose: true })
+  }, [request, board.columns])
+
   const setColumns = (columns: Column[]): void => onEditBoard({ ...board, columns })
 
   const addColumn = (): void => {
@@ -91,12 +103,6 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
     // A column with cards asks where they go; an empty one just goes.
     if (totalOf(column.id) > 0) setDeleting(column)
     else setColumns(board.columns.filter((entry) => entry.id !== column.id))
-  }
-
-  const addCard = async (column: string, title: string): Promise<void> => {
-    const created = await createCard(board.id, column, title)
-    if (!created.ok) window.alert(created.error)
-    reload()
   }
 
   const finishDrag = (): void => {
@@ -159,7 +165,7 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
       },
       onOpenCard: setSelected,
       onCardMenu: (event: React.MouseEvent, card: CardView) => cardMenu.open(event, card),
-      onAddCard: (title: string) => addCard(id, title),
+      onNewCard: (anchor: DOMRect) => setNewCard({ column: id, anchor, choose: false }),
       onEdit: (next: Column) => setColumns(board.columns.map((entry) => (entry.id === next.id ? next : entry))),
       onDelete: () => column !== null && removeColumn(column),
     }
@@ -184,9 +190,19 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
               }}
             />
           </label>
-          <button className={`board__tool${highOnly ? ' is-on' : ''}`} aria-pressed={highOnly} onClick={() => setHighOnly(!highOnly)}>
+          <button
+            className={`board__tool${priority === 'high' ? ' is-on' : ''}`}
+            aria-pressed={priority === 'high'}
+            onClick={() => setPriority(priority === 'high' ? null : 'high')}
+          >
             High only
           </button>
+          {priority !== null && priority !== 'high' && (
+            <button className="board__tool is-on" aria-label={`${LEVEL_LABEL[priority]} only: clear`} onClick={() => setPriority(null)}>
+              {LEVEL_LABEL[priority]} only
+              <Icon name="x" size={12} />
+            </button>
+          )}
           <span className="board__spacer" />
           <button
             className={`board__tool${widgets.shown ? ' is-on' : ''}`}
@@ -202,20 +218,31 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
           </button>
         </div>
 
-        {error !== null && (
-          <p className="board__error" role="alert" onClick={clearError}>
-            {error}
+        {notice !== null && (
+          <p className="board__notice" role="alert" onClick={clearNotice}>
+            <Icon name="alert-triangle" size={13} />
+            {notice}
           </p>
         )}
 
-        {widgets.shown && <WidgetStrip board={board} cards={all} today={today} onOpenCard={setSelected} onEditBoard={onEditBoard} />}
+        {widgets.shown && (
+          <WidgetStrip
+            board={board}
+            cards={all}
+            today={today}
+            priority={priority}
+            onOpenCard={setSelected}
+            onFilterPriority={(level) => setPriority(priority === level ? null : level)}
+            onEditBoard={onEditBoard}
+          />
+        )}
 
         <div className="board__columns" ref={columnsRow}>
           {board.columns.map((column) => (
             <BoardColumn key={column.id} {...columnProps(column)} cards={columnCards(column.id)} total={totalOf(column.id)} />
           ))}
           {unknown.length > 0 && (
-            <BoardColumn {...columnProps(null)} cards={sortCards(filterCards(unknown, { query, highOnly }), sort)} total={unknown.length} />
+            <BoardColumn {...columnProps(null)} cards={sortCards(filterCards(unknown, { query, priority }), sort)} total={unknown.length} />
           )}
           <button className="board__addcol" aria-label="Add column" title="Add column" onClick={addColumn}>
             <Icon name="plus" size={14} />
@@ -236,8 +263,29 @@ export function BoardView({ board, onOpenNote, onEditBoard }: Props): React.Reac
           card={open}
           editCard={editCard}
           move={move}
+          onRename={async (name) => {
+            // The panel follows the card to its new path at once, and back if the rename fails.
+            const from = open.path
+            setSelected(`${from.slice(0, from.lastIndexOf('/') + 1)}${name.trim()}.md`)
+            setSelected((await renameCard(from, name)) ?? from)
+          }}
           onOpenNote={onOpenNote}
           onClose={() => setSelected(null)}
+        />
+      )}
+
+      {newCard !== null && (
+        <NewCardPopover
+          column={newCard.column}
+          columns={newCard.choose ? board.columns : undefined}
+          anchor={newCard.anchor}
+          onAdd={addCard}
+          onOpenExisting={(path) => {
+            setNewCard(null)
+            if (all.some((card) => card.path === path)) setSelected(path)
+            else onOpenNote(path)
+          }}
+          onClose={() => setNewCard(null)}
         />
       )}
 

@@ -135,7 +135,8 @@ function writeTasks(relative: string, parsed: ReturnType<typeof parseNote>, date
     ).map((r) => [r.norm, r]),
   )
   handle.prepare('DELETE FROM tasks WHERE path = ?').run(relative)
-  const tasks = extractTasks(relative, parsed.body, parsed.frontmatter, parsed.title ?? name)
+  // A card's task is its title, which is its file name - never its H1.
+  const tasks = extractTasks(relative, parsed.body, parsed.frontmatter, name)
   if (tasks.length === 0) return
   const now = Date.now()
   const insert = handle.prepare(
