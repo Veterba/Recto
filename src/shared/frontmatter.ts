@@ -320,3 +320,10 @@ export function renameField(text: string, from: string, to: string): string {
 
 /** The document body, with the frontmatter block removed. */
 export const bodyOf = (text: string): string => text.split(/\r?\n/).slice(parseFrontmatter(text).bodyStart).join('\n')
+
+/** The note with its body replaced: the frontmatter stays byte for byte. `withBody(t, bodyOf(t))` is `t`. */
+export function withBody(text: string, body: string): string {
+  const lines = text.split(/\r?\n/)
+  const start = parseFrontmatter(text).bodyStart
+  return start === 0 ? body : `${lines.slice(0, start).join('\n')}\n${body}`
+}

@@ -6,6 +6,7 @@
  * reach across the other.
  */
 
+import type { CardStage } from './kanban'
 import type { OverviewIndex } from './overview'
 
 export type SearchHit = {
@@ -18,10 +19,28 @@ export type SearchHit = {
 /**
  * The link graph. Degree is precomputed so the renderer can size nodes.
  * `topic`: a topic (a `topics/` link with no note behind it, or a note under topics/).
+ * `board`: a board note. `stage`: a card's - where it stands, `mixed` when its boards disagree.
  */
-export type GraphNode = { path: string; name: string; title: string | null; degree: number; topic: boolean }
-/** `auto`: every link between the pair is in the topics property. */
-export type GraphEdge = { source: string; target: string; auto: boolean }
+export type GraphNode = {
+  path: string
+  name: string
+  title: string | null
+  degree: number
+  topic: boolean
+  board?: boolean
+  stage?: CardStage | 'mixed'
+  /** A card's first due date, for the hover. */
+  due?: string | null
+  /** A card's lane on its first board, for the hover. */
+  lane?: string | null
+  /** A card's first board note, where a click opens it. */
+  cardBoard?: string
+}
+/**
+ * `auto`: every link between the pair is in the topics property.
+ * `member`: the pair is a board and a card on it, linked only by that card line.
+ */
+export type GraphEdge = { source: string; target: string; auto: boolean; member?: boolean }
 export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[] }
 
 export type Backlink = {
@@ -34,17 +53,15 @@ export type Backlink = {
 }
 
 /**
- * One card on a board. A card IS a note - these fields are frontmatter, read
- * back out of the properties table rather than stored anywhere of their own.
+ * A card's note, as a board draws it. A card IS a note - these fields are
+ * frontmatter, read back out of the properties table. Where it sits on a
+ * board is the board file's business, not the note's.
  */
 export type BoardCard = {
   path: string
   title: string
   /** The first paragraph of the note's body, Markdown stripped. Empty when there is none. */
   description: string
-  status: string | null
-  /** Fractional index within its column; null for a card never dragged. */
-  order: number | null
   /** `start`, `due` and `completed` as written - a datetime stays one; readers take its date. */
   start: string | null
   due: string | null
@@ -57,6 +74,12 @@ export type BoardCard = {
   /** Wikilinks in the note's body. */
   links: number
 }
+
+/** A board note, for the Tasks sidebar. */
+export type BoardSummary = { path: string; name: string; cards: number }
+
+/** One card on one board: where it stands there. */
+export type CardPlace = { path: string; board: string; lane: string; stage: CardStage }
 
 /** What Tidy reasons over: a note's own signals about where it belongs. */
 export type NoteContext = { path: string; tags: string[]; links: string[] }
@@ -85,7 +108,7 @@ export type TaskRowData = {
   noteDate: string
   doneAt: number | null
   due: string | null
-  /** A card's board. */
+  /** A card's board: the board note's name. */
   board: string | null
 }
 
@@ -139,8 +162,11 @@ export type IndexRequest =
   | { kind: 'resolve-links'; targets: string[] }
   | { kind: 'unresolved' }
   | { kind: 'graph'; autoProperty?: string }
-  | { kind: 'board'; board: string }
+  /** Card fields of the notes these link texts name; null for a name that is no note. */
+  | { kind: 'board-cards'; targets: string[] }
   | { kind: 'boards' }
+  /** Every card on every board, and where it stands there. */
+  | { kind: 'card-places' }
   | { kind: 'context' }
   | { kind: 'note-renamed'; from: string; to: string }
   | { kind: 'history'; path: string }
@@ -180,8 +206,9 @@ export type IndexResponse =
   | { kind: 'resolve-links-result'; resolved: Record<string, string | null> }
   | { kind: 'unresolved-result'; entries: { target: string; sources: string[] }[] }
   | { kind: 'graph-result'; graph: GraphData }
-  | { kind: 'board-result'; cards: BoardCard[] }
-  | { kind: 'boards-result'; boards: { board: string; count: number }[] }
+  | { kind: 'board-cards-result'; cards: Record<string, BoardCard | null> }
+  | { kind: 'boards-result'; boards: BoardSummary[] }
+  | { kind: 'card-places-result'; places: CardPlace[] }
   | { kind: 'context-result'; notes: NoteContext[] }
   | { kind: 'history-result'; snapshots: Snapshot[] }
   | { kind: 'history-get-result'; snapshot: Snapshot | null }

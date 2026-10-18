@@ -88,11 +88,11 @@ export function useShellCreate({
     if (activeSection === 'tasks') {
       // It used to open another copy of the board, which is not what a button
       // labelled "Task" promises. Now it makes a card on the board you are
-      // looking at and opens it, so you can start typing.
-      const board = boards.boards.find((entry) => entry.id === activeBoard) ?? boards.boards[0]
-      const column = board?.columns[0]
-      if (board === undefined || column === undefined) return
-      void createCard(board.id, column.id, 'New task', { onTaken: 'number' }).then((created) => {
+      // looking at - at the top of its first column - and opens it, so you can
+      // start typing.
+      const board = boards.find((entry) => entry.path === activeBoard) ?? boards[0]
+      if (board === undefined) return
+      void createCard(board.path, 'New task', 'number').then((created) => {
         if (created.ok) openBoardCard(created.path)
       })
       return

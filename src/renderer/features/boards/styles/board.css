@@ -117,6 +117,70 @@
   color: var(--text-muted);
 }
 
+/* The board note as Markdown, a click away from the board. */
+.board-raw {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.board-raw__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--size-3);
+  padding: var(--size-2) var(--size-4);
+  border-bottom: 1px solid var(--border);
+}
+.board-raw__warn {
+  margin: 0;
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
+.board-raw__editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.board-raw__editor > * {
+  flex: 1;
+  min-height: 0;
+}
+
+/* After a migration: the board notes it made. */
+.board-migrated {
+  margin: 0 0 var(--size-3);
+  padding-left: 1.2em;
+  font-size: var(--font-size-13);
+  color: var(--text-secondary);
+}
+.board-migrated__open {
+  all: unset;
+  color: var(--accent);
+  cursor: pointer;
+}
+.board-migrated__open:hover {
+  text-decoration: underline;
+}
+
+/* Deleting a board: what becomes of its cards. */
+.board-delete__choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--size-2);
+}
+.board-delete__choice label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+}
+.board-delete__error {
+  color: var(--danger);
+}
+
 /* ---------- columns: full height, cards scroll inside ---------- */
 
 .board__columns {
@@ -376,6 +440,10 @@
 }
 .board-card__when.is-soon {
   color: var(--warning);
+}
+/* A line of text on the board, not a note: no priority row, a quieter edge. */
+.board-card.board-card--light {
+  border-style: dashed;
 }
 .board-card__title {
   margin: 0;
@@ -1059,6 +1127,19 @@ button.board-cal__bar:focus-visible {
   line-height: 1.55;
   color: var(--text-secondary);
 }
+/* A plain-text card: its words, not an editable note name. */
+.card-panel__title--text {
+  margin: 0;
+  cursor: default;
+}
+.card-panel__title--text:hover {
+  border-color: transparent;
+}
+.card-panel__hint {
+  margin: 0;
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
 .card-panel__section {
   display: flex;
   flex-direction: column;
@@ -1072,27 +1153,54 @@ button.board-cal__bar:focus-visible {
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.card-panel__checks {
+/* The note's text, edited here: the note's own editor in live preview, in a
+   soft well so it reads as a place to write, with a hint while it is empty. */
+.card-panel__sub .card-panel__count {
+  float: right;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.note-body {
+  /* Headings a step above the text, not a page's: the box is a few lines high. */
+  --heading-scale: 1.08;
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
+  min-height: 140px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--bg-primary) 70%, transparent);
+}
+.note-body:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+/* Not clipped: the [[ list opens below the line and may reach past the box. */
+.note-body .cm-host {
+  flex: 1;
+  overflow: visible;
+}
+.note-body .cm-scroller {
+  max-height: 46vh;
+}
+.note-body .cm-scroller {
+  padding: 8px 10px;
+}
+.note-body .cm-content {
+  max-width: none;
   padding: 0;
-  list-style: none;
+  font-size: var(--font-size-13);
 }
-.card-panel__check {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  cursor: pointer;
-}
-.card-panel__check input {
-  margin: 2px 0 0;
-  accent-color: var(--accent);
-}
-.card-panel__check.is-done span {
+.note-body.is-empty::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  top: 9px;
+  /* Just past the caret, which sits at the start of the empty line. */
+  left: 18px;
+  right: 12px;
+  font-size: var(--font-size-12-5);
+  line-height: 1.5;
   color: var(--text-muted);
-  text-decoration: line-through;
+  pointer-events: none;
 }
 .card-panel__open {
   align-self: flex-start;
@@ -1106,4 +1214,10 @@ button.board-cal__bar:focus-visible {
 .card-panel__later p {
   margin: 0;
   color: var(--text-muted);
+}
+
+/* In the panel's narrow box the [[ list starts at the box's left edge, not at
+   the caret, so it never runs out past the panel. */
+.note-body .cm-tooltip.cm-tooltip-autocomplete {
+  left: 4px !important;
 }

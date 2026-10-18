@@ -43,8 +43,6 @@ type Props = {
   today: Day
   now: number
   /** The Done column of a board, by id; and its name. */
-  doneOf: (board: string | null) => string | null
-  boardName: (board: string | null) => string | null
   actions: OverviewActions
 }
 
@@ -77,12 +75,12 @@ export function countedLine(starts: readonly (Day | null)[], today: Day): string
 const num = (n: number): string => `${n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('en-US')}`
 const plural = (n: number, one: string, many = `${one}s`): string => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
 
-export function Overview({ data, topics, today, now, doneOf, boardName, actions }: Props): React.ReactElement {
+export function Overview({ data, topics, today, now, actions }: Props): React.ReactElement {
   if (data === null) return <Placeholder />
-  return <Figures data={data} topics={topics} today={today} now={now} doneOf={doneOf} boardName={boardName} actions={actions} />
+  return <Figures data={data} topics={topics} today={today} now={now} actions={actions} />
 }
 
-function Figures({ data, topics, today, now, doneOf, boardName, actions }: Props & { data: OverviewData }): React.ReactElement {
+function Figures({ data, topics, today, now, actions }: Props & { data: OverviewData }): React.ReactElement {
   const { index } = data
   const week = weekStart(today)
   const lastWeek = addDays(week, -7)
@@ -105,8 +103,8 @@ function Figures({ data, topics, today, now, doneOf, boardName, actions }: Props
   const editDays = weekDays.filter((d) => data.editsSince !== null && d >= data.editsSince)
   const wordDays = weekDays.filter((d) => wordsOn(data.words, d) !== null)
 
-  const late = useMemo(() => overdue(index.dueCards, today, doneOf), [index.dueCards, today, doneOf])
-  const lateBoards = [...new Set(late.map((c) => boardName(c.board) ?? 'a board'))]
+  const late = useMemo(() => overdue(index.dueCards, today), [index.dueCards, today])
+  const lateBoards = [...new Set(late.map((c) => c.board ?? 'a board'))]
   const again = rediscover(index, data.opened, data.openedSince, today, now)
   const since = index.oldest
   const counted = countedLine([data.editsSince, wordsSince, data.activeSince], today)
@@ -399,8 +397,6 @@ export function OverviewList({
   data,
   topics,
   today,
-  doneOf,
-  boardName,
   exists,
   actions,
 }: {
@@ -408,8 +404,6 @@ export function OverviewList({
   data: OverviewData | null
   topics: OverviewTopic[] | null
   today: Day
-  doneOf: Props['doneOf']
-  boardName: Props['boardName']
   exists: (path: string) => boolean
   actions: OverviewActions
 }): React.ReactElement {
@@ -431,8 +425,8 @@ export function OverviewList({
       case 'overdue':
         return {
           title: 'Overdue tasks',
-          rows: overdue(data.index.dueCards, today, doneOf).map((c) => (
-            <Row key={c.path} name={c.name} count={`due ${shortDay(c.due)}${boardName(c.board) === null ? '' : ` · ${boardName(c.board)}`}`} onClick={() => actions.openCard(c.path)} />
+          rows: overdue(data.index.dueCards, today).map((c) => (
+            <Row key={c.path} name={c.name} count={`due ${shortDay(c.due)}${c.board === null ? '' : ` · ${c.board}`}`} onClick={() => actions.openCard(c.path)} />
           )),
         }
       case 'day':

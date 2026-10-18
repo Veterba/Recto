@@ -15,6 +15,11 @@ export type Palette = {
   nodeOrphan: string
   label: string
   labelActive: string
+  /** A board note's square, and a card's dot by where it stands. */
+  board?: string
+  taskOpen?: string
+  taskDoing?: string
+  taskDone?: string
   /** Whether the app's own background is dark. */
   dark?: boolean
   /** The app's background, for working out what a tinted background comes to. */
@@ -49,6 +54,10 @@ export function readPalette(): Palette {
     nodeOrphan: css('--border-strong', '#3d3d48'),
     label: css('--text-secondary', '#a6a6b2'),
     labelActive: accent,
+    board: accent,
+    taskOpen: css('--text-muted', '#6f6f7d'),
+    taskDoing: css('--warning', '#e2aa4f'),
+    taskDone: css('--success', '#5fc98d'),
     dark: luminance(css('--bg-primary', '#171717')) < 0.5,
     background: css('--bg-primary', '#171717'),
   }

@@ -4,74 +4,100 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { IPC } from '../../../../src/shared/ipc'
 import type { BoardCardInfo } from '../../../../src/shared/index-results'
-import { setCardField, toggleCheck } from '../../../../src/shared/card-fields'
+import { cardFields, setCardField, toggleCheck } from '../../../../src/shared/card-fields'
 import { useBoardCards } from '../../../../src/renderer/features/boards/hooks/use-board-cards'
-import type { Board } from '../../../../src/renderer/features/boards/boards'
 
 /**
- * The board's writes are shown first and written second: these check that a
- * change is on screen before the file is, that a failed write is undone with
- * a notice, that a second Enter cannot make a second card, and that a card's
- * title is its file name.
+ * The board hook on a vault in memory: a board note in the Obsidian Kanban
+ * format and its cards' notes. A change is on screen before any file is; a
+ * move rewrites only the board's lines (and `completed` on the card going in
+ * or out of Done); a failed write is undone with a notice; the file changing
+ * under a write gets the same change, not an overwrite; a second Enter cannot
+ * make a second card; and a line of text becomes a note on request.
  */
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const board: Board = {
-  id: 'launch',
-  name: 'Launch',
-  columns: [
-    { id: 'todo', name: 'To do' },
-    { id: 'done', name: 'Done' },
-  ],
-}
-
-const row = (title: string, over: Partial<BoardCardInfo> = {}): BoardCardInfo => ({
-  path: `tasks/${title}.md`,
-  title,
-  description: '',
-  status: 'todo',
-  order: 1,
-  start: null,
-  due: null,
-  completed: null,
-  priority: null,
-  tags: null,
-  checklist: { done: 0, total: 1 },
-  links: 0,
-  ...over,
-})
+const BOARD = 'tasks/Launch.md'
+const boardText = [
+  '---',
+  '',
+  'kanban-plugin: board',
+  '',
+  '---',
+  '',
+  '## To do',
+  '',
+  '- [ ] [[Ship it]]',
+  '- [ ] Buy stamps',
+  '    at the post office',
+  '',
+  '',
+  '## Done',
+  '',
+  '**Complete**',
+  '- [x] [[Old one]]',
+  '',
+  '',
+  '',
+  '',
+  '%% kanban:settings',
+  '```',
+  '{"kanban-plugin":"board"}',
+  '```',
+  '%%',
+].join('\n')
 
 type Deferred = { resolve: (value: { ok: boolean; error?: string }) => void }
 
-/** A vault in memory, and an index that never catches up unless told to. */
+/** A vault in memory, and an index that knows only what `indexed` says. */
 let files: Map<string, string>
-let rows: BoardCardInfo[]
+let indexed: Set<string>
 let calls: { channel: string; args: unknown[] }[]
 /** When set, writes wait here instead of answering at once. */
 let pendingWrites: Deferred[] | null
-let failWrites: boolean
+let failWrites: (path: string) => boolean
 let failRename: boolean
 
+/** What the index would say about a note: its fields, from its text. */
+const rowOf = (path: string): BoardCardInfo => ({
+  path,
+  title: path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, ''),
+  links: 0,
+  ...cardFields(files.get(path) ?? ''),
+})
+
 beforeEach(() => {
-  files = new Map([['tasks/Ship it.md', '---\nboard: launch\nstatus: todo\norder: 1\n---\n\n- [ ] Pack\n']])
-  rows = [row('Ship it')]
+  files = new Map([
+    [BOARD, boardText],
+    ['tasks/Ship it.md', '---\npriority: low\n---\n\n- [ ] Pack\n'],
+    ['tasks/Old one.md', '---\ncompleted: 2026-10-01\n---\n'],
+  ])
+  indexed = new Set(['tasks/Ship it.md', 'tasks/Old one.md'])
   calls = []
   pendingWrites = null
-  failWrites = false
+  failWrites = () => false
   failRename = false
+  /** Index rows taken when the index last "saw" each note, so it can lag behind the files. */
+  const seen = new Map<string, BoardCardInfo>([...indexed].map((p) => [p, rowOf(p)]))
   const invoke = async (channel: string, ...args: unknown[]): Promise<unknown> => {
     calls.push({ channel, args })
     switch (channel) {
-      case IPC.indexBoard:
-        return rows
+      case IPC.indexCards: {
+        const out: Record<string, BoardCardInfo | null> = {}
+        for (const link of args[0] as string[]) {
+          const path = `tasks/${link}.md`
+          out[link] = indexed.has(path) ? (seen.get(path) ?? rowOf(path)) : null
+        }
+        return out
+      }
       case IPC.fsRead: {
         const content = files.get(args[0] as string)
         return content === undefined ? { ok: false, error: 'missing' } : { ok: true, content }
       }
       case IPC.fsWrite: {
         const write = (): { ok: boolean; error?: string } => {
-          if (failWrites) return { ok: false, error: 'Disk full.' }
+          if (failWrites(args[0] as string)) return { ok: false, error: 'Disk full.' }
           files.set(args[0] as string, args[1] as string)
           return { ok: true }
         }
@@ -89,10 +115,16 @@ beforeEach(() => {
         const to = `${from.slice(0, from.lastIndexOf('/') + 1)}${args[1]}`
         files.set(to, files.get(from)!)
         files.delete(from)
-        return { ok: true, path: to, rewrittenLinks: 0, rewrittenFiles: 0 }
+        // Main rewrites every link to it, the board's line among them.
+        const oldName = from.slice(from.lastIndexOf('/') + 1).replace(/\.md$/, '')
+        const newName = (args[1] as string).replace(/\.md$/, '')
+        files.set(BOARD, files.get(BOARD)!.split(`[[${oldName}]]`).join(`[[${newName}]]`))
+        indexed.delete(from)
+        indexed.add(to)
+        return { ok: true, path: to, rewrittenLinks: 1, rewrittenFiles: 1 }
       }
       case IPC.indexResolveLink:
-        return [...files.keys()].find((p) => p.endsWith(`/${args[0]}.md`)) ?? null
+        return [...files.keys()].find((p) => p.toLowerCase().endsWith(`/${String(args[0]).toLowerCase()}.md`)) ?? null
       case IPC.fsTrash:
         files.delete(args[0] as string)
         return { ok: true }
@@ -113,7 +145,7 @@ afterEach(() => {
 async function mount(): Promise<{ current: ReturnType<typeof useBoardCards> }> {
   const out = {} as { current: ReturnType<typeof useBoardCards> }
   function Probe(): null {
-    out.current = useBoardCards(board)
+    out.current = useBoardCards(BOARD)
     return null
   }
   const el = document.createElement('div')
@@ -124,8 +156,89 @@ async function mount(): Promise<{ current: ReturnType<typeof useBoardCards> }> {
 }
 
 const card = (hook: { current: ReturnType<typeof useBoardCards> }, title: string) => hook.current.cards?.find((c) => c.title === title)
+const board = (): string => files.get(BOARD)!
+const changedLines = (before: string, after: string): string[] => {
+  const a = before.split('\n')
+  return after.split('\n').filter((line, i) => a[i] !== line)
+}
 
-describe('optimistic board writes', () => {
+describe('reading a board note', () => {
+  it('draws its lanes and cards: notes with their fields, a line of text as it is', async () => {
+    const hook = await mount()
+    expect(hook.current.board?.columns.map((c) => [c.name, c.done === true])).toEqual([
+      ['To do', false],
+      ['Done', true],
+    ])
+    expect(hook.current.cards?.map((c) => [c.title, c.column, c.light])).toEqual([
+      ['Ship it', '0', false],
+      ['Buy stamps', '0', true],
+      ['Old one', '1', false],
+    ])
+    expect(card(hook, 'Ship it')?.level).toBe('low')
+    expect(card(hook, 'Buy stamps')?.description).toBe('at the post office')
+  })
+})
+
+describe('moving cards', () => {
+  it('a move within a column swaps lines of the board and touches nothing else', async () => {
+    const hook = await mount()
+    const key = card(hook, 'Buy stamps')!.key
+    await act(async () => hook.current.move(key, { column: '0', index: 0 }))
+    expect(board()).toBe(boardText.replace('- [ ] [[Ship it]]\n- [ ] Buy stamps\n    at the post office', '- [ ] Buy stamps\n    at the post office\n- [ ] [[Ship it]]'))
+    expect(files.get('tasks/Ship it.md')).toBe('---\npriority: low\n---\n\n- [ ] Pack\n')
+  })
+
+  it('into Done: on screen first, then the line ticked and moved, and completed on the note', async () => {
+    const hook = await mount()
+    pendingWrites = []
+    let done: Promise<void> = Promise.resolve()
+    await act(async () => {
+      done = hook.current.move('tasks/Ship it.md', { column: '1', index: 0 })
+    })
+    expect(card(hook, 'Ship it')?.column).toBe('1')
+    expect(board()).toBe(boardText)
+    await act(async () => {
+      pendingWrites![0]!.resolve({ ok: true })
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    // One line out of To do, the same line ticked into Done; every other line as it was.
+    expect(board().split('\n')).toHaveLength(boardText.split('\n').length)
+    expect(board()).toContain('**Complete**\n- [x] [[Ship it]]\n- [x] [[Old one]]')
+    expect(board()).not.toContain('- [ ] [[Ship it]]')
+    await act(async () => {
+      for (const w of pendingWrites!.splice(0)) w.resolve({ ok: true })
+      await done
+    })
+    expect(files.get('tasks/Ship it.md')).toMatch(/^completed: \d{4}-\d{2}-\d{2}$/m)
+  })
+
+  it('out of Done: unticked, and completed gone from the note', async () => {
+    const hook = await mount()
+    await act(async () => hook.current.move('tasks/Old one.md', { column: '0', index: 0 }))
+    expect(board()).toContain('## To do\n\n- [ ] [[Old one]]\n- [ ] [[Ship it]]')
+    expect(files.get('tasks/Old one.md')).not.toContain('completed')
+  })
+
+  it('a board write that fails is undone on screen and said', async () => {
+    const hook = await mount()
+    failWrites = (path) => path === BOARD
+    await act(async () => hook.current.move('tasks/Ship it.md', { column: '1', index: 0 }))
+    expect(card(hook, 'Ship it')?.column).toBe('0')
+    expect(hook.current.notice).toMatch(/Couldn't save the board.*Disk full/)
+    expect(files.get('tasks/Ship it.md')).not.toContain('completed')
+  })
+
+  it('when the board changed under it (Obsidian, sync), the same move is made to what is there now', async () => {
+    const hook = await mount()
+    files.set(BOARD, boardText.replace('- [ ] Buy stamps', '- [ ] Added in Obsidian\n- [ ] Buy stamps'))
+    const key = card(hook, 'Buy stamps')!.key
+    await act(async () => hook.current.move(key, { column: '1', index: 0 }))
+    expect(board()).toContain('- [ ] [[Ship it]]\n- [ ] Added in Obsidian\n\n')
+    expect(board()).toContain('**Complete**\n- [x] Buy stamps\n    at the post office\n- [x] [[Old one]]')
+  })
+})
+
+describe("a card's note", () => {
   it('shows a priority change before the file is written, and keeps it while the index lags', async () => {
     const hook = await mount()
     pendingWrites = []
@@ -133,17 +246,15 @@ describe('optimistic board writes', () => {
     await act(async () => {
       done = hook.current.editCard('tasks/Ship it.md', (t) => setCardField(t, 'priority', 'high'))
     })
-    // Read, shown - and the write still waiting.
     expect(pendingWrites).toHaveLength(1)
     expect(card(hook, 'Ship it')?.level).toBe('high')
-    expect(files.get('tasks/Ship it.md')).not.toContain('priority')
-
+    expect(files.get('tasks/Ship it.md')).toContain('priority: low')
     await act(async () => {
       pendingWrites![0]!.resolve({ ok: true })
       await done
     })
     expect(files.get('tasks/Ship it.md')).toContain('priority: high')
-    // A reload from an index that has not seen the write yet does not snap it back.
+    // The index still says low; a reload does not snap it back.
     await act(async () => hook.current.reload())
     expect(card(hook, 'Ship it')?.level).toBe('high')
   })
@@ -158,7 +269,7 @@ describe('optimistic board writes', () => {
 
   it('undoes a change whose write failed, and says so', async () => {
     const hook = await mount()
-    failWrites = true
+    failWrites = () => true
     let ok = true
     await act(async () => {
       ok = await hook.current.editCard('tasks/Ship it.md', (t) => setCardField(t, 'due', '2026-10-20'))
@@ -167,51 +278,35 @@ describe('optimistic board writes', () => {
     expect(card(hook, 'Ship it')?.span).toBeNull()
     expect(hook.current.notice).toMatch(/Couldn't save the card.*Disk full/)
   })
-
-  it('moves a card to Done at once, with completed, and back when the write fails', async () => {
-    const hook = await mount()
-    failWrites = true
-    pendingWrites = []
-    await act(async () => {
-      void hook.current.move('tasks/Ship it.md', { column: 'done', index: 0 })
-    })
-    expect(card(hook, 'Ship it')?.column).toBe('done')
-    expect(card(hook, 'Ship it')?.completedDay).not.toBeNull()
-    await act(async () => pendingWrites![0]!.resolve({ ok: false }))
-    expect(card(hook, 'Ship it')?.column).toBe('todo')
-    expect(hook.current.notice).not.toBeNull()
-  })
 })
 
 describe('adding a card', () => {
-  it('is on the board before its note is written, and the note has no H1', async () => {
+  it('makes the note in tasks/, empty, and its line at the top of the column', async () => {
     const hook = await mount()
-    pendingWrites = []
-    let result: Awaited<ReturnType<typeof hook.current.addCard>> | null = null
+    let result: unknown = null
     await act(async () => {
-      result = await hook.current.addCard('todo', 'Write notes')
+      result = await hook.current.addCard('0', 'Write notes')
     })
     expect(result).toEqual({ ok: true, path: 'tasks/Write notes.md' })
-    expect(card(hook, 'Write notes')?.column).toBe('todo')
-    await act(async () => pendingWrites![0]!.resolve({ ok: true }))
-    const text = files.get('tasks/Write notes.md')!
-    expect(text).toMatch(/^---\nboard: launch\nstatus: todo\norder: 2\n---\n\n?$/)
-    expect(text).not.toMatch(/^# /m)
+    expect(files.get('tasks/Write notes.md')).toBe('')
+    expect(board()).toContain('## To do\n\n- [ ] [[Write notes]]\n- [ ] [[Ship it]]')
+    expect(changedLines(boardText, board())[0]).toBe('- [ ] [[Write notes]]')
+    // Shown before the index has read it.
+    expect(card(hook, 'Write notes')).toMatchObject({ column: '0', path: 'tasks/Write notes.md', light: false })
   })
 
-  it('makes one card when Enter comes twice before the first write is done', async () => {
+  it('makes one card when Enter comes twice before the first is done', async () => {
     const hook = await mount()
-    pendingWrites = []
     const results: unknown[] = []
     await act(async () => {
-      results.push(await hook.current.addCard('todo', 'Twice'))
-      results.push(await hook.current.addCard('todo', 'Twice'))
+      const first = hook.current.addCard('0', 'Twice')
+      const second = hook.current.addCard('0', 'Twice')
+      results.push(await first, await second)
     })
     expect(results[0]).toMatchObject({ ok: true })
     expect(results[1]).toMatchObject({ ok: false })
     expect(calls.filter((c) => c.channel === IPC.fsCreate)).toHaveLength(1)
-    expect(hook.current.cards?.filter((c) => c.title === 'Twice')).toHaveLength(1)
-    await act(async () => pendingWrites![0]!.resolve({ ok: true }))
+    expect(board().match(/\[\[Twice\]\]/g)).toHaveLength(1)
   })
 
   it('refuses a name that is already a note, and makes nothing', async () => {
@@ -219,48 +314,80 @@ describe('adding a card', () => {
     const hook = await mount()
     let result: unknown = null
     await act(async () => {
-      result = await hook.current.addCard('todo', 'Groceries')
+      result = await hook.current.addCard('0', 'Groceries')
     })
     expect(result).toEqual({ ok: false, exists: 'Notes/Groceries.md' })
     expect(calls.some((c) => c.channel === IPC.fsCreate)).toBe(false)
+    expect(board()).toBe(boardText)
   })
 
-  it('takes the card off again when its note cannot be written', async () => {
+  it('takes the note away again when the board cannot be written', async () => {
     const hook = await mount()
-    failWrites = true
+    failWrites = (path) => path === BOARD
+    let result: unknown = null
     await act(async () => {
-      await hook.current.addCard('todo', 'Doomed')
+      result = await hook.current.addCard('0', 'Doomed')
     })
-    await act(async () => undefined)
-    expect(card(hook, 'Doomed')).toBeUndefined()
+    expect(result).toMatchObject({ ok: false })
     expect(files.has('tasks/Doomed.md')).toBe(false)
-    expect(hook.current.notice).toMatch(/Couldn't create the card/)
+    expect(card(hook, 'Doomed')).toBeUndefined()
+  })
+})
+
+describe('a line of text', () => {
+  it('becomes a note in tasks/ - its first line the name, the rest the body - and its line a link', async () => {
+    const hook = await mount()
+    const key = card(hook, 'Buy stamps')!.key
+    let made: string | null = null
+    await act(async () => {
+      made = await hook.current.makeNote(key)
+    })
+    expect(made).toBe('tasks/Buy stamps.md')
+    expect(files.get('tasks/Buy stamps.md')).toBe('at the post office\n')
+    expect(board()).toBe(boardText.replace('- [ ] Buy stamps\n    at the post office', '- [ ] [[Buy stamps]]'))
+    expect(card(hook, 'Buy stamps')).toMatchObject({ light: false, path: 'tasks/Buy stamps.md' })
+  })
+
+  it('is not made a note when one has its name; the board is left alone', async () => {
+    files.set('Errands/Buy stamps.md', '')
+    const hook = await mount()
+    await act(async () => {
+      await hook.current.makeNote(card(hook, 'Buy stamps')!.key)
+    })
+    expect(hook.current.notice).toMatch(/exists already/)
+    expect(board()).toBe(boardText)
+  })
+
+  it('comes off the board, and only its lines go', async () => {
+    const hook = await mount()
+    await act(async () => {
+      await hook.current.removeCard(card(hook, 'Buy stamps')!.key)
+    })
+    expect(board()).toBe(boardText.replace('- [ ] Buy stamps\n    at the post office\n', ''))
   })
 })
 
 describe('the title is the file name', () => {
-  it('renaming the title renames the note, shown at once', async () => {
+  it('renaming the title renames the note, and the board reads its rewritten link', async () => {
     const hook = await mount()
     let next: string | null = null
     await act(async () => {
       next = await hook.current.renameCard('tasks/Ship it.md', 'Ship it today')
     })
+    await act(async () => undefined)
     expect(next).toBe('tasks/Ship it today.md')
-    expect(files.has('tasks/Ship it today.md')).toBe(true)
+    expect(board()).toContain('- [ ] [[Ship it today]]')
     expect(card(hook, 'Ship it today')?.path).toBe('tasks/Ship it today.md')
-    // The index still lists the old path for a moment; it is not shown twice.
-    await act(async () => hook.current.reload())
-    expect(hook.current.cards?.map((c) => c.title)).toEqual(['Ship it today'])
+    expect(hook.current.cards?.map((c) => c.title)).toEqual(['Ship it today', 'Buy stamps', 'Old one'])
   })
 
-  it('a rename that fails puts the old name back and says why', async () => {
+  it('a rename that fails keeps the old name and says why', async () => {
     const hook = await mount()
     failRename = true
     await act(async () => {
       await hook.current.renameCard('tasks/Ship it.md', 'Taken')
     })
     expect(card(hook, 'Ship it')?.path).toBe('tasks/Ship it.md')
-    expect(card(hook, 'Taken')).toBeUndefined()
     expect(hook.current.notice).toMatch(/already exists/)
   })
 })

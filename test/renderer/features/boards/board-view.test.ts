@@ -17,19 +17,18 @@ import {
   viewDays,
   viewStart,
 } from '../../../../src/renderer/features/boards/board-view'
-import { UNKNOWN_COLUMN } from '../../../../src/renderer/features/boards/boards'
+import type { Column } from '../../../../src/renderer/features/boards/boards'
 
-const columns = [
-  { id: 'todo', name: 'To do', start: '2026-10-14', due: '2026-10-25' },
-  { id: 'done', name: 'Done' },
+const columns: Column[] = [
+  { id: '0', index: 0, name: 'To do', start: '2026-10-14', due: '2026-10-25' },
+  { id: '1', index: 1, name: 'Done', done: true },
 ]
+const DONE = '1'
 
 const row = (over: Partial<BoardCardInfo>): BoardCardInfo => ({
   path: `tasks/${over.title ?? 'x'}.md`,
   title: 'x',
   description: '',
-  status: 'todo',
-  order: null,
   start: null,
   due: null,
   completed: null,
@@ -39,23 +38,41 @@ const row = (over: Partial<BoardCardInfo>): BoardCardInfo => ({
   links: 0,
   ...over,
 })
-const card = (over: Partial<BoardCardInfo>): ReturnType<typeof toView> => toView(row(over), columns)
+let next = 0
+/** A card that is a note, in a column (the first by default), at a place in it (in the order made by default). */
+const card = (over: Partial<BoardCardInfo> & { column?: string; index?: number }): ReturnType<typeof toView> => {
+  const { column = '0', index = next++, ...fields } = over
+  const title = fields.title ?? 'x'
+  return toView({ text: `[[${title}]]`, link: title, raw: `- [ ] [[${title}]]` }, row(fields), columns[Number(column)]!, index)
+}
 
 describe('cards on the board', () => {
-  it('reads the fields once: column, priority, span, tags, completed day', () => {
+  it('reads the fields once: priority, span, tags, completed day', () => {
     const view = card({
-      status: 'lost',
+      column: DONE,
       priority: 'High',
       start: '2026-10-20',
       due: '2026-10-16T08:00',
       tags: 'ui,#docs',
       completed: '2026-10-15T10:00',
     })
-    expect(view.column).toBe(UNKNOWN_COLUMN)
+    expect(view.column).toBe(DONE)
+    expect(view.key).toBe('tasks/x.md')
     expect(view.level).toBe('high')
     expect(view.span).toEqual({ from: '2026-10-16', to: '2026-10-16' })
     expect(view.tagList).toEqual(['ui', 'docs'])
     expect(view.completedDay).toBe('2026-10-15')
+  })
+
+  it('a line of text is a card too: its first line the title, the rest its description', () => {
+    const view = toView({ text: 'Buy stamps\nat the post office', link: null, raw: '- [ ] Buy stamps\n    at the post office' }, null, columns[0]!, 3)
+    expect(view).toMatchObject({ light: true, title: 'Buy stamps', description: 'at the post office', path: '', key: 'text:0:3', level: null })
+    // A link to a note that is not there yet is drawn with its name until it is.
+    expect(toView({ text: '[[Later/Not yet]]', link: 'Later/Not yet', raw: '- [ ] [[Later/Not yet]]' }, null, columns[0]!, 0)).toMatchObject({
+      light: false,
+      title: 'Not yet',
+      key: 'link:0:0',
+    })
   })
 
   it('filters by words in the title or description, and by one priority', () => {
@@ -70,11 +87,11 @@ describe('cards on the board', () => {
     expect(filterCards(cards, { query: '', priority: 'none' }).map((c) => c.title)).toEqual(['Panel'])
   })
 
-  it('sorts by priority, due date or title; manual keeps the dragged order', () => {
+  it("sorts by priority, due date or title; manual keeps the board file's order", () => {
     const cards = [
-      card({ title: 'b', order: 1, priority: 'low', due: '2026-10-20' }),
-      card({ title: 'a', order: 2, due: '2026-10-18' }),
-      card({ title: 'c', order: 3, priority: 'high' }),
+      card({ title: 'c', index: 2, priority: 'high' }),
+      card({ title: 'b', index: 0, priority: 'low', due: '2026-10-20' }),
+      card({ title: 'a', index: 1, due: '2026-10-18' }),
     ]
     expect(sortCards(cards, 'manual').map((c) => c.title)).toEqual(['b', 'a', 'c'])
     expect(sortCards(cards, 'priority').map((c) => c.title)).toEqual(['c', 'b', 'a'])
@@ -154,7 +171,7 @@ describe('done this week and due soon', () => {
       card({ title: 'b', completed: '2026-10-16T09:00' }),
       card({ title: 'c', completed: '2026-10-16' }),
       card({ title: 'd', completed: '2026-10-09' }),
-      card({ title: 'e', status: 'done' }),
+      card({ title: 'e', column: DONE }),
     ]
     expect(doneThisWeek(cards, '2026-10-16')).toEqual({ total: 3, perDay: [1, 0, 0, 0, 2, 0, 0] })
   })
@@ -166,29 +183,29 @@ describe('done this week and due soon', () => {
     card({ title: 'in three days', due: '2026-10-19' }),
     card({ title: 'today', due: '2026-10-16', priority: 'low' }),
     card({ title: 'spanning', start: '2026-10-14', due: '2026-10-18', priority: 'high' }),
-    card({ title: 'finished', due: '2026-10-15', status: 'done' }),
+    card({ title: 'finished', due: '2026-10-15', column: DONE }),
   ]
 
   it('due soon is today and the next three days, soonest first, without late or finished ones', () => {
-    expect(dueSoon(dated, '2026-10-16', 'done').map((c) => c.title)).toEqual(['today', 'spanning', 'in three days'])
+    expect(dueSoon(dated, '2026-10-16', DONE).map((c) => c.title)).toEqual(['today', 'spanning', 'in three days'])
   })
 
   it('overdue is the late ones, the oldest first', () => {
-    expect(overdue(dated, '2026-10-16', 'done').map((c) => c.title)).toEqual(['older', 'late'])
+    expect(overdue(dated, '2026-10-16', DONE).map((c) => c.title)).toEqual(['older', 'late'])
   })
 
   it('today is every open card today falls inside, highest priority first', () => {
-    expect(todayCards(dated, '2026-10-16', 'done').map((c) => c.title)).toEqual(['spanning', 'today'])
+    expect(todayCards(dated, '2026-10-16', DONE).map((c) => c.title)).toEqual(['spanning', 'today'])
   })
 
   it('counts open cards per priority', () => {
-    expect(priorityCounts(dated, 'done')).toEqual({ high: 1, medium: 0, low: 1, none: 4 })
+    expect(priorityCounts(dated, DONE)).toEqual({ high: 1, medium: 0, low: 1, none: 4 })
   })
 
   it('recently done is the last five to get a completed date, newest first', () => {
-    const cards = ['01', '03', '02', '06', '05', '04'].map((d) => card({ title: `d${d}`, status: 'done', completed: `2026-10-${d}` }))
+    const cards = ['01', '03', '02', '06', '05', '04'].map((d) => card({ title: `d${d}`, column: DONE, completed: `2026-10-${d}` }))
     cards.push(card({ title: 'open' }))
-    cards.push(card({ title: 'same day, later', status: 'done', completed: '2026-10-06T18:00' }))
+    cards.push(card({ title: 'same day, later', column: DONE, completed: '2026-10-06T18:00' }))
     expect(recentlyDone(cards).map((c) => c.title)).toEqual(['same day, later', 'd06', 'd05', 'd04', 'd03'])
   })
 })

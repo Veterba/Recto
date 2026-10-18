@@ -10,8 +10,11 @@ import type {
   GraphEdge,
   GraphNode,
   BoardCard,
+  BoardSummary,
+  CardPlace,
   NoteContext,
 } from '../../shared/indexer-protocol'
+import { linkStage, type CardStage } from '../../shared/kanban'
 import type { OverviewIndex } from '../../shared/overview'
 import { requireDb } from './db'
 import { pathsByName, resolveLink } from '../../shared/parse'
@@ -146,30 +149,53 @@ export function graph(autoProperty: string | null): GraphData {
     manual: l.manual,
   }))
 
+  // A board's card lines link it to its cards; that link is membership, not one anyone wrote.
+  const members = new Set(
+    (handleDb.prepare('SELECT DISTINCT board_path, target_path FROM board_items WHERE target_path IS NOT NULL').all() as {
+      board_path: string
+      target_path: string
+    }[]).map((row) => `${row.board_path}\u0000${row.target_path}`),
+  )
+
   for (const link of [...links, ...resolvedTopics]) {
     if (link.source === link.target) continue
     if (!known.has(link.source) || (!known.has(link.target) && !topics.has(link.target.toLowerCase()))) continue
+    const member = members.has(`${link.source}\u0000${link.target}`)
     // Undirected for layout purposes: A->B and B->A are one spring.
     const key = link.source < link.target ? `${link.source}\u0000${link.target}` : `${link.target}\u0000${link.source}`
     const seen = byPair.get(key)
     if (seen !== undefined) {
       if (link.manual === 1) seen.auto = false
+      if (!member) delete seen.member
       continue
     }
-    byPair.set(key, { source: link.source, target: link.target, auto: link.manual === 0 })
+    byPair.set(key, { source: link.source, target: link.target, auto: link.manual === 0, ...(member ? { member: true } : {}) })
     degree.set(link.source, (degree.get(link.source) ?? 0) + 1)
     degree.set(link.target, (degree.get(link.target) ?? 0) + 1)
   }
   const edges = [...byPair.values()]
 
+  const boardPaths = new Set(boards().map((b) => b.path))
+  const stages = stagesByPath()
+  const dues = new Map(
+    (handleDb.prepare(`SELECT path, value FROM properties WHERE key = 'due'`).all() as { path: string; value: string | null }[]).map((r) => [
+      r.path,
+      /\d{4}-\d{2}-\d{2}/.exec(r.value ?? '')?.[0] ?? null,
+    ]),
+  )
   const nodes: GraphNode[] = [
-    ...rows.map((row) => ({
-      path: row.path,
-      name: row.name.replace(/\.md$/i, ''),
-      title: row.title,
-      degree: degree.get(row.path) ?? 0,
-      topic: row.path.toLowerCase().startsWith('topics/'),
-    })),
+    ...rows.map((row) => {
+      const card = stages.get(row.path)
+      return {
+        path: row.path,
+        name: row.name.replace(/\.md$/i, ''),
+        title: row.title,
+        degree: degree.get(row.path) ?? 0,
+        topic: row.path.toLowerCase().startsWith('topics/'),
+        ...(boardPaths.has(row.path) ? { board: true } : {}),
+        ...(card === undefined ? {} : { stage: card.stage, lane: card.lane, due: dues.get(row.path) ?? null, cardBoard: card.board }),
+      }
+    }),
     ...[...topics.values()].map((id) => ({
       path: id,
       name: id.slice('topics/'.length),
@@ -183,63 +209,91 @@ export function graph(autoProperty: string | null): GraphData {
 }
 
 /**
- * Every card on one board.
+ * The card fields of the notes some link texts name - the cards a board file
+ * lists, `[[Name]]` by `[[Name]]`, resolved the way a link is.
  *
  * A card is a note, so this is a join over the frontmatter rows rather than a
- * table of its own - there is no card record anywhere, and deleting the .md
- * file deletes the card. `board` is the required key: a note without it is not
- * on any board, which is what keeps the board from swallowing the whole vault.
- *
- * A card's title is its file name, like every note's in Recto - not its H1.
- *
- * Cards with no `order` sort last, by name, so a note that was hand-written
- * into a column still appears somewhere stable rather than jumping about.
+ * table of its own. A card's title is its file name, like every note's in
+ * Recto - not its H1. Which lane it is in is the board file's business.
  */
-export function board(name: string): BoardCard[] {
+export function cards(targets: readonly string[]): Record<string, BoardCard | null> {
+  const handle = requireDb()
+  const rows = handle.prepare('SELECT path FROM notes').all() as { path: string }[]
+  const allPaths = new Set(rows.map((r) => r.path))
+  const byName = pathsByName(allPaths)
   const field = (key: string, as: string): string =>
     `(SELECT value FROM properties WHERE properties.path = n.path AND properties.key = '${key}') AS ${as}`
-  const rows = requireDb()
-    .prepare(
-      `SELECT n.path                       AS path,
-              n.name                       AS title,
-              s.value                      AS status,
-              o.num                        AS "order",
-              ${field('start', 'start')},
-              ${field('due', 'due')},
-              ${field('completed', 'completed')},
-              ${field('priority', 'priority')},
-              ${field('tags', 'tags')},
-              (SELECT COUNT(*) FROM links WHERE links.source_path = n.path AND links.property IS NULL) AS links,
-              (SELECT body FROM notes_fts WHERE notes_fts.path = n.path) AS body
-       FROM notes n
-       JOIN properties b ON b.path = n.path AND b.key = 'board' AND b.value = ?
-       LEFT JOIN properties s ON s.path = n.path AND s.key = 'status'
-       LEFT JOIN properties o ON o.path = n.path AND o.key = 'order'
-       ORDER BY o.num IS NULL, o.num, n.name`,
-    )
-    .all(name) as (Omit<BoardCard, 'description' | 'checklist'> & { body: string | null })[]
-
-  return rows.map(({ body, ...row }) => {
+  const read = handle.prepare(
+    `SELECT n.path AS path, n.name AS title,
+            ${field('start', 'start')},
+            ${field('due', 'due')},
+            ${field('completed', 'completed')},
+            ${field('priority', 'priority')},
+            ${field('tags', 'tags')},
+            (SELECT COUNT(*) FROM links WHERE links.source_path = n.path AND links.property IS NULL) AS links,
+            (SELECT body FROM notes_fts WHERE notes_fts.path = n.path) AS body
+       FROM notes n WHERE n.path = ?`,
+  )
+  const out: Record<string, BoardCard | null> = {}
+  for (const target of targets) {
+    const path = resolveLink(target, byName, allPaths)
+    const row = path === null ? undefined : (read.get(path) as (Omit<BoardCard, 'description' | 'checklist'> & { body: string | null }) | undefined)
+    if (row === undefined) {
+      out[target] = null
+      continue
+    }
+    const { body, ...fields } = row
     const items = checklist(body ?? '')
-    return {
-      ...row,
-      title: row.title.replace(/\.md$/i, ''),
+    out[target] = {
+      ...fields,
+      title: fields.title.replace(/\.md$/i, ''),
       description: cardDescription(body ?? ''),
       checklist: { done: items.filter((item) => item.done).length, total: items.length },
     }
-  })
+  }
+  return out
 }
 
-/** Board names that actually occur in the vault, with their card counts. */
-export function boards(): { board: string; count: number }[] {
+/** Every board note - a note in the Obsidian Kanban format - with its card count. */
+export function boards(): BoardSummary[] {
+  return (
+    requireDb()
+      .prepare(
+        `SELECT n.path, n.name, (SELECT COUNT(*) FROM board_items bi WHERE bi.board_path = n.path) AS cards
+           FROM notes n JOIN properties p ON p.path = n.path AND p.key = 'kanban-plugin'
+          WHERE p.value IS NOT NULL AND p.value <> '' AND p.value <> 'false'
+          ORDER BY lower(n.name)`,
+      )
+      .all() as BoardSummary[]
+  ).map((row) => ({ ...row, name: row.name.replace(/\.md$/i, '') }))
+}
+
+/** Every card that is a note, on every board, and where it stands there. */
+export function cardPlaces(): CardPlace[] {
   return requireDb()
     .prepare(
-      `SELECT value AS board, COUNT(*) AS count
-       FROM properties WHERE key = 'board' AND value IS NOT NULL AND value <> ''
-       GROUP BY value ORDER BY value`,
+      `SELECT target_path AS path, board_path AS board, lane_title AS lane, stage
+         FROM board_items WHERE target_path IS NOT NULL
+        -- board_items.lane, not the alias: a bare 'lane' here would sort by the lane's title.
+        ORDER BY board_path, board_items.lane, position`,
     )
-    .all() as { board: string; count: number }[]
+    .all() as CardPlace[]
 }
+
+/** A card's stage over all its boards, and its first board's lane, by note path. */
+function stagesByPath(): Map<string, { stage: CardStage | 'mixed'; lane: string; board: string }> {
+  const out = new Map<string, { stages: CardStage[]; lane: string; board: string }>()
+  for (const place of cardPlaces()) {
+    const seen = out.get(place.path)
+    if (seen === undefined) out.set(place.path, { stages: [place.stage], lane: place.lane, board: place.board })
+    else seen.stages.push(place.stage)
+  }
+  return new Map([...out].map(([path, v]) => [path, { stage: linkStage(v.stages)!, lane: v.lane, board: v.board }]))
+}
+
+/** Notes that are cards: some board lists them. Board notes are left out of the overview's lists too. */
+const NOT_CARD = `NOT EXISTS (SELECT 1 FROM board_items bi WHERE bi.target_path = n.path)
+  AND NOT EXISTS (SELECT 1 FROM properties kp WHERE kp.path = n.path AND kp.key = 'kanban-plugin')`
 
 /**
  * What the vault overview reads, in one call.
@@ -248,14 +302,13 @@ export function boards(): { board: string; count: number }[] {
  * keystroke. `days` are the days "on this day" looks for (a month and a year
  * back), asked by the renderer because its clock is the one on screen.
  *
- * Board cards (notes with a `board` property) are tasks, not notes: they are
- * never orphans and never offered to reread.
+ * Cards (notes a board lists) are tasks, not notes: they are never orphans
+ * and never offered to reread.
  */
 export function overview(days: readonly string[]): OverviewIndex {
   const handle = requireDb()
   const one = (sql: string, ...args: unknown[]): number => (handle.prepare(sql).get(...args) as { n: number } | undefined)?.n ?? 0
   const name = (row: { title: string | null; name: string }): string => row.title ?? row.name.replace(/\.md$/i, '')
-  const NOT_CARD = `NOT EXISTS (SELECT 1 FROM properties p WHERE p.path = n.path AND p.key = 'board')`
 
   const folders = (
     handle
@@ -310,20 +363,22 @@ export function overview(days: readonly string[]): OverviewIndex {
       .all() as { path: string; title: string | null; name: string; target: string }[]
   ).map((row) => ({ path: row.path, name: name(row), target: row.target }))
 
+  const stages = stagesByPath()
+  const boardName = new Map(boards().map((b) => [b.path, b.name]))
   const dueCards = (
     handle
       .prepare(
-        `SELECT n.path, n.title, n.name, due.value AS due,
-                (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'status') AS status,
-                (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'board') AS board
+        `SELECT n.path, n.title, n.name, due.value AS due
            FROM notes n JOIN properties due ON due.path = n.path AND due.key = 'due'
-          WHERE EXISTS (SELECT 1 FROM properties p WHERE p.path = n.path AND p.key = 'board')
+          WHERE EXISTS (SELECT 1 FROM board_items bi WHERE bi.target_path = n.path)
           ORDER BY due.value, n.name`,
       )
-      .all() as { path: string; title: string | null; name: string; due: string | null; status: string | null; board: string | null }[]
+      .all() as { path: string; title: string | null; name: string; due: string | null }[]
   ).flatMap((row) => {
     const due = /\d{4}-\d{2}-\d{2}/.exec(row.due ?? '')?.[0]
-    return due === undefined ? [] : [{ path: row.path, name: name(row), due, status: row.status, board: row.board }]
+    const place = stages.get(row.path)
+    if (due === undefined || place === undefined) return []
+    return [{ path: row.path, name: name(row), due, done: place.stage === 'done', board: boardName.get(place.board) ?? null }]
   })
 
   const written =

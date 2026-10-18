@@ -334,7 +334,7 @@ async function screens(page, dir, vault) {
   await shoot(page, dir, '07-board', 1800)
   // A card opened beside the board: its fields, checklist and the comments placeholder.
   await page.locator('.board-card', { hasText: 'Fix the export bug' }).click()
-  await page.waitForSelector('.card-panel .card-panel__check')
+  await page.waitForSelector('.card-panel .note-body .cm-content')
   await shoot(page, dir, '07b-board-card-panel', 600)
   await page.locator('.card-panel [aria-label="Close card"]').click()
   await page.waitForSelector('.card-panel', { state: 'detached' })
@@ -953,6 +953,58 @@ async function linkCompleteShots(dir, theme) {
 }
 
 /**
+ * Boards as notes, in their own run: the board with a line of text among the
+ * cards, its Markdown with the note about what Obsidian removes, links to a
+ * board and to cards in each stage with their icons, and the graph with
+ * Boards and Tasks on.
+ */
+async function boardShots(dir, theme) {
+  const { base, vault, userData } = prepareVault(theme, `${theme}-boards`)
+  const board = path.join(vault, 'tasks', 'Launch.md')
+  fs.writeFileSync(board, fs.readFileSync(board, 'utf8').replace('- [ ] [[Record the demo]]', '- [ ] [[Record the demo]]\n- [ ] Buy stamps\n    at the post office'))
+  fs.writeFileSync(
+    path.join(vault, 'Plans.md'),
+    '# Plans\n\nThe [[Launch]] board. Next: [[Write the announcement]], then [[Fix the export bug]]; done: [[Design the icon]].\n',
+  )
+  const { app, page } = await launch(userData)
+  try {
+    await key(page, 'Mod+3')
+    await page.locator('.boards__row', { hasText: 'Launch' }).first().click()
+    await page.waitForSelector('.board-card--light')
+    await shoot(page, dir, '31-board-note', 1200)
+    // A new card's panel: its empty notes, the caret in them, the hint beside it.
+    await page.getByRole('button', { name: 'New card in To do' }).click()
+    await page.getByRole('textbox', { name: 'Card title' }).fill('Order the prints')
+    await page.getByRole('textbox', { name: 'Card title' }).press('Enter')
+    await page.locator('.board-card', { hasText: 'Order the prints' }).click()
+    await page.locator('.card-panel .note-body .cm-content').click()
+    await shoot(page, dir, '31e-card-panel-empty', 600)
+    await page.locator('.card-panel [aria-label="Close card"]').click()
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await page.locator('.board-raw .cm-content').getByText('kanban:settings').waitFor()
+    await shoot(page, dir, '31b-board-markdown', 800)
+    await page.getByRole('button', { name: 'Show board' }).click()
+    await key(page, 'Mod+1')
+    await page.locator('[role=treeitem]', { hasText: 'Plans' }).first().click()
+    await page.locator('.cm-wikilink .cm-link-icon--done').waitFor()
+    // The caret off the links' line, so they are drawn as links.
+    await page.locator('.cm-line', { hasText: 'Plans' }).first().click()
+    await shoot(page, dir, '31c-link-icons', 600)
+    await key(page, 'Mod+G')
+    await page.waitForSelector('.graph__canvas')
+    await page.getByRole('button', { name: 'Tasks', exact: true }).click()
+    await page
+      .waitForFunction(() => !document.querySelector('.graph__stat')?.textContent?.includes('settling'), null, { timeout: 30_000 })
+      .catch(() => {})
+    await shoot(page, dir, '31d-graph-boards', 1500)
+    console.log('  31-board-note, 31e-card-panel-empty, 31b-board-markdown, 31c-link-icons, 31d-graph-boards')
+  } finally {
+    await app.close()
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
+/**
  * Editing tables, in their own run: the toolbar's size picker, a row's handle
  * with its menu, and a rectangle of selected cells (test/fixtures/table-edit).
  */
@@ -1090,6 +1142,7 @@ for (const theme of ['light', 'dark']) {
     await highlightShots(dir, theme)
     await linkCompleteShots(dir, theme)
     await settingsGlassShots(dir, theme)
+    await boardShots(dir, theme)
     if (COMPARE !== null) {
       for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.png'))) {
         const old = path.join(COMPARE, theme, name)

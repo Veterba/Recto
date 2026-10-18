@@ -44,22 +44,12 @@ const clean = (text: string): string =>
     .trim()
 
 /**
- * A note's tasks. `frontmatter` decides whether a note in tasks/ is a card;
- * the card's own text is its title.
+ * A note's tasks, its checkbox and list items. A card is not found here: what
+ * makes a note a card is a board that lists it (the index's board_items).
  */
-export function extractTasks(path: string, body: string, frontmatter: Record<string, unknown>, title: string): ExtractedTask[] {
+export function extractTasks(path: string, body: string): ExtractedTask[] {
   if (NO_TASK_FOLDERS.test(path) || isEvalsPath(path)) return []
   const out: ExtractedTask[] = []
-  if (/^tasks\//i.test(path) && (frontmatter['status'] !== undefined || frontmatter['board'] !== undefined)) {
-    out.push({
-      text: title,
-      done: false,
-      heading: null,
-      line: 0,
-      source: 'card',
-      status: frontmatter['status'] == null ? null : String(frontmatter['status']),
-    })
-  }
   const lines = body.split('\n')
   let heading: string | null = null
   let headingLevel = 0

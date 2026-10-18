@@ -12,6 +12,10 @@ export type GraphNodeView = {
   group?: number
   /** A topic: drawn as a hollow circle, never filled. */
   topic?: boolean
+  /** A board note: a larger rounded square. */
+  board?: boolean
+  /** A card: a small dot in the colour of where it stands. */
+  stage?: 'open' | 'doing' | 'done' | 'mixed'
 }
 
 export type Camera = { x: number; y: number; zoom: number }

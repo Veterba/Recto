@@ -5,6 +5,8 @@ import * as ai from './ai'
 import * as bots from './bots'
 import * as answers from './bots/answers'
 import { migrateChats } from './bots/migration'
+import { migrateBoards } from './board-migration'
+import type { BoardMigrationResult } from '../shared/board-migration'
 import * as topics from './topics/service'
 import * as topicCommands from './topics/commands'
 import * as topicStorage from './topics/storage'
@@ -37,9 +39,23 @@ function handle<C extends keyof IpcApi>(
 const renameUndo = new Map<string, { from: string; to: string; entries: { path: string; before: string }[] }>()
 
 /** Restart the watcher and the index whenever the open vault changes. */
+/** What the boards migration did when this vault opened, until the app has said so. */
+let boardsMigration: BoardMigrationResult = { state: 'none' }
+
+/** boards.json to board notes, once (main/board-migration.ts); a failure is said, and the vault opens anyway. */
+function runBoardsMigration(vault: string, names: Record<string, string> = {}): BoardMigrationResult {
+  try {
+    return migrateBoards(vault, names)
+  } catch (err) {
+    console.error('[boards] migration', err)
+    return { state: 'failed', error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 function rewatch(): void {
   // Before the watcher starts, so the files it moves are not reported as edits.
   const vault = currentVault()
+  boardsMigration = vault === null ? { state: 'none' } : runBoardsMigration(vault.path)
   // Bots on or off is decided first, from the vault as it is: the chat
   // migration below makes a chats folder, which would read as "has bots".
   if (vault !== null && bots.botsEnabled()) {
@@ -383,6 +399,21 @@ export function registerIpc(): void {
     overview.recordActive(day, seconds)
     return { ok: true }
   })
+  handle(IPC.boardsMigration, () => {
+    const result = boardsMigration
+    // Said once; conflicts stay until they are answered.
+    if (result.state !== 'conflicts') boardsMigration = { state: 'none' }
+    return result
+  })
+  handle(IPC.boardsMigrate, (names): BoardMigrationResult => {
+    const vault = currentVault()
+    if (vault === null) return { state: 'none' }
+    // The watcher is running by now: every file this writes is reported, and indexed, like any change.
+    boardsMigration = runBoardsMigration(vault.path, names)
+    const result = boardsMigration
+    if (result.state !== 'conflicts') boardsMigration = { state: 'none' }
+    return result
+  })
   handle(IPC.overviewPlace, () => readAppState().overviewPlace ?? START_PLACE)
   handle(IPC.overviewSetPlace, (place) => {
     writeAppState({ overviewPlace: place })
@@ -405,13 +436,17 @@ export function registerIpc(): void {
     const response = await send({ kind: 'graph', autoProperty: 'topics' }, 30_000)
     return response.kind === 'graph-result' ? response.graph : { nodes: [], edges: [] }
   })
-  handle(IPC.indexBoard, async (board) => {
-    const response = await send({ kind: 'board', board }, 30_000)
-    return response.kind === 'board-result' ? response.cards : []
+  handle(IPC.indexCards, async (targets) => {
+    const response = await send({ kind: 'board-cards', targets }, 30_000)
+    return response.kind === 'board-cards-result' ? response.cards : {}
   })
   handle(IPC.indexBoards, async () => {
     const response = await send({ kind: 'boards' }, 30_000)
     return response.kind === 'boards-result' ? response.boards : []
+  })
+  handle(IPC.indexCardPlaces, async () => {
+    const response = await send({ kind: 'card-places' }, 30_000)
+    return response.kind === 'card-places-result' ? response.places : []
   })
   handle(IPC.indexContext, async () => {
     const response = await send({ kind: 'context' }, 30_000)

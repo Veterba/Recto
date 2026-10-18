@@ -22,11 +22,12 @@ type GraphSettings = {
   tunables: Tunables
   showLabels: boolean
   showOrphans: boolean
+  /** Board notes, drawn as rounded squares. On by default: a board is a note you made. */
+  showBoards: boolean
   /**
-   * Task cards are notes, so the graph would show them - but the Data tree
-   * hides the folder they live in, and a note you can see in one place and not
-   * the other reads as a ghost. Off by default, with a switch, so the graph
-   * agrees with the file list AND nothing is hidden from you by force.
+   * Cards - the notes a board lists - as small dots in the colour of where
+   * they stand, tied to their board by a dashed line. Off by default: a busy
+   * board would bury the notes around it.
    */
   showTasks: boolean
   /**
@@ -53,6 +54,7 @@ export const DEFAULT_SETTINGS: GraphSettings = {
   tunables: DEFAULT_TUNABLES,
   showLabels: true,
   showOrphans: true,
+  showBoards: true,
   showTasks: false,
   showChats: true,
   look: DEFAULT_LOOK,
@@ -105,6 +107,7 @@ export function parseSettings(raw: unknown): GraphSettings {
     tunables,
     showLabels: typeof record['showLabels'] === 'boolean' ? record['showLabels'] : true,
     showOrphans: typeof record['showOrphans'] === 'boolean' ? record['showOrphans'] : true,
+    showBoards: typeof record['showBoards'] === 'boolean' ? record['showBoards'] : true,
     showTasks: typeof record['showTasks'] === 'boolean' ? record['showTasks'] : false,
     showChats: typeof record['showChats'] === 'boolean' ? record['showChats'] : true,
     look: coerceLook(record['look']),

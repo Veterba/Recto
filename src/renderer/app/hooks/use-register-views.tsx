@@ -2,10 +2,10 @@ import { useRef } from 'react'
 import { api } from '../api'
 import { IPC } from '@shared/ipc'
 import type { LinkCandidate } from '../../features/editor'
-import { registerMarkdownView } from '../../features/editor'
+import { registerMarkdownView, renderNoteEditor } from '../../features/editor'
 import { registerUnresolvedView } from '../../features/links'
 import { registerGraphView } from '../../features/graph'
-import { registerBoardView } from '../../features/boards'
+import { BoardNote, registerBoardView, useIsBoard } from '../../features/boards'
 import { registerBotView } from '../../features/bots'
 import type { Appearance } from '../appearance'
 
@@ -17,6 +17,7 @@ import type { Appearance } from '../appearance'
 export function useRegisterViews(refs: {
   openFile: React.RefObject<(path: string, heading?: string | null) => void>
   openBoardCard: React.RefObject<(path: string) => void>
+  openBoard: React.RefObject<(path: string, card?: string) => void>
   linkCandidates: React.RefObject<LinkCandidate[]>
   appearance: React.RefObject<Appearance>
   update: React.RefObject<(patch: Partial<Appearance>) => void>
@@ -37,10 +38,18 @@ export function useRegisterViews(refs: {
     () => refs.appearance.current.livePreview,
     () => refs.appearance.current.vimMode,
     () => refs.appearance.current.showNoteTitle,
+    // A board note opened as a note is still a board, its Markdown one click away.
+    {
+      useHosted: useIsBoard,
+      render: (p, editor) => <BoardNote path={p} editor={editor} onOpenNote={(card) => refs.openBoardCard.current(card)} />,
+    },
   )
   registerUnresolvedView((p) => refs.openFile.current(p))
-  registerGraphView((p) => refs.openFile.current(p))
-  registerBoardView((p) => refs.openBoardCard.current(p))
+  registerGraphView(
+    (p) => refs.openFile.current(p),
+    (card, board) => refs.openBoard.current(board, card),
+  )
+  registerBoardView((p) => refs.openBoardCard.current(p), renderNoteEditor)
   registerBotView(
     (p, heading) => refs.openFile.current(p, heading ?? null),
     () => refs.linkCandidates.current,

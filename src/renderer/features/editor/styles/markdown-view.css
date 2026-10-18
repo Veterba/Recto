@@ -94,6 +94,29 @@
 .cm-wikilink:hover {
   text-decoration-color: var(--accent);
 }
+/* A link to a board or a card: its icon before the name, inside the link
+   (editor/link-icons.ts). The [[ list draws the same icon. */
+.cm-link-icon {
+  display: inline-flex;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.28em;
+  vertical-align: -0.08em;
+  color: var(--text-muted);
+}
+.cm-link-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.cm-link-icon--board {
+  color: var(--accent);
+}
+.cm-link-icon--doing {
+  color: var(--warning);
+}
+.cm-link-icon--done {
+  color: var(--success);
+}
 /* `[text](target)` in Live Preview: the label is all that is left of it, so it
    has to look and behave like the link it is. The colour comes from the
    highlighter; this adds the part that says "clickable". */

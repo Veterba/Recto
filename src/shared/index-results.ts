@@ -4,21 +4,33 @@
  * The link graph, for the graph view.
  * `topic`: drawn as a hollow circle, and has no note to open.
  */
-export type GraphNodeInfo = { path: string; name: string; title: string | null; degree: number; topic: boolean }
-/** `auto`: the pair is linked only through the topics property. */
-export type GraphEdgeInfo = { source: string; target: string; auto: boolean }
+export type GraphNodeInfo = {
+  path: string
+  name: string
+  title: string | null
+  degree: number
+  topic: boolean
+  /** A board note: drawn as a rounded square. */
+  board?: boolean
+  /** A card: where it stands, `mixed` when its boards disagree. */
+  stage?: 'open' | 'doing' | 'done' | 'mixed'
+  due?: string | null
+  lane?: string | null
+  /** A card's first board note, where a click opens it. */
+  cardBoard?: string
+}
+/** `auto`: the pair is linked only through the topics property. `member`: a board and one of its cards. */
+export type GraphEdgeInfo = { source: string; target: string; auto: boolean; member?: boolean }
 export type GraphInfo = { nodes: GraphNodeInfo[]; edges: GraphEdgeInfo[] }
 
 /**
- * One card on a kanban board - which is just a note whose frontmatter says so.
- * There is no card record: these fields come back out of the property index.
+ * A card's note, as a board draws it: its frontmatter, read back out of the
+ * property index. Which lane it is in is the board file's business.
  */
 export type BoardCardInfo = {
   path: string
   title: string
   description: string
-  status: string | null
-  order: number | null
   start: string | null
   due: string | null
   completed: string | null
@@ -27,6 +39,12 @@ export type BoardCardInfo = {
   checklist: { done: number; total: number }
   links: number
 }
+
+/** A board note, for the Tasks sidebar. */
+export type BoardSummaryInfo = { path: string; name: string; cards: number }
+
+/** One card on one board: where it stands there. */
+export type CardPlaceInfo = { path: string; board: string; lane: string; stage: 'open' | 'doing' | 'done' }
 
 /** A note's own signals about where it belongs, for Tidy. */
 export type NoteContextInfo = { path: string; tags: string[]; links: string[] }

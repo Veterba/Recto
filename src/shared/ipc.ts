@@ -12,6 +12,8 @@ import type { Bot, BotJob, BotMemoryStatus, BotModelStatus, BotSettings, ModelCh
 import type {
   BacklinkResult,
   BoardCardInfo,
+  BoardSummaryInfo,
+  CardPlaceInfo,
   GraphInfo,
   IndexStats,
   NoteContextInfo,
@@ -23,6 +25,7 @@ import type { TopicInfo, TopicsPreview, TopicsRunNotice, TopicsSettings, TopicsS
 import type { FileNode, OpenVaultResult, RecentVault, RenameOutcome, StartupState, StateFeature, VaultChange } from './vault'
 import type { TextFileResult } from './file-kind'
 import type { OverviewData, OverviewPlace, OverviewTopic } from './overview'
+import type { BoardMigrationResult } from './board-migration'
 
 /**
  * How sharp the backdrop stays, sharpest first.
@@ -83,8 +86,9 @@ export const IPC = {
   indexResolveLinks: 'index:resolve-links',
   indexUnresolved: 'index:unresolved',
   indexGraph: 'index:graph',
-  indexBoard: 'index:board',
+  indexCards: 'index:cards',
   indexBoards: 'index:boards',
+  indexCardPlaces: 'index:card-places',
   indexContext: 'index:context',
   linksUndoRename: 'links:undo-rename',
   historyList: 'history:list',
@@ -145,6 +149,8 @@ export const IPC = {
   overviewActive: 'overview:active',
   overviewPlace: 'overview:place',
   overviewSetPlace: 'overview:set-place',
+  boardsMigration: 'boards:migration',
+  boardsMigrate: 'boards:migrate',
 } as const
 
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
@@ -286,8 +292,12 @@ export type IpcApi = Exhaustive<
     [IPC.indexResolveLinks]: (targets: string[]) => Record<string, string | null>
     [IPC.indexUnresolved]: () => { target: string; sources: string[] }[]
     [IPC.indexGraph]: () => GraphInfo
-    [IPC.indexBoard]: (board: string) => BoardCardInfo[]
-    [IPC.indexBoards]: () => { board: string; count: number }[]
+    /** Card fields of the notes these link texts name (null for a name no note has). */
+    [IPC.indexCards]: (targets: string[]) => Record<string, BoardCardInfo | null>
+    /** Board notes: every note in the Obsidian Kanban format. */
+    [IPC.indexBoards]: () => BoardSummaryInfo[]
+    /** Every card on every board and where it stands there. */
+    [IPC.indexCardPlaces]: () => CardPlaceInfo[]
     [IPC.indexContext]: () => NoteContextInfo[]
     [IPC.linksUndoRename]: (undoId: string) => { ok: boolean; restored: number; error?: string }
     [IPC.historyList]: (path: string) => SnapshotInfo[]
@@ -394,6 +404,10 @@ export type IpcApi = Exhaustive<
     /** Where the overview was left: its page and scroll (userData). */
     [IPC.overviewPlace]: () => OverviewPlace
     [IPC.overviewSetPlace]: (place: OverviewPlace) => { ok: boolean }
+    /** What the boards migration did on this vault's open, once; `none` afterwards. */
+    [IPC.boardsMigration]: () => BoardMigrationResult
+    /** Run it again with names for the boards whose own was taken. */
+    [IPC.boardsMigrate]: (names: Record<string, string>) => BoardMigrationResult
     /** A bot's model, written to its bot.json: an API model id, an Ollama model, or null for the local default. Returns the bots. */
     [IPC.botsSetModel]: (botId: string, model: string | null) => Bot[]
     /** A 2-5 word title for a chat topic from its first exchange, by the bot's model; null when it cannot make one. */

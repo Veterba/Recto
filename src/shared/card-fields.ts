@@ -197,8 +197,6 @@ export function setCardTags(text: string, tags: readonly string[]): string {
 
 /** What a card shows, read from its note's text the way the index reads it. */
 export type CardFields = {
-  status: string | null
-  order: number | null
   start: string | null
   due: string | null
   completed: string | null
@@ -220,12 +218,9 @@ export function cardFields(text: string): CardFields {
     if (raw === null) return null
     return Array.isArray(raw) ? raw.join(',') : String(raw)
   }
-  const order = Number(value('order') ?? Number.NaN)
   const body = bodyOf(text)
   const items = checklist(body)
   return {
-    status: value('status'),
-    order: Number.isFinite(order) ? order : null,
     start: value('start'),
     due: value('due'),
     completed: value('completed'),

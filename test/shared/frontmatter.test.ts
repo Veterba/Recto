@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bodyOf, frontmatterClose, parseFrontmatter, removeField, renameField, serialize, setField } from '../../src/shared/frontmatter'
+import { bodyOf, frontmatterClose, parseFrontmatter, removeField, renameField, serialize, setField, withBody } from '../../src/shared/frontmatter'
 
 const doc = (...lines: string[]): string => lines.join('\n')
 
@@ -297,5 +297,14 @@ describe('finding the closing fence', () => {
     expect(frontmatterClose([])).toBe(-1)
     expect(frontmatterClose(['body', '---', 'x', '---'])).toBe(-1)
     expect(frontmatterClose(['---', 'a: 1', 'body'])).toBe(-1)
+  })
+})
+
+describe('replacing the body', () => {
+  it('keeps the frontmatter byte for byte, and a body read and written back is the note', () => {
+    const note = '---\npriority: high # keep\ntags: [a]\n---\n\nOld text.\n- [ ] one\n'
+    expect(withBody(note, bodyOf(note))).toBe(note)
+    expect(withBody(note, '\nNew text.\n')).toBe('---\npriority: high # keep\ntags: [a]\n---\n\nNew text.\n')
+    expect(withBody('No frontmatter.', 'Other.')).toBe('Other.')
   })
 })

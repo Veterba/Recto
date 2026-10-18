@@ -229,6 +229,7 @@ export function drawVeil({
   look,
   nodeColours,
   nodes,
+  nodeSize,
   paint,
   palette,
   positions,
@@ -248,7 +249,9 @@ export function drawVeil({
   look: GraphLook
   nodeColours: string[]
   nodes: readonly GraphNodeView[]
-  paint: (colour: string, coords: number[], alpha: number, hollow?: boolean) => void
+  /** A node's radius on screen, boards and cards included. */
+  nodeSize: (i: number) => number
+  paint: (colour: string, coords: number[], alpha: number, hollow?: boolean, square?: boolean) => void
   palette: Palette
   positions: Float32Array<ArrayBufferLike>
   surface: { dark: boolean; edge: string; node: string; orphan: string; label: string }
@@ -265,7 +268,7 @@ export function drawVeil({
     const lit: number[] = []
     for (const i of focus) {
       const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
-      const r = radiusIn(look, nodes[i]?.degree ?? 0) * zoomScale
+      const r = nodeSize(i)
       if (sx < -r || sy < -r || sx > width + r || sy > height + r) continue
       lit.push(i, sx, sy, r)
     }
@@ -295,6 +298,8 @@ export function drawVeil({
         [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!],
         focusFade,
         nodes[i]?.topic === true,
+        // A board stays a square under the highlight, not a dot laid on it.
+        nodes[i]?.board === true,
       )
     }
     /*

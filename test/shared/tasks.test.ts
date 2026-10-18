@@ -23,7 +23,7 @@ describe('reading tasks out of a note', () => {
       '- [ ] in code, not a task',
       '```',
     ].join('\n')
-    expect(extractTasks('Daily/2026-09-24.md', body, {}, '2026-09-24').map((t) => [t.text, t.done, t.source, t.heading])).toEqual([
+    expect(extractTasks('Daily/2026-09-24.md', body).map((t) => [t.text, t.done, t.source, t.heading])).toEqual([
       ['Write Lark privacy policy', false, 'checkbox', 'Tasks'],
       ['Review Maria’s doc', true, 'checkbox', 'Tasks'],
       ['plain item counts here', false, 'list', 'Tasks'],
@@ -31,12 +31,10 @@ describe('reading tasks out of a note', () => {
     ])
   })
 
-  it('a card in tasks/ is one task; templates and chats have none', () => {
-    expect(extractTasks('tasks/Weekly goals.md', '# Weekly goals\n\nText.', { board: 'lark', status: 'todo' }, 'Weekly goals')).toEqual([
-      { text: 'Weekly goals', done: false, heading: null, line: 0, source: 'card', status: 'todo' },
-    ])
-    expect(extractTasks('Template/Daily.md', '## Tasks\n- [ ] x', {}, 'Daily')).toEqual([])
-    expect(extractTasks('chats/recto/t.md', '- [ ] x', {}, 't')).toEqual([])
+  it('a card is not a task of its own note (boards list cards); templates and chats have none', () => {
+    expect(extractTasks('tasks/Weekly goals.md', '# Weekly goals\n\nText.')).toEqual([])
+    expect(extractTasks('Template/Daily.md', '## Tasks\n- [ ] x')).toEqual([])
+    expect(extractTasks('chats/recto/t.md', '- [ ] x')).toEqual([])
   })
 
   it('a note’s day: the daily’s name, else frontmatter, else its file time', () => {
@@ -58,7 +56,7 @@ function fixtureRows(): TaskRow[] {
       else {
         const rel = path.relative(FIXTURE, full)
         const name = e.name.replace(/\.md$/, '')
-        for (const t of extractTasks(rel, fs.readFileSync(full, 'utf8'), {}, name))
+        for (const t of extractTasks(rel, fs.readFileSync(full, 'utf8')))
           rows.push({
             path: rel,
             title: name,

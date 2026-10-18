@@ -41,7 +41,6 @@ beforeEach(() => {
         if (channel === IPC.fsWrite) return vaultFs.writeFile(args[0] as string, args[1] as string)
         if (channel === IPC.fsTrash) return { ok: true }
         if (channel === IPC.indexResolveLink) return null
-        if (channel === IPC.indexBoard) return []
         throw new Error(`unexpected ${channel}`)
       },
       on: () => () => undefined,
@@ -138,13 +137,13 @@ describe('dropped and pasted files', () => {
 
 describe('card creation', () => {
   it('refuses a card named like a note in another folder, naming it', async () => {
-    expect(await createCard('b', 'todo', 'Plan')).toEqual({ ok: false, error: '"Plan.md" already exists: Projects/Plan.md' })
+    expect(await createCard('tasks/B.md', 'Plan')).toEqual({ ok: false, error: '"Plan.md" already exists: Projects/Plan.md' })
     expect(exists('tasks/Plan.md')).toBe(false)
   })
 
   it('numbers the sidebar’s "New task"', async () => {
     put('Inbox/New task.md')
-    expect(await createCard('b', 'todo', 'New task', { onTaken: 'number' })).toEqual({ ok: true, path: 'tasks/New task 2.md' })
+    expect(await createCard('tasks/B.md', 'New task', 'number')).toEqual({ ok: true, path: 'tasks/New task 2.md' })
   })
 })
 

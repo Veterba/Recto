@@ -7,6 +7,7 @@ type Props = {
   labels: Toggle
   orphans: Toggle
   localOnly: Toggle
+  boards: Toggle
   tasks: Toggle
   chats: Toggle
   hasActive: boolean
@@ -23,6 +24,7 @@ export function GraphBar({
   labels,
   orphans,
   localOnly,
+  boards,
   tasks,
   chats,
   hasActive,
@@ -65,14 +67,24 @@ export function GraphBar({
           <Icon name="waypoints" size={13} />
         </button>
       </Tip>
-      <Tip label="Show task cards" hint="Hidden with their folder, shown here on request" placement="top">
+      <Tip label="Boards" hint="Board notes, as squares" placement="top">
+        <button
+          className={`graph__btn${boards.on ? ' is-on' : ''}`}
+          onClick={() => boards.set(!boards.on)}
+          aria-pressed={boards.on}
+          aria-label="Boards"
+        >
+          <Icon name="square-kanban" size={13} />
+        </button>
+      </Tip>
+      <Tip label="Tasks" hint="Cards as dots in their status colour, tied to their board" placement="top">
         <button
           className={`graph__btn${tasks.on ? ' is-on' : ''}`}
           onClick={() => tasks.set(!tasks.on)}
           aria-pressed={tasks.on}
-          aria-label="Show task cards"
+          aria-label="Tasks"
         >
-          <Icon name="square-kanban" size={13} />
+          <Icon name="circle-dot" size={13} />
         </button>
       </Tip>
       <Tip label="Show AI chats" hint="Conversations with Claude, saved as notes" placement="top">

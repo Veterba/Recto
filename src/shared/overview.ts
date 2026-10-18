@@ -31,7 +31,8 @@ export type OverviewIndex = {
   /** `[[Target]]` with no such note, one row per note and target. */
   broken: { path: string; name: string; target: string }[]
   /** Board cards with a `due` before today, whatever their column - the renderer knows which column is Done. */
-  dueCards: { path: string; name: string; due: Day; status: string | null; board: string | null }[]
+  /** Cards with a due day; `done` when every board they are on has them in its done lane. `board`: the first board's name. */
+  dueCards: { path: string; name: string; due: Day; done: boolean; board: string | null }[]
   /** Notes written on one of the asked days (a date in the name or the frontmatter, never the file's mtime). */
   written: { path: string; name: string; date: Day }[]
   /** Notes with at least one link, most linked first: the pool "not opened for a while" picks from. */
@@ -276,13 +277,9 @@ export function averagePerDay(active: Record<Day, number>, since: Day | null, fr
 
 // --- needs attention, rediscover ------------------------------------------------
 
-/** Cards past their due day that are not in their board's Done column. */
-export function overdue<T extends { due: Day; status: string | null; board: string | null }>(
-  cards: readonly T[],
-  today: Day,
-  doneOf: (board: string | null) => string | null,
-): T[] {
-  return cards.filter((card) => card.due < today && (card.status === null || card.status !== doneOf(card.board)))
+/** Cards past their due day that are not done. */
+export function overdue<T extends { due: Day; done: boolean }>(cards: readonly T[], today: Day): T[] {
+  return cards.filter((card) => card.due < today && !card.done)
 }
 
 /** How long a note has to go unopened to be offered again. */

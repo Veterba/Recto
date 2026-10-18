@@ -79,3 +79,12 @@
   text-align: center;
   color: var(--text-secondary);
 }
+
+/* A board or a card: its icon before the name, as in the note (link-icons.ts). */
+.cm-editor .cm-tooltip-autocomplete.glass-surface .cm-link-icon {
+  width: 13px;
+  height: 13px;
+  margin-right: -2px;
+  flex-shrink: 0;
+  align-self: center;
+}

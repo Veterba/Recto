@@ -1,7 +1,4 @@
 ---
-board: launch
-status: doing
-order: 1
 date: 2026-09-12
 priority: High
 start: 2026-09-14

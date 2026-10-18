@@ -5,10 +5,11 @@ import { getSnapshot, listSnapshots, pruneSnapshots, takeSnapshot } from './snap
 import { parseNote, pathsByName, resolveLink } from '../../shared/parse'
 import { extractTasks, normaliseTask, noteDate, writtenDate } from '../../shared/tasks'
 import { noteWords } from '../../shared/overview'
+import { isKanban, parseKanban, stageOf } from '../../shared/kanban'
 import type { CatalogNote, IndexRequest, IndexResponse, PeriodNote, StoredCard, TaskRowData } from '../../shared/indexer-protocol'
 import { isHidden } from '../../shared/vault'
 import { vaultRoot, requireDb, open, closeDb } from './db'
-import { search, backlinks, resolveOne, unresolved, graph, board, boards, context, overview } from './queries'
+import { search, backlinks, resolveOne, unresolved, graph, cards, boards, cardPlaces, context, overview } from './queries'
 
 /**
  * The indexer, running in its own process.
@@ -83,13 +84,14 @@ export function writeNote(relative: string, content: string, mtime: number, size
   handle
     .prepare('UPDATE notes SET note_date = ?, written = ?, words = ? WHERE path = ?')
     .run(date, writtenDate(relative, parsed.frontmatter), noteWords(parsed.body), relative)
-  writeTasks(relative, parsed, date, name.replace(/\.md$/i, ''))
+  writeTasks(relative, parsed, date, isKanban(content))
 
   // Child rows are rewritten wholesale rather than diffed: a note is small, and
   // a diff here would be a source of drift for no measurable gain.
   for (const table of ['links', 'tags', 'properties', 'headings']) {
     handle.prepare(`DELETE FROM ${table} WHERE ${table === 'links' ? 'source_path' : 'path'} = ?`).run(relative)
   }
+  writeBoardItems(relative, content)
 
   const insertLink = handle.prepare(
     'INSERT INTO links (source_path, target_text, target_path, heading, alias, line, context, property) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -120,12 +122,33 @@ export function writeNote(relative: string, content: string, mtime: number, size
 }
 
 /**
+ * A board note's cards, rewritten: one row per card, where it stands on this
+ * board worked out here, once, so every reader (link icons, the graph, the
+ * overview, the bots) agrees. The link is resolved with the others.
+ */
+function writeBoardItems(relative: string, content: string): void {
+  const handle = requireDb()
+  handle.prepare('DELETE FROM board_items WHERE board_path = ?').run(relative)
+  if (!isKanban(content)) return
+  const board = parseKanban(content)
+  const insert = handle.prepare(
+    'INSERT INTO board_items (board_path, lane, lane_title, stage, position, text, target_text, target_path, checked) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)',
+  )
+  board.lanes.forEach((lane, index) => {
+    const stage = stageOf(index, board.lanes)
+    lane.items.forEach((item, position) => {
+      insert.run(relative, index, lane.title, stage, position, item.text, item.link, item.checked ? 1 : 0)
+    })
+  })
+}
+
+/**
  * A note's task rows, rewritten. What the index already knew about a task -
  * when it first appeared, when it was checked - is kept across the rewrite;
  * a task checked before the index ever saw it gets its check date from the
  * note's snapshots, if they go back far enough.
  */
-function writeTasks(relative: string, parsed: ReturnType<typeof parseNote>, date: string, name: string): void {
+function writeTasks(relative: string, parsed: ReturnType<typeof parseNote>, date: string, board: boolean): void {
   const handle = requireDb()
   const before = new Map(
     (
@@ -138,8 +161,8 @@ function writeTasks(relative: string, parsed: ReturnType<typeof parseNote>, date
     ).map((r) => [r.norm, r]),
   )
   handle.prepare('DELETE FROM tasks WHERE path = ?').run(relative)
-  // A card's task is its title, which is its file name - never its H1.
-  const tasks = extractTasks(relative, parsed.body, parsed.frontmatter, name)
+  // A board's items are its cards, counted from the notes they name - not tasks of the board's own.
+  const tasks = board ? [] : extractTasks(relative, parsed.body)
   if (tasks.length === 0) return
   const now = Date.now()
   const insert = handle.prepare(
@@ -180,13 +203,13 @@ function writeTasks(relative: string, parsed: ReturnType<typeof parseNote>, date
 
 /** Task rows of notes dated `since`..`to`, and every card (a card is open until moved to done, whatever its date). */
 function taskRows(since: string, to: string): TaskRowData[] {
-  const rows = requireDb()
+  const handle = requireDb()
+  const rows = handle
     .prepare(
       `SELECT t.path, coalesce(n.title, n.name) AS title, t.text, t.norm, t.done, t.source, t.status, t.note_date, t.done_at,
-              (SELECT value FROM properties p WHERE p.path = t.path AND p.key = 'due') AS due,
-              (SELECT value FROM properties p WHERE p.path = t.path AND p.key = 'board') AS board
+              (SELECT value FROM properties p WHERE p.path = t.path AND p.key = 'due') AS due
          FROM tasks t JOIN notes n ON n.path = t.path
-        WHERE (t.note_date >= ? AND t.note_date <= ?) OR t.source = 'card'
+        WHERE t.note_date >= ? AND t.note_date <= ? AND t.source <> 'card'
         ORDER BY t.note_date, t.path, t.line`,
     )
     .all(since, to) as {
@@ -200,9 +223,8 @@ function taskRows(since: string, to: string): TaskRowData[] {
     note_date: string
     done_at: number | null
     due: string | null
-    board: string | null
   }[]
-  return rows.map((r) => ({
+  const out: TaskRowData[] = rows.map((r) => ({
     path: r.path,
     title: r.title.replace(/\.md$/i, ''),
     text: r.text,
@@ -213,15 +235,44 @@ function taskRows(since: string, to: string): TaskRowData[] {
     noteDate: r.note_date,
     doneAt: r.done_at,
     due: r.due === null ? null : (/\d{4}-\d{2}-\d{2}/.exec(r.due)?.[0] ?? null),
-    board: r.board,
+    board: null,
   }))
+
+  // Every note on a board is a card: its title is its file name, its lane the
+  // status. Done once every board it is on has it in the done lane; dated by
+  // `completed`, which entering that lane writes.
+  const cards = handle
+    .prepare(
+      `SELECT n.path, n.name, n.note_date,
+              MIN(bi.stage = 'done') AS done,
+              (SELECT lane_title FROM board_items x WHERE x.target_path = n.path ORDER BY x.board_path, x.lane LIMIT 1) AS status,
+              (SELECT b.name FROM board_items x JOIN notes b ON b.path = x.board_path WHERE x.target_path = n.path ORDER BY x.board_path LIMIT 1) AS board,
+              (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'due') AS due,
+              (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'completed') AS completed
+         FROM board_items bi JOIN notes n ON n.path = bi.target_path
+        GROUP BY n.path ORDER BY n.note_date, n.path`,
+    )
+    .all() as { path: string; name: string; note_date: string; done: number; status: string | null; board: string | null; due: string | null; completed: string | null }[]
+  for (const c of cards) {
+    const title = c.name.replace(/\.md$/i, '')
+    const completed = /\d{4}-\d{2}-\d{2}/.exec(c.completed ?? '')?.[0]
+    out.push({
+      path: c.path,
+      title,
+      text: title,
+      norm: normaliseTask(title),
+      done: c.done === 1,
+      source: 'card',
+      status: c.status,
+      noteDate: c.note_date,
+      doneAt: c.done === 1 && completed !== undefined ? new Date(`${completed}T12:00:00`).getTime() : null,
+      due: c.due === null ? null : (/\d{4}-\d{2}-\d{2}/.exec(c.due)?.[0] ?? null),
+      board: c.board === null ? null : c.board.replace(/\.md$/i, ''),
+    })
+  }
+  return out
 }
 
-/**
- * Notes dated in the period or edited in it, each with what it gained in the
- * period: the lines added since its last snapshot from before the period
- * started, or - with no such snapshot - its opening lines.
- */
 function notesInPeriod(from: string, to: string): PeriodNote[] {
   const handle = requireDb()
   const start = new Date(`${from}T00:00:00`).getTime()
@@ -356,6 +407,8 @@ export function resolveAllLinks(): number {
 
   const links = handle.prepare('SELECT DISTINCT target_text FROM links').all() as { target_text: string }[]
   const update = handle.prepare('UPDATE links SET target_path = ? WHERE target_text = ?')
+  const cards = handle.prepare('SELECT DISTINCT target_text FROM board_items WHERE target_text IS NOT NULL').all() as { target_text: string }[]
+  const updateCard = handle.prepare('UPDATE board_items SET target_path = ? WHERE target_text = ?')
   let resolved = 0
 
   handle.transaction(() => {
@@ -364,6 +417,7 @@ export function resolveAllLinks(): number {
       update.run(target, target_text)
       if (target !== null) resolved++
     }
+    for (const { target_text } of cards) updateCard.run(resolveLink(target_text, byName, allPaths), target_text)
   })()
 
   return resolved
@@ -459,10 +513,12 @@ function handle(request: IndexRequest): IndexResponse {
       return { kind: 'unresolved-result', entries: unresolved() }
     case 'graph':
       return { kind: 'graph-result', graph: graph(request.autoProperty ?? null) }
-    case 'board':
-      return { kind: 'board-result', cards: board(request.board) }
+    case 'board-cards':
+      return { kind: 'board-cards-result', cards: cards(request.targets) }
     case 'boards':
       return { kind: 'boards-result', boards: boards() }
+    case 'card-places':
+      return { kind: 'card-places-result', places: cardPlaces() }
     case 'context':
       return { kind: 'context-result', notes: context() }
     case 'note-renamed':

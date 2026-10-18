@@ -33,8 +33,8 @@ export type WidgetDef = {
 
 /**
  * The widgets a board can show. A new one is a component and an entry here;
- * boards.json stores only the ids, so an id this list no longer knows is
- * skipped rather than breaking the board.
+ * the board note's settings block stores only the ids, so an id this list no
+ * longer knows is skipped rather than breaking the board.
  */
 export const WIDGETS: readonly WidgetDef[] = [
   {

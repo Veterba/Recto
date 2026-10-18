@@ -32,11 +32,13 @@ import { useGraphPointer } from '../hooks/use-graph-pointer'
 type Props = {
   activePath: string | null
   onOpenNote: (path: string) => void
+  /** A card, opened beside its board. */
+  onOpenCard?: (path: string, board: string) => void
   /** Whether the settings can be opened - only when the graph fills the window. */
   editable?: boolean
 }
 
-function GraphView({ activePath, onOpenNote, editable = false }: Props): React.ReactElement {
+function GraphView({ activePath, onOpenNote, onOpenCard, editable = false }: Props): React.ReactElement {
   const refs = useGraphRefs()
   const { hostRef, canvasRef, state, dirty, motion, framePositions, glideCamera } = refs
 
@@ -75,6 +77,8 @@ function GraphView({ activePath, onOpenNote, editable = false }: Props): React.R
     setShowLabels,
     showOrphans,
     setShowOrphans,
+    showBoards,
+    setShowBoards,
     showTasks,
     setShowTasks,
     showChats,
@@ -93,8 +97,8 @@ function GraphView({ activePath, onOpenNote, editable = false }: Props): React.R
   const graph = useGraphData()
 
   const view = useMemo(
-    () => visibleGraph(graph, { showOrphans, showTasks, showChats, linkRange, localOnly, activePath }),
-    [graph, showOrphans, showTasks, showChats, linkRange, localOnly, activePath],
+    () => visibleGraph(graph, { showOrphans, showBoards, showTasks, showChats, linkRange, localOnly, activePath }),
+    [graph, showOrphans, showBoards, showTasks, showChats, linkRange, localOnly, activePath],
   )
 
   // --- worker lifecycle ---------------------------------------------------
@@ -139,7 +143,25 @@ function GraphView({ activePath, onOpenNote, editable = false }: Props): React.R
   useDrawLoop(refs, setRoomy, setFrameMs)
 
   // --- interaction --------------------------------------------------------
-  const { size, onWheel, onPointerDown, onPointerMove, onPointerLeave } = useGraphPointer(refs, onOpenNote, setHovered)
+  // A card opens beside its board, not as a bare note.
+  const openNode = useCallback(
+    (path: string) => {
+      const node = graph?.nodes.find((n) => n.path === path)
+      if (node?.cardBoard !== undefined && onOpenCard !== undefined) onOpenCard(path, node.cardBoard)
+      else onOpenNote(path)
+    },
+    [graph, onOpenNote, onOpenCard],
+  )
+  const { size, onWheel, onPointerDown, onPointerMove, onPointerLeave } = useGraphPointer(refs, openNode, setHovered)
+
+  /** The hover's words: a card says where it stands and when it is due. */
+  const hoverTitle = useMemo(() => {
+    if (hovered === null) return undefined
+    const node = graph?.nodes.find((n) => n.path === hovered)
+    if (node?.stage === undefined) return hovered
+    const status = node.stage === 'mixed' ? 'on several boards' : (node.lane ?? node.stage)
+    return [node.name, status, node.due === null || node.due === undefined ? null : `due ${node.due}`].filter((x) => x !== null).join(' · ')
+  }, [hovered, graph])
 
   /** Put the open note in the middle, at a readable zoom. */
   const centreOnActive = useCallback(() => {
@@ -163,7 +185,7 @@ function GraphView({ activePath, onOpenNote, editable = false }: Props): React.R
       <div
         className="graph__canvas"
         ref={hostRef}
-        title={hovered ?? undefined}
+        title={hoverTitle}
         data-hovered={hovered ?? ''}
         style={{
           backgroundImage: tint === 'none' ? undefined : tint,
@@ -213,6 +235,7 @@ function GraphView({ activePath, onOpenNote, editable = false }: Props): React.R
         labels={{ on: showLabels, set: setShowLabels }}
         orphans={{ on: showOrphans, set: setShowOrphans }}
         localOnly={{ on: localOnly, set: setLocalOnly }}
+        boards={{ on: showBoards, set: setShowBoards }}
         tasks={{ on: showTasks, set: setShowTasks }}
         chats={{ on: showChats, set: setShowChats }}
         hasActive={hasActive}
@@ -231,21 +254,29 @@ function GraphView({ activePath, onOpenNote, editable = false }: Props): React.R
 }
 
 /** Subscribes the graph to the active note without threading props through. */
-function GraphHost({ onOpenNote, editable }: { onOpenNote: (path: string) => void; editable: boolean }): React.ReactElement {
+function GraphHost({
+  onOpenNote,
+  onOpenCard,
+  editable,
+}: {
+  onOpenNote: (path: string) => void
+  onOpenCard: (path: string, board: string) => void
+  editable: boolean
+}): React.ReactElement {
   const { activePath } = useNoteBus()
-  return <GraphView activePath={activePath} onOpenNote={onOpenNote} editable={editable} />
+  return <GraphView activePath={activePath} onOpenNote={onOpenNote} onOpenCard={onOpenCard} editable={editable} />
 }
 
 /**
  * Registered as a view type like everything else, so the graph can be a tab, a
  * split, or the floating window without a second implementation.
  */
-export function registerGraphView(onOpenNote: (path: string) => void): () => void {
+export function registerGraphView(onOpenNote: (path: string) => void, onOpenCard: (path: string, board: string) => void): () => void {
   return registerView({
     type: 'graph',
     title: 'Graph',
     icon: 'git-fork',
     // Editable only when the floating graph is expanded to full size.
-    render: ({ state }) => <GraphHost onOpenNote={onOpenNote} editable={state['maximized'] === true} />,
+    render: ({ state }) => <GraphHost onOpenNote={onOpenNote} onOpenCard={onOpenCard} editable={state['maximized'] === true} />,
   })
 }

@@ -4,6 +4,7 @@ import type { WorkspaceApi } from './use-workspace'
 import { focusEditorOnOpen } from '../../features/editor'
 import { MAIN_BOT, requestNewTopic } from '../../features/bots'
 import type { Bot } from '@shared/bots'
+import { boardOfCard, isBoardPath } from '../../features/boards'
 
 /** Where things open: notes in Data, chats in AI, boards and cards in Tasks. */
 export function useShellNavigation(
@@ -12,7 +13,8 @@ export function useShellNavigation(
 ): {
   openFile: (path: string, heading?: string | null) => void
   newChat: () => Promise<void>
-  openBoard: (id: string) => void
+  /** A board note in the Tasks workspace, with a card open beside it when given. */
+  openBoard: (path: string, card?: string) => void
   openBoardCard: (path: string) => void
   openBot: (bot: Bot) => Promise<void>
 } {
@@ -28,15 +30,23 @@ export function useShellNavigation(
   }, [sections, setActiveSection])
 
   const openBoard = useCallback(
-    (id: string) => {
+    (path: string, card?: string) => {
       setActiveSection('tasks')
-      sections?.tasks.openView('board', { board: id })
+      sections?.tasks.openView('board', card === undefined ? { path } : { path, card })
     },
     [sections, setActiveSection],
   )
 
   const openFile = useCallback(
     (path: string, heading?: string | null) => {
+      // A board note - a [[link]] to a board, say - opens as the board, in Tasks;
+      // a card note opens beside its (first) board there, not as Markdown in Data.
+      const board = isBoardPath(path) ? path : boardOfCard(path)
+      if (board !== null) {
+        setActiveSection('tasks')
+        sections?.tasks.openView('board', board === path ? { path } : { path: board, card: path })
+        return
+      }
       // Opening a note always lands in Data, even if you clicked from elsewhere.
       setActiveSection('data')
       // You opened it to read or write in it, so the keyboard goes there too.

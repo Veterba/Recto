@@ -23,7 +23,7 @@
 import { COLOR_STEPS, DEFAULT_LOOK, degreeT, groupColor, paintSteps, type GraphLook } from './look'
 import type { RenderState } from './render-state'
 import type { Palette } from './palette'
-import { worldToScreen, radiusIn } from './geometry'
+import { drawnRadius, worldToScreen } from './geometry'
 import { surfaceFor } from './sprites'
 import { drawArrows, drawGlow, drawPulses, drawVeil } from './draw-layers'
 import { drawLabels } from './draw-labels'
@@ -73,12 +73,18 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
   const tOf = (i: number): number => degreeT(nodes[i]?.degree ?? 0, maxDegree, look.dots.scale)
   const colourOf = (i: number): string => {
     const node = nodes[i]
+    // Boards and cards say what they are whatever the colouring: a board in the accent, a card by where it stands.
+    if (node?.board === true) return palette.board ?? surface.node
+    if (node?.stage !== undefined)
+      return (node.stage === 'done' ? palette.taskDone : node.stage === 'doing' ? palette.taskDoing : palette.taskOpen) ?? surface.node
     if (look.dots.byFolder) return groupColor(node?.group ?? 0, surface.dark)
     if (look.dots.colors.length > 0) return steps[Math.round(tOf(i) * (COLOR_STEPS - 1))] ?? surface.node
     return (node?.degree ?? 0) === 0 ? surface.orphan : surface.node
   }
   const nodeColours = new Array<string>(nodes.length)
   for (let i = 0; i < nodes.length; i++) nodeColours[i] = colourOf(i)
+  /** A node's radius on screen: a board larger than its links alone would make it, a card small. */
+  const nodeSize = (i: number): number => drawnRadius(look, nodes[i]) * zoomScale
 
   /** A link's colour: its notes', its own gradient by how linked its ends are, or the theme's. */
   const edgeColour = (a: number, b: number): string => {
@@ -254,13 +260,15 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
   const batches = new Map<string, number[]>()
   /** Topics: the same colours, drawn hollow. */
   const hollowBatches = new Map<string, number[]>()
+  /** Boards: rounded squares. */
+  const squareBatches = new Map<string, number[]>()
   for (let i = 0; i < nodes.length; i++) {
     if (i === active || i === hovered) continue
     const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
-    const r = radiusIn(look, nodes[i]?.degree ?? 0) * zoomScale
+    const r = nodeSize(i)
     if (sx < -r || sy < -r || sx > width + r || sy > height + r) continue
     const colour = nodeColours[i] ?? surface.node
-    const target = nodes[i]?.topic === true ? hollowBatches : batches
+    const target = nodes[i]?.board === true ? squareBatches : nodes[i]?.topic === true ? hollowBatches : batches
     let batch = target.get(colour)
     if (batch === undefined) {
       batch = []
@@ -270,13 +278,20 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
   }
 
   const ring = look.node.shape === 'ring'
-  const paint = (colour: string, coords: number[], alpha: number, hollow = false): void => {
+  const paint = (colour: string, coords: number[], alpha: number, hollow = false, square = false): void => {
     context.globalAlpha = alpha
     context.beginPath()
     for (let i = 0; i < coords.length; i += 3) {
       const x = coords[i]!
       const y = coords[i + 1]!
       const r = coords[i + 2]!
+      if (square) {
+        // A rounded square of the same area's feel: a little smaller than the circle it replaces.
+        const half = r * 0.8
+        context.moveTo(x + half, y)
+        context.roundRect(x - half, y - half, half * 2, half * 2, half * 0.38)
+        continue
+      }
       context.moveTo(x + r, y)
       context.arc(x, y, r, 0, Math.PI * 2)
     }
@@ -291,21 +306,25 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
   }
   for (const [colour, coords] of batches) paint(colour, coords, look.node.opacity)
   for (const [colour, coords] of hollowBatches) paint(colour, coords, look.node.opacity, true)
+  for (const [colour, coords] of squareBatches) paint(colour, coords, look.node.opacity, false, true)
 
   // Hovered and open notes last, on top of everything.
   const single = (i: number, isActive: boolean): void => {
     const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
-    const r = radiusIn(look, nodes[i]?.degree ?? 0) * zoomScale
+    const r = nodeSize(i)
     if (sx < -r * 2 || sy < -r * 2 || sx > width + r * 2 || sy > height + r * 2) return
     const colour = isActive ? palette.nodeActive : (nodeColours[i] ?? surface.node)
-    paint(colour, [sx, sy, isActive ? r * 1.6 : r * 1.25], 1, nodes[i]?.topic === true)
-    // A ring around the open note, so it reads even against a dense cluster.
+    paint(colour, [sx, sy, isActive ? r * 1.6 : r * 1.25], 1, nodes[i]?.topic === true, nodes[i]?.board === true)
+    // A ring around the open note, so it reads even against a dense cluster - square around a board.
     if (isActive) {
       context.globalAlpha = 0.35
       context.strokeStyle = palette.nodeActive
       context.lineWidth = 2
       context.beginPath()
-      context.arc(sx, sy, r * 1.6 + 5, 0, Math.PI * 2)
+      if (nodes[i]?.board === true) {
+        const half = r * 1.6 * 0.8 + 5
+        context.roundRect(sx - half, sy - half, half * 2, half * 2, half * 0.38)
+      } else context.arc(sx, sy, r * 1.6 + 5, 0, Math.PI * 2)
       context.stroke()
     }
   }
@@ -336,6 +355,7 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
     look,
     nodeColours,
     nodes,
+    nodeSize,
     paint,
     palette,
     positions,

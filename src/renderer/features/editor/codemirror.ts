@@ -161,11 +161,13 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
   const linkClick = EditorView.domEventHandlers({
     mousedown: (event, view) => {
       const target = event.target as HTMLElement | null
-      if (target?.classList.contains('cm-wikilink') === true) {
+      // The link itself, or its board or card icon inside it.
+      const wikilink = target?.closest<HTMLElement>('.cm-wikilink') ?? null
+      if (wikilink !== null) {
         // The decoration spans the whole inside of the brackets, so the
         // element's own text is the link - no need to re-scan the line. A link
         // drawn inside a widget (a table cell) shows its alias and carries its target.
-        const inner = target.dataset['target'] ?? target.textContent ?? ''
+        const inner = wikilink.dataset['target'] ?? wikilink.textContent ?? ''
         const parsed = /^([^#|]+)(?:#([^|]+))?/.exec(inner.trim())
         const name = parsed?.[1]?.trim()
         if (name === undefined || name === '') return false

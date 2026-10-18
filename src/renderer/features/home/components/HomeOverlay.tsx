@@ -66,8 +66,6 @@ type Props = {
   /** A template, not a note: never flagged as needing attention. */
   isTemplate: (path: string) => boolean
   /** A board's Done column, and its name. */
-  doneOf: (board: string | null) => string | null
-  boardName: (board: string | null) => string | null
   onOpenNote: (path: string) => void
   onOpenCard: (path: string) => void
   onOpenFolder: (name: string) => void
@@ -82,8 +80,6 @@ export function HomeOverlay({
   vaultName,
   exists,
   isTemplate,
-  doneOf,
-  boardName,
   onOpenNote,
   onOpenCard,
   onOpenFolder,
@@ -516,9 +512,9 @@ export function HomeOverlay({
               </div>
               <main className="overview">
                 {view.kind === 'main' ? (
-                  <Overview data={shownData} topics={topics} today={clock.today} now={clock.now} doneOf={doneOf} boardName={boardName} actions={actions} />
+                  <Overview data={shownData} topics={topics} today={clock.today} now={clock.now} actions={actions} />
                 ) : (
-                  <OverviewList view={view} data={shownData} topics={topics} today={clock.today} doneOf={doneOf} boardName={boardName} exists={exists} actions={actions} />
+                  <OverviewList view={view} data={shownData} topics={topics} today={clock.today} exists={exists} actions={actions} />
                 )}
               </main>
               <div className="overview__end" aria-hidden="true" />

@@ -132,17 +132,14 @@ describe('time in Recto', () => {
 })
 
 describe('overdue tasks', () => {
-  const done = (board: string | null): string | null => (board === 'main' ? 'done' : board === 'year' ? 'shipped' : null)
-  it('past due and not in its board’s Done column', () => {
+  it('past due and not done', () => {
     const cards = [
-      { path: 'a', due: '2026-10-17', status: 'doing', board: 'main' },
-      { path: 'b', due: '2026-10-17', status: 'done', board: 'main' },
-      { path: 'c', due: '2026-10-18', status: 'todo', board: 'main' },
-      { path: 'd', due: '2026-10-01', status: 'done', board: 'year' },
-      { path: 'e', due: '2026-10-01', status: 'shipped', board: 'year' },
-      { path: 'f', due: '2026-10-01', status: null, board: 'main' },
+      { path: 'a', due: '2026-10-17', done: false },
+      { path: 'b', due: '2026-10-17', done: true },
+      { path: 'c', due: '2026-10-18', done: false },
+      { path: 'd', due: '2026-10-01', done: false },
     ]
-    expect(overdue(cards, '2026-10-18', done).map((c) => c.path)).toEqual(['a', 'd', 'f'])
+    expect(overdue(cards, '2026-10-18').map((c) => c.path)).toEqual(['a', 'd'])
   })
 })
 

@@ -1,22 +1,30 @@
+import { cardLink, insertItem, isKanban } from '@shared/kanban'
+import { IPC } from '@shared/ipc'
 import { api } from '../../app/api'
-import { setField } from '@shared/frontmatter'
 import { noteIndexChanged } from '../../app/note-bus'
 import { noteEdited } from '../../app/usage'
-import { placeAt } from './ordering'
-import { IPC } from '@shared/ipc'
+import { newBoardText } from './boards'
 
 /**
- * Create a card, which means: create a note and put three keys in its
- * frontmatter.
+ * Making cards and boards.
  *
- * Shared by the board's new-card popover and the sidebar's new-task button so
- * the two cannot produce differently-shaped cards. The note has no H1: a card's
- * title is its file name, as everywhere else in Recto, and a heading repeating
- * it would show the name twice.
+ * A card that is a note is a note in tasks/ and a line on a board, `- [ ]
+ * [[Name]]`. The note carries nothing about the board - not its lane, not its
+ * order; the board's line is the whole of that. It has no H1 either: a card's
+ * title is its file name, as everywhere else in Recto.
  */
 
-/** Where new cards are written. A folder, not a database. */
+/** Where card notes and board notes are written. A folder, not a database. */
 export const CARD_FOLDER = 'tasks'
+
+/** A card's name as a file name: one line, nothing a path or a link cannot hold. */
+export const cardName = (text: string): string =>
+  text
+    .split('\n')[0]!
+    .replace(/[\\/:|#^[\]]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120)
 
 /**
  * The note a new card's name would collide with, or null. A link resolves by
@@ -31,46 +39,68 @@ export async function cardExists(name: string): Promise<string | null> {
   return read.ok ? path : null
 }
 
-export async function createCard(
-  board: string,
-  column: string,
-  title: string,
-  /**
-   * The card's order, when the caller has the column on screen; otherwise it
-   * goes last, asked of the index. `onTaken: 'number'` for a name the app chose
-   * ("New task"); a typed name that is taken anywhere is refused by main.
-   */
-  options: { order?: number; onTaken?: 'refuse' | 'number' } = {},
+/**
+ * A card's note, empty or with a body. `onTaken: 'number'` for a name the app
+ * chose ("New task"); a typed name that is taken anywhere is refused by main.
+ */
+export async function createCardNote(
+  name: string,
+  body = '',
+  onTaken: 'refuse' | 'number' = 'refuse',
 ): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
-  const name = title.trim()
   if (name === '') return { ok: false, error: 'A card needs a name.' }
-
-  const created = await api.invoke(IPC.fsCreate, CARD_FOLDER, `${name}.md`, 'file', options.onTaken)
+  const created = await api.invoke(IPC.fsCreate, CARD_FOLDER, `${name}.md`, 'file', onTaken)
   if (!created.ok) return created
-
-  let order = options.order
-  if (order === undefined) {
-    const cards = await api.invoke(IPC.indexBoard, board)
-    const orders = cards
-      .filter((card) => card.status === column)
-      .map((card) => card.order)
-      .filter((value): value is number => value !== null)
-    const placed = placeAt(orders, orders.length)
-    order = placed.kind === 'order' ? placed.order : placed.orders.at(-1)!
+  if (body !== '') {
+    const written = await api.invoke(IPC.fsWrite, created.path, `${body}\n`)
+    if (!written.ok) {
+      await api.invoke(IPC.fsTrash, created.path)
+      return { ok: false, error: written.error ?? 'Could not write the card.' }
+    }
   }
+  noteIndexChanged()
+  noteEdited(created.path)
+  return { ok: true, path: created.path }
+}
 
-  let text = ''
-  text = setField(text, 'board', board)
-  text = setField(text, 'status', column)
-  text = setField(text, 'order', order)
+/**
+ * A card made from outside a board (the sidebar's New button): its note, and
+ * its line at the top of the board's first column.
+ */
+export async function createCard(
+  boardPath: string,
+  title: string,
+  onTaken: 'refuse' | 'number' = 'refuse',
+): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+  const created = await createCardNote(title.trim(), '', onTaken)
+  if (!created.ok) return created
+  const read = await api.invoke(IPC.fsRead, boardPath)
+  const stem = created.path.slice(created.path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
+  if (!read.ok || !isKanban(read.content)) return created
+  let next: string
+  try {
+    next = insertItem(read.content, 0, 0, cardLink(stem))
+  } catch {
+    // A board with no column yet: the note is made, and stays a note.
+    return created
+  }
+  const written = await api.invoke(IPC.fsWrite, boardPath, next)
+  if (written.ok) {
+    noteIndexChanged()
+    noteEdited(boardPath)
+  }
+  return created
+}
 
-  const written = await api.invoke(IPC.fsWrite, created.path, text)
+/** A new board note in tasks/, beside its cards, under a typed name (refused when a note has it). */
+export async function createBoard(name: string): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+  const created = await api.invoke(IPC.fsCreate, CARD_FOLDER, `${name}.md`, 'file', 'refuse')
+  if (!created.ok) return created
+  const written = await api.invoke(IPC.fsWrite, created.path, newBoardText())
   if (!written.ok) {
-    // An empty note that is no card helps nobody.
     await api.invoke(IPC.fsTrash, created.path)
-    return { ok: false, error: written.error ?? 'Could not write the card.' }
+    return { ok: false, error: written.error ?? 'Could not write the board.' }
   }
-
   noteIndexChanged()
   noteEdited(created.path)
   return { ok: true, path: created.path }

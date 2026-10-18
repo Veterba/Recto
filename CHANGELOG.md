@@ -4,6 +4,27 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.52.0 — 2026-10-18
+### Added
+- A board is a note in the Obsidian Kanban format: the same board opens in Recto and in Obsidian with the Kanban plugin. Its columns are the note's headings and its cards the lines under them, in order; a card is either a link to a note in tasks/ or a line of plain text.
+- Moving a card rewrites only its own line in the board note, nothing else in it: lines Recto doesn't understand and the plugin's settings block stay as they are. Into the done column the line is ticked and the card's note gets `completed`; out of it both are undone. If the board changed meanwhile (Obsidian, sync), the same move is made to what is there now.
+- "Make it a note" in a plain-text card's panel: the note is made in tasks/ (its first line the name, the rest the body) and the line becomes a link to it.
+- "Markdown" on a board shows the note itself, with a word that Obsidian removes text outside the columns when it saves the board.
+- Links to a board show a board icon, and links to a card show where it stands: an open circle in its first column, half filled in any column between, a check when done, a dashed circle when its boards disagree. Inside the link in the editor and in the [[ list, updated when the card moves.
+- The graph has Boards (on) and Tasks (off): a board is a rounded square, a card a small dot in its status colour, tied to its board by a thin dashed line. Hovering a card shows its column and due date; clicking it opens it beside its board.
+- "Cards here are done" in a column's menu marks the done column, as the plugin's "Mark cards in this list as complete" does.
+- Deleting a board asks whether to keep its card notes (the default) or archive them too.
+- A card's panel edits the note's text in place, under its fields: the same editor as a note's tab, so Markdown shows as it is typed, a `- [ ]` is a box to tick and [[ offers the vault's notes. Comments sit below it.
+### Changed
+- A [[link]] to a card opens it beside its board in Tasks, not as Markdown in Data. The card panel's separate description and checklist are part of the editable text now.
+- Boards live in tasks/ beside their cards, and are made, renamed, deleted and opened from the Tasks list; the Data tree shows neither boards nor cards, wherever they are. A [[link]] to a board opens it in Tasks.
+- Card notes no longer carry `board`, `status` or `order`; the board note says where each card is. A note can be on several boards; its panel shows its column on the board you're looking at.
+- A column's WIP limit is written in its heading, `Doing (3)`, as the plugin writes it; its colour and dates, the board's widgets and sort sit in the note's settings block under `recto`.
+- On first open, the boards of `.recto/boards.json` become board notes in tasks/, with the cards in their order, Done ticked, and the plugin set to show each card's priority and due date. Cards whose status named no column go to an "Unknown status" column at the end. Every file it changes is copied to `.recto/backup/<date>/` first, and a notice says what changed and where the copy is; a board whose name a note already has asks for another name before anything is written. Running it again changes nothing.
+- Notes are read again once after updating, to find the boards.
+### Removed
+- `.recto/boards.json`: after the move it is only in the backup.
+
 ## v0.51.0 — 2026-10-18
 ### Added
 - The vault overview's figures (⌃⌘H, then →) are a page that scrolls as a whole, wherever the pointer is: the vault's name large on the moving field, then a solid card with every figure, white in the light theme and the page's dark in the dark one. No figure sits on the field any more, so nothing is lost on a light patch. Back and the shortcut stay in the top corners.

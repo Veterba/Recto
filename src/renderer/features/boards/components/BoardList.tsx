@@ -1,102 +1,99 @@
 import { useState } from 'react'
-import { ConfirmDialog } from '../../../ui/ConfirmDialog'
+import type { BoardSummaryInfo } from '@shared/index-results'
+import { IPC } from '@shared/ipc'
+import { api } from '../../../app/api'
+import { noteIndexChanged } from '../../../app/note-bus'
 import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { fuzzyMatch } from '../../../ui/fuzzy'
-import { columnId, DEFAULT_BOARDS, type Board } from '../boards'
-import { updateBoards, useBoards } from '../boards-store'
+import { boardMade, refreshBoards, useBoards } from '../boards-store'
+import { createBoard } from '../create-card'
+import { requestBoardDelete } from './DeleteBoardDialog'
 
 /**
- * The Tasks sidebar: which boards exist.
+ * The Tasks sidebar: the vault's boards, which are notes.
  *
  * Deliberately the same shape as the file tree next door — a list you pick
  * from — because Tasks is a workspace like Data, not a different kind of app.
+ * Boards are notes in tasks/, which the Data tree hides, so this list is where
+ * they are made, renamed, deleted and opened. A board's name is its note's
+ * name: renaming it here renames the note.
  */
 
 type Props = {
+  /** The board note on screen. */
   activeBoard: string | null
   /** The sidebar's search box, shared with the file tree next door. */
   query: string
-  onOpen: (id: string) => void
+  onOpen: (path: string) => void
+  /** A board note was renamed: its tabs follow. */
+  onRenamed: (from: string, to: string) => void
 }
 
-export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactElement {
-  const file = useBoards()
+export function BoardList({ activeBoard, query, onOpen, onRenamed }: Props): React.ReactElement {
+  const boards = useBoards()
   const [adding, setAdding] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
-  /** The board a removal is waiting on confirmation for. */
-  const [confirming, setConfirming] = useState<Board | null>(null)
-  const contextMenu = useContextMenu<Board>()
+  const [error, setError] = useState<string | null>(null)
+  const contextMenu = useContextMenu<BoardSummaryInfo>()
 
-  const menuFor = (board: Board): MenuItem[] => [
+  const menuFor = (board: BoardSummaryInfo): MenuItem[] => [
     { kind: 'heading', label: 'This board' },
-    { kind: 'item', label: 'Open', icon: 'square-kanban', run: () => onOpen(board.id) },
-    { kind: 'item', label: 'Rename', icon: 'pencil', run: () => setRenaming(board.id) },
+    { kind: 'item', label: 'Open', icon: 'square-kanban', run: () => onOpen(board.path) },
+    { kind: 'item', label: 'Rename', icon: 'pencil', run: () => setRenaming(board.path) },
+    { kind: 'item', label: 'Reveal in Finder', icon: 'external-link', run: () => void api.invoke(IPC.fsReveal, board.path) },
     { kind: 'separator' },
-    {
-      kind: 'item',
-      label: 'Remove board',
-      icon: 'trash',
-      danger: true,
-      // Not destructive to anything but the definition, and the menu should
-      // say so rather than leave it to be discovered.
-      disabled: file.boards.length <= 1,
-      run: () => setConfirming(board),
-    },
+    { kind: 'item', label: 'Delete board…', icon: 'trash', danger: true, run: () => requestBoardDelete(board.path) },
   ]
 
-  const add = (name: string): void => {
+  const add = async (name: string): Promise<void> => {
     const trimmed = name.trim()
     setAdding(false)
     if (trimmed === '') return
-    // Board ids are reused as `board:` values in frontmatter, so they go
-    // through the same slug rules as column ids.
-    const id = columnId(trimmed, file.boards)
-    // Copied, not aliased: sharing the module constant would put one stray
-    // in-place edit between us and a corrupted default for every new board.
-    const board: Board = {
-      id,
-      name: trimmed,
-      columns: DEFAULT_BOARDS.boards[0]!.columns.map((column) => ({ ...column })),
+    const created = await createBoard(trimmed)
+    if (!created.ok) {
+      setError(created.error)
+      return
     }
-    updateBoards({ boards: [...file.boards, board] })
-    onOpen(id)
+    setError(null)
+    boardMade(created.path)
+    onOpen(created.path)
   }
 
-  const remove = (id: string): void => {
-    if (file.boards.length <= 1) return
-    // Only the definition goes. The cards are notes and stay exactly where they
-    // are; recreating a board with the same id brings them all back.
-    updateBoards({ boards: file.boards.filter((board) => board.id !== id) })
+  const rename = async (board: BoardSummaryInfo, name: string): Promise<void> => {
+    setRenaming(null)
+    const trimmed = name.trim()
+    if (trimmed === '' || trimmed === board.name) return
+    const result = await api.invoke(IPC.fsRename, board.path, `${trimmed}.md`)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setError(null)
+    onRenamed(board.path, result.path)
+    noteIndexChanged()
+    refreshBoards()
   }
 
   const trimmed = query.trim()
-  const shown = trimmed === '' ? file.boards : file.boards.filter((board) => fuzzyMatch(trimmed, board.name) !== null)
+  const shown = trimmed === '' ? boards : boards.filter((board) => fuzzyMatch(trimmed, board.name) !== null)
 
   return (
     <div className="boards">
       {shown.map((board) => (
         <div
-          className={`boards__row${board.id === activeBoard ? ' is-active' : ''}`}
-          key={board.id}
+          className={`boards__row${board.path === activeBoard ? ' is-active' : ''}`}
+          key={board.path}
           onContextMenu={(event) => contextMenu.open(event, board)}
         >
-          {renaming === board.id ? (
+          {renaming === board.path ? (
             <input
               className="boards__rename"
               defaultValue={board.name}
+              aria-label="Board name"
               autoFocus
-              onBlur={(event) => {
-                setRenaming(null)
-                const name = event.target.value.trim()
-                if (name !== '' && name !== board.name) {
-                  // The id stays: it is what every card's frontmatter says.
-                  updateBoards({
-                    boards: file.boards.map((entry) => (entry.id === board.id ? { ...entry, name } : entry)),
-                  })
-                }
-              }}
+              onBlur={(event) => void rename(board, event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') event.currentTarget.blur()
                 if (event.key === 'Escape') setRenaming(null)
@@ -104,30 +101,35 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
             />
           ) : (
             <>
-              <button className="boards__name" onClick={() => onOpen(board.id)} onDoubleClick={() => setRenaming(board.id)}>
+              <button className="boards__name" title={board.path} onClick={() => onOpen(board.path)} onDoubleClick={() => setRenaming(board.path)}>
                 <Icon name="square-kanban" size={14} />
                 {board.name}
               </button>
-              {file.boards.length > 1 && (
-                <Tip label="Remove this board" hint="The cards stay as notes">
-                  <button className="boards__remove" aria-label={`Remove ${board.name}`} onClick={() => setConfirming(board)}>
-                    <Icon name="x" size={12} />
-                  </button>
-                </Tip>
-              )}
+              <Tip label="Delete this board" hint="Asks about its cards">
+                <button className="boards__remove" aria-label={`Delete ${board.name}`} onClick={() => requestBoardDelete(board.path)}>
+                  <Icon name="x" size={12} />
+                </button>
+              </Tip>
             </>
           )}
         </div>
       ))}
 
-      {shown.length === 0 && <p className="sidebar__empty">No board matches “{trimmed}”.</p>}
+      {boards.length === 0 && !adding && <p className="sidebar__empty">No boards yet. A board is a note; it opens in Obsidian's Kanban plugin too.</p>}
+      {boards.length > 0 && shown.length === 0 && <p className="sidebar__empty">No board matches “{trimmed}”.</p>}
+      {error !== null && (
+        <p className="sidebar__empty boards__error" role="alert">
+          {error}
+        </p>
+      )}
 
       {adding ? (
         <input
           className="boards__rename"
           placeholder="Board name"
+          aria-label="New board name"
           autoFocus
-          onBlur={(event) => add(event.target.value)}
+          onBlur={(event) => void add(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') event.currentTarget.blur()
             if (event.key === 'Escape') setAdding(false)
@@ -138,25 +140,6 @@ export function BoardList({ activeBoard, query, onOpen }: Props): React.ReactEle
           <Icon name="plus" size={13} />
           New board
         </button>
-      )}
-
-      {confirming !== null && (
-        <ConfirmDialog
-          title="Remove board"
-          body={
-            <>
-              <strong>{confirming.name}</strong> disappears from this list. Its cards are notes and stay exactly where they are — recreating
-              a board with the same name brings them back.
-            </>
-          }
-          confirmLabel="Remove board"
-          onConfirm={() => {
-            const id = confirming.id
-            setConfirming(null)
-            remove(id)
-          }}
-          onCancel={() => setConfirming(null)}
-        />
       )}
 
       {contextMenu.menu !== null && (

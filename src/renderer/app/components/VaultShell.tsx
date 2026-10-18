@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ATTACHMENTS_FOLDER, type VaultInfo } from '@shared/vault'
+import { ATTACHMENTS_FOLDER, type FileNode, type VaultInfo } from '@shared/vault'
 import { IPC } from '@shared/ipc'
 import { api } from '../api'
 import { Breadcrumb } from './Breadcrumb'
@@ -22,7 +22,7 @@ import { commands } from '../commands'
 import { getSection, type SectionId } from '../sections'
 import { setVaultFiles, setVaultPath } from '../vault-url'
 import { useVault } from '../vault-store'
-import { setActiveNote } from '../note-bus'
+import { setActiveNote, useNoteBus } from '../note-bus'
 import { useWorkspace } from '../hooks/use-workspace'
 import { useWritingState } from '../hooks/use-writing-state'
 import { useSectionDefaults } from '../hooks/use-section-defaults'
@@ -40,7 +40,7 @@ import { TemplatePicker, usePeriodicNotesAutoCreate, useTemplateActions, useTemp
 import { TidyDialog, useTidy } from '../../features/tidy'
 import { CHAT_FOLDER } from '../../features/ai'
 import { BotList, MAIN_BOT, onOpenTopic, reloadBots, requestTopic, useBots, useBotsEnabled } from '../../features/bots'
-import { BoardList, CARD_FOLDER, doneColumn, requestNewCard, useBoards } from '../../features/boards'
+import { BoardDeleteHost, BoardList, BoardsMigrationNotice, isTaskPath, refreshBoards, requestNewCard, useBoards, useCardPlaces } from '../../features/boards'
 import { registerArchiveView } from '../../features/archive'
 import { HomeOverlay, forgetFigures, loadPlace } from '../../features/home'
 import { useUsageTracking } from '../usage'
@@ -141,12 +141,21 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   // Bot definitions are per vault, and edited by hand outside the watched notes.
   useEffect(() => reloadBots(), [vault.path])
 
-  /** Which board the Tasks workspace is showing, from its own active leaf. */
+  /** Which board note the Tasks workspace is showing, from its own active leaf. */
   const activeBoard = useMemo(() => {
     const leaf = sections?.tasks.activeLeaf
-    const id = leaf?.type === 'board' ? leaf.state['board'] : undefined
-    return typeof id === 'string' ? id : null
+    const path = leaf?.type === 'board' ? leaf.state['path'] : undefined
+    return typeof path === 'string' ? path : null
   }, [sections, revision])
+
+  // Boards are notes: the list, and where each card stands, follow the vault.
+  // Asked again a moment later, when the indexer - a process behind - has read the change.
+  const { revision: notesRevision } = useNoteBus()
+  useEffect(() => {
+    refreshBoards()
+    const timer = window.setTimeout(refreshBoards, 1200)
+    return () => window.clearTimeout(timer)
+  }, [notesRevision, vault.path])
 
   useSectionDefaults(activeSection, sections, revision, tree.roots, boards)
 
@@ -178,28 +187,33 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   // --- sidebar list -------------------------------------------------------
 
   /**
-   * The Data tree, without the folder the board writes cards into.
+   * The Data tree, without what the Tasks tab owns: tasks/, and every board
+   * and card note wherever it is (isTaskPath, one rule).
    *
-   * Cards and templates are real notes and have to live somewhere, but that
-   * somewhere is an implementation detail of the features that own them - a
-   * folder of them sitting in your file list is clutter you did not create.
+   * Cards, boards and templates are real notes and have to live somewhere, but
+   * that somewhere is an implementation detail of the features that own them -
+   * a folder of them sitting in your file list is clutter you did not create.
    * They stay indexed, in the graph, findable by ⌘O and full-text search, and
-   * openable from the board or the template picker; only this one list hides
-   * them.
+   * a [[link]] opens them; only this one list hides them.
    */
+  const cardPlaces = useCardPlaces()
   const visibleTree = useMemo(() => {
     // Templates are NOT hidden: they are notes the user writes and edits, so
-    // the folder sits in the tree with its own icon. Cards and chats are the
-    // app's storage for features that have their own screens.
-    const hidden = new Set<string>([CARD_FOLDER, CHAT_FOLDER, ATTACHMENTS_FOLDER])
-    const withoutCards = {
-      roots: tree.roots.filter((node) => !(node.kind === 'folder' && hidden.has(node.path))),
-      byPath: tree.byPath,
-    }
+    // the folder sits in the tree with its own icon. Chats and attachments are
+    // the app's storage for features that have their own screens.
+    const hidden = new Set<string>([CHAT_FOLDER, ATTACHMENTS_FOLDER])
+    const prune = (nodes: readonly FileNode[]): FileNode[] =>
+      nodes.flatMap((node) => {
+        if (isTaskPath(node.path) || (node.kind === 'folder' && hidden.has(node.path))) return []
+        return node.children === undefined ? [node] : [{ ...node, children: prune(node.children) }]
+      })
+    const withoutCards = { roots: prune(tree.roots), byPath: tree.byPath }
     if (query.trim() === '') return withoutCards
     const roots = filterTree(withoutCards.roots, query, (name) => fuzzyMatch(query, name) !== null)
     return { roots, byPath: tree.byPath }
-  }, [tree, query])
+    // `boards` and `cardPlaces` are what isTaskPath reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tree, query, boards, cardPlaces])
 
   /** Files in the attachments folder, for Settings - it is not in the tree any more. */
   const attachmentFiles = useMemo(() => {
@@ -309,6 +323,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   openFileRef.current = openFile
   const openBoardCardRef = useRef(openBoardCard)
   openBoardCardRef.current = openBoardCard
+  const openBoardRef = useRef(openBoard)
+  openBoardRef.current = openBoard
 
   /**
    * Note names for `[[` autocomplete.
@@ -322,6 +338,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   useRegisterViews({
     openFile: openFileRef,
     openBoardCard: openBoardCardRef,
+    openBoard: openBoardRef,
     linkCandidates: linkCandidatesRef,
     appearance: appearanceRef,
     update: updateRef,
@@ -334,11 +351,6 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const noteExists = useCallback((path: string) => tree.byPath.has(path), [tree.byPath])
   const templateFolder = templates.settings.folder
   const isTemplate = useCallback((path: string) => templateFolder !== '' && path.startsWith(`${templateFolder}/`), [templateFolder])
-  const boardDone = useCallback((id: string | null) => {
-    const board = boards.boards.find((b) => b.id === id)
-    return board === undefined ? null : doneColumn(board.columns)
-  }, [boards])
-  const boardName = useCallback((id: string | null) => boards.boards.find((b) => b.id === id)?.name ?? null, [boards])
   const openCardFromHome = useCallback(
     (path: string) => {
       setActiveSection('tasks')
@@ -506,9 +518,9 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         icon: 'square-kanban',
         // The board on screen, or the first one; the popover there asks for the column.
         run: () => {
-          const id = activeBoard ?? boards.boards[0]?.id
-          if (id === undefined) return
-          openBoard(id)
+          const path = activeBoard ?? boards[0]?.path
+          if (path === undefined) return
+          openBoard(path)
           requestNewCard()
         },
       },
@@ -569,7 +581,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
                 onPinNote={pinNote}
               />
             ) : activeSection === 'tasks' ? (
-              <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} />
+              <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} onRenamed={followRename} />
             ) : botsOn === false ? (
               <p className="bots-off">
                 Bots are off ·{' '}
@@ -667,6 +679,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
           }}
         />
       )}
+      <BoardDeleteHost />
+      <BoardsMigrationNotice vaultPath={vault.path} onOpenBoard={(path) => openBoard(path)} />
       {tidy !== null && <TidyDialog plan={tidy} busy={tidyBusy} onConfirm={() => void runTidy()} onCancel={() => setTidy(null)} />}
       <HomeOverlay
         open={homeOpen}
@@ -677,8 +691,6 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         vaultName={vault.name}
         exists={noteExists}
         isTemplate={isTemplate}
-        doneOf={boardDone}
-        boardName={boardName}
         onOpenNote={openFile}
         onOpenCard={openCardFromHome}
         onOpenFolder={openFolderFromHome}

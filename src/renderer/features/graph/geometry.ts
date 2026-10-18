@@ -10,6 +10,17 @@ export const radiusOf = (degree: number): number => nodeRadius(degree)
 
 export const radiusIn = (look: GraphLook, degree: number): number => nodeRadius(degree, look.node.size, look.node.growth)
 
+/**
+ * A node's radius as drawn, in world units: a board a little larger than its
+ * links alone would make it, a card small, any other note by its links.
+ */
+export function drawnRadius(look: GraphLook, node: { degree: number; board?: boolean; stage?: string } | undefined): number {
+  const r = radiusIn(look, node?.degree ?? 0)
+  if (node?.board === true) return Math.max(r, radiusIn(look, 0) * 1.35)
+  if (node?.stage !== undefined) return radiusIn(look, 0) * 0.8
+  return r
+}
+
 export function worldToScreen(camera: Camera, x: number, y: number, width: number, height: number): [number, number] {
   return [(x - camera.x) * camera.zoom + width / 2, (y - camera.y) * camera.zoom + height / 2]
 }

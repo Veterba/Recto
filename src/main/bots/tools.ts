@@ -1,12 +1,10 @@
 import { createHash } from 'node:crypto'
-import fs from 'node:fs'
 import path from 'node:path'
 import { BOTS_FOLDER, CHATS_FOLDER, type Bot } from '../../shared/bots'
 import type { CatalogNote, PeriodNote, TaskRowData } from '../../shared/indexer-protocol'
 import { groupTasks, isDaily, normaliseTask, tasksInPeriod, type TaskRow } from '../../shared/tasks'
 import { send as indexer } from '../index-client'
 import { langOf, renderGroupedTasks, renderTaskAnswer } from './task-answer'
-import { currentVault } from '../vault'
 import { isExcluded } from './context'
 import type { Period } from './period'
 import type { BotModelProvider } from './provider'
@@ -43,43 +41,6 @@ const MAX_INFERRED = 20
 const day = (iso: string): string => new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 const folderOf = (p: string): string => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
 const excluded = (bot: Bot, p: string): boolean => isExcluded(p, [CHATS_FOLDER, path.dirname(BOTS_FOLDER), ...(bot.exclude ?? [])])
-
-/** A board's name as the user wrote it (boards.json), else its id with a capital letter. */
-function boardName(id: string): string {
-  const vault = currentVault()
-  try {
-    if (vault !== null) {
-      const raw = JSON.parse(fs.readFileSync(path.join(vault.path, '.recto', 'boards.json'), 'utf8')) as {
-        boards?: { id?: string; name?: string }[]
-      }
-      const found = raw.boards?.find((b) => b.id === id)?.name
-      if (found !== undefined && found !== '') return found
-    }
-  } catch {
-    // No boards file: the id will do.
-  }
-  return id.charAt(0).toUpperCase() + id.slice(1)
-}
-
-/** The columns that mean done, per board: named done / готово / complete, or else the board's last column. */
-function doneColumns(): Set<string> {
-  const vault = currentVault()
-  const done = new Set<string>(['done', 'готово', 'сделано', 'complete', 'completed', 'finished', 'ferdig'])
-  if (vault === null) return done
-  try {
-    const raw = JSON.parse(fs.readFileSync(path.join(vault.path, '.recto', 'boards.json'), 'utf8')) as {
-      boards?: { columns?: { id?: string; name?: string }[] }[]
-    }
-    for (const board of raw.boards ?? []) {
-      const columns = board.columns ?? []
-      const named = columns.filter((c) => /done|готов|сделан|complete|finish|ferdig/i.test(`${c.id ?? ''} ${c.name ?? ''}`))
-      for (const c of named.length > 0 ? named : columns.slice(-1)) for (const k of [c.id, c.name]) if (k) done.add(k.toLowerCase())
-    }
-  } catch {
-    // No boards: the names alone decide.
-  }
-  return done
-}
 
 const addDays = (iso: string, n: number): string => {
   const d = new Date(`${iso}T12:00:00`)
@@ -134,10 +95,7 @@ export async function tasksTool(
   // because whether it is still open is decided by its latest copy, wherever that is.
   const response = await indexer({ kind: 'task-rows', since: addDays(period.from, -60), to: period.to > o.today ? period.to : o.today })
   const raw: TaskRowData[] = response.kind === 'task-rows-result' ? response.rows : []
-  const done = doneColumns()
-  const rows: TaskRow[] = raw
-    .filter((r) => !excluded(o.bot, r.path))
-    .map((r) => (r.source === 'card' ? { ...r, done: r.status !== null && done.has(r.status.toLowerCase()) } : r))
+  const rows: TaskRow[] = raw.filter((r) => !excluded(o.bot, r.path))
   const groups = groupTasks(rows)
   const found = tasksInPeriod(groups, period.from, period.to, status)
 
@@ -333,10 +291,7 @@ export async function groupedTasksTool(
   const to = q.period !== null && q.period.to > o.today ? q.period.to : o.today
   const since = q.period === null ? '1970-01-01' : addDays(q.period.from, -60)
   const response = await indexer({ kind: 'task-rows', since, to })
-  const done = doneColumns()
-  const rows: TaskRow[] = (response.kind === 'task-rows-result' ? response.rows : [])
-    .filter((r) => !excluded(o.bot, r.path))
-    .map((r) => (r.source === 'card' ? { ...r, done: r.status !== null && done.has(r.status.toLowerCase()) } : r))
+  const rows: TaskRow[] = (response.kind === 'task-rows-result' ? response.rows : []).filter((r) => !excluded(o.bot, r.path))
   const groups = groupTasks(rows)
   const found =
     q.period !== null
@@ -430,7 +385,7 @@ export async function groupedTasksTool(
     const loose: Item[] = []
     for (const x of kept) {
       const own = subjectFolder(x.path)
-      if (x.board !== null) label.set(x, boardName(x.board))
+      if (x.board !== null) label.set(x, x.board)
       else if (own !== null) label.set(x, leaf(own))
       else if (!isDaily(x.path) && x.path.includes('/')) label.set(x, x.title)
       else loose.push(x)

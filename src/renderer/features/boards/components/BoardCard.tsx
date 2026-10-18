@@ -34,9 +34,9 @@ export function BoardCard({ card, today, selected, dragging, dropBefore, ...on }
   const { done, total } = card.checklist
   return (
     <article
-      className={`board-card${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${dropBefore ? ' is-before' : ''}`}
+      className={`board-card${card.light ? ' board-card--light' : ''}${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${dropBefore ? ' is-before' : ''}`}
       draggable
-      data-path={card.path}
+      data-path={card.path === '' ? undefined : card.path}
       aria-label={card.title}
       tabIndex={0}
       onClick={on.onOpen}
@@ -49,15 +49,17 @@ export function BoardCard({ card, today, selected, dragging, dropBefore, ...on }
       onDrop={on.onDrop}
       onContextMenu={on.onContextMenu}
     >
-      <div className="board-card__top">
-        <PriorityLabel card={card} />
-        {card.span !== null && (
-          <span className={`board-card__when${state === null ? '' : ` is-${state}`}`}>
-            <Icon name="calendar" size={11} />
-            {spanLabel(card.span, today)}
-          </span>
-        )}
-      </div>
+      {!card.light && (
+        <div className="board-card__top">
+          <PriorityLabel card={card} />
+          {card.span !== null && (
+            <span className={`board-card__when${state === null ? '' : ` is-${state}`}`}>
+              <Icon name="calendar" size={11} />
+              {spanLabel(card.span, today)}
+            </span>
+          )}
+        </div>
+      )}
       <h3 className="board-card__title">{card.title}</h3>
       {card.description !== '' && <p className="board-card__desc">{card.description}</p>}
       {(total > 0 || card.links > 0 || card.tagList.length > 0) && (

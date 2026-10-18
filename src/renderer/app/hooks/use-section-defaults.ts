@@ -37,7 +37,7 @@ export function useSectionDefaults(
     if (activeSection !== 'tasks') return
     const tasks = sections?.tasks
     if (tasks === undefined || tasks.activeLeaf !== null) return
-    const first = boards.boards[0]
-    if (first !== undefined) tasks.openView('board', { board: first.id })
+    const first = boards[0]
+    if (first !== undefined) tasks.openView('board', { path: first.path })
   }, [activeSection, sections, revision, boards])
 }

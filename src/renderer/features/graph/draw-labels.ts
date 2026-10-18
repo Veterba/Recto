@@ -6,7 +6,7 @@
 import type { GraphLook } from './look'
 import type { Palette } from './palette'
 import type { Camera, GraphNodeView, RenderState } from './render-state'
-import { worldToScreen, radiusIn } from './geometry'
+import { drawnRadius, worldToScreen } from './geometry'
 
 /** Labels, culled by zoom and crowding, fading out under the veil. */
 export function drawLabels({
@@ -81,10 +81,12 @@ export function drawLabels({
       const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
       if (sx < 0 || sy < 0 || sx > width || sy > height) continue
 
-      const r = radiusIn(look, node.degree) * zoomScale
+      const r = drawnRadius(look, node) * zoomScale
       context.globalAlpha = (isActive || isHovered ? 1 : 0.8 * fade) * (1 - veiled)
       context.fillStyle = isActive ? palette.labelActive : surface.label
-      context.fillText(fitLabel(context, node.label, fontSize * 16), sx, sy + (isActive ? r * 1.6 : r) + 4)
+      // Under the node and clear of its ring - a board's square ring sits further out than a dot's.
+      const below = node.board === true ? (isActive ? r * 1.28 + 5 : isHovered ? r : r * 0.8) + 7 : (isActive ? r * 1.6 : r) + 4
+      context.fillText(fitLabel(context, node.label, fontSize * 16), sx, sy + below)
     }
   }
 }

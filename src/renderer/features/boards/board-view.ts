@@ -1,30 +1,70 @@
 import type { BoardCardInfo } from '@shared/index-results'
+import type { KanbanItem } from '@shared/kanban'
 import { addDays, cardSpan, dateOnly, dueState, readPriority, readTags, type Priority } from '@shared/card-fields'
-import { columnOf, type Column } from './boards'
-import { sortColumn } from './ordering'
+import type { Column } from './boards'
 
 /**
- * What the board draws, worked out from the index's rows: pure, so the
- * filters, the sort and every widget's arithmetic are tested without a screen.
+ * What the board draws, worked out from the board file's items and the
+ * index's rows for the notes they name: pure, so the filters, the sort and
+ * every widget's arithmetic are tested without a screen.
  */
 
 export type CardView = BoardCardInfo & {
-  /** The column it is drawn in: a real column id, or `UNKNOWN_COLUMN`. */
+  /** Who it is on this board: its note's path, or for a plain-text card its place (unique on screen). */
+  key: string
+  /** A plain-text card: no note behind it, only its text. */
+  light: boolean
+  /** The column it is in. */
   column: string
+  /** Its place in that column, in the file. */
+  index: number
+  /** Its lines as the file has them, to find it again if the file changed. */
+  raw: string
+  /** The item's own text (a light card's title and description). */
+  text: string
   level: Priority | null
   span: { from: string; to: string } | null
   tagList: string[]
   completedDay: string | null
 }
 
-export function toView(row: BoardCardInfo, columns: readonly Column[]): CardView {
+const blank = (path: string, title: string): BoardCardInfo => ({
+  path,
+  title,
+  description: '',
+  start: null,
+  due: null,
+  completed: null,
+  priority: null,
+  tags: null,
+  checklist: { done: 0, total: 0 },
+  links: 0,
+})
+
+/**
+ * One card: an item of the board file, and the note it names if it names one
+ * (`row`). A link to a note that does not exist yet is drawn with its name,
+ * like a light card, until the note is there.
+ */
+export function toView(item: Pick<KanbanItem, 'text' | 'link' | 'raw'>, row: BoardCardInfo | null, column: Column, index: number): CardView {
+  const light = item.link === null
+  const title = light ? (item.text.split('\n')[0] ?? '') : item.link!.slice(item.link!.lastIndexOf('/') + 1)
+  const base = row ?? blank('', title)
+  const description = light ? item.text.split('\n').slice(1).join(' ').trim() : base.description
   return {
-    ...row,
-    column: columnOf(row.status, columns),
-    level: readPriority(row.priority),
-    span: cardSpan(dateOnly(row.start), dateOnly(row.due)),
-    tagList: readTags(row.tags),
-    completedDay: dateOnly(row.completed),
+    ...base,
+    title: row?.title ?? title,
+    description,
+    key: row !== null ? row.path : `${light ? 'text' : 'link'}:${column.id}:${index}`,
+    light,
+    column: column.id,
+    index,
+    raw: item.raw,
+    text: item.text,
+    level: readPriority(base.priority),
+    span: cardSpan(dateOnly(base.start), dateOnly(base.due)),
+    tagList: readTags(base.tags),
+    completedDay: dateOnly(base.completed),
   }
 }
 
@@ -53,12 +93,14 @@ export const SORTS: readonly { key: SortKey; label: string }[] = [
 
 const RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2 }
 
-/** A column's cards in the chosen order. Manual is the order they were dragged into. */
+export const isSortKey = (value: unknown): value is SortKey => SORTS.some((s) => s.key === value)
+
+/** A column's cards in the chosen order. Manual is the order the board file has them in. */
 export function sortCards<T extends CardView>(cards: readonly T[], key: SortKey): T[] {
-  const manual = sortColumn(cards)
+  const manual = [...cards].sort((a, b) => a.index - b.index)
   if (key === 'manual') return manual
-  const position = new Map(manual.map((card, i) => [card.path, i]))
-  const tie = (a: T, b: T): number => position.get(a.path)! - position.get(b.path)!
+  const position = new Map(manual.map((card, i) => [card.key, i]))
+  const tie = (a: T, b: T): number => position.get(a.key)! - position.get(b.key)!
   return [...manual].sort((a, b) => {
     if (key === 'title') return a.title.localeCompare(b.title) || tie(a, b)
     if (key === 'priority') return (a.level === null ? 3 : RANK[a.level]) - (b.level === null ? 3 : RANK[b.level]) || tie(a, b)
@@ -156,7 +198,7 @@ export function calendarBars(cards: readonly CardView[], columns: readonly Colum
     .sort((a, b) => (a.span!.from < b.span!.from ? -1 : a.span!.from > b.span!.from ? 1 : a.title.localeCompare(b.title)))
   for (const card of dated) {
     const cut = clip(card.span!)
-    if (cut !== null) out.push({ kind: 'card', key: card.path, label: card.title, level: card.level, path: card.path, ...cut })
+    if (cut !== null) out.push({ kind: 'card', key: card.key, label: card.title, level: card.level, path: card.path, ...cut })
   }
   return out
 }

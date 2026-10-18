@@ -5,6 +5,8 @@
 
 import { Decoration, WidgetType, type EditorView } from '@codemirror/view'
 import { vaultFileUrl } from '../../app/vault-url'
+import type { LinkKind } from '../../app/link-kinds'
+import { linkIcon } from './link-icons'
 
 export const hidden = Decoration.replace({})
 
@@ -53,23 +55,31 @@ export class TaskBox extends WidgetType {
   }
 }
 
-/** Rendered `[[target]]` — the alias when there is one, else the target. */
+/**
+ * Rendered `[[target]]` — the alias when there is one, else the target. A
+ * link to a board or a card carries an icon before the name (link-icons.ts).
+ */
 export class LinkLabel extends WidgetType {
   constructor(
     private readonly label: string,
     private readonly unresolved: boolean,
+    private readonly kind?: LinkKind,
   ) {
     super()
   }
 
   override eq(other: LinkLabel): boolean {
-    return other.label === this.label && other.unresolved === this.unresolved
+    return other.label === this.label && other.unresolved === this.unresolved && other.kind === this.kind
   }
 
   override toDOM(): HTMLElement {
     const span = document.createElement('span')
     span.className = `cm-wikilink${this.unresolved ? ' cm-wikilink-unresolved' : ''}`
-    span.textContent = this.label
+    if (this.kind !== undefined) {
+      span.classList.add('cm-wikilink--kind')
+      span.append(linkIcon(this.kind))
+    }
+    span.append(this.label)
     return span
   }
 

@@ -25,6 +25,7 @@ describe('graph settings', () => {
       tunables: { ...DEFAULT_TUNABLES, repelStrength: 400 },
       showLabels: false,
       showOrphans: false,
+      showBoards: false,
       showTasks: true,
       showChats: true,
       look: { ...DEFAULT_LOOK, dots: { ...DEFAULT_LOOK.dots, colors: ['#22d3ee', '#f0abfc'] } },
@@ -35,9 +36,10 @@ describe('graph settings', () => {
     expect(parseSettings(JSON.parse(JSON.stringify(saved)))).toEqual(saved)
   })
 
-  it('hides task cards unless the file says otherwise', () => {
-    // They live in a folder the Data tree hides, and a note visible in one list
-    // and not the other reads as a ghost the app failed to forget.
+  it('shows boards and hides task cards unless the file says otherwise', () => {
+    // A busy board's cards would bury the notes around it.
+    expect(parseSettings({}).showBoards).toBe(true)
+    expect(parseSettings({ showBoards: false }).showBoards).toBe(false)
     expect(parseSettings({}).showTasks).toBe(false)
     expect(parseSettings({ showTasks: true }).showTasks).toBe(true)
     expect(parseSettings({ showTasks: 'yes' }).showTasks).toBe(false)
@@ -82,6 +84,7 @@ describe('graph settings', () => {
       'linkRange',
       'localOnly',
       'look',
+      'showBoards',
       'showChats',
       'showLabels',
       'showOrphans',

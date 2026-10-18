@@ -1,10 +1,18 @@
-import { autocompletion, insertCompletionText, type Completion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
+import {
+  autocompletion,
+  insertCompletionText,
+  type Completion,
+  type CompletionContext,
+  type CompletionResult,
+} from '@codemirror/autocomplete'
 import type { Extension } from '@codemirror/state'
 import { EditorView, ViewPlugin } from '@codemirror/view'
 import { IPC } from '@shared/ipc'
 import { api } from '../../app/api'
 import { noteIndexChanged } from '../../app/note-bus'
+import { linkKindOf, type LinkKind } from '../../app/link-kinds'
 import { highlightCompletion } from './highlights'
+import { linkIcon } from './link-icons'
 
 /**
  * `[[` autocomplete for note names - and the one autocomplete of the editor:
@@ -17,8 +25,8 @@ import { highlightCompletion } from './highlights'
 
 export type LinkCandidate = { path: string; name: string; folder: string }
 
-/** A completion that shows a folder after its name. */
-type NoteCompletion = Completion & { folder?: string }
+/** A completion that shows a folder after its name, and an icon before it for a board or a card. */
+type NoteCompletion = Completion & { folder?: string; kind?: LinkKind }
 
 /** Matches an unfinished wikilink at the cursor: `[[par` with no closing `]]`. */
 const OPEN_LINK = /\[\[([^\]\n]*)$/
@@ -41,6 +49,10 @@ function renderFolder(completion: NoteCompletion): Node | null {
   span.textContent = middleEllipsis(completion.folder, PATH_CHARS)
   span.title = completion.folder
   return span
+}
+
+function renderKind(completion: NoteCompletion): Node | null {
+  return completion.kind === undefined ? null : linkIcon(completion.kind)
 }
 
 function renderCreate(completion: Completion): Node | null {
@@ -100,14 +112,18 @@ export function linkCompletion(getCandidates: () => readonly LinkCandidate[]): E
           const after = context.state.doc.sliceString(context.pos, context.pos + 2)
           const close = after === ']]' ? '' : ']]'
 
-          const options: NoteCompletion[] = candidates.map((candidate) => ({
-            label: candidate.name,
-            ...(candidate.folder === '' ? {} : { folder: candidate.folder }),
-            // Close the brackets on accept, so the link is complete rather
-            // than leaving the user to type ']]' themselves - unless they
-            // already did.
-            apply: `${candidate.name}${close}`,
-          }))
+          const options: NoteCompletion[] = candidates.map((candidate) => {
+            const kind = linkKindOf(candidate.path) ?? linkKindOf(candidate.name)
+            return {
+              label: candidate.name,
+              ...(candidate.folder === '' ? {} : { folder: candidate.folder }),
+              ...(kind === undefined ? {} : { kind }),
+              // Close the brackets on accept, so the link is complete rather
+              // than leaving the user to type ']]' themselves - unless they
+              // already did.
+              apply: `${candidate.name}${close}`,
+            }
+          })
 
           // No note has this name yet: the last row makes one. Names are
           // unique in the vault ignoring case, so that is how they are compared.
@@ -146,6 +162,7 @@ export function linkCompletion(getCandidates: () => readonly LinkCandidate[]): E
       optionClass: (completion) => (completion.type === 'create' ? 'cm-completion-create' : ''),
       addToOptions: [
         { render: renderCreate, position: 20 },
+        { render: renderKind, position: 30 },
         { render: renderFolder, position: 80 },
       ],
     }),

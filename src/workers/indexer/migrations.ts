@@ -311,6 +311,32 @@ export const MIGRATIONS: readonly Migration[] = [
       UPDATE notes SET mtime = -1;
     `,
   },
+  {
+    version: 13,
+    name: 'board-items',
+    sql: `
+      -- Boards are notes in the Obsidian Kanban format (shared/kanban.ts): one
+      -- row per card on a board, archived cards left out. 'target_path' is the
+      -- note a card links to, resolved like a link (null for a plain-text
+      -- card, or a link to nothing yet). 'stage' is where it stands on that
+      -- board: 'open' (first lane), 'doing', or 'done'.
+      CREATE TABLE board_items (
+        board_path  TEXT NOT NULL REFERENCES notes(path) ON DELETE CASCADE,
+        lane        INTEGER NOT NULL,
+        lane_title  TEXT NOT NULL,
+        stage       TEXT NOT NULL,
+        position    INTEGER NOT NULL,
+        text        TEXT NOT NULL,
+        target_text TEXT,
+        target_path TEXT,
+        checked     INTEGER NOT NULL
+      );
+      CREATE INDEX idx_board_items_board ON board_items(board_path);
+      CREATE INDEX idx_board_items_target ON board_items(target_path);
+      CREATE INDEX idx_board_items_text ON board_items(target_text);
+      UPDATE notes SET mtime = -1;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

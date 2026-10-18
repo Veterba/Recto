@@ -1,5 +1,4 @@
 import type { GraphInfo } from '@shared/index-results'
-import { CARD_FOLDER } from '../boards'
 import { CHAT_FOLDER } from '../ai'
 import type { GraphNodeView } from './render-state'
 import { histogram, inRange, type LinkRange } from './degree-bins'
@@ -22,6 +21,9 @@ export function signature(graph: GraphInfo | null): string {
 
 type GraphFilters = {
   showOrphans: boolean
+  /** Board notes. */
+  showBoards: boolean
+  /** Cards: notes a board lists. */
   showTasks: boolean
   showChats: boolean
   linkRange: LinkRange
@@ -32,7 +34,7 @@ type GraphFilters = {
 export type GraphViewModel = {
   nodes: GraphNodeView[]
   edges: [number, number][]
-  /** Indices into `edges` of the links only the topics property makes. */
+  /** Indices into `edges` of the links only the topics property makes, and of a card's line on its board: drawn thin and dashed. */
   auto: number[]
   paths: string[]
   groups: number[]
@@ -42,7 +44,7 @@ export type GraphViewModel = {
 /** Nodes actually shown, after the filters. */
 export function visibleGraph(
   graph: GraphInfo | null,
-  { showOrphans, showTasks, showChats, linkRange, localOnly, activePath }: GraphFilters,
+  { showOrphans, showBoards, showTasks, showChats, linkRange, localOnly, activePath }: GraphFilters,
 ): GraphViewModel {
   if (graph === null) {
     return {
@@ -55,16 +57,19 @@ export function visibleGraph(
     }
   }
 
-  // Task cards first: the Data tree hides the folder they live in, so showing
-  // them here made three real notes look like ghosts the app had failed to
-  // forget. Whichever way it is set, the two lists now agree.
+  // Boards and their cards by what they are, not by folder: a card is a note
+  // a board lists, wherever it lives, and a note in tasks/ that no board lists
+  // is just a note.
   //
   // Templates used to be filtered here too, back when their folder was
   // hidden. It is a visible, configurable folder now, so they are ordinary
   // notes in the graph - hiding a hard-coded `templates/` would have hidden
   // the old default and none of a vault's real templates.
   const visible = graph.nodes.filter(
-    (node) => (showTasks || !node.path.startsWith(`${CARD_FOLDER}/`)) && (showChats || !node.path.startsWith(`${CHAT_FOLDER}/`)),
+    (node) =>
+      (showBoards || node.board !== true) &&
+      (showTasks || node.stage === undefined) &&
+      (showChats || !node.path.startsWith(`${CHAT_FOLDER}/`)),
   )
   let kept = visible.filter((node) => (showOrphans || node.degree > 0) && inRange(node.degree, linkRange))
 
@@ -97,6 +102,8 @@ export function visibleGraph(
     // to find the note.
     label: node.name,
     topic: node.topic,
+    ...(node.board === true ? { board: true } : {}),
+    ...(node.stage === undefined ? {} : { stage: node.stage }),
     degree: node.degree,
     group: groupIndex.get(folderOf(node.path)) ?? 0,
   }))
@@ -107,7 +114,7 @@ export function visibleGraph(
     const a = indexOf.get(edge.source)
     const b = indexOf.get(edge.target)
     if (a === undefined || b === undefined) continue
-    if (edge.auto) auto.push(edges.length)
+    if (edge.auto || edge.member === true) auto.push(edges.length)
     edges.push([a, b])
   }
   // Counted before the link filter, so the histogram shows what there is to choose from.

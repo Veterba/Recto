@@ -440,6 +440,32 @@ function MarkdownEditor({
   )
 }
 
+/**
+ * Notes that are something more - a board - drawn by the feature that owns
+ * them. The editor only asks; it does not know what a board is.
+ */
+export type NoteHosts = {
+  /** Whether the note at a path is drawn by `render` instead of the editor. */
+  useHosted: (path: string) => boolean
+  /** The note drawn its own way; `editor` is this note's editor, for its Markdown. */
+  render: (path: string, editor: React.ReactElement) => React.ReactElement
+}
+
+let editorFor: ((path: string, onRenamed: (next: string) => void) => React.ReactElement) | null = null
+/** The vault's notes for `[[`, as the shell keeps them: the same list wherever a note is edited. */
+let linkCandidatesFor: () => readonly LinkCandidate[] = () => []
+export const currentLinkCandidates = (): readonly LinkCandidate[] => linkCandidatesFor()
+
+/** A note's editor, outside a markdown tab: a board's Markdown in a board tab. */
+export function renderNoteEditor(path: string, onRenamed: (next: string) => void): React.ReactElement {
+  return editorFor?.(path, onRenamed) ?? <div className="pane-empty" />
+}
+
+/** A note, or what its feature draws for it. A component, so the feature's hook can run. */
+function NoteHost({ path, editor, hosts }: { path: string; editor: React.ReactElement; hosts: NoteHosts }): React.ReactElement {
+  return hosts.useHosted(path) ? hosts.render(path, editor) : editor
+}
+
 export function registerMarkdownView(
   onOpenLink: (target: string, heading: string | null) => void,
   onOpenPath: (path: string, heading?: string | null) => void,
@@ -447,7 +473,24 @@ export function registerMarkdownView(
   getLivePreview: () => boolean,
   getVim: () => boolean,
   getShowTitle: () => boolean,
+  hosts: NoteHosts,
 ): () => void {
+  const editor = (path: string, heading: string | null, onRenamed: (next: string) => void): React.ReactElement => (
+    <MarkdownEditor
+      key={path}
+      path={path}
+      heading={heading}
+      onOpenLink={onOpenLink}
+      onOpenPath={onOpenPath}
+      getLinkCandidates={getLinkCandidates}
+      livePreview={getLivePreview()}
+      vim={getVim()}
+      showTitle={getShowTitle()}
+      onRenamed={onRenamed}
+    />
+  )
+  editorFor = (path, onRenamed) => editor(path, null, onRenamed)
+  linkCandidatesFor = getLinkCandidates
   return registerView({
     type: 'markdown',
     title: 'Editor',
@@ -458,8 +501,6 @@ export function registerMarkdownView(
     },
     render: ({ state, setState }) => {
       const path = (state as State).path
-      const livePreview = getLivePreview()
-      const vim = getVim()
       const rawHeading = (state as State).heading
       const heading = typeof rawHeading === 'string' && rawHeading !== '' ? rawHeading : null
       if (typeof path !== 'string' || path === '') {
@@ -476,23 +517,10 @@ export function registerMarkdownView(
       const kind = fileKind(path)
       if (kind === 'image' || kind === 'pdf') return <FileView key={path} path={path} />
       if (kind !== 'note') return <CodeView key={path} path={path} />
-      return (
-        <MarkdownEditor
-          key={path}
-          path={path}
-          heading={heading}
-          onOpenLink={onOpenLink}
-          onOpenPath={onOpenPath}
-          getLinkCandidates={getLinkCandidates}
-          livePreview={livePreview}
-          vim={vim}
-          showTitle={getShowTitle()}
-          // The tab follows the file. The heading is dropped: it was where a
-          // link landed when the note opened, and it is not worth re-scrolling
-          // to after a rename.
-          onRenamed={(next) => setState({ path: next })}
-        />
-      )
+      // The tab follows the file. The heading is dropped: it was where a link
+      // landed when the note opened, and it is not worth re-scrolling to after
+      // a rename.
+      return <NoteHost key={path} path={path} hosts={hosts} editor={editor(path, heading, (next) => setState({ path: next }))} />
     },
   })
 }

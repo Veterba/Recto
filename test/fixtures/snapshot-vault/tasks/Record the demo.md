@@ -1,7 +1,4 @@
 ---
-board: launch
-status: todo
-order: 2
 date: 2026-09-11
 priority: medium
 due: 2026-09-18

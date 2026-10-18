@@ -1,7 +1,7 @@
 import { highlightsIn } from './highlights'
 import { syntaxTree } from '@codemirror/language'
 import { writingConfig } from './writing'
-import { Compartment, RangeSetBuilder, type Extension } from '@codemirror/state'
+import { Compartment, RangeSetBuilder, StateEffect, type Extension } from '@codemirror/state'
 import { EmbedWidget, FootnoteWidget, MathWidget } from './rich-widgets'
 import { CalloutHeader } from './callout-widget'
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
@@ -9,6 +9,10 @@ import { livePreviewEnabled, isLivePreviewOn, setLivePreview } from './live-prev
 import { bullet, mdLink, hidden, TaskBox, ImageWidget, LinkLabel } from './live-preview-widgets'
 import { blockHiding } from './block-hiding'
 import { inlineTag, InlineHtmlWidget } from './html-blocks'
+import { linkKindOf, onLinkKinds } from '../../app/link-kinds'
+
+/** The boards' link icons changed (a card moved, a board was made): redraw the links. */
+const linkKindsChanged = StateEffect.define<null>()
 
 /**
  * Live Preview: the markdown markers are hidden until the cursor reaches them.
@@ -268,7 +272,7 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
           from: start,
           to: end,
           deco: Decoration.replace({
-            widget: new LinkLabel(label, unresolved.has(target.normalize('NFC').toLowerCase())),
+            widget: new LinkLabel(label, unresolved.has(target.normalize('NFC').toLowerCase()), linkKindOf(target)),
           }),
         })
       }
@@ -320,17 +324,27 @@ export function livePreview(getUnresolved: (view: EditorView) => ReadonlySet<str
       class {
         decorations: DecorationSet
 
+        /** Links to boards and cards change their icon when a card moves, with no edit here. */
+        private readonly offKinds: () => void
+
         constructor(view: EditorView) {
           this.decorations = build(view, getUnresolved(view))
+          this.offKinds = onLinkKinds(() => view.dispatch({ effects: linkKindsChanged.of(null) }))
         }
 
         update(update: ViewUpdate): void {
           // Selection changes matter as much as document changes: moving the
           // cursor onto a line is what reveals its syntax.
-          const toggled = update.transactions.some((tr) => tr.effects.some((effect) => effect.is(setLivePreview)))
+          const toggled = update.transactions.some((tr) =>
+            tr.effects.some((effect) => effect.is(setLivePreview) || effect.is(linkKindsChanged)),
+          )
           if (update.docChanged || update.viewportChanged || update.selectionSet || toggled) {
             this.decorations = build(update.view, getUnresolved(update.view))
           }
+        }
+
+        destroy(): void {
+          this.offKinds()
         }
       },
       {

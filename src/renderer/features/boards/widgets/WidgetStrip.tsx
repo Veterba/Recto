@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
-import type { Board } from '../boards'
+import type { Board, BoardWidgets } from '../boards'
 import { WIDGETS, widgetsOf, type WidgetProps } from './registry'
 
 /** The drag type of a widget being moved, so a dragged card or file is not taken for one. */
@@ -12,13 +12,17 @@ const MIME = 'application/x-recto-widget'
  * The menu lists every widget, ticked when shown, so it always has something
  * to offer; a widget is dragged by its header to a new place.
  */
-export function WidgetStrip({ board, onEditBoard, ...props }: Omit<WidgetProps, 'board'> & { board: Board; onEditBoard: (next: Board) => void }): React.ReactElement {
+export function WidgetStrip({
+  board,
+  onEditWidgets,
+  ...props
+}: Omit<WidgetProps, 'board'> & { board: Board; onEditWidgets: (next: BoardWidgets) => void }): React.ReactElement {
   const state = widgetsOf(board)
   const menu = useContextMenu<null>()
   const [dragging, setDragging] = useState<string | null>(null)
   const [over, setOver] = useState<number | null>(null)
   const shown = state.list.map((id) => WIDGETS.find((w) => w.id === id)).filter((w) => w !== undefined)
-  const setList = (list: string[]): void => onEditBoard({ ...board, widgets: { ...state, list } })
+  const setList = (list: string[]): void => onEditWidgets({ ...state, list })
 
   const items: MenuItem[] = [
     { kind: 'heading', label: 'Widgets' },

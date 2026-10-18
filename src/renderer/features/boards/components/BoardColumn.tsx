@@ -7,8 +7,7 @@ import { spanLabel, type CardView } from '../board-view'
 import { BoardCard } from './BoardCard'
 
 type Props = {
-  /** Null for the "Unknown status" column: no menu, no new cards, nothing dropped into it. */
-  column: Column | null
+  column: Column
   /** The cards to draw, filtered and sorted. */
   cards: CardView[]
   /** Every card in the column, filters aside: what the count and the WIP limit are about. */
@@ -20,11 +19,11 @@ type Props = {
   dropIndex: number | null
   renaming: boolean
   setRenaming: (on: boolean) => void
-  onDragStart: (path: string) => void
+  onDragStart: (key: string) => void
   onDragEnd: () => void
   onDragOver: (index: number) => void
-  onDrop: (path: string, index: number) => void
-  onOpenCard: (path: string) => void
+  onDrop: (key: string, index: number) => void
+  onOpenCard: (key: string) => void
   onCardMenu: (event: React.MouseEvent, card: CardView) => void
   /** The header's "+": open the new-card popover inside this column. */
   onNewCard: (anchor: DOMRect) => void
@@ -47,9 +46,8 @@ export function BoardColumn(props: Props): React.ReactElement {
   const { column, cards, total, dropIndex } = props
   const [form, setForm] = useState<'wip' | 'dates' | null>(null)
   const menu = useContextMenu<null>()
-  const known = column !== null
-  const name = column?.name ?? 'Unknown status'
-  const full = column?.wip !== undefined && total >= column.wip
+  const name = column.name
+  const full = column.wip !== undefined && total >= column.wip
 
   const menuItems = (col: Column): MenuItem[] => [
     { kind: 'item', label: 'Rename', icon: 'pencil', run: () => props.setRenaming(true) },
@@ -63,39 +61,43 @@ export function BoardColumn(props: Props): React.ReactElement {
     { kind: 'separator' },
     { kind: 'item', label: 'WIP limit…', icon: 'sliders', run: () => setForm('wip') },
     { kind: 'item', label: 'Date range…', icon: 'calendar-range', run: () => setForm('dates') },
+    {
+      kind: 'item',
+      label: 'Cards here are done',
+      icon: col.done === true ? 'check' : 'circle-dashed',
+      run: () => props.onEdit({ ...col, done: col.done !== true }),
+    },
     { kind: 'separator' },
     { kind: 'item', label: 'Delete column', icon: 'trash', danger: true, run: props.onDelete },
   ]
 
   const dragOver = (index: number) => (event: React.DragEvent) => {
-    if (!known) return
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
     if (dropIndex !== index) props.onDragOver(index)
   }
   const drop = (index: number) => (event: React.DragEvent) => {
-    if (!known) return
     event.preventDefault()
     event.stopPropagation()
-    const path = event.dataTransfer.getData('text/plain')
-    if (path !== '') props.onDrop(path, index)
+    const key = event.dataTransfer.getData('application/x-recto-card') || event.dataTransfer.getData('text/plain')
+    if (key !== '') props.onDrop(key, index)
   }
 
   return (
     <section
-      className={`board-col${dropIndex !== null ? ' is-target' : ''}${known ? '' : ' board-col--unknown'}`}
+      className={`board-col${dropIndex !== null ? ' is-target' : ''}${column.done === true ? ' is-done' : ''}`}
       aria-label={name}
-      data-column={column?.id ?? ''}
-      style={column?.color === undefined ? undefined : { ['--col-ink' as string]: `var(--col-${column.color})` }}
-      // A note dragged onto a column becomes a card, not a new pane.
-      data-accepts-drop={known ? true : undefined}
+      data-column={column.id}
+      style={column.color === undefined ? undefined : { ['--col-ink' as string]: `var(--col-${column.color})` }}
+      // A card dragged onto a column lands in it, not in a new pane.
+      data-accepts-drop
       onDragOver={dragOver(cards.length)}
       onDrop={drop(cards.length)}
     >
       <header className="board-col__head">
         <span className="board-col__dot" aria-hidden="true" />
-        {props.renaming && column !== null ? (
+        {props.renaming ? (
           <input
             className="board-col__rename"
             defaultValue={column.name}
@@ -105,7 +107,7 @@ export function BoardColumn(props: Props): React.ReactElement {
             onBlur={(event) => {
               props.setRenaming(false)
               const next = event.target.value.trim()
-              // The id is left alone on rename: it is what the notes say.
+              // The heading changes; the cards under it stay where they are.
               if (next !== '' && next !== column.name) props.onEdit({ ...column, name: next })
             }}
             onKeyDown={(event) => {
@@ -118,37 +120,35 @@ export function BoardColumn(props: Props): React.ReactElement {
             }}
           />
         ) : (
-          <h2 className="board-col__name" onDoubleClick={() => known && props.setRenaming(true)}>
+          <h2 className="board-col__name" onDoubleClick={() => props.setRenaming(true)}>
             {name}
           </h2>
         )}
         {/* With a WIP limit the count is in the limit's pill; once is enough. */}
-        {column?.wip === undefined && <span className="board-col__count">{total}</span>}
-        {column?.wip !== undefined && (
+        {column.wip === undefined && <span className="board-col__count">{total}</span>}
+        {column.wip !== undefined && (
           <span className={`board-col__wip${full ? ' is-full' : ''}`} title="Work-in-progress limit">
             {total}/{column.wip}
           </span>
         )}
-        {column !== null && (
-          <span className="board-col__acts">
-            <Tip label="New card">
-              <button
-                className="icon-btn board-col__btn"
-                aria-label={`New card in ${name}`}
-                onClick={(event) => props.onNewCard(event.currentTarget.closest('.board-col')!.getBoundingClientRect())}
-              >
-                <Icon name="plus" size={14} />
-              </button>
-            </Tip>
-            <button className="icon-btn board-col__btn" aria-label={`${name} menu`} onClick={(event) => menu.open(event, null)}>
-              <Icon name="more-horizontal" size={14} />
+        <span className="board-col__acts">
+          <Tip label="New card">
+            <button
+              className="icon-btn board-col__btn"
+              aria-label={`New card in ${name}`}
+              onClick={(event) => props.onNewCard(event.currentTarget.closest('.board-col')!.getBoundingClientRect())}
+            >
+              <Icon name="plus" size={14} />
             </button>
-          </span>
-        )}
+          </Tip>
+          <button className="icon-btn board-col__btn" aria-label={`${name} menu`} onClick={(event) => menu.open(event, null)}>
+            <Icon name="more-horizontal" size={14} />
+          </button>
+        </span>
       </header>
 
-      {column !== null && form !== null && <ColumnForm column={column} form={form} onSave={props.onEdit} onClose={() => setForm(null)} />}
-      {column !== null && column.start !== undefined && (
+      {form !== null && <ColumnForm column={column} form={form} onSave={props.onEdit} onClose={() => setForm(null)} />}
+      {column.start !== undefined && (
         <p className="board-col__range">
           <Icon name="calendar-range" size={11} />
           {spanLabel({ from: column.start, to: column.due !== undefined && column.due > column.start ? column.due : column.start }, props.today)}
@@ -158,17 +158,18 @@ export function BoardColumn(props: Props): React.ReactElement {
       <div className="board-col__cards">
         {cards.map((card, index) => (
           <BoardCard
-            key={card.path}
+            key={card.key}
             card={card}
             today={props.today}
-            selected={props.selected === card.path}
-            dragging={props.dragging === card.path}
+            selected={props.selected === card.key}
+            dragging={props.dragging === card.key}
             dropBefore={dropIndex === index}
-            onOpen={() => props.onOpenCard(card.path)}
+            onOpen={() => props.onOpenCard(card.key)}
             onDragStart={(event) => {
-              event.dataTransfer.setData('text/plain', card.path)
+              event.dataTransfer.setData('application/x-recto-card', card.key)
+              event.dataTransfer.setData('text/plain', card.light ? card.text : card.path)
               event.dataTransfer.effectAllowed = 'move'
-              props.onDragStart(card.path)
+              props.onDragStart(card.key)
             }}
             onDragEnd={props.onDragEnd}
             onDragOver={dragOver(index)}
@@ -177,11 +178,10 @@ export function BoardColumn(props: Props): React.ReactElement {
           />
         ))}
         {dropIndex === cards.length && <div className="board-col__dropline" aria-hidden="true" />}
-        {!known && <p className="board-col__note">Their status names no column. Drag a card to a column, or set its status.</p>}
-        {known && total === 0 && dropIndex === null && <p className="board-col__note">No cards. + above adds one.</p>}
+        {total === 0 && dropIndex === null && <p className="board-col__note">No cards. + above adds one.</p>}
       </div>
 
-      {menu.menu !== null && column !== null && <ContextMenu items={menuItems(column)} at={menu.menu.at} onClose={menu.close} />}
+      {menu.menu !== null && <ContextMenu items={menuItems(column)} at={menu.menu.at} onClose={menu.close} />}
     </section>
   )
 }

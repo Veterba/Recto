@@ -55,6 +55,7 @@ export function treeMenu(
       icon: 'folder-plus',
       run: () => onCreateIn(parent, 'folder'),
     },
+
     { kind: 'separator' },
     { kind: 'heading', label: isFolder ? 'This folder' : 'This note' },
     { kind: 'item', label: 'Rename', icon: 'pencil', shortcut: 'F2', run: () => rename(node.path) },

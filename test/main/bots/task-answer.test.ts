@@ -16,7 +16,7 @@ function rows(): TaskRow[] {
       else {
         const rel = path.relative(FIXTURE, full)
         const title = e.name.replace(/\.md$/, '')
-        for (const t of extractTasks(rel, fs.readFileSync(full, 'utf8'), {}, title))
+        for (const t of extractTasks(rel, fs.readFileSync(full, 'utf8')))
           out.push({
             path: rel,
             title,

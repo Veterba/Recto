@@ -1,21 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { IPC } from '@shared/ipc'
-import { bodyOf, parseFrontmatter } from '@shared/frontmatter'
-import {
-  cardDescription,
-  checklist,
-  dateOnly,
-  readPriority,
-  readTags,
-  setCardField,
-  setCardTags,
-  toggleCheck,
-  PRIORITIES,
-} from '@shared/card-fields'
+import { bodyOf, parseFrontmatter, withBody } from '@shared/frontmatter'
+import { checklist, dateOnly, readPriority, readTags, setCardField, setCardTags, PRIORITIES } from '@shared/card-fields'
 import { api } from '../../../app/api'
 import { useNoteBus } from '../../../app/note-bus'
 import { Icon } from '../../../ui/Icon'
-import { UNKNOWN_COLUMN, type Board } from '../boards'
+import { NoteBodyEditor } from '../../editor'
+import type { Board } from '../boards'
 import type { CardView } from '../board-view'
 import type { Drop } from '../hooks/use-board-cards'
 
@@ -23,24 +14,86 @@ type Props = {
   board: Board
   card: CardView
   editCard: (path: string, edit: (text: string) => string) => Promise<boolean>
-  move: (path: string, target: Drop) => Promise<void>
+  move: (key: string, target: Drop) => Promise<void>
   /** Rename the card's note: its title is its file name. */
   onRename: (name: string) => Promise<void>
+  /** A plain-text card becomes a note in tasks/. */
+  onMakeNote: () => Promise<void>
   onOpenNote: (path: string) => void
   onClose: () => void
 }
 
 const LEVEL_LABEL = { high: 'High', medium: 'Medium', low: 'Low' } as const
 
+/** How long typing in the panel pauses before the note is written. */
+const BODY_SAVE_MS = 500
+
 /** The value of a frontmatter key as written, or null. */
 const raw = (text: string, key: string): unknown => parseFrontmatter(text).fields.find((f) => f.key === key)?.value ?? null
 
 /**
- * A card, opened beside the board. Every field is the note's own frontmatter
- * or text, read from the file itself and written back one key at a time; the
- * board stays where it was.
+ * A card, opened beside the board. Its column is its line's place on this
+ * board; every other field is the note's own frontmatter or text, read from
+ * the file itself and written back one key at a time. A plain-text card has
+ * no note: it offers to become one.
  */
-export function CardPanel({ board, card, editCard, move, onRename, onOpenNote, onClose }: Props): React.ReactElement {
+export function CardPanel(props: Props): React.ReactElement {
+  return props.card.light ? <LightCardPanel {...props} /> : <NoteCardPanel {...props} />
+}
+
+/** The column select: the lanes of the board on screen. */
+function StatusSelect({ board, card, move }: Pick<Props, 'board' | 'card' | 'move'>): React.ReactElement {
+  return (
+    <select
+      id="card-status"
+      className="setting__select"
+      value={card.column}
+      onChange={(event) => void move(card.key, { column: event.target.value, index: Number.MAX_SAFE_INTEGER })}
+    >
+      {board.columns.map((column) => (
+        <option key={column.id} value={column.id}>
+          {column.name}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function LightCardPanel({ board, card, move, onMakeNote, onClose }: Props): React.ReactElement {
+  const [busy, setBusy] = useState(false)
+  return (
+    <aside className="card-panel glass-surface" aria-label={`Card: ${card.title}`}>
+      <header className="card-panel__head">
+        <code className="card-panel__path">Text on {board.name}</code>
+        <button className="icon-btn" aria-label="Close card" onClick={onClose}>
+          <Icon name="x" size={15} />
+        </button>
+      </header>
+      <div className="card-panel__body">
+        <p className="card-panel__title card-panel__title--text">{card.title}</p>
+        <div className="card-panel__fields">
+          <label htmlFor="card-status">Status</label>
+          <StatusSelect board={board} card={card} move={move} />
+        </div>
+        {card.description !== '' && <p className="card-panel__desc">{card.description}</p>}
+        <p className="card-panel__hint">A line of text on the board. As a note it can have a priority, dates, a tag and a checklist.</p>
+        <button
+          className="btn btn--sm card-panel__open"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true)
+            void onMakeNote().finally(() => setBusy(false))
+          }}
+        >
+          <Icon name="file-plus" size={13} />
+          Make it a note
+        </button>
+      </div>
+    </aside>
+  )
+}
+
+function NoteCardPanel({ board, card, editCard, move, onRename, onOpenNote, onClose }: Props): React.ReactElement {
   const [text, setText] = useState<string | null>(null)
   const [dateError, setDateError] = useState(false)
   const { revision } = useNoteBus()
@@ -60,7 +113,6 @@ export function CardPanel({ board, card, editCard, move, onRename, onOpenNote, o
     if (!(await editCard(card.path, change))) read()
   }
 
-  const status = card.column === UNKNOWN_COLUMN ? (card.status ?? '') : card.column
   const priorityRaw = text === null ? card.priority : raw(text, 'priority')
   const level = readPriority(priorityRaw)
   const unknownPriority = level === null && typeof priorityRaw === 'string' && priorityRaw.trim() !== '' ? priorityRaw.trim() : null
@@ -69,7 +121,30 @@ export function CardPanel({ board, card, editCard, move, onRename, onOpenNote, o
   const tags = readTags(text === null ? card.tags : raw(text, 'tags'))
   const body = text === null ? '' : bodyOf(text)
   const items = checklist(body)
-  const description = text === null ? card.description : cardDescription(body)
+
+  /**
+   * The note's text, typed in the panel: shown on the board as it is typed
+   * (description, checklist), written once typing pauses.
+   */
+  const bodyTimer = useRef<number | undefined>(undefined)
+  /** The write waiting for a pause - run at once if the panel closes first, so nothing typed is lost. */
+  const pendingBody = useRef<(() => void) | null>(null)
+  const writeBody = (next: string): void => {
+    window.clearTimeout(bodyTimer.current)
+    const write = (): void => {
+      pendingBody.current = null
+      void edit((t) => withBody(t, next))
+    }
+    pendingBody.current = write
+    bodyTimer.current = window.setTimeout(write, BODY_SAVE_MS)
+  }
+  useEffect(
+    () => () => {
+      window.clearTimeout(bodyTimer.current)
+      pendingBody.current?.()
+    },
+    [],
+  )
 
   /** A date edit, refused while it would put the start after the due date. */
   const setDate = (key: 'start' | 'due', value: string): void => {
@@ -119,23 +194,7 @@ export function CardPanel({ board, card, editCard, move, onRename, onOpenNote, o
 
         <div className="card-panel__fields">
           <label htmlFor="card-status">Status</label>
-          <select
-            id="card-status"
-            className="setting__select"
-            value={status}
-            onChange={(event) => void move(card.path, { column: event.target.value, index: Number.MAX_SAFE_INTEGER })}
-          >
-            {card.column === UNKNOWN_COLUMN && (
-              <option value={status} disabled>
-                {status} (no column)
-              </option>
-            )}
-            {board.columns.map((column) => (
-              <option key={column.id} value={column.id}>
-                {column.name}
-              </option>
-            ))}
-          </select>
+          <StatusSelect board={board} card={card} move={move} />
 
           <label htmlFor="card-priority">Priority</label>
           <select
@@ -201,25 +260,29 @@ export function CardPanel({ board, card, editCard, move, onRename, onOpenNote, o
           />
         </div>
 
-        {description !== '' && <p className="card-panel__desc">{description}</p>}
-
-        {items.length > 0 && (
-          <section className="card-panel__section" aria-label="Checklist">
-            <h3 className="card-panel__sub">
-              Checklist · {items.filter((i) => i.done).length}/{items.length}
-            </h3>
-            <ul className="card-panel__checks">
-              {items.map((item, index) => (
-                <li key={index}>
-                  <label className={`card-panel__check${item.done ? ' is-done' : ''}`}>
-                    <input type="checkbox" checked={item.done} onChange={() => void edit((t) => toggleCheck(t, index))} />
-                    <span>{item.text}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+        <section className="card-panel__section card-panel__notes" aria-label="Notes">
+          <h3 className="card-panel__sub">
+            Notes
+            {items.length > 0 && (
+              <span className="card-panel__count">
+                {items.filter((i) => i.done).length}/{items.length} done
+              </span>
+            )}
+          </h3>
+          {text !== null && (
+            <NoteBodyEditor
+              docKey={card.path}
+              value={body}
+              placeholder="Notes, steps, links. Markdown works: “- [ ] ” starts a checklist item."
+              onChange={writeBody}
+              onOpenLink={(target) =>
+                void api.invoke(IPC.indexResolveLink, target).then((found) => {
+                  if (found !== null) onOpenNote(found)
+                })
+              }
+            />
+          )}
+        </section>
 
         <button className="btn btn--sm card-panel__open" onClick={() => onOpenNote(card.path)}>
           <Icon name="file-text" size={13} />

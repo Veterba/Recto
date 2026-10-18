@@ -30,10 +30,11 @@ describe('vault overview from the index', () => {
       'Leaf.md': '# Leaf\n\nNothing out.',
       'Alone.md': '# Alone\n\nOnly [[Alone]] itself, and [[Nowhere]].',
       'Island.md': '# Island\n\nNo links at all.',
-      'tasks/Card.md': '---\nboard: main\nstatus: todo\n---\n',
+      'tasks/Card.md': '# Card',
+      'Main.md': '---\nkanban-plugin: board\n---\n\n## To do\n\n- [ ] [[Card]]\n',
     })
     const o = overview([])
-    // A link to itself or to nothing is no link; a card is a task, not a note.
+    // A link to itself or to nothing is no link; a card is a task, not a note, and a board is neither.
     expect(o.orphans.map((n) => n.path)).toEqual(['Alone.md', 'Island.md'])
     expect(o.broken.map((b) => `${b.path} -> ${b.target}`)).toEqual(['Alone.md -> Nowhere', 'Hub.md -> Missing'])
     expect(o.hubs).toEqual([
@@ -52,13 +53,19 @@ describe('vault overview from the index', () => {
     expect(overview([])).toMatchObject({ notes: 2, words: 6 + 4, links: 1, tags: 2 })
   })
 
-  it('lists board cards with a due date, for the renderer to judge against its Done columns', () => {
+  it('lists cards with a due date, done when their board has them in its done lane', () => {
     vault({
-      'tasks/Late.md': '---\nboard: main\nstatus: doing\ndue: 2026-10-01T09:00\n---\n',
-      'tasks/Undated.md': '---\nboard: main\nstatus: todo\n---\n',
+      'tasks/Late.md': '---\ndue: 2026-10-01T09:00\n---\n',
+      'tasks/Finished.md': '---\ndue: 2026-09-01\n---\n',
+      'tasks/Undated.md': '# Undated',
       'Plain note.md': '---\ndue: 2026-10-01\n---\n# Not a card\n',
+      'tasks/Main.md':
+        '---\nkanban-plugin: board\n---\n\n## To do\n\n- [ ] [[Undated]]\n\n## Doing\n\n- [ ] [[Late]]\n\n## Done\n\n**Complete**\n- [x] [[Finished]]\n',
     })
-    expect(overview([]).dueCards).toEqual([{ path: 'tasks/Late.md', name: 'Late', due: '2026-10-01', status: 'doing', board: 'main' }])
+    expect(overview([]).dueCards).toEqual([
+      { path: 'tasks/Finished.md', name: 'Finished', due: '2026-09-01', done: true, board: 'Main' },
+      { path: 'tasks/Late.md', name: 'Late', due: '2026-10-01', done: false, board: 'Main' },
+    ])
   })
 
   it('on this day reads the date a note gives itself, never its mtime', () => {

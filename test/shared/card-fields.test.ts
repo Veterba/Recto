@@ -106,10 +106,8 @@ describe('writing a card', () => {
 
 describe("a card's fields from its text", () => {
   it('reads what the board shows, the way the index keeps it', () => {
-    const text = '---\nboard: launch\nstatus: todo\norder: 2.5\npriority: High\nstart: 2026-10-14\ndue: 2026-10-16\ntags: [ui, docs]\n---\n\nFirst words.\n\n- [x] a\n- [ ] b\n'
+    const text = '---\npriority: High\nstart: 2026-10-14\ndue: 2026-10-16\ntags: [ui, docs]\n---\n\nFirst words.\n\n- [x] a\n- [ ] b\n'
     expect(cardFields(text)).toEqual({
-      status: 'todo',
-      order: 2.5,
       start: '2026-10-14',
       due: '2026-10-16',
       completed: null,
