@@ -95,10 +95,10 @@ export function extractTasks(path: string, body: string, frontmatter: Record<str
 }
 
 /**
- * The day a note is about: the date in a daily note's name, else its
- * frontmatter date / created, else the day it was last written.
+ * The day a note says it was written: the date in its name, else its
+ * frontmatter date / created / day. Null when it says nothing.
  */
-export function noteDate(path: string, frontmatter: Record<string, unknown>, mtimeMs: number): string {
+export function writtenDate(path: string, frontmatter: Record<string, unknown>): string | null {
   const named = /(\d{4}-\d{2}-\d{2})/.exec(path.slice(path.lastIndexOf('/') + 1))?.[1]
   if (named !== undefined) return named
   for (const key of ['date', 'created', 'day']) {
@@ -106,6 +106,16 @@ export function noteDate(path: string, frontmatter: Record<string, unknown>, mti
     const found = typeof value === 'string' ? /(\d{4}-\d{2}-\d{2})/.exec(value)?.[1] : undefined
     if (found !== undefined) return found
   }
+  return null
+}
+
+/**
+ * The day a note is about: the date in a daily note's name, else its
+ * frontmatter date / created, else the day it was last written.
+ */
+export function noteDate(path: string, frontmatter: Record<string, unknown>, mtimeMs: number): string {
+  const written = writtenDate(path, frontmatter)
+  if (written !== null) return written
   const d = new Date(mtimeMs)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }

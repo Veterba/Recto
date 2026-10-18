@@ -21,6 +21,8 @@ type AppState = {
   botNotify?: boolean
   /** Minutes without bot use before the local model is unloaded; -1 keeps it (Settings → Bots). */
   botUnloadMinutes?: number
+  /** Where the vault overview was left: its page and scroll, restored on ⌃⌘H. */
+  overviewPlace?: import('../shared/overview').OverviewPlace
 }
 
 const file = () => path.join(app.getPath('userData'), 'app-state.json')

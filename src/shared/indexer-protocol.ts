@@ -6,6 +6,8 @@
  * reach across the other.
  */
 
+import type { OverviewIndex } from './overview'
+
 export type SearchHit = {
   path: string
   snippet: string
@@ -63,28 +65,6 @@ export type NoteChange = { type: 'upserted' | 'removed'; path: string }
 
 /** One stored version of a note. `content` is omitted when listing. */
 export type Snapshot = { id: number; path: string; ts: number; bytes: number; content?: string }
-
-/**
- * What the vault itself can say about how it is being used.
- *
- * Everything here is a GROUP BY over the index - no counters are stored, so
- * nothing can drift. Note that `mtime` is the last write, not the creation
- * date: the filesystem does not keep one we can trust across a git clone or a
- * sync, so "touched" is the honest word for it.
- */
-export type VaultUsage = {
-  notes: number
-  links: number
-  unresolved: number
-  tags: number
-  /** Notes written to in the last seven days. */
-  touchedThisWeek: number
-  /** Notes written to per day, oldest first, seven entries. */
-  weekTrend: number[]
-  topFolders: { name: string; count: number }[]
-  topTags: { tag: string; count: number }[]
-  hubs: { name: string; links: number }[]
-}
 
 /** What topics reasons over: every note's mtime, resolved links and tags. */
 export type TopicsGraph = {
@@ -167,7 +147,12 @@ export type IndexRequest =
   | { kind: 'history-get'; id: number }
   | { kind: 'history-prune' }
   | { kind: 'stats' }
-  | { kind: 'vault-usage' }
+  /** The vault overview's aggregates; `days` are the days "on this day" looks for. */
+  | { kind: 'overview'; days: string[] }
+  /** Words in every note, for the daily count in `.recto/stats/words.json`. */
+  | { kind: 'words-total' }
+  /** When every saved version was taken, for backfilling the days with edits. */
+  | { kind: 'snapshot-times' }
   | { kind: 'topics-graph' }
   /** Notes carrying a link written as `target`, resolved or not - a topic link never resolves. */
   | { kind: 'link-sources'; target: string }
@@ -202,7 +187,9 @@ export type IndexResponse =
   | { kind: 'history-get-result'; snapshot: Snapshot | null }
   | { kind: 'history-prune-result'; removed: number }
   | { kind: 'stats-result'; notes: number; links: number; unresolved: number; tags: number }
-  | { kind: 'vault-usage-result'; usage: VaultUsage }
+  | { kind: 'overview-result'; overview: OverviewIndex }
+  | { kind: 'words-total-result'; words: number }
+  | { kind: 'snapshot-times-result'; rows: { path: string; ts: number }[] }
   | { kind: 'topics-graph-result'; graph: TopicsGraph }
   | { kind: 'link-sources-result'; paths: string[] }
   | { kind: 'task-rows-result'; rows: TaskRowData[] }

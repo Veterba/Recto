@@ -231,46 +231,7 @@
   white-space: nowrap;
 }
 
-.home__back {
-  all: unset;
-  box-sizing: border-box;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: clamp(14px, 1.5vw, 21px);
-  font-style: italic;
-  font-weight: 500;
-}
-
-/*
- * The way back is light, not ink.
- *
- * Pane two damps the whole field to read the figures against, so its ground is
- * reliably dark - and ink on it would need a shelf of its own for no reason.
- * Same type, opposite polarity, because the ground is opposite.
- */
-.home__back {
-  order: -1;
-  margin: 0;
-  color: #f2f2f2;
-}
-.home__back:hover {
-  color: #fff;
-}
 .home__cta:focus-visible {
   outline: 1px solid var(--home-ink);
   outline-offset: 4px;
-}
-.home__back:focus-visible {
-  outline: 2px solid #f2f2f2;
-  outline-offset: 3px;
-  border-radius: 999px;
-}
-.home__arrow {
-  display: inline-block;
-  transition: transform 180ms var(--ease);
-}
-.home__back:hover .home__arrow {
-  transform: translateX(-6px);
 }

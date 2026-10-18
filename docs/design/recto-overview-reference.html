@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recto vault overview</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: shader fills the window edge to edge; one solid reading column in the middle carries all text. */
+:root{
+  --paper:#ffffff; --ink:#141418; --soft:#55555c; --muted:#8c8c93; --line:#ececef; --chip:#f3f3f5;
+  --acc:#2f62dc; --acc-soft:rgba(47,98,220,.1); --warn:#b7791f; --bad:#c2453d; --ok:#3f8f5a;
+  --heat0:#eef0f4; --heat1:#c9d6f3; --heat2:#8fabe8; --heat3:#4f78d8; --heat4:#2448a8;
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#16161b; --ink:#ecebf2; --soft:#b2b0bb; --muted:#85838f; --line:#26252d; --chip:#202027;
+  --acc:#8b5cf6; --acc-soft:rgba(139,92,246,.16); --warn:#e0a84a; --bad:#e57068; --ok:#6cc08a;
+  --heat0:#202027; --heat1:#3b2f63; --heat2:#5a43a3; --heat3:#7b5ce0; --heat4:#a98ef0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#16161b; --ink:#ecebf2; --soft:#b2b0bb; --muted:#85838f; --line:#26252d; --chip:#202027;
+  --acc:#8b5cf6; --acc-soft:rgba(139,92,246,.16); --warn:#e0a84a; --bad:#e57068; --ok:#6cc08a;
+  --heat0:#202027; --heat1:#3b2f63; --heat2:#5a43a3; --heat3:#7b5ce0; --heat4:#a98ef0; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:#0b1030;color:var(--ink);font:13px/1.5 var(--ui);padding-block:20px 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.intro{max-width:1100px;margin:0 auto 14px;color:#cdd3ee}
+.intro h1{margin:0;font-size:19px;color:#fff;font-weight:650}
+.intro p{margin:4px 0 0;max-width:75ch}
+.win{max-width:1100px;margin:0 auto;height:760px;border-radius:14px;overflow:hidden;position:relative;box-shadow:0 30px 80px -20px rgba(0,0,0,.7)}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.dots{position:absolute;top:14px;left:16px;display:flex;gap:7px;z-index:3}.dots i{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.55);display:block}
+.col{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(600px,100%);background:var(--paper);overflow:auto;z-index:2;
+  padding:56px 48px 48px;display:flex;flex-direction:column;gap:30px;scrollbar-width:thin}
+.top{display:flex;align-items:center;gap:10px;color:var(--muted)}
+.back{border:0;background:none;font:inherit;color:var(--soft);cursor:pointer;padding:4px 8px 4px 0;display:flex;gap:6px;align-items:center}
+.back:hover{color:var(--ink)}
+.top .sp{flex:1}
+.vault{font-size:22px;font-weight:650;letter-spacing:-.3px;margin:0;text-wrap:balance}
+.since{color:var(--muted);margin-top:2px}
+.lbl{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.big4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.big4 b{display:block;font-size:30px;font-weight:300;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.1}
+.sec{display:flex;flex-direction:column;gap:12px}
+.sech{display:flex;align-items:baseline;gap:10px}
+.sech .r{margin-left:auto;color:var(--muted);font-size:12px}
+.week{display:grid;grid-template-columns:repeat(2,1fr);gap:18px 24px}
+.stat b{font-size:22px;font-weight:400;font-variant-numeric:tabular-nums}
+.stat small{display:block;color:var(--muted);font-size:12px}
+.stat .delta{color:var(--ok);font-size:12px;margin-left:6px}
+svg.spark{width:100%;height:28px;display:block;margin-top:4px}
+.heat{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,10px);gap:3px;overflow-x:auto;padding-bottom:4px}
+.heat i{width:10px;height:10px;border-radius:2px;background:var(--heat0);display:block}
+.heatleg{display:flex;align-items:center;gap:4px;color:var(--muted);font-size:11px;justify-content:flex-end}
+.heatleg i{width:10px;height:10px;border-radius:2px;display:block}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.list{display:flex;flex-direction:column}
+.list a{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);color:var(--ink);text-decoration:none;font-variant-numeric:tabular-nums}
+.list a:hover{color:var(--acc)}
+.list a span:last-child{color:var(--muted)}
+.attn{display:flex;flex-direction:column;gap:8px}
+.attn a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:var(--chip);color:var(--ink);text-decoration:none}
+.attn a:hover{background:var(--acc-soft)}
+.attn .n{font-size:18px;font-variant-numeric:tabular-nums;min-width:28px}
+.attn .d{color:var(--muted);font-size:12px;display:block}
+.attn .go{margin-left:auto;color:var(--muted)}
+.pill{display:inline-block;width:8px;height:8px;border-radius:50%}
+.onday{border-left:2px solid var(--acc);padding:2px 0 2px 12px}
+.onday b{display:block}.onday span{color:var(--muted);font-size:12px}
+.topics{display:flex;flex-wrap:wrap;gap:6px}
+.topics span{padding:4px 10px;border-radius:99px;background:var(--chip);font-size:12px}
+.topics span em{font-style:normal;color:var(--muted);margin-left:4px}
+.empty{color:var(--muted);font-size:12px}
+.foot{color:var(--muted);font-size:11.5px;border-top:1px solid var(--line);padding-top:14px}
+@media (max-width:640px){.col{padding:48px 20px}.big4{grid-template-columns:repeat(2,1fr)}.two,.week{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){canvas{display:none}.win{background:#1b2a6b}}
+</style></head><body>
+
+<div class="intro">
+  <h1>Recto vault overview</h1>
+  <p>The shader keeps the whole window; all text sits in one solid column in the middle, white in light theme and dark in dark theme, so it never lands on a bright patch. Example numbers.</p>
+</div>
+
+<div class="win">
+  <canvas id="sh"></canvas>
+  <div class="dots"><i></i><i></i><i></i></div>
+  <main class="col">
+    <div class="top"><button class="back">← Back</button><span class="sp"></span><span>⌃⌘H</span></div>
+
+    <div>
+      <h2 class="vault">Recto Vault</h2>
+      <div class="since">Since 14 Mar 2026 · 218 days</div>
+    </div>
+
+    <div class="big4">
+      <div><b>33</b><span class="lbl">Notes</span></div>
+      <div><b>41.2k</b><span class="lbl">Words</span></div>
+      <div><b>29</b><span class="lbl">Links</span></div>
+      <div><b>6</b><span class="lbl">Tags</span></div>
+    </div>
+
+    <section class="sec">
+      <div class="sech"><span class="lbl">This week</span><span class="r">12–18 Oct</span></div>
+      <div class="week">
+        <div class="stat"><b>12</b><span class="delta">+4</span><small>notes touched</small><svg class="spark" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="var(--acc)" stroke-width="1.5" points="0,24 16,22 33,18 50,20 66,10 83,12 100,6"/></svg></div>
+        <div class="stat"><b>3,120</b><span class="delta">+18%</span><small>words written</small><svg class="spark" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="var(--acc)" stroke-width="1.5" points="0,20 16,24 33,14 50,16 66,8 83,18 100,10"/></svg></div>
+        <div class="stat"><b>4 days</b><small>writing streak · longest 11</small></div>
+        <div class="stat"><b>2 h 10 min</b><small>in Recto this week · today 25 min</small></div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sech"><span class="lbl">Writing activity</span><span class="r">last 26 weeks</span></div>
+      <div class="heat" id="heat"></div>
+      <div class="heatleg">Less <i style="background:var(--heat0)"></i><i style="background:var(--heat1)"></i><i style="background:var(--heat2)"></i><i style="background:var(--heat3)"></i><i style="background:var(--heat4)"></i> More</div>
+    </section>
+
+    <section class="sec">
+      <span class="lbl">Needs attention</span>
+      <div class="attn">
+        <a href="#"><span class="n">5</span><span><b>Notes with no links</b><span class="d">Nothing points to them and they point nowhere</span></span><span class="go">→</span></a>
+        <a href="#"><span class="n">3</span><span><b>Broken links</b><span class="d">[[Links]] to notes that don’t exist</span></span><span class="go">→</span></a>
+        <a href="#"><span class="n" style="color:var(--bad)">2</span><span><b>Overdue tasks</b><span class="d">On the 2026-2027 board</span></span><span class="go">→</span></a>
+      </div>
+    </section>
+
+    <div class="two">
+      <section class="sec"><span class="lbl">Most written in</span>
+        <div class="list"><a href="#"><span>Programming</span><span>15</span></a><a href="#"><span>Learning</span><span>7</span></a><a href="#"><span>Other</span><span>5</span></a><a href="#"><span>tasks</span><span>4</span></a></div></section>
+      <section class="sec"><span class="lbl">Most linked</span>
+        <div class="list"><a href="#"><span>Transcript</span><span>10</span></a><a href="#"><span>Transcript log</span><span>7</span></a><a href="#"><span>Khan Academy</span><span>5</span></a></div></section>
+    </div>
+
+    <section class="sec">
+      <span class="lbl">Topics</span>
+      <div class="topics"><span>Maths<em>9</em></span><span>Recto<em>8</em></span><span>Norwegian<em>6</em></span><span>Habits<em>4</em></span></div>
+    </section>
+
+    <section class="sec">
+      <span class="lbl">Rediscover</span>
+      <div class="onday"><b>Khan Unit 4</b><span>Written a month ago · not opened since</span></div>
+      <div class="onday"><b>How I use Recto</b><span>Not opened for 62 days</span></div>
+    </section>
+
+    <div class="foot">Counted on this Mac from your notes; nothing is sent anywhere.</div>
+  </main>
+</div>
+
+<script>
+// heatmap sample
+(()=>{const h=document.getElementById('heat');let s=7;const r=()=>(s=(s*9301+49297)%233280)/233280;
+ for(let i=0;i<26*7;i++){const v=r();const lv=v<.45?0:v<.65?1:v<.82?2:v<.94?3:4;const e=document.createElement('i');if(lv)e.style.background=`var(--heat${lv})`;h.appendChild(e)}})();
+// shader-like mosaic
+(()=>{const c=document.getElementById('sh'),x=c.getContext('2d');let w,h,t=0;
+ const fit=()=>{const r=c.getBoundingClientRect();w=c.width=Math.ceil(r.width/18);h=c.height=Math.ceil(r.height/18);c.style.imageRendering='pixelated'};
+ fit();addEventListener('resize',fit);
+ const img=()=>x.createImageData(w,h);
+ const draw=()=>{const d=img();for(let j=0;j<h;j++)for(let i=0;i<w;i++){
+   const v=.5+.5*Math.sin(i*.18+t*.6+Math.sin(j*.12+t*.3)*2)*Math.cos(j*.15-t*.4+Math.cos(i*.08)*1.5);
+   const k=(j*w+i)*4;d.data[k]=20+v*170;d.data[k+1]=35+v*190;d.data[k+2]=110+v*140;d.data[k+3]=255}
+   x.putImageData(d,0,0);t+=.02;if(!matchMedia('(prefers-reduced-motion: reduce)').matches)requestAnimationFrame(draw)};
+ draw();})();
+</script>
+</body></html>

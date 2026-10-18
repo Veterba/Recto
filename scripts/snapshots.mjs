@@ -228,6 +228,10 @@ async function launch(userData) {
   })
   await page.reload()
   await page.waitForSelector('[role=treeitem]')
+  // Time in Recto counts real seconds while the window has focus; a run's
+  // length is not part of the picture. The window's blur stops the count
+  // without touching the editor's own sense of focus.
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
   await sleep(1500)
   return { app, page }
 }
@@ -354,9 +358,9 @@ async function screens(page, dir, vault) {
   // Each step waits for what it should have done, so a key press that did not
   // land fails the run instead of photographing the wrong screen.
   const pane = (name) => page.waitForFunction((n) => document.querySelector('.home__live')?.textContent === n, name)
-  // The overlay measures its type once, as it opens, to hold the glass dark
-  // behind it. Its fonts load lazily; one that lands after that measurement
-  // leaves the glass shaped around the fallback font. Load them first.
+  // The overlay measures its type once, as it opens, for the shader to draw
+  // it. Its fonts load lazily; one that lands after that measurement leaves
+  // the text drawn in the fallback font. Load them first.
   await page.evaluate(() =>
     Promise.all(['italic 400 16px "Bodoni Moda"', '500 16px "Geist Sans"', '500 16px "Geist Mono"'].map((f) => document.fonts.load(f))),
   )
@@ -365,7 +369,18 @@ async function screens(page, dir, vault) {
   await shoot(page, dir, '17-home', 2500)
   await page.keyboard.press('ArrowRight')
   await pane('Statistics')
+  await page.waitForSelector('.overview [aria-label="This week"]')
   await shoot(page, dir, '18-statistics', 3000)
+  // Scrolled to the end: the card's last section, then the field.
+  await page.evaluate(() => {
+    const scroller = document.querySelector('.overview__scroller')
+    scroller?.scrollTo(0, scroller.scrollHeight)
+  })
+  await shoot(page, dir, '18b-statistics-end', 1500)
+  await page.evaluate(() => document.querySelector('.overview__scroller')?.scrollTo(0, 0))
+  // Leave it on the welcome, as a first opening finds it.
+  await page.keyboard.press('ArrowLeft')
+  await pane('Recto')
   await page.keyboard.press('Escape')
   await page.waitForSelector('.home__live', { state: 'detached' })
 
@@ -878,6 +893,66 @@ async function highlightShots(dir, theme) {
 }
 
 /**
+ * Settings over a note of big black type, dragged to lie across the sidebar
+ * and the note: everything behind the panel has to come out blurred - over
+ * the see-through sidebar as much as over the page.
+ */
+async function settingsGlassShots(dir, theme) {
+  const { base, vault, userData } = prepareVault(theme, `${theme}-settings-glass`)
+  const lines = Array.from({ length: 14 }, (_, i) => `# ${'MWMWMWMWMWMWMWMW'.slice(i % 4)} ${i + 1}`)
+  fs.writeFileSync(path.join(vault, 'Contrast.md'), `# Big black type\n\n${lines.join('\n\n')}\n`)
+  const { app, page } = await launch(userData)
+  try {
+    await page.locator('[role=treeitem]', { hasText: 'Contrast' }).first().click()
+    await page.waitForSelector('.cm-content')
+    await key(page, 'Mod+,')
+    await page.waitForSelector('[role=dialog][aria-label=Settings]')
+    await sleep(800)
+    const head = await page.locator('.settings-panel__head').boundingBox()
+    await page.mouse.move(head.x + head.width / 2, head.y + head.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(head.x + head.width / 2 - head.x + 140, head.y + head.height / 2, { steps: 8 })
+    await page.mouse.up()
+    await shoot(page, dir, '16b-settings-glass', 900)
+    await page.keyboard.press('Escape')
+    console.log('  16b-settings-glass')
+  } finally {
+    await app.close()
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
+/**
+ * The [[ link list open in a note: names, folders after them (a long one cut
+ * in the middle), and the row that makes a note no name matches yet.
+ */
+async function linkCompleteShots(dir, theme) {
+  const { base, vault, userData } = prepareVault(theme, `${theme}-link-complete`)
+  const put = (relative, text) => {
+    fs.mkdirSync(path.dirname(path.join(vault, relative)), { recursive: true })
+    fs.writeFileSync(path.join(vault, relative), text)
+  }
+  put('Garden/Garden plan.md', '# Garden plan\n')
+  put('Gardening tools.md', '# Gardening tools\n')
+  put('Programming/Projects/Recto app/Design notes/Garden of forking paths.md', '# Garden of forking paths\n')
+  put('Draft.md', '# Draft\n\nA link goes here: \n')
+  const { app, page } = await launch(userData)
+  try {
+    await page.locator('[role=treeitem]', { hasText: 'Draft' }).first().click()
+    await page.locator('.cm-line', { hasText: 'A link goes here' }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('[[Gard')
+    await page.waitForSelector('.cm-tooltip-autocomplete li')
+    await shoot(page, dir, '30-link-complete', 600)
+    await page.keyboard.press('Escape')
+    console.log('  30-link-complete')
+  } finally {
+    await app.close()
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
+/**
  * Editing tables, in their own run: the toolbar's size picker, a row's handle
  * with its menu, and a rectangle of selected cells (test/fixtures/table-edit).
  */
@@ -1013,6 +1088,8 @@ for (const theme of ['light', 'dark']) {
     await tableEditShots(dir, theme)
     await periodicShots(dir, theme)
     await highlightShots(dir, theme)
+    await linkCompleteShots(dir, theme)
+    await settingsGlassShots(dir, theme)
     if (COMPARE !== null) {
       for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.png'))) {
         const old = path.join(COMPARE, theme, name)

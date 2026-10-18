@@ -17,10 +17,39 @@
   animation: note-window-in 160ms var(--ease) backwards;
 }
 
-/* Frosted in both themes: one blur over whatever is behind, the theme's tinted
-   fill on top so text reads. Translucency off leaves the solid tokens alone. */
+/* Frosted in both themes: one blur over whatever is behind, the page's paper
+   at 70% on the same element so text reads, the cards a little more opaque.
+   Translucency off leaves the solid tokens alone: no blur, a solid panel. */
 :root:not([data-translucent='off']) .settings-panel {
-  --glass-surface-blur: blur(24px) saturate(170%);
+  --glass-surface-blur: blur(24px) saturate(1.6);
+  --glass-surface-bg: color-mix(in srgb, var(--bg-primary) 70%, transparent);
+  --glass-surface-sheen: transparent;
+}
+:root:not([data-translucent='off']) .settings-panel .settings__card {
+  background: color-mix(in srgb, var(--bg-primary) 85%, transparent);
+}
+
+/*
+ * The blur's opaque base, exactly under the panel and under everything else.
+ *
+ * Chromium draws the blurred backdrop over the backdrop as it was, not in
+ * place of it. Where the page is opaque (the editor) the blurred copy hides
+ * the original; where it is nearly transparent - the sidebar, title bar and
+ * status bar, which let the desktop's vibrancy through - the blurred copy is
+ * nearly transparent too, and the sharp original shows through the panel's
+ * tint. This gives the page under the panel a paper ground (the editor's own
+ * page covers it; the sidebar's text sits on it), so what is behind comes out
+ * blurred everywhere. Outside the panel nothing changes.
+ */
+.settings-panel__base {
+  position: fixed;
+  z-index: -1;
+  border-radius: var(--radius-l);
+  background: var(--bg-primary);
+  pointer-events: none;
+}
+:root[data-translucent='off'] .settings-panel__base {
+  display: none;
 }
 
 .settings-panel__head {

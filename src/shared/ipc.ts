@@ -17,12 +17,12 @@ import type {
   NoteContextInfo,
   SearchResult,
   SnapshotInfo,
-  VaultUsage,
 } from './index-results'
 import type { ObsidianSyncStatus, ObsidianVaultInfo, SyncCounts, SyncProblem } from './obsidian-sync'
 import type { TopicInfo, TopicsPreview, TopicsRunNotice, TopicsSettings, TopicsStatus } from './topics'
 import type { FileNode, OpenVaultResult, RecentVault, RenameOutcome, StartupState, StateFeature, VaultChange } from './vault'
 import type { TextFileResult } from './file-kind'
+import type { OverviewData, OverviewPlace, OverviewTopic } from './overview'
 
 /**
  * How sharp the backdrop stays, sharpest first.
@@ -78,7 +78,6 @@ export const IPC = {
   indexSearch: 'index:search',
   indexBacklinks: 'index:backlinks',
   indexStats: 'index:stats',
-  indexVaultUsage: 'index:vault-usage',
   indexReindex: 'index:reindex',
   indexResolveLink: 'index:resolve-link',
   indexResolveLinks: 'index:resolve-links',
@@ -139,6 +138,13 @@ export const IPC = {
   botsRetry: 'bots:retry',
   botsJobs: 'bots:jobs',
   botsViewing: 'bots:viewing',
+  overviewData: 'overview:data',
+  overviewTopics: 'overview:topics',
+  overviewEdited: 'overview:edited',
+  overviewOpened: 'overview:opened',
+  overviewActive: 'overview:active',
+  overviewPlace: 'overview:place',
+  overviewSetPlace: 'overview:set-place',
 } as const
 
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
@@ -275,7 +281,6 @@ export type IpcApi = Exhaustive<
     [IPC.indexSearch]: (query: string, limit?: number) => SearchResult[]
     [IPC.indexBacklinks]: (path: string) => BacklinkResult[]
     [IPC.indexStats]: () => IndexStats
-    [IPC.indexVaultUsage]: () => VaultUsage
     [IPC.indexReindex]: () => { ok: boolean }
     [IPC.indexResolveLink]: (target: string) => string | null
     [IPC.indexResolveLinks]: (targets: string[]) => Record<string, string | null>
@@ -376,6 +381,19 @@ export type IpcApi = Exhaustive<
     [IPC.botsJobs]: () => BotJob[]
     /** What a bot's chat shows and whether it is on screen: for notifications and the unread dot. */
     [IPC.botsViewing]: (view: { botId: string; topic: string | null; visible: boolean }) => { ok: boolean }
+    /** The vault overview's raw figures, with the renderer's day and clock (main/overview.ts). Null with no vault or no index. */
+    [IPC.overviewData]: (today: string, now: number) => OverviewData | null
+    /** The largest topics and their notes; null when Topics is off. */
+    [IPC.overviewTopics]: () => OverviewTopic[] | null
+    /** You edited a note on `day`: a save in the editor, a card you changed or moved. */
+    [IPC.overviewEdited]: (path: string, day: string) => { ok: boolean }
+    /** A note came on screen. */
+    [IPC.overviewOpened]: (path: string, at: number) => { ok: boolean }
+    /** Seconds you were active in Recto, added to `day`. */
+    [IPC.overviewActive]: (day: string, seconds: number) => { ok: boolean }
+    /** Where the overview was left: its page and scroll (userData). */
+    [IPC.overviewPlace]: () => OverviewPlace
+    [IPC.overviewSetPlace]: (place: OverviewPlace) => { ok: boolean }
     /** A bot's model, written to its bot.json: an API model id, an Ollama model, or null for the local default. Returns the bots. */
     [IPC.botsSetModel]: (botId: string, model: string | null) => Bot[]
     /** A 2-5 word title for a chat topic from its first exchange, by the bot's model; null when it cannot make one. */

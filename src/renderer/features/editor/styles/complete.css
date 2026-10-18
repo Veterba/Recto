@@ -1,0 +1,81 @@
+/* ---------- autocomplete: [[ links, == highlights - every list the editor offers ----------
+
+   The same glass layer as the find bar: the `.glass-surface` material (it is
+   CodeMirror's tooltipClass), written out again here because CodeMirror's own
+   tooltip background outranks one class; the shape is this list's. Selectors
+   carry one class more than CodeMirror's theme, injected after this sheet. */
+
+.cm-editor .cm-tooltip.cm-tooltip-autocomplete.glass-surface {
+  background: linear-gradient(180deg, var(--glass-surface-sheen) -60%, transparent 45%), var(--glass-surface-bg);
+  backdrop-filter: var(--glass-surface-blur);
+  box-shadow:
+    inset 0 1px 0 var(--glass-surface-highlight),
+    var(--glass-surface-border),
+    var(--glass-surface-shadow);
+  border: none;
+  border-radius: 12px;
+  padding: 6px;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-13);
+  color: var(--text-primary);
+}
+
+.cm-editor .cm-tooltip-autocomplete.glass-surface > ul {
+  font-family: var(--font-ui);
+  /* Fits its rows; never narrower than 260 or wider than 440 - or the editor. */
+  min-width: min(260px, var(--cm-editor-width, 260px) - 28px);
+  max-width: min(440px, var(--cm-editor-width, 440px) - 28px);
+  /* Eight rows, then it scrolls inside. */
+  max-height: calc(8 * 32px);
+  scrollbar-width: thin;
+}
+
+.cm-editor .cm-tooltip-autocomplete.glass-surface > ul > li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border-radius: 8px;
+  line-height: 18px;
+  color: var(--text-primary);
+}
+.cm-editor .cm-tooltip-autocomplete.glass-surface > ul > li:hover {
+  background: color-mix(in srgb, var(--accent-muted) 55%, transparent);
+}
+.cm-editor .cm-tooltip-autocomplete.glass-surface > ul > li[aria-selected] {
+  background: var(--accent-muted);
+  color: var(--text-primary);
+}
+
+.cm-editor .cm-tooltip-autocomplete.glass-surface .cm-completionLabel {
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The letters you typed: heavier, not underlined. */
+.cm-editor .cm-tooltip-autocomplete.glass-surface .cm-completionMatchedText {
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* The folder after the name; its middle is already cut in link-complete.ts. */
+.cm-editor .cm-tooltip-autocomplete.glass-surface .cm-completionPath,
+.cm-editor .cm-tooltip-autocomplete.glass-surface .cm-completionDetail {
+  min-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: normal;
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
+
+.cm-editor .cm-tooltip-autocomplete.glass-surface .cm-completionPlus {
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--text-secondary);
+}

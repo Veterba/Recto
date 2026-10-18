@@ -4,6 +4,25 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.51.0 — 2026-10-18
+### Added
+- The vault overview's figures (⌃⌘H, then →) are a page that scrolls as a whole, wherever the pointer is: the vault's name large on the moving field, then a solid card with every figure, white in the light theme and the page's dark in the dark one. No figure sits on the field any more, so nothing is lost on a light patch. Back and the shortcut stay in the top corners.
+- ⌃⌘H reopens on the pane, page and scroll you left it on, after a restart too. Pressed again it goes back to the note or board you were on, at the same scroll.
+- New figures: words in the vault, words written this week (counted from now on, each day's change in the total), the writing streak and the longest one, and time in Recto (an average per day this week, last week's, this month and in all; counted only while the window has focus and you were active in the last 2 minutes).
+- "Notes touched" and "words written" show today's change beside the number ("+4 today", "−120 today"). Nothing changed today, nothing shown. Fewer words is shown in grey, not red.
+- Writing activity: the last 26 weeks across the card, one square a day shaded by the notes you edited. Hover shows the date and the count; a click lists that day's notes.
+- Needs attention: notes with no links either way, broken links and overdue cards, each opening a list.
+- Topics (when Topics is on) and Rediscover: a note written a month or a year ago today, and the most linked note you haven't opened for 60 days.
+- One line under the card's heading says since when the figures are counted ("Stats counted from today"); no figure shows a dash.
+- When no note has the name you typed after [[, the list's last row is "Create “name”": it writes the link and makes the note.
+### Changed
+- "Notes touched" and the streak count only edits you made (editor saves, card edits and moves), not Recto's own writes or changes from other apps or sync. The last month of version history is read in once, so the first weeks are not blank.
+- Sections with nothing in them are not shown; with only one of Most written in and Most linked, it takes the card's width. A week's line appears once it has three days to draw, and one note then two is a gentle rise rather than a spike.
+- The [[ link list is a glass layer like the find bar, in both themes: the app's font, no type icon, the note's name with its folder after it (a long folder is shortened in the middle), at most eight rows before it scrolls, and a soft accent on the chosen row instead of solid blue. The == highlight list looks the same.
+- Notes are read again once after updating, to count their words.
+### Fixed
+- Settings blurs what is behind it everywhere, also where it lies over the sidebar: there the sidebar's names showed through almost sharp. The panel is the page's colour at 70% with a 24 px blur, its cards at 85%. Translucency off still gives a solid panel.
+
 ## v0.50.1 — 2026-10-16
 ### Fixed
 - A file name is unique in the whole vault again, ignoring case: a second note called "Plan" in any folder is refused, and so is a second Plan.pdf. A note and a file may share a base name (Plan.md and Plan.pdf). This holds for new notes and files, New file…, renames (including changing the type), moves between folders, new cards and periodic notes. The error names the file that already has the name, and New file… stays open to show it.

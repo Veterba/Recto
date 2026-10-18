@@ -46,21 +46,3 @@ export type BacklinkResult = {
 
 export type IndexStats = { notes: number; links: number; unresolved: number; tags: number }
 
-/**
- * The vault's own account of itself, for the home overlay.
- *
- * `mtime` is the only date the filesystem keeps that survives a clone or a
- * sync, so everything dated here means *touched*, not created.
- */
-export type VaultUsage = {
-  notes: number
-  links: number
-  unresolved: number
-  tags: number
-  touchedThisWeek: number
-  /** Notes touched per day, oldest first, seven entries. */
-  weekTrend: number[]
-  topFolders: { name: string; count: number }[]
-  topTags: { tag: string; count: number }[]
-  hubs: { name: string; links: number }[]
-}

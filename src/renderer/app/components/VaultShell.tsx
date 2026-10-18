@@ -40,9 +40,10 @@ import { TemplatePicker, usePeriodicNotesAutoCreate, useTemplateActions, useTemp
 import { TidyDialog, useTidy } from '../../features/tidy'
 import { CHAT_FOLDER } from '../../features/ai'
 import { BotList, MAIN_BOT, onOpenTopic, reloadBots, requestTopic, useBots, useBotsEnabled } from '../../features/bots'
-import { BoardList, CARD_FOLDER, requestNewCard, useBoards } from '../../features/boards'
+import { BoardList, CARD_FOLDER, doneColumn, requestNewCard, useBoards } from '../../features/boards'
 import { registerArchiveView } from '../../features/archive'
-import { HomeOverlay } from '../../features/home'
+import { HomeOverlay, forgetFigures, loadPlace } from '../../features/home'
+import { useUsageTracking } from '../usage'
 import type { Period, TemplateSettings } from '@shared/templates'
 
 type Props = {
@@ -114,6 +115,13 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
 
   // Image widgets resolve `attachments/x.png` against this.
   useEffect(() => setVaultPath(vault.path), [vault.path])
+
+  // The overview's time in Recto and "last opened"; where it was left, read now so ⌃⌘H never waits.
+  useUsageTracking(activePath)
+  useEffect(() => {
+    forgetFigures()
+    void loadPlace()
+  }, [])
 
   useWritingState(vault.path)
 
@@ -320,6 +328,32 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   })
 
   const openPeriodicSettings = useCallback(() => openSettings('periodic'), [openSettings])
+
+  // --- the vault overview (⌃⌘H) ---
+  const closeHome = useCallback(() => setHomeOpen(false), [])
+  const noteExists = useCallback((path: string) => tree.byPath.has(path), [tree.byPath])
+  const templateFolder = templates.settings.folder
+  const isTemplate = useCallback((path: string) => templateFolder !== '' && path.startsWith(`${templateFolder}/`), [templateFolder])
+  const boardDone = useCallback((id: string | null) => {
+    const board = boards.boards.find((b) => b.id === id)
+    return board === undefined ? null : doneColumn(board.columns)
+  }, [boards])
+  const boardName = useCallback((id: string | null) => boards.boards.find((b) => b.id === id)?.name ?? null, [boards])
+  const openCardFromHome = useCallback(
+    (path: string) => {
+      setActiveSection('tasks')
+      openBoardCard(path)
+    },
+    [setActiveSection, openBoardCard],
+  )
+  /** A folder from "Most written in": the notes, with that folder open in the tree. */
+  const openFolderFromHome = useCallback(
+    (name: string) => {
+      setActiveSection('data')
+      setExpanded((prev) => new Set(prev).add(name))
+    },
+    [setActiveSection],
+  )
   const { insertTemplate, updateTemplates, openPeriodicNote, openTodayNote } = useTemplateActions({
     activePath,
     closePicker: () => setTemplatesOpen(false),
@@ -636,10 +670,18 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       {tidy !== null && <TidyDialog plan={tidy} busy={tidyBusy} onConfirm={() => void runTidy()} onCancel={() => setTidy(null)} />}
       <HomeOverlay
         open={homeOpen}
-        onClose={() => setHomeOpen(false)}
+        onClose={closeHome}
         sidebarWidth={appearance.sidebarOpen ? appearance.sidebarWidth : 0}
         vaultPath={vault.path}
         roots={tree.roots}
+        vaultName={vault.name}
+        exists={noteExists}
+        isTemplate={isTemplate}
+        doneOf={boardDone}
+        boardName={boardName}
+        onOpenNote={openFile}
+        onOpenCard={openCardFromHome}
+        onOpenFolder={openFolderFromHome}
       />
       <CommandPalette registry={commands} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={openFile} />

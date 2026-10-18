@@ -49,7 +49,6 @@ describe('home palette: the light theme is what it was', () => {
     // All ones: the text texture is used exactly as drawn.
     expect([...p.textWeights]).toEqual([1, 1, 1])
     expect(p.grain).toBe(0.046)
-    expect(p.statsTo).toBe(1)
   })
 
   it('both light blocks agree, as do both dark ones', () => {
@@ -68,7 +67,6 @@ describe('home palette: the light theme is what it was', () => {
       '--home-rule-ink',
       '--home-grain',
       '--home-ground',
-      '--home-stats-to',
     ]) {
       expect(darkRead(token)).toBe(base(token))
     }
@@ -86,13 +84,12 @@ describe('home palette: the dark theme', () => {
     for (let i = 1; i < 7; i++) expect(p.ramp[i * 3]!).toBeGreaterThan(p.ramp[(i - 1) * 3]!)
   })
 
-  it('light ink, fainter meta and rules, lighter grain, figures read against the shallow end', () => {
+  it('light ink, fainter meta and rules, lighter grain', () => {
     const p = dark()
     expect([...p.ink].map((v) => Math.round(v * 255))).toEqual([236, 234, 242])
     expect(p.textWeights[1]).toBeCloseTo(0.6 / 0.78)
     expect(p.textWeights[2]).toBeCloseTo(0.2 / 0.38)
     expect(p.grain).toBeLessThan(light().grain)
-    expect(p.statsTo).toBe(0)
   })
 })
 
@@ -104,7 +101,6 @@ describe('home palette: crossfade', () => {
     expect(mixPalette(a, b, 1)).toBe(b)
     const mid = mixPalette(a, b, 0.5)
     expect(mid.grain).toBeCloseTo((a.grain + b.grain) / 2)
-    expect(mid.statsTo).toBe(0.5)
     expect(mid.ramp[0]).toBeCloseTo((a.ramp[0]! + b.ramp[0]!) / 2)
   })
 })

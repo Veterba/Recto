@@ -30,10 +30,10 @@
  * never displaced, never blurred, never magnified.
  */
 
-import { SPREAD, MAX_SHAPES, MAX_BLOCKS, MAX_TEXT_BOXES, MAX_SEGMENTS, SPLAT_FORCE, DISP_MAX, GLASS_GAIN, DISP_DECAY } from './scene-tuning'
+import { SPREAD, MAX_SHAPES, MAX_TEXT_BOXES, MAX_SEGMENTS, SPLAT_FORCE, DISP_MAX, GLASS_GAIN, DISP_DECAY } from './scene-tuning'
 import { mixPalette, type Palette } from './scene-palette'
 import { link } from './scene-gl'
-import { HEIGHT_FRAG, FROST_FRAG, colorFrag } from './scene-shaders-depth'
+import { HEIGHT_FRAG, FROST_FRAG, COLOR_FRAG } from './scene-shaders-depth'
 import { SCENE_FRAG, SPLAT_FRAG, ADVECT_FRAG, FINAL_FRAG } from './scene-shaders-compose'
 import type { SceneDebug, SceneFlags } from './scene-flags'
 import { rng, type Shape, shapeNow, bornShape, coverageOf } from './scene-shapes'
@@ -64,8 +64,10 @@ export type Scene = {
   resize: (cssWidth: number, cssHeight: number, dpr: number) => void
   /** The hero lines and rules to rasterise, measured from the DOM. */
   setText: (lines: readonly HeroLine[], rules?: readonly Rule[]) => void
-  /** Page two's content blocks, CSS px in that page's frame; the field stays dark behind them. */
-  setBlocks: (rects: readonly { x: number; y: number; width: number; height: number }[]) => void
+  /** Page two's title lines, measured from the DOM at no scroll, in that page's frame. */
+  setTitle: (lines: readonly HeroLine[]) => void
+  /** How far page two has scrolled, CSS px: its title moves up with it. */
+  setScroll: (px: number) => void
   /** Pointer position in uv, and how far it moved since the last one. */
   push: (u: number, v: number, du: number, dv: number) => void
   /** 0 on page one, 1 on page two. */
@@ -110,7 +112,8 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
       ok: false,
       resize: () => {},
       setText: () => {},
-      setBlocks: () => {},
+      setTitle: () => {},
+      setScroll: () => {},
       push: () => {},
       setProgress: () => {},
       setPalette: () => {},
@@ -160,8 +163,7 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
   const programs = {
     height: link(gl, HEIGHT_FRAG),
     frost: link(gl, FROST_FRAG),
-    color: link(gl, colorFrag(false)),
-    colorToward: link(gl, colorFrag(true)),
+    color: link(gl, COLOR_FRAG),
     scene: link(gl, SCENE_FRAG),
     splat: link(gl, SPLAT_FRAG),
     advect: link(gl, ADVECT_FRAG),
@@ -222,6 +224,17 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  /* Page two's title, and the kind texture its raster needs but nothing reads. */
+  const titleTex = gl.createTexture()!
+  const titleKindTex = gl.createTexture()!
+  for (const t of [titleTex, titleKindTex]) {
+    gl.bindTexture(gl.TEXTURE_2D, t)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]))
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, t === titleTex ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  }
   /* What kind each line is (scene-text.ts), read only when the theme weighs the kinds differently. */
   const kindTex = gl.createTexture()!
   gl.bindTexture(gl.TEXTURE_2D, kindTex)
@@ -247,7 +260,13 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
   let lines: readonly HeroLine[] = []
   let rules: readonly Rule[] = []
 
-  const rasterise = (): void => rasteriseText(gl, textTex, kindTex, lines, rules, cssW, cssH, pixelRatio)
+  let titleLines: readonly HeroLine[] = []
+  let scroll = 0
+
+  const rasterise = (): void => {
+    rasteriseText(gl, textTex, kindTex, lines, rules, cssW, cssH, pixelRatio)
+    rasteriseText(gl, titleTex, titleKindTex, titleLines, [], cssW, cssH, pixelRatio)
+  }
 
   const resize = (w: number, h: number, dpr: number): void => {
     cssW = Math.max(1, w)
@@ -425,10 +444,6 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
 
   const segData = new Float32Array(MAX_SEGMENTS * 4)
 
-  /** Page two's content blocks, CSS px in the page's own frame. */
-  let blocks = new Float32Array(MAX_BLOCKS * 4)
-  let blockCount = 0
-
   const frame = (dt: number): void => {
     drawn++
     // Collect the previous frame's timing before starting another.
@@ -491,16 +506,12 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
       draw(frost, frostT)
 
       const paint = (source: Target, target: Target, lit: boolean): void => {
-        // The light theme's own variant whenever its push is the one in force.
-        const color = colours.statsTo === 1 || programs.colorToward === null ? programs.color! : programs.colorToward
+        const color = programs.color!
         gl.useProgram(color)
         bind(color, 'u_h', 0, source.tex)
         gl.uniform3fv(at(color, 'u_ramp'), lit ? colours.ramp : colours.glass)
         gl.uniform1fv(at(color, 'u_stop'), lit ? colours.rampAt : colours.glassAt)
-        if (color === programs.colorToward) gl.uniform1f(at(color, 'u_statsTo'), colours.statsTo)
         gl.uniform1f(at(color, 'u_gain'), lit ? 1.6 : GLASS_GAIN)
-        gl.uniform4fv(at(color, 'u_blocks'), blocks)
-        gl.uniform1i(at(color, 'u_blockCount'), blockCount)
         gl.uniform2f(at(color, 'u_css'), cssW, cssH)
         gl.uniform1f(at(color, 'u_time'), time)
         gl.uniform1f(at(color, 'u_lit'), lit ? 1 : 0)
@@ -520,6 +531,8 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
       bind(compose, 'u_dark', 1, darkT.tex)
       bind(compose, 'u_text', 2, textTex)
       bind(compose, 'u_textKind', 4, kindTex)
+      bind(compose, 'u_title', 5, titleTex)
+      gl.uniform1f(at(compose, 'u_scroll'), scroll)
       gl.uniform1f(at(compose, 'u_progress'), progress)
       gl.uniform2f(at(compose, 'u_css'), cssW, cssH)
       gl.uniform1f(at(compose, 'u_dpr'), pixelRatio)
@@ -604,10 +617,12 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
   return {
     ok: !broken,
     resize,
-    setBlocks: (rects) => {
-      blocks = new Float32Array(MAX_BLOCKS * 4)
-      blockCount = Math.min(MAX_BLOCKS, rects.length)
-      rects.slice(0, MAX_BLOCKS).forEach((r, i) => blocks.set([r.x, r.y, r.width, r.height], i * 4))
+    setTitle: (next) => {
+      titleLines = next
+      rasteriseText(gl, titleTex, titleKindTex, titleLines, [], cssW, cssH, pixelRatio)
+    },
+    setScroll: (px) => {
+      scroll = px
     },
     setText: (next, nextRules = []) => {
       lines = next
@@ -650,6 +665,8 @@ export function createScene(canvas: HTMLCanvasElement, flags: SceneFlags, reduce
       dropTargets()
       gl.deleteTexture(textTex)
       gl.deleteTexture(kindTex)
+      gl.deleteTexture(titleTex)
+      gl.deleteTexture(titleKindTex)
       gl.deleteTexture(testTex)
       gl.deleteBuffer(quad)
       gl.deleteVertexArray(vao)

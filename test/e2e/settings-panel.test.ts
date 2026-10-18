@@ -10,7 +10,8 @@ import { quitApp, removeDir } from './helpers/app'
  * without a backdrop, takes focus and gives it back, moves and resizes within
  * the window, comes back where it was after a relaunch, searches across
  * sections with the real controls in the results, dims settings whose parent
- * is off, and turns solid with translucency off. Runs with `npm run test:e2e`.
+ * is off, and turns solid with translucency off; and over the see-through
+ * sidebar too, what is behind it comes out blurred. Runs with `npm run test:e2e`.
  */
 
 const RUN = process.env['RECTO_E2E'] === '1'
@@ -227,7 +228,7 @@ describe.skipIf(!RUN)('the settings panel', () => {
     const glass = await look()
     expect(glass.filter).toMatch(/blur\(24px\) saturate/)
     // A tinted fill, not a clear one and not an opaque one.
-    expect(glass.background).toMatch(/^rgba\(\d+, \d+, \d+, 0\.\d+\)$/)
+    expect(glass.background).toMatch(/^(rgba\(\d+, \d+, \d+, 0\.\d+\)|color\(srgb [\d. ]+ \/ 0\.\d+\))$/)
     // The entrance animation leaves nothing behind on the panel at rest.
     expect(glass.transform).toBe('none')
 
@@ -253,5 +254,61 @@ describe.skipIf(!RUN)('the settings panel', () => {
     // An opaque colour: no alpha channel in rgb(), or an alpha of 1.
     expect(solid.background).toMatch(/^rgb\(\d+, \d+, \d+\)$/)
     await translucency.click()
+  }, 30_000)
+
+  it('blurs what is behind it over the see-through sidebar, not only over the page', async () => {
+    const roughness = async (clip: Box): Promise<number> => {
+      const png = (await page.screenshot({ clip })).toString('base64')
+      return page.evaluate(async (data) => {
+        const image = new Image()
+        image.src = `data:image/png;base64,${data}`
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = image.width
+        canvas.height = image.height
+        const context = canvas.getContext('2d')!
+        context.drawImage(image, 0, 0)
+        const pixels = context.getImageData(0, 0, image.width, image.height).data
+        const lum: number[] = []
+        for (let i = 0; i < pixels.length; i += 4) lum.push(0.299 * pixels[i]! + 0.587 * pixels[i + 1]! + 0.114 * pixels[i + 2]!)
+        const mean = lum.reduce((a, b) => a + b, 0) / lum.length
+        return Math.sqrt(lum.reduce((a, b) => a + (b - mean) ** 2, 0) / lum.length)
+      }, png)
+    }
+    if ((await panel().count()) === 0) await open()
+    await section('Appearance')
+    const translucency = panel().getByRole('switch', { name: 'Translucency' })
+    if ((await translucency.getAttribute('aria-checked')) !== 'true') await translucency.click()
+    expect(await panel().evaluate((el) => getComputedStyle(el).backdropFilter)).toContain('blur(')
+
+    // The panel to the window's left edge, its header over the sidebar.
+    const head = (await panel().locator('.settings-panel__head').boundingBox())!
+    await drag({ x: head.x + head.width / 2, y: head.y + head.height / 2 }, -head.x, 0)
+    await sleep(300)
+    const at = (await panel().locator('.settings-panel__head').boundingBox())!
+    const sidebar = (await page.locator('aside.sidebar').boundingBox())!
+    expect(at.x).toBeLessThan(10)
+    // Under the header's empty middle, still inside the sidebar: black bars with
+    // clear gaps between them - the shape of the sidebar's own text, which has
+    // nothing opaque under it but the desktop.
+    const region = { x: at.x + 140, y: at.y + 6, width: Math.min(120, sidebar.x + sidebar.width - at.x - 160), height: at.height - 12 }
+    expect(region.width).toBeGreaterThan(40)
+    await page.evaluate((r) => {
+      const bars = document.createElement('div')
+      bars.id = 'e2e-bars'
+      bars.style.cssText = `position:fixed;left:${r.x}px;top:${r.y}px;width:${r.width}px;height:${r.height}px;z-index:50;background:repeating-linear-gradient(90deg,#000 0 6px,transparent 6px 12px)`
+      document.body.append(bars)
+    }, region)
+    await sleep(200)
+    const behind = await roughness(region)
+    await page.keyboard.press('Escape')
+    await panel().waitFor({ state: 'detached' })
+    await sleep(200)
+    const bare = await roughness(region)
+    await page.evaluate(() => document.getElementById('e2e-bars')?.remove())
+    expect(bare).toBeGreaterThan(40)
+    // Measured: about 1.6 blurred, about 11 with the sharp bars showing
+    // through the tint - which is what a quarter would have let pass.
+    expect(behind).toBeLessThan(bare / 20)
   }, 30_000)
 })

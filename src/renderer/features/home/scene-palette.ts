@@ -25,8 +25,6 @@ export type Palette = {
    */
   textWeights: Float32Array<ArrayBuffer>
   grain: number
-  /** Which end of the ramp page two pushes toward behind its figures: 1 deep, 0 shallow. */
-  statsTo: number
 }
 
 const STOPS = 7
@@ -126,7 +124,6 @@ export function readPalette(read: (token: string) => string, base: InkBase): Pal
       numberOf(get('rule-ink'), '--home-rule-ink') / base.rule,
     ]),
     grain: numberOf(get('grain'), '--home-grain'),
-    statsTo: numberOf(get('stats-to'), '--home-stats-to'),
   }
 }
 
@@ -149,6 +146,5 @@ export function mixPalette(a: Palette, b: Palette, t: number): Palette {
     ink: lerp(a.ink, b.ink, t),
     textWeights: lerp(a.textWeights, b.textWeights, t),
     grain: a.grain + (b.grain - a.grain) * t,
-    statsTo: a.statsTo + (b.statsTo - a.statsTo) * t,
   }
 }

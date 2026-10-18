@@ -3,11 +3,12 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { getSnapshot, listSnapshots, pruneSnapshots, takeSnapshot } from './snapshots'
 import { parseNote, pathsByName, resolveLink } from '../../shared/parse'
-import { extractTasks, normaliseTask, noteDate } from '../../shared/tasks'
+import { extractTasks, normaliseTask, noteDate, writtenDate } from '../../shared/tasks'
+import { noteWords } from '../../shared/overview'
 import type { CatalogNote, IndexRequest, IndexResponse, PeriodNote, StoredCard, TaskRowData } from '../../shared/indexer-protocol'
 import { isHidden } from '../../shared/vault'
 import { vaultRoot, requireDb, open, closeDb } from './db'
-import { search, backlinks, resolveOne, unresolved, graph, board, boards, context, vaultUsage } from './queries'
+import { search, backlinks, resolveOne, unresolved, graph, board, boards, context, overview } from './queries'
 
 /**
  * The indexer, running in its own process.
@@ -79,7 +80,9 @@ export function writeNote(relative: string, content: string, mtime: number, size
     )
     .run(relative, name, parsed.title, mtime, size, Date.now())
   const date = noteDate(relative, parsed.frontmatter, mtime)
-  handle.prepare('UPDATE notes SET note_date = ? WHERE path = ?').run(date, relative)
+  handle
+    .prepare('UPDATE notes SET note_date = ?, written = ?, words = ? WHERE path = ?')
+    .run(date, writtenDate(relative, parsed.frontmatter), noteWords(parsed.body), relative)
   writeTasks(relative, parsed, date, name.replace(/\.md$/i, ''))
 
   // Child rows are rewritten wholesale rather than diffed: a note is small, and
@@ -343,9 +346,9 @@ function renameNote(from: string, to: string): void {
  * Re-point every link whose text resolves to a known note.
  *
  * Done as a pass over the whole link table rather than per-note, because
- * creating one file can resolve links in a hundred others.
+ * creating one file can resolve links in a hundred others. Exported for the tests.
  */
-function resolveAllLinks(): number {
+export function resolveAllLinks(): number {
   const handle = requireDb()
   const rows = handle.prepare('SELECT path FROM notes').all() as { path: string }[]
   const allPaths = new Set(rows.map((r) => r.path))
@@ -479,8 +482,12 @@ function handle(request: IndexRequest): IndexResponse {
       const tags = (handleDb.prepare('SELECT COUNT(DISTINCT tag) AS n FROM tags').get() as { n: number }).n
       return { kind: 'stats-result', notes, links, unresolved, tags }
     }
-    case 'vault-usage':
-      return { kind: 'vault-usage-result', usage: vaultUsage() }
+    case 'overview':
+      return { kind: 'overview-result', overview: overview(request.days) }
+    case 'words-total':
+      return { kind: 'words-total-result', words: (requireDb().prepare('SELECT COALESCE(SUM(words), 0) AS n FROM notes').get() as { n: number }).n }
+    case 'snapshot-times':
+      return { kind: 'snapshot-times-result', rows: requireDb().prepare('SELECT path, ts FROM snapshots').all() as { path: string; ts: number }[] }
     case 'link-sources':
       return {
         kind: 'link-sources-result',

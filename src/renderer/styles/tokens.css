@@ -228,9 +228,8 @@
   --glass-primary-highlight: rgb(255 255 255 / 0.14);
   /* The home scene (features/home/scene-palette.ts): page one's ramp and page
      two's, shallow to deep; the ink of the words and rules, and how strong
-     meta labels and grid rules are; grain; the ground before the scene draws;
-     and which end of the ramp page two pushes toward behind its figures (1
-     deep, 0 shallow). In the dark the depth logic inverts: near-black, and
+     meta labels and grid rules are; grain; and the ground before the scene
+     draws. In the dark the depth logic inverts: near-black, and
      deep inside the shapes glow violet, ending on the accent. */
   --home-ramp: #0f0e13, #17151d, #221e2e, #33294a, #4b3572, #6a45a8, var(--accent);
   --home-ramp-stops: 0 0.2 0.4 0.6 0.78 0.92 1;
@@ -241,7 +240,6 @@
   --home-rule-ink: 0.2;
   --home-grain: 0.03;
   --home-ground: #0f0e13;
-  --home-stats-to: 0;
 }
 
 @media (prefers-color-scheme: light) {
@@ -295,7 +293,6 @@
     --home-rule-ink: 0.38;
     --home-grain: 0.046;
     --home-ground: #eee;
-    --home-stats-to: 1;
   }
 }
 
@@ -349,7 +346,6 @@
   --home-rule-ink: 0.38;
   --home-grain: 0.046;
   --home-ground: #eee;
-  --home-stats-to: 1;
 }
 
 :root[data-theme='dark'] {
@@ -406,9 +402,8 @@
   --glass-primary-highlight: rgb(255 255 255 / 0.14);
   /* The home scene (features/home/scene-palette.ts): page one's ramp and page
      two's, shallow to deep; the ink of the words and rules, and how strong
-     meta labels and grid rules are; grain; the ground before the scene draws;
-     and which end of the ramp page two pushes toward behind its figures (1
-     deep, 0 shallow). In the dark the depth logic inverts: near-black, and
+     meta labels and grid rules are; grain; and the ground before the scene
+     draws. In the dark the depth logic inverts: near-black, and
      deep inside the shapes glow violet, ending on the accent. */
   --home-ramp: #0f0e13, #17151d, #221e2e, #33294a, #4b3572, #6a45a8, var(--accent);
   --home-ramp-stops: 0 0.2 0.4 0.6 0.78 0.92 1;
@@ -419,7 +414,6 @@
   --home-rule-ink: 0.2;
   --home-grain: 0.03;
   --home-ground: #0f0e13;
-  --home-stats-to: 0;
 }
 
 /*

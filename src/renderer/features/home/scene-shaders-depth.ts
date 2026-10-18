@@ -3,7 +3,7 @@
  * colour ramps (see the render graph in scene.ts).
  */
 
-import { MAX_SHAPES, MAX_BLOCKS, MAX_TEXT_BOXES, STATS_SIGMA, STATS_PUSH, SHADE_S } from './scene-tuning'
+import { MAX_SHAPES, MAX_TEXT_BOXES, SHADE_S } from './scene-tuning'
 
 /** Shared by every fragment shader: value noise, fBm, hash. */
 export const NOISE = `
@@ -100,19 +100,10 @@ void main() {
  * the smeared depth's slope, and at most 8% more or less luminance, so every
  * mass reads as a gentle hill lit from its upper left.
  *
- * Page two gets its own ramp and gain, a flowing layer of fine detail for
- * the lenses to show, and behind its statistics a soft darkening rather than
- * a floor, so the detail and the motion carry on under the type. How much
- * darkening applies is kept in alpha, for the glass to calm its highlights.
- *
- * Built twice. Behind its figures page two is pushed toward the deep end in
- * the light theme and the shallow end in the dark; the push is a uniform only
- * in the variant that needs one (`toward`). The GPU's compiler folds float
- * maths as it likes, and any rewrite of the light theme's line - even one
- * that adds an exact zero - moved its pixels by a level. The light theme runs
- * the line exactly as it always was.
+ * Page two gets its own ramp and gain, and a flowing layer of fine detail for
+ * the lenses to show.
  */
-export const colorFrag = (toward: boolean): string => `#version 300 es
+export const COLOR_FRAG = `#version 300 es
 precision highp float;
 in vec2 v_uv;
 out vec4 fragColor;
@@ -122,9 +113,6 @@ uniform vec3 u_ramp[7];
 uniform float u_stop[7];
 uniform float u_gain;
 uniform float u_lit;
-/* Page two's content blocks, CSS px, y down: x, y, width, height. */
-uniform vec4 u_blocks[${MAX_BLOCKS}];
-uniform int u_blockCount;
 uniform vec2 u_css;
 uniform float u_time;
 ${NOISE}
@@ -134,15 +122,6 @@ uniform vec2 u_texel;
 /* Page one's text boxes, each an ellipse (centre, radii) in height units. */
 uniform vec4 u_textBoxes[${MAX_TEXT_BOXES}];
 uniform int u_textBoxCount;
-${
-  toward
-    ? `/* Which end page two pushes toward behind its figures: 1 deep, 0 shallow -
-   whichever end the light type on it reads against. */
-uniform float u_statsTo;
-`
-    : ''
-}/* Which end page two pushes toward behind its figures: 1 deep, 0 shallow -
-   whichever end the light type on it reads against. */
 
 vec3 ramp(float d) {
   for (int i = 0; i < 6; i++) {
@@ -169,23 +148,6 @@ vec3 encode(vec3 c) {
 }
 
 float depth(float h) { return 1.0 - exp(-u_gain * h); }
-
-/*
- * One smooth mask over the union of page two's content boxes: 1 inside a box,
- * a gaussian of STATS_SIGMA px outside it, joined by max. No rectangle edges,
- * no plateau - it only ever scales the field down.
- */
-float overStats(vec2 uv) {
-  vec2 p = vec2(uv.x, 1.0 - uv.y) * u_css;
-  float m = 0.0;
-  for (int i = 0; i < ${MAX_BLOCKS}; i++) {
-    if (i >= u_blockCount) break;
-    vec4 b = u_blocks[i];
-    vec2 beyond = max(abs(p - (b.xy + 0.5 * b.zw)) - 0.5 * b.zw, 0.0);
-    m = max(m, exp(-dot(beyond, beyond) / (2.0 * ${STATS_SIGMA.toFixed(1)} * ${STATS_SIGMA.toFixed(1)})));
-  }
-  return m;
-}
 
 /* 3D simplex noise (Gustavson / Ashima): gradient noise, no value lattice to
    show through as axis-aligned blocks. */
@@ -263,15 +225,12 @@ float detail(vec2 uv) {
 
 void main() {
   float d = depth(texture(u_h, v_uv).r);
-  float held = 0.0;
   if (u_lit < 0.5) {
     // The remap that reaches the dark end, then the detail on top of it -
     // added before the remap, the pale end clipped it flat and nothing moved.
     // Lifted off zero first: where no shape is, d sat at 0 and half the
     // detail clipped away, leaving the pale end flat and still.
     d = clamp(0.18 + 0.82 * smoothstep(0.0, 0.7, d) + 0.72 * detail(v_uv), 0.0, 1.0);
-    held = overStats(v_uv);
-    d += (${toward ? 'u_statsTo' : '1.0'} - d) * ${STATS_PUSH} * held;
   }
   if (u_lit > 0.5 && u_textBoxCount > 0) {
     // The ellipses are page one's, so they slide out with the words. One
@@ -299,5 +258,5 @@ void main() {
     vec3 L = normalize(vec3(-0.4, -0.6, 0.7));
     color *= 1.0 + clamp(0.08 * (dot(n, L) - L.z) / (1.0 - L.z), -0.08, 0.08);
   }
-  fragColor = vec4(color, held);
+  fragColor = vec4(color, 1.0);
 }`

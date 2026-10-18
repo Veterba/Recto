@@ -12,12 +12,13 @@ function themePalette(): Palette {
   return readPalette((token) => style.getPropertyValue(token), { meta: META_INK, rule: RULE_INK })
 }
 
-/** The one frame loop: the WebGL scene behind both pages, the text it composites, the slide between pages, and the pointer river - created when the overlay mounts, torn down when it closes. */
+/** The one frame loop: the WebGL scene behind both pages, the text it composites (the hero, and page two's title as page two scrolls), the slide between pages, and the pointer river - created when the overlay mounts, torn down when it closes. */
 export function useHomeScene({
   canvasRef,
   dragOffsetRef,
   heroRef,
-  measureBlocks,
+  titleRef,
+  scrollerRef,
   mounted,
   rasterRef,
   reduced,
@@ -30,7 +31,10 @@ export function useHomeScene({
   canvasRef: RefObject<HTMLCanvasElement | null>
   dragOffsetRef: RefObject<number | null>
   heroRef: RefObject<HTMLDivElement | null>
-  measureBlocks: () => void
+  /** Page two's title: drawn by the shader like the hero, its DOM ink transparent. */
+  titleRef: RefObject<HTMLElement | null>
+  /** Page two's scrolling pane: its scroll moves the title. */
+  scrollerRef: RefObject<HTMLElement | null>
   mounted: boolean
   rasterRef: RefObject<(() => void) | null>
   reduced: boolean
@@ -88,8 +92,8 @@ export function useHomeScene({
      * the type it has to sit precisely on top of. Read once per resize, never
      * in the frame loop.
      */
-    const measureText = (): HeroLine[] => {
-      if (hero === null) return []
+    const measureText = (root: HTMLElement | null = hero): HeroLine[] => {
+      if (root === null) return []
       /*
        * Against page one's own pane, not the window. The texture is drawn
        * again whenever something on the page changes - the clock, the counts,
@@ -97,9 +101,12 @@ export function useHomeScene({
        * page two on screen, when every rect in the window's frame is shifted
        * by the slide. Measured that way, the words came back somewhere else.
        */
-      const box = (hero.closest('.home__pane') ?? host).getBoundingClientRect()
+      const pane = root.closest<HTMLElement>('.home__pane') ?? host
+      const box = pane.getBoundingClientRect()
+      // Page two scrolls: its title is measured as it lies with no scroll, and the shader moves it.
+      const scrolled = root === hero ? 0 : (scrollerRef.current?.scrollTop ?? 0)
       const out: HeroLine[] = []
-      for (const el of Array.from(hero.querySelectorAll<HTMLElement>('[data-hero-line]'))) {
+      for (const el of Array.from(root.querySelectorAll<HTMLElement>('[data-hero-line]'))) {
         const style = getComputedStyle(el)
         const rect = el.getBoundingClientRect()
         const text = style.textTransform === 'uppercase' ? (el.textContent ?? '').toUpperCase() : (el.textContent ?? '')
@@ -109,7 +116,7 @@ export function useHomeScene({
         out.push({
           text,
           x: rect.left - box.left,
-          y: rect.top - box.top,
+          y: rect.top - box.top + scrolled,
           width: rect.width,
           height: rect.height,
           font: `${style.fontStyle} ${style.fontWeight} ${style.fontSize}/${style.lineHeight} ${style.fontFamily}`,
@@ -126,14 +133,16 @@ export function useHomeScene({
 
     let box = host.getBoundingClientRect()
     let dpr = window.devicePixelRatio || 1
-    const raster = (): void => scene.setText(measureText(), layoutRules(box.width, box.height))
+    const raster = (): void => {
+      scene.setText(measureText(), layoutRules(box.width, box.height))
+      scene.setTitle(measureText(titleRef.current))
+    }
     rasterRef.current = raster
     const measure = (): void => {
       box = host.getBoundingClientRect()
       dpr = window.devicePixelRatio || 1
       scene.resize(box.width, box.height, dpr)
       raster()
-      measureBlocks()
     }
     measure()
     // Every face, explicitly, then again: a texture rasterised before they
@@ -160,7 +169,12 @@ export function useHomeScene({
     let lastU: number | null = null
     let lastV: number | null = null
     let movedAt = -Infinity
-    measureBlocks()
+    // A scroll is motion too: the title has to keep pace with the page at full rate.
+    const onScroll = (): void => {
+      movedAt = performance.now()
+    }
+    const scroller = scrollerRef.current
+    scroller?.addEventListener('scroll', onScroll, { passive: true })
     const onPointerMove = (event: PointerEvent): void => {
       const u = (event.clientX - box.left) / Math.max(1, box.width)
       const v = (event.clientY - box.top) / Math.max(1, box.height)
@@ -238,6 +252,7 @@ export function useHomeScene({
         track.style.transform = `translate3d(${-reveal.current * 100}%, 0, 0)`
       }
       scene.setProgress(reveal.current)
+      scene.setScroll(scrollerRef.current?.scrollTop ?? 0)
       scene.frame(dt)
     }
     raf = requestAnimationFrame(loop)
@@ -256,6 +271,7 @@ export function useHomeScene({
       schemeQuery.removeEventListener('change', onTheme)
       dprQuery?.removeEventListener('change', onDpr)
       window.removeEventListener('pointermove', onPointerMove)
+      scroller?.removeEventListener('scroll', onScroll)
       document.removeEventListener('visibilitychange', onVisibility)
       canvas.removeEventListener('webglcontextlost', onLost)
       canvas.removeEventListener('webglcontextrestored', onRestored)

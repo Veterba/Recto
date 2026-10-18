@@ -1,6 +1,7 @@
 import { api } from '../../app/api'
 import { setField } from '@shared/frontmatter'
 import { noteIndexChanged } from '../../app/note-bus'
+import { noteEdited } from '../../app/usage'
 import { placeAt } from './ordering'
 import { IPC } from '@shared/ipc'
 
@@ -71,5 +72,6 @@ export async function createCard(
   }
 
   noteIndexChanged()
+  noteEdited(created.path)
   return { ok: true, path: created.path }
 }

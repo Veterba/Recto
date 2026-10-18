@@ -10,9 +10,9 @@ import type {
   GraphEdge,
   GraphNode,
   BoardCard,
-  VaultUsage,
   NoteContext,
 } from '../../shared/indexer-protocol'
+import type { OverviewIndex } from '../../shared/overview'
 import { requireDb } from './db'
 import { pathsByName, resolveLink } from '../../shared/parse'
 import { cardDescription, checklist } from '../../shared/card-fields'
@@ -242,41 +242,22 @@ export function boards(): { board: string; count: number }[] {
 }
 
 /**
- * Every note's tags and resolved outgoing links.
+ * What the vault overview reads, in one call.
  *
- * Read in one pass rather than per note: Tidy reasons over the whole vault at
- * once, and a query per note on a few thousand notes is the difference between
- * instant and a visible pause.
- */
-/**
- * What the home overlay reads: the shape of the vault and the last week of
- * writing in it.
+ * Small aggregates, never a walk of the files: the overview opens on a
+ * keystroke. `days` are the days "on this day" looks for (a month and a year
+ * back), asked by the renderer because its clock is the one on screen.
  *
- * One pass of small aggregates rather than a query per figure, because the
- * overlay asks for all of them at once and the whole point of an index is that
- * this costs nothing. `mtime` is the last write: the only date the filesystem
- * keeps that survives a clone, a sync or a restore, so every "this week" figure
- * here means touched, not created.
+ * Board cards (notes with a `board` property) are tasks, not notes: they are
+ * never orphans and never offered to reread.
  */
-export function vaultUsage(): VaultUsage {
+export function overview(days: readonly string[]): OverviewIndex {
   const handle = requireDb()
   const one = (sql: string, ...args: unknown[]): number => (handle.prepare(sql).get(...args) as { n: number } | undefined)?.n ?? 0
+  const name = (row: { title: string | null; name: string }): string => row.title ?? row.name.replace(/\.md$/i, '')
+  const NOT_CARD = `NOT EXISTS (SELECT 1 FROM properties p WHERE p.path = n.path AND p.key = 'board')`
 
-  const DAY = 86_400_000
-  const startOfToday = new Date()
-  startOfToday.setHours(0, 0, 0, 0)
-  const weekStart = startOfToday.getTime() - 6 * DAY
-
-  const perDay = handle
-    .prepare(
-      `SELECT CAST((mtime - ?) / ? AS INTEGER) AS bucket, COUNT(*) AS n
-         FROM notes WHERE mtime >= ? GROUP BY bucket`,
-    )
-    .all(weekStart, DAY, weekStart) as { bucket: number; n: number }[]
-  const weekTrend = Array.from({ length: 7 }, () => 0)
-  for (const row of perDay) if (row.bucket >= 0 && row.bucket < 7) weekTrend[row.bucket] = row.n
-
-  const topFolders = (
+  const folders = (
     handle
       .prepare(
         // `folder`, not `name`: SQLite resolves a bare `name` in GROUP BY to
@@ -291,41 +272,95 @@ export function vaultUsage(): VaultUsage {
     .filter((row) => row.folder !== '')
     .map((row) => ({ name: row.folder, count: row.count }))
 
-  const topTags = handle.prepare('SELECT tag, COUNT(*) AS count FROM tags GROUP BY tag ORDER BY count DESC, tag LIMIT 5').all() as {
-    tag: string
-    count: number
-  }[]
+  // Degree, both directions, over resolved links between two different notes.
+  const degree = handle
+    .prepare(
+      `SELECT n.path AS path, n.title AS title, n.name AS name, COUNT(*) AS links
+         FROM (
+           SELECT source_path AS path FROM links WHERE target_path IS NOT NULL AND target_path <> source_path
+           UNION ALL
+           SELECT target_path AS path FROM links WHERE target_path IS NOT NULL AND target_path <> source_path
+         ) AS ends
+         JOIN notes n ON n.path = ends.path
+        WHERE ${NOT_CARD}
+        GROUP BY ends.path ORDER BY links DESC, n.name`,
+    )
+    .all() as { path: string; title: string | null; name: string; links: number }[]
+  const linked = degree.map((row) => ({ path: row.path, name: name(row), links: row.links }))
 
-  // Degree, both directions, over resolved links only - an unresolved link
-  // points at a note that is not there to be a hub.
-  const hubs = (
+  const orphans = (
     handle
       .prepare(
-        `SELECT n.title AS title, n.name AS name, COUNT(*) AS links
-           FROM (
-             SELECT source_path AS path FROM links WHERE target_path IS NOT NULL
-             UNION ALL
-             SELECT target_path AS path FROM links WHERE target_path IS NOT NULL
-           ) AS ends
-           JOIN notes n ON n.path = ends.path
-          GROUP BY ends.path ORDER BY links DESC, name LIMIT 3`,
+        `SELECT n.path, n.title, n.name FROM notes n
+          WHERE ${NOT_CARD}
+            AND NOT EXISTS (SELECT 1 FROM links l WHERE l.source_path = n.path AND l.target_path IS NOT NULL AND l.target_path <> n.path)
+            AND NOT EXISTS (SELECT 1 FROM links l WHERE l.target_path = n.path AND l.source_path <> n.path)
+          ORDER BY n.name`,
       )
-      .all() as { title: string | null; name: string; links: number }[]
-  ).map((row) => ({ name: row.title ?? row.name.replace(/\.md$/i, ''), links: row.links }))
+      .all() as { path: string; title: string | null; name: string }[]
+  ).map((row) => ({ path: row.path, name: name(row) }))
+
+  const broken = (
+    handle
+      .prepare(
+        `SELECT DISTINCT n.path, n.title, n.name, l.target_text AS target
+           FROM links l JOIN notes n ON n.path = l.source_path
+          WHERE l.target_path IS NULL ORDER BY n.name, l.target_text`,
+      )
+      .all() as { path: string; title: string | null; name: string; target: string }[]
+  ).map((row) => ({ path: row.path, name: name(row), target: row.target }))
+
+  const dueCards = (
+    handle
+      .prepare(
+        `SELECT n.path, n.title, n.name, due.value AS due,
+                (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'status') AS status,
+                (SELECT value FROM properties p WHERE p.path = n.path AND p.key = 'board') AS board
+           FROM notes n JOIN properties due ON due.path = n.path AND due.key = 'due'
+          WHERE EXISTS (SELECT 1 FROM properties p WHERE p.path = n.path AND p.key = 'board')
+          ORDER BY due.value, n.name`,
+      )
+      .all() as { path: string; title: string | null; name: string; due: string | null; status: string | null; board: string | null }[]
+  ).flatMap((row) => {
+    const due = /\d{4}-\d{2}-\d{2}/.exec(row.due ?? '')?.[0]
+    return due === undefined ? [] : [{ path: row.path, name: name(row), due, status: row.status, board: row.board }]
+  })
+
+  const written =
+    days.length === 0
+      ? []
+      : (
+          handle
+            .prepare(
+              `SELECT n.path, n.title, n.name, n.written FROM notes n
+                WHERE ${NOT_CARD} AND n.written IN (${days.map(() => '?').join(', ')}) ORDER BY n.name`,
+            )
+            .all(...days) as { path: string; title: string | null; name: string; written: string }[]
+        ).map((row) => ({ path: row.path, name: name(row), date: row.written }))
 
   return {
     notes: one('SELECT COUNT(*) AS n FROM notes'),
+    words: one('SELECT COALESCE(SUM(words), 0) AS n FROM notes'),
     links: one('SELECT COUNT(*) AS n FROM links'),
-    unresolved: one('SELECT COUNT(*) AS n FROM links WHERE target_path IS NULL'),
     tags: one('SELECT COUNT(DISTINCT tag) AS n FROM tags'),
-    touchedThisWeek: one('SELECT COUNT(*) AS n FROM notes WHERE mtime >= ?', weekStart),
-    weekTrend,
-    topFolders,
-    topTags,
-    hubs,
+    oldest: (handle.prepare('SELECT MIN(note_date) AS d FROM notes').get() as { d: string | null }).d,
+    folders,
+    hubs: linked.slice(0, 4),
+    orphans,
+    broken,
+    dueCards,
+    written,
+    linked,
   }
 }
 
+/**
+ * Every note's tags and resolved outgoing links.
+ *
+ * Read in one pass rather than per note: Tidy reasons over the whole vault at
+ * once, and a query per note on a few thousand notes is the difference between
+ * instant and a visible pause.
+ */
 export function context(): NoteContext[] {
   const handle = requireDb()
   const notes = handle.prepare('SELECT path FROM notes ORDER BY path').all() as { path: string }[]

@@ -50,6 +50,10 @@ uniform float u_flatField;
 uniform vec3 u_ink;
 uniform vec3 u_textWeights;
 uniform sampler2D u_textKind;
+/* Page two's title, drawn like the hero text, and how far page two has
+   scrolled, CSS px: the title moves up with the page. */
+uniform sampler2D u_title;
+uniform float u_scroll;
 
 float sdRoundBox(vec2 q, vec2 b, float r) {
   vec2 w = abs(q) - b;
@@ -141,7 +145,7 @@ vec3 glass(vec2 uv) {
     float l4 = dot(field(c + vec2(-1.5, -1.5) * cell).rgb, vec3(0.2126, 0.7152, 0.0722));
     float m = (l0 + l1 + l2 + l3 + l4) / 5.0;
     float sd = 255.0 * sqrt(((l0 - m) * (l0 - m) + (l1 - m) * (l1 - m) + (l2 - m) * (l2 - m) + (l3 - m) * (l3 - m) + (l4 - m) * (l4 - m)) / 5.0);
-    col += 0.30 * band * top * (1.0 - mid.a) * smoothstep(2.0, 12.0, sd);
+    col += 0.30 * band * top * smoothstep(2.0, 12.0, sd);
   }
   return col;
 }
@@ -162,6 +166,12 @@ void main() {
       ink = sum > 1e-3 ? t.a * dot(k / sum, u_textWeights) : t.a;
     }
     color = mix(color, u_ink, ink);
+  }
+  // Page two's title: white on the glass in both themes, and large enough
+  // to stay readable over its light patches too.
+  vec2 uv2 = vec2(uv1.x - 1.0, v_uv.y - u_scroll / u_css.y);
+  if (uv2.x >= 0.0 && uv2.x <= 1.0 && uv2.y >= 0.0 && uv2.y <= 1.0) {
+    color = mix(color, vec3(1.0), texture(u_title, uv2).a);
   }
   fragColor = vec4(color, 1.0);
 }`

@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import { ATTACHMENTS_FOLDER as ATTACHMENTS, type RenameOutcome } from '../shared/vault'
 import { IPC, type IpcApi } from '../shared/ipc'
 import * as ai from './ai'
@@ -9,6 +9,9 @@ import * as topics from './topics/service'
 import * as topicCommands from './topics/commands'
 import * as topicStorage from './topics/storage'
 import * as archive from './archive'
+import * as overview from './overview'
+import { START_PLACE } from '../shared/overview'
+import { readState as readAppState, writeState as writeAppState } from './store'
 import * as obsidianSync from './sync'
 import { openIndexForVault, send, stopIndexer } from './index-client'
 import { readState, writeState } from './state'
@@ -51,6 +54,12 @@ function rewatch(): void {
   if (window) startWatching(window)
   // Topics reads the index, so it starts once the index is open.
   void openIndexForVault()
+    .then(async () => {
+      // Edits before counting began, from version history, once; and the
+      // day's first word count, taken before anything is typed into it.
+      await overview.backfillEdits().catch((err: unknown) => console.error('[overview]', err))
+      await overview.countWords(overview.todayHere())
+    })
     .then(() => topics.start())
     .then(() => bots.startBackground())
     .catch((err: unknown) => console.error('[indexer]', err))
@@ -88,6 +97,8 @@ function moveAuthorship(from: string, to: string): void {
 }
 
 export function registerIpc(): void {
+  // Edits still waiting for their batch are written before the app goes.
+  app.on('before-quit', () => void overview.flushEdits())
   handle(IPC.appStartupState, () => {
     const state = startupState()
     if (state.kind === 'ready') rewatch()
@@ -183,6 +194,7 @@ export function registerIpc(): void {
      */
     void send({ kind: 'note-renamed', from, to: moved.path }, 15_000).catch(() => undefined)
     moveAuthorship(from, moved.path)
+    overview.moved(from, moved.path)
     void topicCommands.moved(from, moved.path).catch((err: unknown) => console.error('[topics]', err))
 
     const rewrite = await vaultFs.rewriteLinksTo(sources, from, moved.path)
@@ -357,21 +369,24 @@ export function registerIpc(): void {
       ? { notes: response.notes, links: response.links, unresolved: response.unresolved, tags: response.tags }
       : { notes: 0, links: 0, unresolved: 0, tags: 0 }
   })
-  handle(IPC.indexVaultUsage, async () => {
-    const response = await send({ kind: 'vault-usage' }, 15_000)
-    return response.kind === 'vault-usage-result'
-      ? response.usage
-      : {
-          notes: 0,
-          links: 0,
-          unresolved: 0,
-          tags: 0,
-          touchedThisWeek: 0,
-          weekTrend: [0, 0, 0, 0, 0, 0, 0],
-          topFolders: [],
-          topTags: [],
-          hubs: [],
-        }
+  handle(IPC.overviewData, (today, now) => overview.overviewData(today, now).catch(() => null))
+  handle(IPC.overviewTopics, () => overview.overviewTopics().catch(() => null))
+  handle(IPC.overviewEdited, (p, day) => {
+    overview.recordEdit(p, day)
+    return { ok: true }
+  })
+  handle(IPC.overviewOpened, (p, at) => {
+    overview.recordOpened(p, at)
+    return { ok: true }
+  })
+  handle(IPC.overviewActive, (day, seconds) => {
+    overview.recordActive(day, seconds)
+    return { ok: true }
+  })
+  handle(IPC.overviewPlace, () => readAppState().overviewPlace ?? START_PLACE)
+  handle(IPC.overviewSetPlace, (place) => {
+    writeAppState({ overviewPlace: place })
+    return { ok: true }
   })
   handle(IPC.indexResolveLink, async (target) => {
     const response = await send({ kind: 'resolve-link', target }, 15_000)

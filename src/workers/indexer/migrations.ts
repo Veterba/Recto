@@ -298,6 +298,19 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX idx_note_cards_path ON note_cards(path);
     `,
   },
+  {
+    version: 12,
+    name: 'note-words',
+    sql: `
+      -- Words per note (shared/overview.ts noteWords), for the vault overview's
+      -- total. The day the note was written by its own account (a date in its
+      -- name or frontmatter, never mtime), for "on this day". Every note is
+      -- read again once to fill both in.
+      ALTER TABLE notes ADD COLUMN words INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE notes ADD COLUMN written TEXT;
+      UPDATE notes SET mtime = -1;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

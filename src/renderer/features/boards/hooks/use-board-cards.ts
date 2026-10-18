@@ -4,6 +4,7 @@ import type { BoardCardInfo } from '@shared/index-results'
 import { cardFields, isoDay, setCardField } from '@shared/card-fields'
 import { api } from '../../../app/api'
 import { noteIndexChanged, useNoteBus } from '../../../app/note-bus'
+import { noteEdited } from '../../../app/usage'
 import { doneColumn, UNKNOWN_COLUMN, type Board } from '../boards'
 import { toView, type CardView } from '../board-view'
 import { CARD_FOLDER, cardExists, createCard } from '../create-card'
@@ -158,9 +159,11 @@ export function useBoardCards(board: Board): {
   /**
    * Read, edit, show, write. `shown` takes back whatever the caller already put
    * on screen for the same gesture, so a failure lands where it started.
+   * `byYou` is false for the writes the board makes on its own (renumbering a
+   * column), which are not your edits to those cards.
    */
   const writeCard = useCallback(
-    async (path: string, edit: (text: string) => string, shown?: () => void): Promise<boolean> => {
+    async (path: string, edit: (text: string) => string, shown?: () => void, byYou = true): Promise<boolean> => {
       const read = await api.invoke(IPC.fsRead, path)
       if (!read.ok) {
         shown?.()
@@ -178,6 +181,7 @@ export function useBoardCards(board: Board): {
         return false
       }
       noteIndexChanged()
+      if (byYou) noteEdited(path)
       return true
     },
     [show],
@@ -233,7 +237,7 @@ export function useBoardCards(board: Board): {
         for (const [position, entry] of rest.entries()) {
           const next = placed.orders[position]!
           if (entry.path === path || entry.order === next) continue
-          await writeCard(entry.path, (text) => setCardField(text, 'order', next))
+          await writeCard(entry.path, (text) => setCardField(text, 'order', next), undefined, false)
         }
       }
     },

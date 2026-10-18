@@ -19,6 +19,7 @@ import type { EditorHandle } from '../editor-handle'
 import type { LinkCandidate } from '../link-complete'
 import type { Format } from '../active-formats'
 import { noteIndexChanged } from '../../../app/note-bus'
+import { noteEdited } from '../../../app/usage'
 import { registerView } from '../../../app/view-registry'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { NoteTitle } from './NoteTitle'
@@ -166,6 +167,7 @@ function MarkdownEditor({
         // the graph. Self-writes are suppressed in the watcher, so nothing else
         // would ever tell it.
         noteIndexChanged()
+        noteEdited(path)
       } else setError(result.error ?? 'Could not save.')
     },
     [path],

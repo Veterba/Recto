@@ -6,9 +6,6 @@
 /** Pointer segments folded into the displacement in one frame. */
 export const MAX_SEGMENTS = 8
 
-/** Content blocks on page two the field keeps dark behind. */
-export const MAX_BLOCKS = 16
-
 /** Text boxes on page one, each with its own legibility cap. */
 export const MAX_TEXT_BOXES = 24
 
@@ -69,21 +66,6 @@ export const GRAIN_LIFE: readonly [number, number] = [1.0, 3.0]
  * median has to sit near #70. Tuned against the measured percentiles.
  */
 export const GLASS_GAIN = 1.4
-
-/**
- * How far page two's field is pushed behind its statistics, toward the end of
- * the ramp the light type reads against - deep in the light theme, shallow in
- * the dark: d + (to - d) x PUSH x G, G one gaussian over the union of the
- * content boxes.
- * Deeper along the ramp, toward navy - multiplying the colour darker turned
- * it to grey mud. The brief's flat d + 0.35 G left pale field behind the type
- * at 3:1; pushing by the remaining distance clears 4.5:1 and never clips
- * the deep end into a plateau. 0.55 keeps the detail moving behind the type;
- * 0.75 measured 15:1 and a dead zone.
- */
-export const STATS_PUSH = 0.55
-
-export const STATS_SIGMA = 120
 
 /*
  * The glass: cells that touch, each a small lens. Pitch in CSS px, the rest

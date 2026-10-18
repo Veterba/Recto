@@ -250,125 +250,133 @@ export function SettingsPanel({
   const section = SECTIONS.find((s) => s.id === tab) ?? SECTIONS[0]!
 
   return createPortal(
-    <div
-      className="settings-panel glass-surface"
-      role="dialog"
-      aria-label="Settings"
-      ref={panel}
-      tabIndex={-1}
-      style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape' || usesEscape(event.target)) return
-        event.preventDefault()
-        event.stopPropagation()
-        onClose()
-      }}
-    >
-      <header
-        className="settings-panel__head"
-        title="Drag to move · double-click to centre"
-        onPointerDown={(event) => {
-          if ((event.target as HTMLElement).closest('button') !== null) return
-          track(event, (start, dx, dy) => clampInside({ ...start, x: start.x + dx, y: start.y + dy }, windowBounds(), SETTINGS_PANEL_MIN))
-        }}
-        onDoubleClick={(event) => {
-          if ((event.target as HTMLElement).closest('button') !== null) return
-          const next = centred(rectRef.current)
-          setRect(next)
-          save(next)
+    <>
+      {/* The blur's opaque base: see .settings-panel__base in settings.css. */}
+      <div
+        className="settings-panel__base"
+        style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+        aria-hidden="true"
+      />
+      <div
+        className="settings-panel glass-surface"
+        role="dialog"
+        aria-label="Settings"
+        ref={panel}
+        tabIndex={-1}
+        style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || usesEscape(event.target)) return
+          event.preventDefault()
+          event.stopPropagation()
+          onClose()
         }}
       >
-        <h2 className="settings-panel__title">Settings</h2>
-        <button className="dialog__close" onClick={onClose} aria-label="Close settings">
-          <Icon name="x" size={16} />
-        </button>
-      </header>
-
-      <div className="settings">
-        <nav className="settings__nav">
-          <label className="settings__search">
-            <Icon name="search" size={13} />
-            <input
-              value={query}
-              placeholder="Search settings"
-              aria-label="Search settings"
-              spellCheck={false}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                // Esc empties the search first; on an empty one it closes Settings.
-                if (event.key !== 'Escape') return
-                event.preventDefault()
-                event.stopPropagation()
-                if (query !== '') setQuery('')
-                else onClose()
-              }}
-            />
-          </label>
-          <div className="settings__tabs" role="tablist" aria-orientation="vertical" aria-label="Sections">
-            {GROUPS.map((group) => (
-              <div key={group} className="settings__navgroup" role="presentation">
-                <div className="settings__navhead" role="presentation">
-                  {group}
-                </div>
-                {SECTIONS.filter((s) => s.group === group).map((item) => {
-                  const active = query === '' && tab === item.id
-                  return (
-                    <button
-                      key={item.id}
-                      role="tab"
-                      aria-selected={active}
-                      className={`settings__tab${active ? ' is-active' : ''}`}
-                      onClick={() => go(item.id)}
-                    >
-                      {item.label}
-                      {item.badge !== undefined && <span className="settings__navbadge">{item.badge}</span>}
-                    </button>
-                  )
-                })}
-              </div>
-            ))}
-          </div>
-        </nav>
-
-        <div className="settings__body">
-          {query.trim() === '' ? (
-            <div className="settings__section" role="tabpanel" aria-label={section.label} key={section.id}>
-              <h2 className="settings__title">{section.label}</h2>
-              <p className="settings__lead">{section.description}</p>
-              {section.render(deps)}
-            </div>
-          ) : (
-            <SettingSearchContext.Provider value={query.trim()}>
-              <div className="settings-results" aria-label="Search results">
-                <h2 className="settings__title">Results for “{query.trim()}”</h2>
-                {SECTIONS.filter((s) => s.searchable).map((s) => (
-                  <section key={s.id} className="settings-results__section" aria-label={s.label}>
-                    <button className="settings-results__head" onClick={() => go(s.id)}>
-                      {s.label}
-                      <Icon name="arrow-right" size={12} />
-                    </button>
-                    {s.render(deps)}
-                  </section>
-                ))}
-                <p className="settings-results__empty">Nothing matches. Try another word.</p>
-              </div>
-            </SettingSearchContext.Provider>
-          )}
-        </div>
-      </div>
-
-      {RESIZE.map(({ name, edges }) => (
-        <div
-          key={name}
-          className={`settings-panel__edge settings-panel__edge--${name}`}
-          aria-hidden="true"
+        <header
+          className="settings-panel__head"
+          title="Drag to move · double-click to centre"
           onPointerDown={(event) => {
-            event.stopPropagation()
-            track(event, (start, dx, dy) => resizeFrom(start, edges, dx, dy, windowBounds(), SETTINGS_PANEL_MIN))
+            if ((event.target as HTMLElement).closest('button') !== null) return
+            track(event, (start, dx, dy) => clampInside({ ...start, x: start.x + dx, y: start.y + dy }, windowBounds(), SETTINGS_PANEL_MIN))
           }}
-        />
-      ))}
-    </div>,
+          onDoubleClick={(event) => {
+            if ((event.target as HTMLElement).closest('button') !== null) return
+            const next = centred(rectRef.current)
+            setRect(next)
+            save(next)
+          }}
+        >
+          <h2 className="settings-panel__title">Settings</h2>
+          <button className="dialog__close" onClick={onClose} aria-label="Close settings">
+            <Icon name="x" size={16} />
+          </button>
+        </header>
+
+        <div className="settings">
+          <nav className="settings__nav">
+            <label className="settings__search">
+              <Icon name="search" size={13} />
+              <input
+                value={query}
+                placeholder="Search settings"
+                aria-label="Search settings"
+                spellCheck={false}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  // Esc empties the search first; on an empty one it closes Settings.
+                  if (event.key !== 'Escape') return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  if (query !== '') setQuery('')
+                  else onClose()
+                }}
+              />
+            </label>
+            <div className="settings__tabs" role="tablist" aria-orientation="vertical" aria-label="Sections">
+              {GROUPS.map((group) => (
+                <div key={group} className="settings__navgroup" role="presentation">
+                  <div className="settings__navhead" role="presentation">
+                    {group}
+                  </div>
+                  {SECTIONS.filter((s) => s.group === group).map((item) => {
+                    const active = query === '' && tab === item.id
+                    return (
+                      <button
+                        key={item.id}
+                        role="tab"
+                        aria-selected={active}
+                        className={`settings__tab${active ? ' is-active' : ''}`}
+                        onClick={() => go(item.id)}
+                      >
+                        {item.label}
+                        {item.badge !== undefined && <span className="settings__navbadge">{item.badge}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </nav>
+
+          <div className="settings__body">
+            {query.trim() === '' ? (
+              <div className="settings__section" role="tabpanel" aria-label={section.label} key={section.id}>
+                <h2 className="settings__title">{section.label}</h2>
+                <p className="settings__lead">{section.description}</p>
+                {section.render(deps)}
+              </div>
+            ) : (
+              <SettingSearchContext.Provider value={query.trim()}>
+                <div className="settings-results" aria-label="Search results">
+                  <h2 className="settings__title">Results for “{query.trim()}”</h2>
+                  {SECTIONS.filter((s) => s.searchable).map((s) => (
+                    <section key={s.id} className="settings-results__section" aria-label={s.label}>
+                      <button className="settings-results__head" onClick={() => go(s.id)}>
+                        {s.label}
+                        <Icon name="arrow-right" size={12} />
+                      </button>
+                      {s.render(deps)}
+                    </section>
+                  ))}
+                  <p className="settings-results__empty">Nothing matches. Try another word.</p>
+                </div>
+              </SettingSearchContext.Provider>
+            )}
+          </div>
+        </div>
+
+        {RESIZE.map(({ name, edges }) => (
+          <div
+            key={name}
+            className={`settings-panel__edge settings-panel__edge--${name}`}
+            aria-hidden="true"
+            onPointerDown={(event) => {
+              event.stopPropagation()
+              track(event, (start, dx, dy) => resizeFrom(start, edges, dx, dy, windowBounds(), SETTINGS_PANEL_MIN))
+            }}
+          />
+        ))}
+      </div>
+    </>,
     document.body,
   )
 }

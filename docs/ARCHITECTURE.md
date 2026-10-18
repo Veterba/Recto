@@ -146,7 +146,7 @@ fixture run again after a fix to the checks.
    links that could now point somewhere.
 4. **Renderer.** The same batch is pushed as `vault:changed`. The tree applies it to its copy
    (`file-tree/file-tree-ops.ts`), `note-bus.ts` bumps a revision, and views that show derived data -
-   backlinks, graph, boards, home statistics - ask the index again through `index:*`.
+   backlinks, graph, boards, the vault overview - ask the index again through `index:*`.
 5. **Editor.** A note opens with `fs:read` into CodeMirror (`features/editor/codemirror.ts`). Typing
    is saved with `fs:write` after 500 ms of quiet, and on close. A change on disk from elsewhere is
    reloaded into the editor.
@@ -176,14 +176,14 @@ test/            the same folders as src/
 
 | feature | what | CSS block(s) |
 |---|---|---|
-| `editor` | CodeMirror, live preview, properties, backlinks, outline, history, writing tools | `md`, `prop(s)`, `backlinks`, `outline`, `history`, `formatbar`, `focusbar`, `wmenu`, `note-title`, `link-suggest` |
+| `editor` | CodeMirror, live preview, properties, backlinks, outline, history, writing tools, the autocomplete list (`link-complete.ts`; glass, `styles/complete.css`) | `md`, `prop(s)`, `backlinks`, `outline`, `history`, `formatbar`, `focusbar`, `wmenu`, `note-title`, `link-suggest` |
 | `file-tree` | the Data tree, drag and drop, context menu, note preview card | `tree`, `note-peek` |
 | `search` | full-text search, quick switcher | `search-result` (inside the shared `palette`) |
 | `graph` | the link graph and its settings panel | `graph`, `gset`, `gwheel`, `glegend` |
 | `boards` | kanban boards over notes: full-height glass columns, a card panel that edits the note's frontmatter one key at a time (`shared/card-fields.ts`), and a widget strip (`widgets/registry.ts`: one component and one entry per widget). Every change is shown first and written second (`hooks/use-board-cards.ts`): the card is re-read from the text being written (`cardFields`) and kept over the index's row until the index draws the same card; a failed write is undone with a notice. A card's title is its file name; new cards are added from a column's "+" (`NewCardPopover`) | `board`, `board-col`, `board-card`, `board-pri`, `board-cal`, `board-seg`, `board-done`, `board-due`, `board-pris`, `board-widget`, `card-panel`, `new-card`, `boards` |
 | `topics` | topics settings and the run notice | `topics` |
 | `tidy` | filing loose notes | `tidy` |
-| `home` | the home overlay and statistics | `home` |
+| `home` | the overlay on ⌃⌘H: one WebGL scene (`scene.ts`) behind two panes that slide - the welcome, whose text the shader draws (`hero-text.ts`, `scene-text.ts`), and the vault overview, a pane that scrolls as a whole: the vault's name drawn by the shader (moved by a scroll uniform), then a solid card (`components/Overview.tsx`). Main gathers the raw material (`main/overview.ts`: one `overview` query on the index, the `.recto/stats/` files, the userData usage file); every figure is a pure sum in `shared/overview.ts` worked out against the renderer's clock. Where it was left (pane, page, scroll) is `overviewPlace` in `app-state.json`. Edits, active time and last opened are reported from `app/usage.ts` | `home`, `overview` |
 | `settings` | the Settings panel: floating glass over the app, moved and resized with the note-window geometry (`app/note-windows.ts`), kept in `appearance.json` as `settingsPanel`; a sidebar of sections, search across them (rows hide themselves via `ui/setting-search.ts`) | `settings-panel`, `settings`, `settings-results`, `setting` notes, `osync`, `hotkeys`, `vault-recent`, `daily`, `note-error` |
 | `ai` | the chat's parts every conversation is built from: its turns and its composer | `chat` |
 | `templates` | template picker, daily notes | (uses `palette`) |
@@ -211,6 +211,7 @@ In the vault:
 | `.recto/bots/<id>/` | a bot: `bot.json` (name, specialty, look, personality, model, excluded folders), `SYSTEM.md` and `EXAMPLES.md` (one example answer per kind); Recto is written once into a vault with no `bots` folder, and an unedited SYSTEM.md or EXAMPLES.md is brought up to date | `main/bots` |
 | `.recto/evals/<run id>/` | an eval run's `config.json` and `results.jsonl`, and `graded.jsonl` beside them; the run's report is a note in the evals folder | `scripts/evals` |
 | `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `boards`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive`. `boards` holds each board's columns (with optional `color`, `wip`, `start`/`due`, `done`) and its `widgets` | `main/state.ts` |
+| `.recto/stats/edits.json`, `.recto/stats/words.json` | the vault overview's history: per day, the notes you edited (editor saves, card edits and moves you made; backfilled once from version history) and the vault's total words, first and last count. Every write reads, merges and replaces the file whole; an iCloud conflict copy (`edits 2.json`) is merged in and removed on the next read | `main/overview.ts` |
 | `.recto/index.db` | SQLite (WAL): the index, tasks, version snapshots, usage events, topic vectors, the bots' piece vectors, note cards and tasks read from plain text | indexer, embedder |
 | `.recto/archive/` | archived files until retention runs out | `main/archive.ts` |
 | `.recto/.gitignore` | keeps `index.db`, `.trash/` and `archive/` out of git | written once |
@@ -218,7 +219,8 @@ In the vault:
 Topics are written into notes as `topics: ["[[topics/Name]]"]`; a topic has no file of its own.
 
 Outside the vault, in the app-data folder (`~/Library/Application Support/Recto/`):
-`app-state.json` (last and recent vaults), `secrets.bin` (the API key, encrypted with Electron
+`app-state.json` (last and recent vaults, where the vault overview was left), `overview-usage.json`
+(seconds active in Recto per day; per vault, when each note was last opened), `secrets.bin` (the API key, encrypted with Electron
 `safeStorage`), `obsidian-sync.json` and `obsidian-sync/` (pairings and sync manifests), `models/`
 (the embedding model).
 
