@@ -53,6 +53,14 @@ describe('vault overview from the index', () => {
     expect(overview([])).toMatchObject({ notes: 2, words: 6 + 4, links: 1, tags: 2 })
   })
 
+  it("a board note's lines are links to its cards, not writing: it adds no words", () => {
+    vault({
+      'A.md': '# A\n\nOne two three',
+      'tasks/Board.md': '---\nkanban-plugin: board\n---\n\n## To do\n\n- [ ] [[A]]\n- [ ] Buy stamps\n',
+    })
+    expect(overview([]).words).toBe(4)
+  })
+
   it('lists cards with a due date, done when their board has them in its done lane', () => {
     vault({
       'tasks/Late.md': '---\ndue: 2026-10-01T09:00\n---\n',

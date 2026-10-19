@@ -337,6 +337,15 @@ export const MIGRATIONS: readonly Migration[] = [
       UPDATE notes SET mtime = -1;
     `,
   },
+  {
+    version: 14,
+    name: 'board-words',
+    sql: `
+      -- Board notes count no words (shared/overview.ts WORDS_RULE 2): read
+      -- them again to zero theirs.
+      UPDATE notes SET mtime = -1 WHERE path IN (SELECT path FROM properties WHERE key = 'kanban-plugin');
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

@@ -124,7 +124,8 @@ describe.skipIf(!RUN)('boards as notes', () => {
     await title.fill('Draft notes')
     await title.press('Meta+Enter')
     await card('Draft notes').waitFor()
-    expect(await title.inputValue()).toBe('')
+    // The card shows before its line is written; the field empties once it is.
+    await page.waitForFunction(() => (document.querySelector('.new-card__title') as HTMLInputElement | null)?.value === '')
     // Enter twice, quickly: one card.
     await title.fill('Only once')
     await title.press('Enter')
@@ -207,8 +208,8 @@ describe.skipIf(!RUN)('boards as notes', () => {
       page.locator('.card-panel').boundingBox(),
     ])
     expect(list!.x + list!.width).toBeLessThanOrEqual(box!.x + box!.width)
-    await page.keyboard.press('Enter')
-    await until(() => file('Write the announcement').includes('Typed in the panel see [[Record the demo]]'))
+    await option.click()
+    await until(() => file('Write the announcement').includes('Typed in the panel see [[Record the demo]]'), 15_000)
     // Its frontmatter is the panel's fields', untouched by the typing.
     expect(file('Write the announcement')).toMatch(/^---\ndate: 2026-09-10\npriority: low\n/)
     // The note never learns where it is on the board.

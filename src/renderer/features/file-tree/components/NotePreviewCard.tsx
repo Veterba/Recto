@@ -5,6 +5,7 @@ import { api } from '../../../app/api'
 import { edited, readingTime, summariseNote, type NotePreview } from '../note-preview'
 import { Icon } from '../../../ui/Icon'
 import { IPC, IPC_EVENT } from '@shared/ipc'
+import { doneLane, isKanban, parseKanban } from '@shared/kanban'
 
 /**
  * A note's gist, shown when the pointer rests on it - in the sidebar, or on a
@@ -125,6 +126,10 @@ export function NotePreviewCard({ path, anchor, mtime, onOpen, onPin, onPointerE
   }
 
   const folder = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
+  // A board says what is on it - columns, cards, how far along - not its frontmatter or headings.
+  const board = text !== null && isKanban(text) ? parseKanban(text) : null
+  const boardTotal = board?.lanes.reduce((sum, lane) => sum + lane.items.length, 0) ?? 0
+  const boardDone = board === null ? 0 : (board.lanes[doneLane(board.lanes)]?.items.length ?? 0)
 
   return createPortal(
     <div
@@ -171,63 +176,88 @@ export function NotePreviewCard({ path, anchor, mtime, onOpen, onPin, onPointerE
             </div>
           </header>
 
-          {preview.tags.length > 0 && (
-            <div className="note-peek__tags">
-              {preview.tags.slice(0, 8).map((tag) => (
-                <span className="note-peek__tag" key={tag}>
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {summary !== null ? (
-            <p className={`note-peek__summary${summary.state === 'error' ? ' is-error' : ''}`}>
-              <Icon name="sparkles" size={12} />
-              <span>
-                {summary.text}
-                {summary.state === 'streaming' && <i className="note-peek__caret" />}
-              </span>
-            </p>
-          ) : preview.excerpt !== '' ? (
-            <p className="note-peek__excerpt">{preview.excerpt}</p>
-          ) : (
-            <p className="note-peek__excerpt is-empty">No text yet.</p>
-          )}
-
-          {preview.properties.length > 0 && (
-            <dl className="note-peek__props">
-              {preview.properties.map((prop) => (
-                <div key={prop.key}>
-                  <dt>{prop.key}</dt>
-                  <dd>{prop.value}</dd>
+          {board !== null ? (
+            <>
+              <ul className="note-peek__lanes" aria-label="Columns">
+                {board.lanes.map((lane, index) => (
+                  <li key={index}>
+                    <span>{lane.title}</span>
+                    <span className="note-peek__count">{lane.wip === null ? lane.items.length : `${lane.items.length}/${lane.wip}`}</span>
+                  </li>
+                ))}
+              </ul>
+              {boardTotal > 0 && (
+                <div className="note-peek__tasks">
+                  <div className="note-peek__bar">
+                    <span style={{ width: `${(boardDone / boardTotal) * 100}%` }} />
+                  </div>
+                  <span>
+                    {boardDone}/{boardTotal} done
+                  </span>
                 </div>
-              ))}
-            </dl>
+              )}
+            </>
+          ) : (
+            <>
+              {preview.tags.length > 0 && (
+                <div className="note-peek__tags">
+                  {preview.tags.slice(0, 8).map((tag) => (
+                    <span className="note-peek__tag" key={tag}>
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {summary !== null ? (
+                <p className={`note-peek__summary${summary.state === 'error' ? ' is-error' : ''}`}>
+                  <Icon name="sparkles" size={12} />
+                  <span>
+                    {summary.text}
+                    {summary.state === 'streaming' && <i className="note-peek__caret" />}
+                  </span>
+                </p>
+              ) : preview.excerpt !== '' ? (
+                <p className="note-peek__excerpt">{preview.excerpt}</p>
+              ) : (
+                <p className="note-peek__excerpt is-empty">No text yet.</p>
+              )}
+
+              {preview.properties.length > 0 && (
+                <dl className="note-peek__props">
+                  {preview.properties.map((prop) => (
+                    <div key={prop.key}>
+                      <dt>{prop.key}</dt>
+                      <dd>{prop.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+
+              {preview.outline.length > 0 && (
+                <ul className="note-peek__outline">
+                  {preview.outline.map((heading, index) => (
+                    <li key={index} className={heading.level === 3 ? 'is-sub' : ''}>
+                      {heading.text}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {preview.tasks.total > 0 && (
+                <div className="note-peek__tasks">
+                  <div className="note-peek__bar">
+                    <span style={{ width: `${(preview.tasks.done / preview.tasks.total) * 100}%` }} />
+                  </div>
+                  <span>
+                    {preview.tasks.done}/{preview.tasks.total} done
+                  </span>
+                </div>
+              )}
+            </>
           )}
 
-          {preview.outline.length > 0 && (
-            <ul className="note-peek__outline">
-              {preview.outline.map((heading, index) => (
-                <li key={index} className={heading.level === 3 ? 'is-sub' : ''}>
-                  {heading.text}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {preview.tasks.total > 0 && (
-            <div className="note-peek__tasks">
-              <div className="note-peek__bar">
-                <span style={{ width: `${(preview.tasks.done / preview.tasks.total) * 100}%` }} />
-              </div>
-              <span>
-                {preview.tasks.done}/{preview.tasks.total} done
-              </span>
-            </div>
-          )}
-
-          {hasKey && preview.words > 0 && (summary === null || summary.state === 'error') && (
+          {board === null && hasKey && preview.words > 0 && (summary === null || summary.state === 'error') && (
             <footer className="note-peek__foot">
               <button className="note-peek__ai" onClick={summarise}>
                 <Icon name="sparkles" size={12} />

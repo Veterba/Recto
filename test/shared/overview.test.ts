@@ -20,8 +20,13 @@ import {
   streak,
   todayChange,
   weekStart,
-  wordsBetween,
-  wordsOn,
+  applyWords,
+  mergeWritten,
+  wordDiff,
+  writtenBetween,
+  writtenFromSnapshots,
+  writtenOn,
+  WORDS_RULE,
   type WordsDay,
 } from '../../src/shared/overview'
 
@@ -78,30 +83,104 @@ describe('notes touched', () => {
   })
 })
 
-describe('words written', () => {
-  const w = (start: number, end: number): WordsDay => ({ start, startAt: 1, end, endAt: 2 })
+describe('words written: the words you added that day and kept', () => {
+  const words = (n: number, from = 0): string => Array.from({ length: n }, (_, i) => `w${from + i}`).join(' ')
+  /** A note saved again and again on one day, as the editor does. */
+  function note(start: string, day = '2026-10-19') {
+    let written = {}
+    let text = start
+    return {
+      save(next: string): void {
+        written = applyWords(written, day, 'A.md', wordDiff(text, next))
+        text = next
+      },
+      count: (): number => writtenOn(written, day),
+    }
+  }
 
-  it('the first day ever counted is measured from its own first count', () => {
-    expect(wordsOn({ '2026-10-18': w(1000, 1250) }, '2026-10-18')).toBe(250)
+  it('each word typed counts, and each of them deleted again comes off', () => {
+    const n = note('')
+    n.save('one two three four five six seven eight nine ten')
+    expect(n.count()).toBe(10)
+    n.save('one two three four five six seven')
+    expect(n.count()).toBe(7)
+    n.save('one two three four five six seven eight')
+    expect(n.count()).toBe(8)
+    n.save('')
+    expect(n.count()).toBe(0)
   })
-  it('later days from the end of the last day counted before them, gaps and all', () => {
-    const words = { '2026-10-14': w(900, 1000), '2026-10-17': w(1010, 1100), '2026-10-18': w(1100, 1300) }
-    // 17th: from the 14th's end (1000), not from its own first count (1010) - those 10 words were written in between.
-    expect(wordsOn(words, '2026-10-17')).toBe(100)
-    expect(wordsOn(words, '2026-10-18')).toBe(200)
-    expect(wordsOn(words, '2026-10-15')).toBeNull()
-    expect(wordsBetween(words, '2026-10-12', '2026-10-18')).toBe(400)
+
+  it('paste 500 and delete 800 that were there before: 500 written, never below zero', () => {
+    const old = words(800, 1000)
+    const n = note(old)
+    n.save(`${old} ${words(500)}`)
+    n.save(words(500))
+    expect(n.count()).toBe(500)
+    n.save('')
+    expect(n.count()).toBe(0)
   })
-  it('deleting counts against the day', () => {
-    expect(wordsOn({ '2026-10-17': w(0, 500), '2026-10-18': w(500, 380) }, '2026-10-18')).toBe(-120)
+
+  it('a word changed counts one; text moved counts nothing', () => {
+    const changed = note('the cat sat')
+    changed.save('the dog sat')
+    expect(changed.count()).toBe(1)
+    const moved = note('one two\n\nthree four')
+    moved.save('three four\n\none two')
+    expect(moved.count()).toBe(0)
   })
-  it('a range with nothing counted is null, not zero', () => {
-    expect(wordsBetween({ '2026-10-18': w(1, 2) }, '2026-10-05', '2026-10-11')).toBeNull()
+
+  it("Recto's own writes and other apps' never count: no words in, none out", () => {
+    // A board move, a completed stamp: noteEdited without texts sends an empty change.
+    expect(applyWords({}, '2026-10-19', 'tasks/Board.md', { added: [], removed: [] })).toEqual({})
+    expect(wordDiff('Body.', 'Body.')).toEqual({ added: [], removed: [] })
   })
+
+  it('the week sums its days; two copies of the file merge word by word by the larger, never the sum', () => {
+    const written = {
+      '2026-10-12': { 'A.md': { a: 100 } },
+      '2026-10-14': { 'A.md': { a: 20 }, 'B.md': { b: 30 } },
+      '2026-10-20': { 'A.md': { a: 999 } },
+    }
+    expect(writtenBetween(written, '2026-10-12', '2026-10-18')).toBe(150)
+    expect(mergeWritten(written, { '2026-10-14': { 'A.md': { a: 25, c: 1 } } })['2026-10-14']).toEqual({ 'A.md': { a: 25, c: 1 }, 'B.md': { b: 30 } })
+    expect(mergeWritten(written, written)).toEqual(written)
+  })
+
+  it('read off version history: each version against the one before, only on days the note was yours', () => {
+    const at = (day: string, hour: number): number => new Date(`${day}T${String(hour).padStart(2, '0')}:00:00`).getTime()
+    const rows = [
+      { path: 'A.md', ts: at('2026-10-18', 9), body: 'first copy the index took' },
+      { path: 'A.md', ts: at('2026-10-18', 10), body: 'first copy the index took and five more words here' },
+      { path: 'A.md', ts: at('2026-10-18', 11), body: 'first copy the index took and five more' },
+      { path: 'A.md', ts: at('2026-10-19', 10), body: 'and five' },
+      { path: 'B.md', ts: at('2026-10-19', 9), body: 'other' },
+      { path: 'B.md', ts: at('2026-10-19', 11), body: 'other app wrote all of this' },
+    ]
+    // B changed that day, but not by you: not in edits. A: five typed, two taken back.
+    const written = writtenFromSnapshots(rows, { '2026-10-18': ['A.md'], '2026-10-19': ['A.md'] })
+    expect(writtenOn(written, '2026-10-18')).toBe(3)
+    expect(writtenOn(written, '2026-10-19')).toBe(0)
+  })
+})
+
+describe("the vault's total words, by rule", () => {
+  const w = (start: number, end: number, rule?: number): WordsDay => ({ start, startAt: 1, end, endAt: 2, ...(rule === undefined ? {} : { rule }) })
+
   it('a count keeps the day’s first and moves its last', () => {
     const once = recordWords({}, '2026-10-18', 1000, 10)
     const twice = recordWords(once, '2026-10-18', 1040, 20)
-    expect(twice['2026-10-18']).toEqual({ start: 1000, startAt: 10, end: 1040, endAt: 20 })
+    expect(twice['2026-10-18']).toEqual({ start: 1000, startAt: 10, end: 1040, endAt: 20, rule: WORDS_RULE })
+  })
+
+  it('a day counted under the old rule starts again under the new one: no change between rules', () => {
+    // Counted 18,080 under rule 1 this morning; under rule 2 (board notes out) the vault reads 16,700.
+    const next = recordWords({ '2026-10-19': w(18_080, 18_100) }, '2026-10-19', 16_700, 30)
+    expect(next['2026-10-19']).toEqual({ start: 16_700, startAt: 30, end: 16_700, endAt: 30, rule: WORDS_RULE })
+    expect(next['2026-10-19']!.end - next['2026-10-19']!.start).toBe(0)
+  })
+
+  it('two copies under different rules: the newer rule stands alone', () => {
+    expect(mergeWords({ '2026-10-19': w(100, 120) }, { '2026-10-19': w(90, 95, WORDS_RULE) })['2026-10-19']).toEqual(w(90, 95, WORDS_RULE))
   })
 })
 
@@ -224,9 +303,10 @@ describe('today’s change', () => {
     expect(todayChange(0)).toBeNull()
     expect(todayChange(null)).toBeNull()
   })
-  it('words today come from the day’s change in the total', () => {
-    const words = { '2026-10-17': { start: 0, startAt: 1, end: 500, endAt: 2 }, '2026-10-18': { start: 500, startAt: 3, end: 380, endAt: 4 } }
-    expect(todayChange(wordsOn(words, '2026-10-18'))).toEqual({ text: '−120 today', tone: 'down' })
+  it('words today are what you added, so never below zero', () => {
+    const written = { '2026-10-18': { 'A.md': { '#': 1240 } } }
+    expect(todayChange(writtenOn(written, '2026-10-18'))).toEqual({ text: '+1,240 today', tone: 'up' })
+    expect(todayChange(writtenOn(written, '2026-10-19'))).toBeNull()
   })
 })
 

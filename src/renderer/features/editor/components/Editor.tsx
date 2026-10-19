@@ -19,7 +19,7 @@ type EditorProps = {
   onSave: () => void
   onOpenLink: (target: string, heading: string | null) => void
   onDragLink?: (target: string, heading: string | null, x: number, y: number) => void
-  onLinkHover?: (link: { target: string; heading: string | null; anchor: DOMRect } | null) => void
+  onLinkHover?: (link: { target: string; heading: string | null; element: HTMLElement } | null) => void
   /** Rendered and not editable: a reading view. */
   readOnly?: boolean
   getLinkCandidates?: () => readonly LinkCandidate[]

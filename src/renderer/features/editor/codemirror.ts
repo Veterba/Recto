@@ -48,7 +48,7 @@ type EditorOptions = {
   /** A link was dragged rather than clicked, and the pointer is now at x, y. */
   onDragLink?: (target: string, heading: string | null, x: number, y: number) => void
   /** The pointer came to rest on a link to a note (or left it: null), for its preview. */
-  onLinkHover?: (link: { target: string; heading: string | null; anchor: DOMRect } | null) => void
+  onLinkHover?: (link: { target: string; heading: string | null; element: HTMLElement } | null) => void
   readOnly?: boolean
   /** Note names offered after typing `[[`. Read lazily, so it stays current. */
   getLinkCandidates?: () => readonly LinkCandidate[]
@@ -147,7 +147,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       if (element === hovered) return false
       hovered = element
       const link = element === null ? null : noteLinkOf(element)
-      options.onLinkHover?.(link === null || element === null ? null : { ...link, anchor: element.getBoundingClientRect() })
+      options.onLinkHover?.(link === null || element === null ? null : { ...link, element })
       return false
     },
     mouseleave: () => {

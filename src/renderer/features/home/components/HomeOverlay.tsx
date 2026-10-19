@@ -166,6 +166,13 @@ export function HomeOverlay({
     void fetchTopics().then(setTopics)
   }, [])
 
+  // Opened while the vault is first being read: no notes yet. Ask again until there are.
+  useEffect(() => {
+    if (!mounted || data === null || data.index.notes > 0) return
+    const timer = window.setTimeout(refresh, 1000)
+    return () => window.clearTimeout(timer)
+  }, [mounted, data, refresh])
+
   useEffect(() => {
     if (!mounted) return
     /*

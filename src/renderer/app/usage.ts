@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { IPC } from '@shared/ipc'
-import { activeSeconds, dayOf } from '@shared/overview'
+import { bodyOf } from '@shared/frontmatter'
+import { activeSeconds, dayOf, wordDiff } from '@shared/overview'
 import { api } from './api'
 
 /**
@@ -13,10 +14,16 @@ import { api } from './api'
 /**
  * You edited a note: a save from the editor, a card you changed or moved.
  * Called only where a person did it - never for Recto's own writes (link
- * updates on rename, a column renumbered, topics) or another app's.
+ * updates on rename, a board migrated, a `completed` stamp, topics) or
+ * another app's.
+ *
+ * With the text before and after, the words that came in and went go too
+ * (shared/overview.ts wordDiff): words written are the words you added that
+ * day and kept. Without them - a card moved on its board - nothing changed.
  */
-export function noteEdited(path: string): void {
-  void api.invoke(IPC.overviewEdited, path, dayOf(new Date())).catch(() => undefined)
+export function noteEdited(path: string, before?: string, after?: string): void {
+  const diff = before === undefined || after === undefined ? { added: [], removed: [] } : wordDiff(bodyOf(before), bodyOf(after))
+  void api.invoke(IPC.overviewEdited, path, dayOf(new Date()), diff.added, diff.removed).catch(() => undefined)
 }
 
 /** How often active time is counted and sent. */

@@ -396,7 +396,8 @@ export type IpcApi = Exhaustive<
     /** The largest topics and their notes; null when Topics is off. */
     [IPC.overviewTopics]: () => OverviewTopic[] | null
     /** You edited a note on `day`: a save in the editor, a card you changed or moved. */
-    [IPC.overviewEdited]: (path: string, day: string) => { ok: boolean }
+    /** A note you edited, and the words that came in and went (none for a board move, a field, a stamp). */
+    [IPC.overviewEdited]: (path: string, day: string, added: string[], removed: string[]) => { ok: boolean }
     /** A note came on screen. */
     [IPC.overviewOpened]: (path: string, at: number) => { ok: boolean }
     /** Seconds you were active in Recto, added to `day`. */

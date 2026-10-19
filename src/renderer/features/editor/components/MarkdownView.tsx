@@ -158,6 +158,9 @@ function MarkdownEditor({
   const save = useCallback(
     async (next: string) => {
       setStatus('saving')
+      // What the file said before this save - read, or last written here - is
+      // what the save is measured against for the words it added.
+      const before = lastWritten.current
       lastWritten.current = next
       const result = await api.invoke(IPC.fsWrite, path, next)
       if (result.ok) {
@@ -167,7 +170,7 @@ function MarkdownEditor({
         // the graph. Self-writes are suppressed in the watcher, so nothing else
         // would ever tell it.
         noteIndexChanged()
-        noteEdited(path)
+        noteEdited(path, before ?? undefined, next)
       } else setError(result.error ?? 'Could not save.')
     },
     [path],
@@ -394,7 +397,7 @@ function MarkdownEditor({
         onSave={flush}
         onOpenLink={onOpenLink}
         onDragLink={(target, heading, x, y) => beginPaneDrag({ kind: 'link', target, heading }, target, x, y)}
-        onLinkHover={(link) => hoverLink(link)}
+        onLinkHover={(link) => hoverLink(link === null ? null : { target: link.target, element: link.element })}
         getLinkCandidates={getLinkCandidates}
         onSelectionChange={syncFormats}
         onFoldsChange={(lines) => writeFolds(path, lines)}

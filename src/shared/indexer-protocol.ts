@@ -179,6 +179,8 @@ export type IndexRequest =
   | { kind: 'words-total' }
   /** When every saved version was taken, for backfilling the days with edits. */
   | { kind: 'snapshot-times' }
+  /** Every saved version of these notes, oldest first, for backfilling the words written. */
+  | { kind: 'snapshot-contents'; paths: string[] }
   | { kind: 'topics-graph' }
   /** Notes carrying a link written as `target`, resolved or not - a topic link never resolves. */
   | { kind: 'link-sources'; target: string }
@@ -217,6 +219,7 @@ export type IndexResponse =
   | { kind: 'overview-result'; overview: OverviewIndex }
   | { kind: 'words-total-result'; words: number }
   | { kind: 'snapshot-times-result'; rows: { path: string; ts: number }[] }
+  | { kind: 'snapshot-contents-result'; rows: { path: string; ts: number; content: string }[] }
   | { kind: 'topics-graph-result'; graph: TopicsGraph }
   | { kind: 'link-sources-result'; paths: string[] }
   | { kind: 'task-rows-result'; rows: TaskRowData[] }

@@ -88,6 +88,8 @@ describe.skipIf(!RUN)('vault overview', { timeout: 30_000 }, () => {
     await open()
     expect(await paneName()).toBe('Recto')
     await openStats()
+    // Opened while the vault may still be being read: the figures fill in by themselves.
+    await card().getByText('Broken links').waitFor({ timeout: 20_000 })
     const text = await card().innerText()
     expect(text).toContain('Stats counted from today')
     expect(text.match(/Counting/g)).toBeNull()
@@ -176,5 +178,40 @@ describe.skipIf(!RUN)('vault overview', { timeout: 30_000 }, () => {
     await close()
     expect(await page.locator('.cm-scroller').evaluate((el) => el.scrollTop)).toBe(before)
     expect(await page.evaluate(() => document.activeElement?.closest('.cm-editor') !== null)).toBe(true)
+  })
+
+  it('words you type show as words written, with today\'s in green beside them, and come off when you delete them', async () => {
+    if ((await page.locator('.home__live').count()) > 0) await close()
+    await page.locator('[role=treeitem]', { hasText: 'Alone' }).click()
+    await page.locator('.cm-line', { hasText: 'No links.' }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' Five new words typed here.')
+    // Saved, then counted: the overview reads what is waiting to be written too.
+    await page.waitForTimeout(1500)
+    await openStats()
+    const stat = page.locator('.overview__stat', { hasText: 'words written' })
+    await stat.locator('.overview__delta--up', { hasText: '+5 today' }).waitFor({ timeout: 5000 })
+    expect(await stat.locator('b').first().innerText()).toBe('5')
+    // The theme's success colour, resolved the same way.
+    const [delta, success] = await stat.locator('.overview__delta--up').evaluate((el) => {
+      const probe = document.createElement('span')
+      probe.style.color = 'var(--success)'
+      el.parentElement!.append(probe)
+      const colours = [getComputedStyle(el).color, getComputedStyle(probe).color]
+      probe.remove()
+      return colours
+    })
+    expect(delta).toBe(success)
+    await close()
+
+    // Two of those words deleted again: they come off.
+    await page.locator('.cm-line', { hasText: 'Five new words' }).click()
+    await page.keyboard.press('End')
+    for (let i = 0; i < ' typed here.'.length; i++) await page.keyboard.press('Backspace')
+    await page.waitForTimeout(1500)
+    await openStats()
+    await stat.locator('.overview__delta--up', { hasText: '+3 today' }).waitFor({ timeout: 5000 })
+    expect(await stat.locator('b').first().innerText()).toBe('3')
+    await close()
   })
 })

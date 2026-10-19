@@ -17,8 +17,8 @@ import {
   streak,
   todayChange,
   weekStart,
-  wordsBetween,
-  wordsOn,
+  writtenBetween,
+  writtenOn,
 } from '@shared/overview'
 
 /**
@@ -88,8 +88,8 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
   const weekDays = Array.from({ length: elapsed + 1 }, (_, i) => addDays(week, i))
 
   const touched = notesBetween(data.edits, week, today)
-  const wordsSince = Object.keys(data.words).sort()[0] ?? null
-  const written = wordsBetween(data.words, week, today) ?? 0
+  // Words you added, this week; today's on its own beside it. Never a net change: deleting is not unwriting.
+  const written = writtenBetween(data.written, week, today)
 
   const run = streak(data.edits, today)
 
@@ -101,13 +101,13 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
 
   // A line needs three days to say anything.
   const editDays = weekDays.filter((d) => data.editsSince !== null && d >= data.editsSince)
-  const wordDays = weekDays.filter((d) => wordsOn(data.words, d) !== null)
+  const wordDays = weekDays.filter((d) => data.writtenSince !== null && d >= data.writtenSince)
 
   const late = useMemo(() => overdue(index.dueCards, today), [index.dueCards, today])
   const lateBoards = [...new Set(late.map((c) => c.board ?? 'a board'))]
   const again = rediscover(index, data.opened, data.openedSince, today, now)
   const since = index.oldest
-  const counted = countedLine([data.editsSince, wordsSince, data.activeSince], today)
+  const counted = countedLine([data.editsSince, data.writtenSince, data.activeSince], today)
   const attention = index.orphans.length + index.broken.length + late.length > 0
   const lists = [index.folders.length > 0, index.hubs.length > 0].filter(Boolean).length
 
@@ -142,9 +142,9 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
           />
           <Stat
             value={num(written)}
-            delta={todayChange(wordsOn(data.words, today))}
+            delta={todayChange(writtenOn(data.written, today))}
             caption="words written"
-            spark={wordDays.length >= 3 ? weekDays.map((d) => Math.max(0, wordsOn(data.words, d) ?? 0)) : undefined}
+            spark={wordDays.length >= 3 ? weekDays.map((d) => writtenOn(data.written, d)) : undefined}
             floor={250}
           />
           <Stat value={plural(run.current, 'day')} caption={`writing streak · longest ${plural(run.longest, 'day')}`} />

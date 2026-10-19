@@ -4,6 +4,17 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.52.1 — 2026-10-19
+### Changed
+- "Words written" is the words you added and kept, not the change in the vault's total: each save in the editor or a card's panel counts the words it brought in, and a word you typed and deleted again comes off. Deleting text that was there before that day takes nothing off, so it never goes below zero; moving text changes nothing; Recto's own writes (migrations, link updates on rename, `completed` stamps, board moves) and other apps' changes never count. It shows the week's words with today's beside them.
+- The days before this were read in once from version history, on the days you edited each note, so this week isn't blank.
+- Board notes add no words to the vault's total: their lines are links to cards. A day counted under the old rule starts again under the new one instead of showing the difference.
+- A board's preview shows its columns with their card counts and how many cards are done, instead of its frontmatter and headings.
+### Fixed
+- The overview opened while the vault was first being read showed zero notes until it was opened again; it now fills in by itself.
+- The overview showed "−1,338 words written" after notes were archived: a drop in the vault's total was taken for words you wrote.
+- A note's preview no longer turns up after you've moved on. Clicking a link before the preview delay is over, a hotkey that changes the view, opening the overview, settings or the palette, a scroll, or the link or tree row disappearing now stops it or puts it away at once; before, it could appear a few seconds later over the board or note you'd gone to, or stay where it was. One preview, with the same rules, for links in notes, floating notes and the file tree.
+
 ## v0.52.0 — 2026-10-18
 ### Added
 - A board is a note in the Obsidian Kanban format: the same board opens in Recto and in Obsidian with the Kanban plugin. Its columns are the note's headings and its cards the lines under them, in order; a card is either a link to a note in tasks/ or a line of plain text.

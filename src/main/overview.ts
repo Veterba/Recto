@@ -2,19 +2,28 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { VAULT_STATE_DIR } from '../shared/vault'
+import { bodyOf } from '../shared/frontmatter'
+import { isKanban } from '../shared/kanban'
 import {
   type Day,
   type OverviewData,
   type OverviewTopic,
   type WordsDay,
+  type WordDiff,
+  type Written,
+  applyWords,
   dayOf,
   editsFromSnapshots,
   mergeEdits,
   mergeWords,
+  mergeWritten,
   monthsBack,
+  oldCount,
   moveEdits,
   movedPath,
+  moveWritten,
   recordWords,
+  writtenFromSnapshots,
 } from '../shared/overview'
 import { send } from './index-client'
 import { currentVault } from './vault'
@@ -27,8 +36,10 @@ import { linkSources } from './topics/service'
  *
  * In the vault, `.recto/stats/` - it is about the vault, and travels with it:
  *   - `edits.json`: per day, the notes you edited (saves in the editor, card
- *     edits and moves you made). Not Recto's own writes, not other apps.
- *   - `words.json`: per day, the vault's total words, first and last count.
+ *     edits and moves you made), and the words each of those saves added.
+ *     Not Recto's own writes, not other apps.
+ *   - `words.json`: per day, the vault's total words, first and last count,
+ *     with the rule they were counted by.
  *
  * In userData, `overview-usage.json` - it is about this Mac:
  *   - seconds active in Recto per day;
@@ -40,26 +51,72 @@ import { linkSources } from './topics/service'
  * Macs can only ever add to each other's days.
  */
 
-type EditsFile = { since: Day | null; backfilled: boolean; days: Record<Day, string[]> }
+type EditsFile = {
+  since: Day | null
+  backfilled: boolean
+  days: Record<Day, string[]>
+  /** Words your saves added, per day and note; counted from `writtenSince`. */
+  written: Written
+  writtenSince: Day | null
+  writtenBackfilled: boolean
+  /** The form `written` was read in from history: 2 is word by word (an earlier build kept numbers). */
+  writtenFormat: number
+}
 type WordsFile = { days: Record<Day, WordsDay> }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 
 function parseEdits(raw: unknown): EditsFile {
-  const out: EditsFile = { since: null, backfilled: false, days: {} }
+  const out: EditsFile = { since: null, backfilled: false, days: {}, written: {}, writtenSince: null, writtenBackfilled: false, writtenFormat: 0 }
   if (!isObject(raw)) return out
   if (typeof raw['since'] === 'string' && DAY.test(raw['since'])) out.since = raw['since']
   out.backfilled = raw['backfilled'] === true
   if (isObject(raw['days']))
     for (const [day, paths] of Object.entries(raw['days']))
       if (DAY.test(day) && Array.isArray(paths)) out.days[day] = paths.filter((p): p is string => typeof p === 'string')
+  if (typeof raw['writtenSince'] === 'string' && DAY.test(raw['writtenSince'])) out.writtenSince = raw['writtenSince']
+  out.writtenBackfilled = raw['writtenBackfilled'] === true
+  if (typeof raw['writtenFormat'] === 'number') out.writtenFormat = raw['writtenFormat']
+  if (isObject(raw['written']))
+    for (const [day, notes] of Object.entries(raw['written'])) {
+      if (!DAY.test(day) || !isObject(notes)) continue
+      const kept: Record<string, Record<string, number>> = {}
+      for (const [p, words] of Object.entries(notes)) {
+        // A number is a count from before words were kept one by one.
+        if (typeof words === 'number' && Number.isFinite(words) && words > 0) kept[p] = oldCount(words)
+        else if (isObject(words)) {
+          const counts: Record<string, number> = {}
+          for (const [w, n] of Object.entries(words)) if (typeof n === 'number' && Number.isFinite(n) && n > 0) counts[w] = n
+          if (Object.keys(counts).length > 0) kept[p] = counts
+        }
+      }
+      out.written[day] = kept
+    }
   return out
 }
 
+const earlier = (a: Day | null, b: Day | null): Day | null => (a === null ? b : b === null ? a : a < b ? a : b)
+
 function mergeEditsFiles(a: EditsFile, b: EditsFile): EditsFile {
-  const since = a.since === null ? b.since : b.since === null ? a.since : a.since < b.since ? a.since : b.since
-  return { since, backfilled: a.backfilled || b.backfilled, days: mergeEdits(a.days, b.days) }
+  return {
+    since: earlier(a.since, b.since),
+    backfilled: a.backfilled || b.backfilled,
+    days: mergeEdits(a.days, b.days),
+    written: mergeWritten(a.written, b.written),
+    writtenSince: earlier(a.writtenSince, b.writtenSince),
+    writtenBackfilled: a.writtenBackfilled || b.writtenBackfilled,
+    writtenFormat: Math.max(a.writtenFormat, b.writtenFormat),
+  }
+}
+
+type PendingWords = { day: Day; path: string; diff: WordDiff }[]
+
+/** What a run in this process adds to the file: its saves' words folded in, in order - where two copies of the file are merged by the larger. */
+function addEdits(file: EditsFile, days: Record<Day, string[]>, words: PendingWords): EditsFile {
+  let written = file.written
+  for (const { day, path: p, diff } of words) written = applyWords(written, day, p, diff)
+  return { ...file, since: earlier(file.since, Object.keys(days).sort()[0] ?? null), days: mergeEdits(file.days, days), written }
 }
 
 function parseWords(raw: unknown): WordsFile {
@@ -153,7 +210,39 @@ export async function backfillEdits(): Promise<void> {
   if (response.kind !== 'snapshot-times-result') return
   const days = editsFromSnapshots(response.rows)
   const first = Object.keys(days).sort()[0] ?? null
-  updateEdits((file) => mergeEditsFiles(file, { since: first, backfilled: true, days }))
+  updateEdits((file) => mergeEditsFiles(file, { ...parseEdits(null), since: first, backfilled: true, days }))
+}
+
+/**
+ * Words written before they were counted at save time, read once off version
+ * history: what each saved version of a note added, on the days you edited
+ * that note (edits.json). Board notes are left out. History cannot tell your
+ * save from another app's on the same day, so a day is as good as that.
+ * Counting starts at the first day there was history for; with none, today.
+ */
+const WRITTEN_FORMAT = 2
+
+export async function backfillWritten(today: Day): Promise<void> {
+  if (statsDir() === null) return
+  const { data } = readEdits()
+  if (data.writtenBackfilled && data.writtenFormat >= WRITTEN_FORMAT) return
+  const paths = [...new Set(Object.values(data.days).flat())]
+  const response = paths.length === 0 ? null : await send({ kind: 'snapshot-contents', paths }, 60_000).catch(() => null)
+  const rows =
+    response?.kind === 'snapshot-contents-result'
+      ? response.rows.filter((r) => !isKanban(r.content)).map((r) => ({ path: r.path, ts: r.ts, body: bodyOf(r.content) }))
+      : []
+  const written = writtenFromSnapshots(rows, data.days)
+  const first = rows.length === 0 ? null : dayOf(new Date(Math.min(...rows.map((r) => r.ts))))
+  updateEdits((file) => ({
+    ...file,
+    // Every save of yours left a version in history, so history holds the
+    // counts so far: read in whole, in place of an earlier build's numbers.
+    written: file.writtenFormat >= WRITTEN_FORMAT ? mergeWritten(file.written, written) : written,
+    writtenSince: file.writtenSince ?? first ?? today,
+    writtenBackfilled: true,
+    writtenFormat: WRITTEN_FORMAT,
+  }))
 }
 
 // --- edits and words, as they happen -----------------------------------------
@@ -164,16 +253,18 @@ export async function backfillEdits(): Promise<void> {
  * cannot file them under the other one.
  */
 let pending: Record<Day, string[]> = {}
+let pendingWords: PendingWords = []
 let pendingVault: string | null = null
 let pendingDay: Day | null = null
 let flushTimer: NodeJS.Timeout | null = null
 const FLUSH_MS = 5_000
 
-export function recordEdit(notePath: string, day: Day): void {
+export function recordEdit(notePath: string, day: Day, diff: WordDiff = { added: [], removed: [] }): void {
   const vault = currentVault()?.path ?? null
   if (vault === null || !notePath.toLowerCase().endsWith('.md') || !DAY.test(day)) return
   if (pendingVault !== null && pendingVault !== vault) void flushEdits()
   pending = mergeEdits(pending, { [day]: [notePath] })
+  if (diff.added.length > 0 || diff.removed.length > 0) pendingWords.push({ day, path: notePath, diff })
   pendingVault = vault
   pendingDay = day
   flushTimer ??= setTimeout(() => void flushEdits(), FLUSH_MS)
@@ -186,11 +277,12 @@ export function recordEdit(notePath: string, day: Day): void {
 export async function flushEdits(): Promise<void> {
   if (flushTimer !== null) clearTimeout(flushTimer)
   flushTimer = null
-  const [days, vault, day] = [pending, pendingVault, pendingDay]
+  const [days, words, vault, day] = [pending, pendingWords, pendingVault, pendingDay]
   pending = {}
+  pendingWords = []
   pendingVault = pendingDay = null
   if (vault === null || day === null || Object.keys(days).length === 0) return
-  updateEdits((file) => mergeEditsFiles(file, { since: Object.keys(days).sort()[0]!, backfilled: false, days }), statsDir(vault))
+  updateEdits((file) => addEdits(file, days, words), statsDir(vault))
   if (currentVault()?.path === vault) await countWords(day)
 }
 
@@ -296,9 +388,12 @@ export function moved(from: string, to: string): void {
     entry.notes = notes
     writeUsage()
   }
-  if (pendingVault === vault.path) pending = moveEdits(pending, from, to)
+  if (pendingVault === vault.path) {
+    pending = moveEdits(pending, from, to)
+    pendingWords = pendingWords.map((w) => ({ ...w, path: movedPath(w.path, from, to) }))
+  }
   const { data, exists } = readEdits()
-  if (exists) writeStats('edits', { ...data, days: moveEdits(data.days, from, to) })
+  if (exists) writeStats('edits', { ...data, days: moveEdits(data.days, from, to), written: moveWritten(data.written, from, to) })
 }
 
 // --- the page's data ------------------------------------------------------------
@@ -325,11 +420,14 @@ export async function overviewData(today: Day, now: number): Promise<OverviewDat
   const u = readUsage()
   const opened = openedFor(vault.path, now)
   const wanted = new Set([...index.written.map((n) => n.path), ...index.linked.map((n) => n.path)])
+  const mine = pendingVault === vault.path
   return {
     index,
-    edits: pendingVault === vault.path ? mergeEdits(edits.days, pending) : edits.days,
+    edits: mine ? mergeEdits(edits.days, pending) : edits.days,
     editsSince: edits.since,
     words,
+    written: mine ? addEdits(edits, pending, pendingWords).written : edits.written,
+    writtenSince: edits.writtenSince ?? today,
     active: u.active,
     activeSince: u.activeSince ?? today,
     openedSince: opened.since,

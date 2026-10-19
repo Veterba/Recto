@@ -258,3 +258,29 @@
 .note-peek.is-pinnable {
   cursor: pointer;
 }
+
+/* A board's preview: each column with its card count (against its WIP limit). */
+.note-peek__lanes {
+  margin: 0 0 var(--size-2);
+  padding: var(--size-2) 0 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+.note-peek__lanes li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--size-2);
+  padding: 2px 0;
+  color: var(--text-secondary);
+}
+.note-peek__lanes li > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-peek__count {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}

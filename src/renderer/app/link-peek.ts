@@ -2,24 +2,39 @@ import { api } from './api'
 import { IPC } from '@shared/ipc'
 
 /**
- * The preview of a link under the pointer - in a note, or in a floating note
- * window - shown with the same card the file tree uses, after the same delay.
+ * The note preview card, wherever it is asked for - a link in a note or a
+ * floating note window, a row in the file tree - with one lifecycle.
  *
- * One at a time, app-wide: whichever editor reported the hover, there is one
- * pointer. The timings follow the tree's: once a card is up the next one opens
- * quickly, and there is a short grace for the trip from the link to the card.
+ * One at a time, app-wide: there is one pointer. It opens after the delay set
+ * in Settings (quickly, once a card is already up), and it belongs to the
+ * element it was asked for, its anchor. Anything that means you have moved on
+ * puts it away at once, and cancels one that has not opened yet:
+ * - a press anywhere but on the card (any button: the anchor clicked, a tab, a link);
+ * - a key, the window losing focus, a scroll anywhere but in the card;
+ * - navigation the shell makes without any of those (`closeLinkPeek`);
+ * - the anchor gone from the page, hidden, or moved - checked every frame;
+ * - the pointer off the anchor and not on the card within a moment.
+ * A card never follows its anchor somewhere new: if the anchor moves, it closes.
  */
 
 export type LinkPeek = { path: string; anchor: { top: number; right: number; bottom: number } }
 
 const WARM_MS = 250
-const CLOSE_MS = 180
+/** Grace for the trip from the anchor to the card. */
+const CLOSE_MS = 150
+/** The card's root, so a press on it is not taken for "moved on". */
+export const PEEK_CARD_CLASS = 'note-peek'
 
 let peek: LinkPeek | null = null
 let delayMs = 2000
-let timer: number | undefined
-/** Bumped on every hover, so a link resolved late cannot open a card for a link already left. */
+let openTimer: number | undefined
+let closeTimer: number | undefined
+/** Bumped on every request, so a link resolved late cannot open a card for one already left. */
 let token = 0
+let anchor: HTMLElement | null = null
+/** Where the anchor was when its card opened: a card does not follow it. */
+let anchorBox: DOMRect | null = null
+let frame = 0
 const listeners = new Set<() => void>()
 
 const set = (next: LinkPeek | null): void => {
@@ -38,39 +53,114 @@ export function setLinkPeekDelay(ms: number): void {
   delayMs = ms
 }
 
-/** The pointer came to rest on a link (or left one: null). */
-export function hoverLink(link: { target: string; anchor: DOMRect } | null): void {
-  window.clearTimeout(timer)
+/** Still on the page, shown, and - once a card is up - where it was. */
+function anchorHolds(element: HTMLElement): boolean {
+  if (!element.isConnected) return false
+  const box = element.getBoundingClientRect()
+  if (box.width === 0 && box.height === 0) return false
+  if (anchorBox === null) return true
+  return Math.abs(box.top - anchorBox.top) < 1 && Math.abs(box.left - anchorBox.left) < 1
+}
+
+/** Every frame while a card is up or on its way: its anchor must still be there. */
+function watch(): void {
+  cancelAnimationFrame(frame)
+  const tick = (): void => {
+    if (anchor === null) return
+    if (!anchorHolds(anchor)) {
+      closeLinkPeek()
+      return
+    }
+    frame = requestAnimationFrame(tick)
+  }
+  frame = requestAnimationFrame(tick)
+}
+
+/**
+ * The pointer came to rest on an anchor - a link (`target`, resolved like a
+ * link) or a note row (`path`) - or left it (null).
+ */
+export function hoverLink(request: { target?: string; path?: string; element: HTMLElement } | null): void {
+  window.clearTimeout(openTimer)
+  window.clearTimeout(closeTimer)
   const mine = ++token
-  if (link === null) {
-    if (peek !== null) timer = window.setTimeout(() => set(null), CLOSE_MS)
+  if (request === null) {
+    // Off the anchor: the card goes unless the pointer reaches it first.
+    closeTimer = window.setTimeout(closeLinkPeek, CLOSE_MS)
     return
   }
-  const { top, right, bottom } = link.anchor
-  timer = window.setTimeout(
+  const element = request.element
+  const warm = peek !== null
+  anchor = element
+  anchorBox = null
+  watch()
+  openTimer = window.setTimeout(
     () => {
-      void api.invoke(IPC.indexResolveLink, link.target).then((path) => {
-        // A link to nothing has nothing to preview.
-        if (mine === token && path !== null) set({ path, anchor: { top, right, bottom } })
+      const resolve = request.path !== undefined ? Promise.resolve(request.path) : api.invoke(IPC.indexResolveLink, request.target ?? '')
+      void resolve.then((path) => {
+        // A link to nothing has nothing to preview; a request since, or an anchor gone, wins.
+        if (mine !== token || path === null || anchor !== element || !anchorHolds(element)) return
+        const box = element.getBoundingClientRect()
+        anchorBox = box
+        set({ path, anchor: { top: box.top, right: box.right, bottom: box.bottom } })
       })
     },
-    peek !== null ? WARM_MS : delayMs,
+    warm ? WARM_MS : delayMs,
   )
 }
 
 /** The pointer is on the card: keep it. */
 export function holdLinkPeek(): void {
-  window.clearTimeout(timer)
-  token++
+  window.clearTimeout(closeTimer)
 }
 
-/** The pointer left the card: the same grace as leaving the link. */
+/** The pointer left the card: the same grace as leaving the anchor. */
 export function releaseLinkPeek(): void {
-  hoverLink(null)
+  window.clearTimeout(closeTimer)
+  closeTimer = window.setTimeout(closeLinkPeek, CLOSE_MS)
 }
 
+/** Put the card away, and any that was on its way. */
 export function closeLinkPeek(): void {
-  window.clearTimeout(timer)
+  window.clearTimeout(openTimer)
+  window.clearTimeout(closeTimer)
+  cancelAnimationFrame(frame)
   token++
-  set(null)
+  anchor = null
+  anchorBox = null
+  if (peek !== null) set(null)
+}
+
+const onCard = (event: Event): boolean => event.target instanceof Element && event.target.closest(`.${PEEK_CARD_CLASS}`) !== null
+const busy = (): boolean => anchor !== null || peek !== null
+
+/**
+ * The events that mean "moved on", for the whole window, once. Capture phase,
+ * so nothing that stops a press or a key on its way (CodeMirror opening a
+ * link on mousedown, say) can keep them from the card.
+ */
+export function installLinkPeekWatch(): () => void {
+  const press = (event: Event): void => {
+    if (busy() && !onCard(event)) closeLinkPeek()
+  }
+  const away = (): void => {
+    if (busy()) closeLinkPeek()
+  }
+  const scroll = (event: Event): void => {
+    if (busy() && !onCard(event)) closeLinkPeek()
+  }
+  window.addEventListener('pointerdown', press, true)
+  window.addEventListener('auxclick', press, true)
+  window.addEventListener('keydown', away, true)
+  window.addEventListener('blur', away)
+  window.addEventListener('scroll', scroll, true)
+  window.addEventListener('wheel', scroll, { capture: true, passive: true })
+  return () => {
+    window.removeEventListener('pointerdown', press, true)
+    window.removeEventListener('auxclick', press, true)
+    window.removeEventListener('keydown', away, true)
+    window.removeEventListener('blur', away)
+    window.removeEventListener('scroll', scroll, true)
+    window.removeEventListener('wheel', scroll, true)
+  }
 }

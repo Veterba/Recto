@@ -64,7 +64,7 @@ export function NoteReader({
         onChange={() => {}}
         onSave={() => {}}
         onOpenLink={onOpenLink}
-        onLinkHover={(link) => hoverLink(link)}
+        onLinkHover={(link) => hoverLink(link === null ? null : { target: link.target, element: link.element })}
         onReady={(editor) => {
           handle.current = editor
           // Tables, maths and frontmatter are laid out on a transaction, and a

@@ -8,9 +8,8 @@ import type { VaultTree } from '../file-tree-ops'
 import { moveWithin, placeInto } from '../tree-order'
 import { useTreeOrder } from '../hooks/use-tree-order'
 import { treeMenu } from '../tree-menu'
-import { useNotePeek } from '../hooks/use-note-peek'
+import { closeLinkPeek, hoverLink } from '../../../app/link-peek'
 import { ConfirmDialog } from '../../../ui/ConfirmDialog'
-import { NotePreviewCard } from './NotePreviewCard'
 import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
 import { RenameDialog } from './RenameDialog'
@@ -44,10 +43,6 @@ type Props = {
   vaultPath: string
   /** The templates folder, which gets its own icon so it cannot pass for a normal one. */
   templateFolder: string
-  /** Milliseconds the pointer rests on a note before its preview opens. */
-  previewDelayMs: number
-  /** A note's preview card was clicked: pin it as a floating window. */
-  onPinNote: (path: string, rect: DOMRect) => void
 }
 
 /*
@@ -69,8 +64,6 @@ export function FileTree({
   onRenamed,
   vaultPath,
   templateFolder,
-  previewDelayMs,
-  onPinNote,
 }: Props): React.ReactElement {
   // Read every render rather than fixed at module load: the sidebar's text
   // size is a setting, and the virtualiser has to agree with the stylesheet
@@ -89,7 +82,12 @@ export function FileTree({
   const [rewrite, setRewrite] = useState<{ files: number; links: number; undoId: string } | null>(null)
   /** The node a delete is waiting on confirmation for. */
   const [confirming, setConfirming] = useState<FileNode | null>(null)
-  const { peek, peekTimer, cancelPeek, hoverRow, leaveRow } = useNotePeek(previewDelayMs)
+  // The preview card is the app's one (app/link-peek.ts): a row is its anchor, notes only -
+  // a folder has no gist, and an image previews itself.
+  const cancelPeek = closeLinkPeek
+  const hoverRow = (node: FileNode, element: HTMLElement): void =>
+    hoverLink(node.kind === 'file' && node.name.toLowerCase().endsWith('.md') ? { path: node.path, element } : null)
+  const leaveRow = (): void => hoverLink(null)
 
   const rows = useMemo(() => flatten(tree.roots, expanded, order), [tree.roots, expanded, order])
   const contextMenu = useContextMenu<FileNode>()
@@ -415,26 +413,6 @@ export function FileTree({
           </div>
         </div>
       </div>
-
-      {peek !== null && renaming === null && contextMenu.menu === null && (
-        <NotePreviewCard
-          path={peek.node.path}
-          anchor={peek.anchor}
-          mtime={peek.node.mtime}
-          onOpen={(path) => {
-            cancelPeek()
-            onOpenFile(path)
-          }}
-          onPin={(path, rect) => {
-            cancelPeek()
-            onPinNote(path, rect)
-          }}
-          // Resting on the card keeps it; leaving it starts the same short
-          // grace a row does, so card and row behave as one target.
-          onPointerEnter={() => window.clearTimeout(peekTimer.current)}
-          onPointerLeave={leaveRow}
-        />
-      )}
 
       {contextMenu.menu !== null && (
         <ContextMenu items={menuFor(contextMenu.menu.subject)} at={contextMenu.menu.at} onClose={contextMenu.close} />

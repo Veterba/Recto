@@ -148,6 +148,11 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     return typeof path === 'string' ? path : null
   }, [sections, revision])
 
+  // Navigation that comes without a press or a key the preview card already
+  // heard (a command run, a link followed, a view restored): it puts the card
+  // away too, and any on its way.
+  useEffect(() => closeLinkPeek(), [activeSection, activePath, revision, homeOpen, settingsOpen, paletteOpen, searchOpen, switcherOpen])
+
   // Boards are notes: the list, and where each card stands, follow the vault.
   // Asked again a moment later, when the indexer - a process behind - has read the change.
   const { revision: notesRevision } = useNoteBus()
@@ -577,8 +582,6 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
                 onRenamed={followRename}
                 vaultPath={vault.path}
                 templateFolder={templates.settings.folder}
-                previewDelayMs={appearance.previewDelay * 1000}
-                onPinNote={pinNote}
               />
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} onRenamed={followRename} />

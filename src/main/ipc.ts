@@ -74,6 +74,7 @@ function rewatch(): void {
       // Edits before counting began, from version history, once; and the
       // day's first word count, taken before anything is typed into it.
       await overview.backfillEdits().catch((err: unknown) => console.error('[overview]', err))
+      await overview.backfillWritten(overview.todayHere()).catch((err: unknown) => console.error('[overview]', err))
       await overview.countWords(overview.todayHere())
     })
     .then(() => topics.start())
@@ -387,8 +388,10 @@ export function registerIpc(): void {
   })
   handle(IPC.overviewData, (today, now) => overview.overviewData(today, now).catch(() => null))
   handle(IPC.overviewTopics, () => overview.overviewTopics().catch(() => null))
-  handle(IPC.overviewEdited, (p, day) => {
-    overview.recordEdit(p, day)
+  handle(IPC.overviewEdited, (p, day, added, removed) => {
+    // From the renderer: kept to lists of words, whatever came.
+    const words = (list: unknown): string[] => (Array.isArray(list) ? list.filter((w): w is string => typeof w === 'string') : [])
+    overview.recordEdit(p, day, { added: words(added), removed: words(removed) })
     return { ok: true }
   })
   handle(IPC.overviewOpened, (p, at) => {

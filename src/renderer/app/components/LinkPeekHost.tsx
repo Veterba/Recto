@@ -1,8 +1,8 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { NotePreviewCard } from '../../features/file-tree'
-import { closeLinkPeek, holdLinkPeek, linkPeekSnapshot, releaseLinkPeek, setLinkPeekDelay, subscribeLinkPeek } from '../link-peek'
+import { closeLinkPeek, holdLinkPeek, installLinkPeekWatch, linkPeekSnapshot, releaseLinkPeek, setLinkPeekDelay, subscribeLinkPeek } from '../link-peek'
 
-/** The card for the link under the pointer (see link-peek.ts), put away by anything you do. */
+/** The note preview card - for a link or a tree row (see link-peek.ts) - put away by anything you do. */
 export function LinkPeekHost({
   delayMs,
   mtimeOf,
@@ -19,16 +19,8 @@ export function LinkPeekHost({
 
   useEffect(() => setLinkPeekDelay(delayMs), [delayMs])
 
-  // A key or the window losing focus means you have moved on - as the tree's card does.
-  useEffect(() => {
-    if (peek === null) return
-    window.addEventListener('keydown', closeLinkPeek)
-    window.addEventListener('blur', closeLinkPeek)
-    return () => {
-      window.removeEventListener('keydown', closeLinkPeek)
-      window.removeEventListener('blur', closeLinkPeek)
-    }
-  }, [peek])
+  // A press, a key, a scroll, the window losing focus: you have moved on.
+  useEffect(() => installLinkPeekWatch(), [])
 
   if (peek === null) return null
   return (
