@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /**
  * The note's name, as an editable heading above the text.
@@ -20,6 +20,9 @@ export function NoteTitle({ path, onRename }: { path: string; onRename: (name: s
   const [draft, setDraft] = useState(current)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Escape blurs, and the blur would commit what was typed: the blur handler
+  // still sees this render's draft, not the reset one.
+  const cancelled = useRef(false)
 
   useEffect(() => setDraft(current), [current])
 
@@ -58,7 +61,10 @@ export function NoteTitle({ path, onRename }: { path: string; onRename: (name: s
           setDraft(event.target.value)
           if (error !== null) setError(null)
         }}
-        onBlur={() => void commit()}
+        onBlur={() => {
+          if (cancelled.current) cancelled.current = false
+          else void commit()
+        }}
         onKeyDown={(event) => {
           event.stopPropagation()
           if (event.key === 'Enter') {
@@ -66,6 +72,7 @@ export function NoteTitle({ path, onRename }: { path: string; onRename: (name: s
             event.currentTarget.blur()
           }
           if (event.key === 'Escape') {
+            cancelled.current = true
             setDraft(current)
             setError(null)
             event.currentTarget.blur()

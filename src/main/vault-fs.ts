@@ -132,6 +132,8 @@ export async function readText(relative: string): Promise<TextFileResult> {
   }
 }
 
+let tmpCount = 0
+
 /**
  * Write-then-rename, so a crash mid-write cannot truncate a note. Callers are
  * expected to have registered the path as a self-write first (see watcher).
@@ -142,7 +144,7 @@ export async function writeFile(relative: string, content: string): Promise<{ ok
     const existing = await fsp.readFile(absolute).catch(() => null)
     // The last line of defence for the bug above: text is never written over a
     // file that holds binary data, whatever the renderer asks for.
-    const notText = existing === null ? null : notTextReason(existing.subarray(0, 8192), true)
+    const notText = existing === null ? null : notTextReason(existing)
     if (notText !== null) return { ok: false, error: notTextMessage(notText, true) }
     const bytes = Buffer.from(content, 'utf8')
     // Nothing to write: leave the file alone. A rewrite of the same bytes
@@ -159,7 +161,9 @@ export async function writeFile(relative: string, content: string): Promise<{ ok
         bytes.length,
         new Error().stack?.split('\n').slice(2, 6).join(' <- '),
       )
-    const tmp = `${absolute}.tmp-${process.pid}`
+    // Unique per write: two writes to one note in flight (an autosave and a
+    // board edit) shared one temp file, and one could rename the other's half.
+    const tmp = `${absolute}.tmp-${process.pid}-${++tmpCount}`
     await fsp.mkdir(path.dirname(absolute), { recursive: true })
     await fsp.writeFile(tmp, bytes)
     await fsp.rename(tmp, absolute)
@@ -306,6 +310,12 @@ export async function create(
   }
 }
 
+function sameFile(a: string, b: string): boolean {
+  const one = fs.statSync(a)
+  const two = fs.statSync(b)
+  return one.ino === two.ino && one.dev === two.dev
+}
+
 export async function rename(relative: string, newName: string): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   try {
     const root = requireVault()
@@ -319,7 +329,9 @@ export async function rename(relative: string, newName: string): Promise<{ ok: t
       const existing = nameTaken(bare, allFiles(root).filter((other) => other !== relative))
       if (existing !== null) return { ok: false, error: takenMessage(existing) }
     }
-    if (fs.existsSync(to)) return { ok: false, error: `"${bare}" already exists here.` }
+    // On a case-insensitive disk (the Mac default) `to` exists when only the
+    // case changes - it is the same file, so it is not in the way.
+    if (fs.existsSync(to) && !sameFile(from, to)) return { ok: false, error: `"${bare}" already exists here.` }
     await fsp.rename(from, to)
     return { ok: true, path: toRelative(root, to) }
   } catch (err) {
@@ -347,11 +359,15 @@ export async function move(relative: string, newParent: string): Promise<{ ok: t
   }
 }
 
+/** A file `rewriteLinksTo` changed: what it held before and what was written. */
+export type RewrittenFile = { path: string; before: string; after: string }
+
 /**
  * Rewrite `[[links]]` in a set of files so they point at a note's new path.
  *
  * Returns enough to undo it: the files touched and their previous contents.
  * Editing files the user is not looking at without an undo would be reckless.
+ * Writes go through `writeFile`, so they are atomic and guarded like any save.
  */
 export async function rewriteLinksTo(
   sources: readonly string[],
@@ -359,9 +375,9 @@ export async function rewriteLinksTo(
   newPath: string,
   /** Only links that spell out the whole path - see `rewriteWikiLinks`. */
   exact = false,
-): Promise<{ changed: { path: string; before: string }[]; links: number }> {
+): Promise<{ changed: RewrittenFile[]; links: number }> {
   const root = requireVault()
-  const changed: { path: string; before: string }[] = []
+  const changed: RewrittenFile[] = []
   let links = 0
 
   for (const source of sources) {
@@ -381,27 +397,39 @@ export async function rewriteLinksTo(
     const result = rewriteWikiLinks(before, oldPath, newPath, exact)
     if (result.count === 0 || result.text === before) continue
 
-    await fsp.writeFile(absolute, result.text, 'utf8')
-    changed.push({ path: source, before })
+    if (!(await writeFile(source, result.text)).ok) continue
+    changed.push({ path: source, before, after: result.text })
     links += result.count
   }
 
   return { changed, links }
 }
 
-/** Put back the contents captured by `rewriteLinksTo`. */
-export async function restoreContents(entries: readonly { path: string; before: string }[]): Promise<number> {
+/**
+ * Put back the contents captured by `rewriteLinksTo`.
+ *
+ * Only into files still exactly as the rewrite left them: a note edited since
+ * keeps the edit (and the new link) rather than losing it to the undo.
+ */
+export async function restoreContents(entries: readonly RewrittenFile[]): Promise<{ restored: number; skipped: number }> {
   const root = requireVault()
   let restored = 0
+  let skipped = 0
   for (const entry of entries) {
+    let current: string
     try {
-      await fsp.writeFile(resolveInVault(root, entry.path), entry.before, 'utf8')
-      restored++
+      current = await fsp.readFile(resolveInVault(root, entry.path), 'utf8')
     } catch {
       // The file has since been deleted; nothing to put back.
+      continue
     }
+    if (current !== entry.after) {
+      skipped++
+      continue
+    }
+    if ((await writeFile(entry.path, entry.before)).ok) restored++
   }
-  return restored
+  return { restored, skipped }
 }
 
 /**

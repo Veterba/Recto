@@ -178,3 +178,11 @@ describe('word count', () => {
     expect(countWords('---\ntags:\n  - a\n---\n# Title here\n\nOne *two* [[Three|four]] five-six.')).toBe(7)
   })
 })
+
+describe('sentence focus at the start of an indented line', () => {
+  it('does not recurse forever on leading spaces', () => {
+    const doc = Text.of(['  - nested item', '   '])
+    expect(focusRange(doc, 0, 'sentence')).toEqual({ from: 2, to: 15 })
+    expect(() => focusRange(doc, doc.line(2).from + 1, 'sentence')).not.toThrow()
+  })
+})

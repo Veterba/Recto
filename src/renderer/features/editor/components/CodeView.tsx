@@ -49,12 +49,18 @@ export function CodeView({ path }: { path: string }): React.ReactElement {
   const save = useCallback(
     async (next: string) => {
       setStatus('saving')
+      const before = lastWritten.current
       lastWritten.current = next
       const result = await api.invoke(IPC.fsWrite, path, next)
       if (result.ok) {
         setStatus('saved')
         setSaveError(null)
-      } else setSaveError(result.error ?? 'Could not save.')
+      } else {
+        // Still unsaved, so flush on close tries again.
+        if (lastWritten.current === next) lastWritten.current = before
+        setStatus('dirty')
+        setSaveError(result.error ?? 'Could not save.')
+      }
     },
     [path],
   )

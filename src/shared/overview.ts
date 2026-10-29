@@ -173,16 +173,23 @@ export function wordDiff(beforeBody: string, afterBody: string): WordDiff {
 export type Written = Record<Day, Record<string, Record<string, number>>>
 const OLD_COUNT = '#'
 
+/**
+ * A word's count, 0 when it has none. Own keys only: `constructor` is a word
+ * too, and `words['constructor']` on a plain object is Object's constructor,
+ * which turned the day's total into a string.
+ */
+const countOf = (words: Record<string, number>, word: string): number => (Object.hasOwn(words, word) ? words[word]! : 0)
+
 /** One save's change folded into its note's day: its deletions take back what you wrote that day, then its additions count. */
 export function applyWords(written: Written, day: Day, path: string, diff: WordDiff): Written {
   if (diff.added.length === 0 && diff.removed.length === 0) return written
   const words = { ...written[day]?.[path] }
   for (const word of diff.removed) {
-    const left = words[word] ?? 0
+    const left = countOf(words, word)
     if (left > 1) words[word] = left - 1
     else if (left === 1) delete words[word]
   }
-  for (const word of diff.added) words[word] = (words[word] ?? 0) + 1
+  for (const word of diff.added) words[word] = countOf(words, word) + 1
   const notes = { ...written[day] }
   if (Object.keys(words).length === 0) delete notes[path]
   else notes[path] = words
@@ -202,7 +209,7 @@ export function mergeWritten(a: Written, b: Written): Written {
     const mergedNotes = { ...out[day] }
     for (const [path, words] of Object.entries(notes)) {
       const merged = { ...mergedNotes[path] }
-      for (const [word, n] of Object.entries(words)) merged[word] = Math.max(merged[word] ?? 0, n)
+      for (const [word, n] of Object.entries(words)) merged[word] = Math.max(countOf(merged, word), n)
       mergedNotes[path] = merged
     }
     out[day] = mergedNotes

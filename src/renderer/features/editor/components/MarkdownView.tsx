@@ -103,6 +103,7 @@ function MarkdownEditor({
 }): React.ReactElement {
   const [initial, setInitial] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [status, setStatus] = useState<'loaded' | 'dirty' | 'saving' | 'saved'>('loaded')
   const saveTimer = useRef<number | undefined>(undefined)
   const handle = useRef<EditorHandle | null>(null)
@@ -156,7 +157,7 @@ function MarkdownEditor({
   }, [path, attempt])
 
   const save = useCallback(
-    async (next: string) => {
+    async (next: string): Promise<boolean> => {
       setStatus('saving')
       // What the file said before this save - read, or last written here - is
       // what the save is measured against for the words it added.
@@ -165,13 +166,22 @@ function MarkdownEditor({
       const result = await api.invoke(IPC.fsWrite, path, next)
       if (result.ok) {
         setStatus('saved')
+        setSaveError(null)
         setSavedAt(Date.now())
         // A save can have added or removed a `[[link]]`, which is a change to
         // the graph. Self-writes are suppressed in the watcher, so nothing else
         // would ever tell it.
         noteIndexChanged()
         noteEdited(path, before ?? undefined, next)
-      } else setError(result.error ?? 'Could not save.')
+        return true
+      }
+      // The text stays in the editor and stays unsaved, so the next keystroke,
+      // ⌘S or closing the tab tries again. Replacing the editor with the error
+      // card here threw the unsaved text away.
+      if (lastWritten.current === next) lastWritten.current = before
+      setStatus('dirty')
+      setSaveError(result.error ?? 'Could not save.')
+      return false
     },
     [path],
   )
@@ -265,7 +275,8 @@ function MarkdownEditor({
       // that no longer exists.
       window.clearTimeout(saveTimer.current)
       const value = handle.current?.getValue()
-      if (value !== undefined && value !== lastWritten.current) await save(value)
+      if (value !== undefined && value !== lastWritten.current && !(await save(value)))
+        return 'Not renamed: the note could not be saved first.'
 
       const extension = path.toLowerCase().endsWith('.md') ? '.md' : ''
       const result = await api.invoke(IPC.fsRename, path, `${name}${extension}`)
@@ -384,6 +395,11 @@ function MarkdownEditor({
         >
           <Icon name="list-tree" size={13} />
         </button>
+        {saveError !== null && (
+          <span className="md__save-error" role="alert">
+            {saveError}
+          </span>
+        )}
         <span className={`md__status is-${status}`}>
           {status === 'dirty' ? 'Unsaved' : status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : ''}
         </span>

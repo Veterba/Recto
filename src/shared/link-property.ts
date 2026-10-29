@@ -9,6 +9,7 @@
  */
 
 import { parseFrontmatter, removeField, setField } from './frontmatter'
+import { isCrlf, toLf, withEndings } from './line-endings'
 
 const WIKILINK = /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g
 
@@ -22,12 +23,12 @@ export function linksIn(text: string, key: string): string[] {
 
 /**
  * Set `key` to exactly these links, in this order. An empty list removes the
- * key. Line endings are kept: a CRLF note stays CRLF, since `setField` itself
- * joins on `\n`.
+ * key. Line endings are kept: a CRLF note stays CRLF. The check below compares
+ * `\n` text, so the endings are taken off first and put back after.
  */
 export function writeLinks(text: string, key: string, targets: readonly string[]): string {
-  const crlf = text.includes('\r\n') && !/(?<!\r)\n/.test(text)
-  const plain = crlf ? text.replace(/\r\n/g, '\n') : text
+  const crlf = isCrlf(text)
+  const plain = crlf ? toLf(text) : text
   const next =
     targets.length === 0
       ? removeField(plain, key)
@@ -42,7 +43,7 @@ export function writeLinks(text: string, key: string, targets: readonly string[]
     console.error(`[link-property] refused a write that would change more than "${key}"`, new Error().stack)
     return text
   }
-  return crlf ? next.replace(/\n/g, '\r\n') : next
+  return withEndings(next, crlf)
 }
 
 /**

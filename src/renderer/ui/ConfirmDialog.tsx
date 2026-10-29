@@ -46,7 +46,9 @@ export function ConfirmDialog({ title, body, confirmLabel, danger = true, onConf
         onKeyDown={(event) => {
           event.stopPropagation()
           if (event.key === 'Escape') onCancel()
-          if (event.key === 'Enter') onConfirm()
+          // A focused button answers Enter with its own click: Cancel cancels,
+          // and the confirm button is not pressed twice.
+          if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)) onConfirm()
         }}
       >
         <header className="dialog__head">

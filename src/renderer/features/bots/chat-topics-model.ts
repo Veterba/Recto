@@ -1,9 +1,10 @@
-import { botThreadFolder, type BotMessage } from '@shared/bots'
+import { botThreadFolder, isActive, type BotMessage } from '@shared/bots'
 import { appendTurns, createdStamp, parseTopic, topicFile, topicFileName, type ChatTopicMeta, type TopicMessage } from '@shared/chat-topics'
 import { IPC } from '@shared/ipc'
 import type { FileNode } from '@shared/vault'
 import { api } from '../../app/api'
 import { noteIndexChanged } from '../../app/note-bus'
+import { jobForTopic } from './jobs-store'
 
 /**
  * A bot's conversation as chat topics: which topic files there are, and which
@@ -221,11 +222,19 @@ export class ChatTopics {
 
   /** A new title: in the frontmatter and in the file name, which is renamed to match. */
   async retitle(path: string, title: string): Promise<string> {
+    // Never while main writes the topic: the file here would be behind it (a
+    // question just added, an answer streaming), and writing it back lost
+    // that; the rename pulled the file from under the job too.
+    const running = jobForTopic(path)
+    if (running !== null && isActive(running)) return path
+    // From the file, not the cache: main may have written since it was read.
+    this.loaded.delete(path)
     const topic = await this.load(path)
     const clean = title.trim()
     if (topic === null || clean === '' || clean === topic.meta.title) return path
     topic.meta = { ...topic.meta, title: clean }
-    await api.invoke(IPC.fsWrite, path, topicFile(topic.meta, topic.extra, topic.body))
+    const written = await api.invoke(IPC.fsWrite, path, topicFile(topic.meta, topic.extra, topic.body))
+    if (!written.ok) return path
     // A name already taken - two topics begun in the same minute, on the same
     // subject - gets a number, as the migration does.
     let next = path

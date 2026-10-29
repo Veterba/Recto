@@ -12,6 +12,8 @@
  * refuses to touch it.
  */
 
+import { keepLineEndings, toLf } from './line-endings'
+
 export type FieldType = 'text' | 'number' | 'boolean' | 'list' | 'date' | 'link' | 'empty'
 
 export type Field = {
@@ -253,6 +255,10 @@ function renderBlockList(key: string, items: readonly string[], indent: string):
  * Creates the frontmatter block if the file has none.
  */
 export function setField(text: string, key: string, value: Field['value']): string {
+  return keepLineEndings(text, (lf) => setFieldLf(lf, key, value))
+}
+
+function setFieldLf(text: string, key: string, value: Field['value']): string {
   const lines = text.split(/\r?\n/)
   const parsed = parseFrontmatter(text)
   const rendered = `${key}: ${serialize(value)}`.trimEnd()
@@ -286,6 +292,10 @@ export function setField(text: string, key: string, value: Field['value']): stri
  * empty `---\n---` at the top of a note is noise.
  */
 export function removeField(text: string, key: string): string {
+  return keepLineEndings(text, (lf) => removeFieldLf(lf, key))
+}
+
+function removeFieldLf(text: string, key: string): string {
   const parsed = parseFrontmatter(text)
   if (!parsed.present) return text
 
@@ -307,6 +317,10 @@ export function removeField(text: string, key: string): string {
 
 /** Rename a key in place, keeping its value and position. */
 export function renameField(text: string, from: string, to: string): string {
+  return keepLineEndings(text, (lf) => renameFieldLf(lf, from, to))
+}
+
+function renameFieldLf(text: string, from: string, to: string): string {
   const parsed = parseFrontmatter(text)
   const existing = parsed.fields.find((field) => field.key === from)
   if (existing === undefined || from === to) return text
@@ -323,7 +337,8 @@ export const bodyOf = (text: string): string => text.split(/\r?\n/).slice(parseF
 
 /** The note with its body replaced: the frontmatter stays byte for byte. `withBody(t, bodyOf(t))` is `t`. */
 export function withBody(text: string, body: string): string {
-  const lines = text.split(/\r?\n/)
-  const start = parseFrontmatter(text).bodyStart
-  return start === 0 ? body : `${lines.slice(0, start).join('\n')}\n${body}`
+  return keepLineEndings(text, (lf) => {
+    const start = parseFrontmatter(lf).bodyStart
+    return start === 0 ? toLf(body) : `${lf.split('\n').slice(0, start).join('\n')}\n${toLf(body)}`
+  })
 }

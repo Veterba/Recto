@@ -238,6 +238,70 @@ describe('moving cards', () => {
   })
 })
 
+describe('board writes in a queue', () => {
+  it('a write after one that failed does not bring the failed change back', async () => {
+    const hook = await mount()
+    pendingWrites = []
+    let fails = 1
+    failWrites = (path) => path === BOARD && fails-- > 0
+    let first: Promise<boolean> = Promise.resolve(true)
+    let second: Promise<boolean> = Promise.resolve(true)
+    // The second is made once the first is on screen, as a second gesture would be.
+    await act(async () => {
+      first = hook.current.editBoard((t) => t.replace('## To do', '## Backlog'))
+    })
+    await act(async () => {
+      second = hook.current.editBoard((t) => t.replace('## Done', '## Shipped'))
+    })
+    await act(async () => {
+      pendingWrites![0]!.resolve({ ok: true })
+      await first
+    })
+    await act(async () => {
+      pendingWrites![1]!.resolve({ ok: true })
+      await second
+    })
+    expect(board()).toContain('## To do')
+    expect(board()).not.toContain('## Backlog')
+    expect(board()).toContain('## Shipped')
+  })
+
+  it('two edits to one card note close together both land', async () => {
+    const hook = await mount()
+    pendingWrites = []
+    let a: Promise<boolean> = Promise.resolve(true)
+    let b: Promise<boolean> = Promise.resolve(true)
+    await act(async () => {
+      a = hook.current.editCard('tasks/Ship it.md', (t) => setCardField(t, 'priority', 'high'))
+      b = hook.current.editCard('tasks/Ship it.md', (t) => setCardField(t, 'due', '2026-11-01'))
+    })
+    for (let i = 0; i < 2; i++) {
+      await act(async () => {
+        while (pendingWrites!.length === 0) await Promise.resolve()
+        pendingWrites!.shift()!.resolve({ ok: true })
+      })
+    }
+    await act(async () => {
+      await Promise.all([a, b])
+    })
+    expect(files.get('tasks/Ship it.md')).toContain('priority: high')
+    expect(files.get('tasks/Ship it.md')).toContain('due: 2026-11-01')
+  })
+})
+
+describe('emptying a column', () => {
+  it('moving its cards last first, each to the same slot, moves every text card and keeps their order', async () => {
+    files.set(BOARD, boardText.replace('- [ ] Buy stamps\n    at the post office', '- [ ] One\n- [ ] Two\n- [ ] Three'))
+    const hook = await mount()
+    const from = hook.current.cards!.filter((c) => c.column === '0')
+    const at = hook.current.cards!.filter((c) => c.column === '1').length
+    // As the delete-column dialog does it (BoardView).
+    for (const c of [...from].reverse()) await act(async () => hook.current.move(c.key, { column: '1', index: at }))
+    expect(hook.current.cards!.filter((c) => c.column === '0')).toEqual([])
+    expect(hook.current.cards!.filter((c) => c.column === '1').map((c) => c.title)).toEqual(['Old one', 'Ship it', 'One', 'Two', 'Three'])
+  })
+})
+
 describe("a card's note", () => {
   it('shows a priority change before the file is written, and keeps it while the index lags', async () => {
     const hook = await mount()

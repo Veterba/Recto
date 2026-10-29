@@ -96,9 +96,13 @@ function GraphView({ activePath, onOpenNote, onOpenCard, editable = false }: Pro
   // --- data ---------------------------------------------------------------
   const graph = useGraphData()
 
+  // The open note shapes the graph only in local-only mode. Passed (and
+  // depended on) otherwise, every note switch made a new view, and the
+  // simulation was torn down and reheated for a graph that had not changed.
+  const centre = localOnly ? activePath : null
   const view = useMemo(
-    () => visibleGraph(graph, { showOrphans, showBoards, showTasks, showChats, linkRange, localOnly, activePath }),
-    [graph, showOrphans, showBoards, showTasks, showChats, linkRange, localOnly, activePath],
+    () => visibleGraph(graph, { showOrphans, showBoards, showTasks, showChats, linkRange, localOnly, activePath: centre }),
+    [graph, showOrphans, showBoards, showTasks, showChats, linkRange, localOnly, centre],
   )
 
   // --- worker lifecycle ---------------------------------------------------

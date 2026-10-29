@@ -28,6 +28,7 @@ import {
   writtenOn,
   WORDS_RULE,
   type WordsDay,
+  type Written,
 } from '../../src/shared/overview'
 
 /** The vault overview's sums: what each figure on the page is made of. */
@@ -319,5 +320,15 @@ describe('display', () => {
   })
   it('days are local', () => {
     expect(dayOf(new Date(2026, 9, 18, 23, 59))).toBe('2026-10-18')
+  })
+})
+
+describe('words that are also names on every object', () => {
+  it('counts "constructor" like any other word', () => {
+    let written: Written = {}
+    written = applyWords(written, '2026-10-29', 'A.md', wordDiff('', 'The constructor builds it.'))
+    expect(written['2026-10-29']!['A.md']).toEqual({ the: 1, constructor: 1, builds: 1, it: 1 })
+    expect(writtenOn(written, '2026-10-29')).toBe(4)
+    expect(writtenOn(mergeWritten(written, written), '2026-10-29')).toBe(4)
   })
 })

@@ -54,7 +54,10 @@ export const blockHiding = StateField.define<DecorationSet>({
     // in the tree later. Recompute when the tree changes too, or those stay raw
     // until something else happens to move the caret.
     const treeChanged = syntaxTree(transaction.startState) !== syntaxTree(transaction.state)
-    if (!transaction.docChanged && transaction.selection === undefined && !treeChanged && value !== Decoration.none) {
+    // Switching Live Preview is a transaction with nothing but its effect;
+    // skipping it left the blocks hidden in Source until the caret moved.
+    const toggled = transaction.startState.field(livePreviewEnabled, false) !== transaction.state.field(livePreviewEnabled, false)
+    if (!transaction.docChanged && transaction.selection === undefined && !treeChanged && !toggled && value !== Decoration.none) {
       return value.map(transaction.changes)
     }
 
@@ -90,28 +93,6 @@ export const blockHiding = StateField.define<DecorationSet>({
       }
     }
 
-    // --- rules and code fences -------------------------------------------
-    //
-    // The fence lines go too, not just their backticks. Hiding only the ``` of
-    // "```python" leaves the word "python" sitting inside the block, and the
-    // closing fence leaves an empty row at the bottom - which is exactly what
-    // a rendered code block should not have. The language is shown as a chip
-    // instead, from blocks.ts.
-    let inFence = false
-    for (let n = frontmatterEnd + 1; n <= doc.lines; n++) {
-      const line = doc.line(n)
-      const isFence = FENCE.test(line.text)
-
-      if (isFence) {
-        const wasIn = inFence
-        inFence = !inFence
-        if (!touched.has(n)) ranges.push({ from: line.from, to: line.to, deco: hiddenBlock })
-        // A closing fence ends the block; nothing else on this line matters.
-        if (wasIn) continue
-        continue
-      }
-    }
-
     // --- rules, maths blocks and tables, from the grammar -----------------
     //
     // Rules used to be guessed from the text: a `---` line counted unless the
@@ -124,10 +105,25 @@ export const blockHiding = StateField.define<DecorationSet>({
     syntaxTree(state).iterate({
       enter: (node) => {
         const name = node.name
-        if (name !== 'HorizontalRule' && name !== 'MathBlock' && name !== 'Table' && name !== 'HTMLBlock') return undefined
+        if (name !== 'HorizontalRule' && name !== 'MathBlock' && name !== 'Table' && name !== 'HTMLBlock' && name !== 'FencedCode')
+          return undefined
         if (node.from < consumedTo) return false
         const first = doc.lineAt(node.from)
         let last = doc.lineAt(node.to)
+        if (name === 'FencedCode') {
+          // The fence lines go too, not just their backticks: hiding only the
+          // ``` of "```python" leaves "python" inside the block, and the
+          // closing fence an empty row under it. The language is a chip
+          // instead, from blocks.ts. Which lines are fences is the parser's
+          // call - a regex hid any line starting with ```, prose included.
+          // Only a line that is nothing but the fence: one opening in a list
+          // item ("- ```") keeps its marker and stays as it was.
+          if (first.number <= frontmatterEnd || !FENCE.test(first.text)) return false
+          if (!touched.has(first.number)) ranges.push({ from: first.from, to: first.to, deco: hiddenBlock })
+          const closed = last.number > first.number && FENCE.test(last.text)
+          if (closed && !touched.has(last.number)) ranges.push({ from: last.from, to: last.to, deco: hiddenBlock })
+          return false
+        }
         if (name === 'HTMLBlock') {
           // `<details>` with blank lines inside parses as several blocks; render
           // it whole, up to its `</details>`, or leave it as source.

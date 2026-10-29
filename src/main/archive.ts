@@ -137,6 +137,10 @@ export async function restore(id: string): Promise<{ ok: true; path: string } | 
 export async function purge(id: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const state = readManifest()
+    // Only an id the manifest knows: the id comes from the renderer, and
+    // joined unchecked, '../x' or '' named a file outside the archive (or the
+    // archive itself) for the trash.
+    if (!state.entries.some((e) => e.id === id)) return { ok: false, error: 'That item is no longer in the archive.' }
     const stored = path.join(archiveDir(), id)
     if (fs.existsSync(stored)) await shell.trashItem(stored)
     writeManifest({ ...state, entries: state.entries.filter((e) => e.id !== id) })

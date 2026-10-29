@@ -19,6 +19,13 @@ import { type DropHint, flatten, type Row, placeFor } from '../tree-rows'
 import { TreeRow } from './TreeRow'
 
 /**
+ * A row being dragged, by its own type. Drops read only this: text/plain is
+ * also set by a board card (its note's path) and by selected text, and taking
+ * that for a tree drag moved a card's note out of tasks/.
+ */
+const TREE_DRAG = 'application/x-recto-tree-path'
+
+/**
  * The file explorer.
  *
  * Virtualised: the vault is flattened to the rows that are actually visible
@@ -351,7 +358,7 @@ export function FileTree({
         onDrop={(ev) => {
           // Empty space below the rows means "move to the vault root".
           ev.preventDefault()
-          const from = ev.dataTransfer.getData('text/plain')
+          const from = ev.dataTransfer.getData(TREE_DRAG)
           if (from !== '') void drop(from, '')
         }}
       >
@@ -379,6 +386,7 @@ export function FileTree({
                 dropLine={hint !== null && hint.path === row.node.path && hint.place !== 'into' ? hint.place : null}
                 onDragStart={(ev) => {
                   cancelPeek()
+                  ev.dataTransfer.setData(TREE_DRAG, row.node.path)
                   ev.dataTransfer.setData('text/plain', row.node.path)
                   ev.dataTransfer.effectAllowed = 'move'
                   // A file can also be dropped on a pane, to open it there.
@@ -399,7 +407,7 @@ export function FileTree({
                 onDropRow={(ev) => {
                   ev.preventDefault()
                   ev.stopPropagation()
-                  const from = ev.dataTransfer.getData('text/plain')
+                  const from = ev.dataTransfer.getData(TREE_DRAG)
                   if (from === '') return
                   const place = placeFor(row.node, ev.clientY, ev.currentTarget.getBoundingClientRect())
                   if (place === 'into') {

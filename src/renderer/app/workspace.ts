@@ -164,6 +164,9 @@ export class Workspace extends Events<WorkspaceEvents> {
     if (i === -1) return
 
     tabs.children.splice(i, 1)
+    // A tab closed left of the shown one moves it down a place; without this
+    // the pane showed its right-hand neighbour while the active leaf stayed.
+    if (i < tabs.active) tabs.active--
     tabs.active = Math.max(0, Math.min(tabs.active, tabs.children.length - 1))
 
     if (tabs.children.length === 0) this.pruneEmpty()
@@ -177,23 +180,28 @@ export class Workspace extends Events<WorkspaceEvents> {
   }
 
   /**
-   * Close every tab in the group that holds `leafId` - or in every group.
+   * Close every tab in the group that holds `except`, but that one - or, with
+   * no `except`, every tab in every group.
    *
    * One layout change rather than one per tab, so the workspace is saved once
    * and nothing flickers through half-closed states.
    */
   closeAll(options: { except?: string } = {}): void {
     const keep = options.except
-    for (const leaf of this.leaves()) {
-      if (leaf.id === keep) continue
-      const tabs = this.tabsContaining(leaf.id)
-      if (!tabs) continue
-      const i = tabs.children.findIndex((child) => child.id === leaf.id)
-      if (i !== -1) tabs.children.splice(i, 1)
+    const group = keep === undefined ? null : this.tabsContaining(keep)
+    if (group !== null) {
+      // "Close other tabs" is about the pane it was clicked in; the panes
+      // beside it keep their tabs.
+      group.children = group.children.filter((leaf) => leaf.id === keep)
+      group.active = 0
+    } else {
+      for (const tabs of this.allTabs()) {
+        tabs.children = []
+        tabs.active = 0
+      }
     }
-    for (const tabs of this.allTabs()) tabs.active = Math.max(0, Math.min(tabs.active, tabs.children.length - 1))
     this.pruneEmpty()
-    const next = this.firstLeaf()
+    const next = keep !== undefined && group !== null ? this.getLeaf(keep) : this.firstLeaf()
     if (this.activeLeafId !== next?.id) {
       this.activeLeafId = next?.id ?? null
       this.trigger('active-leaf-change', this.activeLeaf)
@@ -274,6 +282,7 @@ export class Workspace extends Events<WorkspaceEvents> {
     const at = index ?? to.children.length
     to.children.splice(Math.max(0, Math.min(at, to.children.length)), 0, leaf)
     to.active = to.children.indexOf(leaf)
+    if (from !== to && i < from.active) from.active--
     from.active = Math.max(0, Math.min(from.active, from.children.length - 1))
     if (from.children.length === 0) this.pruneEmpty()
     this.trigger('layout-change')

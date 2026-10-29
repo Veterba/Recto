@@ -23,7 +23,7 @@ export type NotFound = { asked: string; closest: string[] }
 export type Scope =
   { kind: 'vault'; words: string } | { kind: 'folder'; folder: string; words: string } | { kind: 'topic'; topic: string; words: string }
 
-const fold = (s: string): string => s.normalize('NFC').toLowerCase().replace(/ё/g, 'е').trim()
+export const fold = (s: string): string => s.normalize('NFC').toLowerCase().replace(/ё/g, 'е').trim()
 const WORD = /[\p{L}\p{N}]+/gu
 const words = (s: string): string[] => fold(s).match(WORD) ?? []
 

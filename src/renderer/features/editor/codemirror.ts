@@ -25,6 +25,7 @@ import { findInNote, openFind } from './find'
 import { tableEditing } from './table-editor'
 import type { EditorHandle } from './editor-handle'
 import { pressOrDrag } from '../../ui/press-or-drag'
+import { isCrlf, toLf, withEndings } from '@shared/line-endings'
 
 /**
  * The CodeMirror wrapper.
@@ -221,7 +222,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
    * which is both ugly and not where anyone wants to start typing.
    */
   const bodyStart = ((): number => {
-    const lines = options.doc.split('\n')
+    const lines = options.doc.split(/\r?\n/)
     if (!/^---\s*$/.test(lines[0] ?? '')) return 0
     for (let i = 1; i < lines.length; i++) {
       if (/^---\s*$/.test(lines[i] ?? '')) {
@@ -231,6 +232,13 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
     }
     return 0
   })()
+
+  /**
+   * CodeMirror keeps `\n` inside. A CRLF note is handed back CRLF, or opening
+   * and closing one rewrote every line of it with nothing typed.
+   */
+  let crlf = isCrlf(options.doc)
+  const outward = (text: string): string => withEndings(text, crlf)
 
   const view = new EditorView({
     parent,
@@ -326,7 +334,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
           ...yieldToCommands(defaultKeymap),
         ]),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) options.onChange(update.state.doc.toString())
+          if (update.docChanged) options.onChange(outward(update.state.doc.toString()))
           // The toolbar needs to know on both, because typing can enter or
           // leave a format without the cursor being moved by hand.
           if (update.docChanged || update.selectionSet) options.onSelectionChange?.()
@@ -346,9 +354,11 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
   view.dom.addEventListener('focusin', () => options.onFocus?.())
 
   return {
-    getValue: () => view.state.doc.toString(),
+    getValue: () => outward(view.state.doc.toString()),
 
-    setValue: (next) => {
+    setValue: (value) => {
+      crlf = isCrlf(value)
+      const next = toLf(value)
       const current = view.state.doc.toString()
       if (next === current) return
       /**

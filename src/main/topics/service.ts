@@ -71,6 +71,8 @@ let retryTimer: NodeJS.Timeout | null = null
 let running = false
 let again = false
 let lastFocusTick = 0
+/** What the last search for new topics in the pool looked at (see `place`). */
+let lastPoolSearch = ''
 /** Per note, mirrored from the embedder's table: vectors' freshness and the settle record. */
 export let states = new Map<string, StateRow>()
 let model: ModelStatus = { state: 'missing', bytes: MODEL_BYTES }
@@ -275,7 +277,16 @@ async function place(ctx: Context, state: TopicsState, settledPaths: string[]): 
   const placed = new Set([...members.values()].flatMap((s) => [...s]))
   const evaluated = ctx.eligible.filter((p) => states.get(p)?.evaluatedAt != null)
   const pool = new Set(evaluated.filter((p) => !placed.has(p)))
-  if (pool.size >= 3) {
+  // The search is all pairs of notes (n² similarities), on the main thread,
+  // every pass. Its answer depends only on what is below, so when none of it
+  // changed since the last search there is nothing new to find.
+  const key = [
+    next.language,
+    next.deleted.join(','),
+    ...evaluated.map((p) => `${p}\u0000${states.get(p)?.evaluatedAt}${pool.has(p) ? '' : '\u0000placed'}`),
+  ].join('\n')
+  if (pool.size >= 3 && key !== lastPoolSearch) {
+    let unnamed = false
     const vectors = await noteVectors(evaluated)
     const kept = evaluated.filter((p) => vectors[p] !== undefined)
     const clusters = selectTopics(similarities(kept.map((p) => vectors[p]!)), kept.length)
@@ -285,12 +296,18 @@ async function place(ctx: Context, state: TopicsState, settledPaths: string[]): 
       const paths = cluster.map((i) => kept[i]!)
       if (!paths.every((p) => pool.has(p)) || isDeletedAgain(next, new Set(paths)) || lang === null) continue
       const name = await nameFor(ctx, paths, lang, centroid(cluster.map((i) => vectors[kept[i]!]!)), names)
-      if (name === null) continue
+      if (name === null) {
+        unnamed = true
+        continue
+      }
       names.add(name.toLowerCase())
       const topic: Topic = { id: newId(), name, renamedByUser: false }
       next = { ...next, topics: [...next.topics, topic], language: lang }
       for (const p of paths) next = setAssigned(next, p, [topic.id])
     }
+    // A cluster that got no name may get one next time; only a search that
+    // came to its end is not repeated.
+    if (!unnamed) lastPoolSearch = key
   }
   return next
 }
@@ -474,6 +491,19 @@ async function settledNotes(ctx: Context, now: number): Promise<string[]> {
   return due
 }
 
+/**
+ * One thing at a time reads and saves the topics state. A pass reads it, works
+ * for minutes and saves it at the end, so a rename or delete done meanwhile was
+ * saved over - and a lost rename left notes linking a name no topic had, which
+ * dissolved the topic. Commands (commands.ts) wait for the pass, and it for them.
+ */
+let lock: Promise<unknown> = Promise.resolve()
+export function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+  const run = lock.then(fn)
+  lock = run.catch(() => undefined)
+  return run
+}
+
 export async function tick(): Promise<void> {
   if (!active) return
   if (running) {
@@ -482,7 +512,7 @@ export async function tick(): Promise<void> {
   }
   running = true
   try {
-    await pass()
+    await exclusive(pass)
   } catch (err) {
     console.error('[topics]', err)
   } finally {

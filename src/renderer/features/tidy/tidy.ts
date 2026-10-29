@@ -198,6 +198,9 @@ export function planTidy(input: TidyInput): TidyPlan {
       // Do not invent a folder that already exists - that is rule 1's job, and
       // it already declined.
       if (byNormalisedName.has(normalise(name))) continue
+      // Nor one named like a reserved folder: they are left out of the map
+      // above, and on a case-insensitive disk "Tasks" IS tasks/.
+      if ([...reserved].some((r) => normalise(r) === normalise(name))) continue
       const remaining = paths.filter((path) => undecided.includes(path))
       if (remaining.length < minimum) continue
       for (const path of remaining) {

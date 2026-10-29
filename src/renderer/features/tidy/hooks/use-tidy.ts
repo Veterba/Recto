@@ -46,21 +46,39 @@ export function useTidy(
   const runTidy = useCallback(async () => {
     if (tidy === null) return
     setTidyBusy(true)
-    // Create each new folder once, even when several notes are headed for it.
-    const created = new Set<string>()
-    for (const move of tidy.moves) {
-      if (!move.creates || created.has(move.into)) continue
-      created.add(move.into)
-      await api.invoke(IPC.fsCreate, '', move.into, 'folder')
+    const failed: string[] = []
+    try {
+      // Create each new folder once, even when several notes are headed for it.
+      // A folder that could not be made is not moved into: `fs:move` would
+      // find whatever else answers to that name.
+      const created = new Set<string>()
+      const missing = new Set<string>()
+      for (const move of tidy.moves) {
+        if (!move.creates || created.has(move.into) || missing.has(move.into)) continue
+        const made = await api.invoke(IPC.fsCreate, '', move.into, 'folder')
+        if (made.ok && made.path === move.into) created.add(move.into)
+        else missing.add(move.into)
+      }
+      for (const move of tidy.moves) {
+        if (missing.has(move.into)) {
+          failed.push(move.path)
+          continue
+        }
+        // `fs:move` is the same path as a drag in the tree, so links follow.
+        const moved = await api.invoke(IPC.fsMove, move.path, move.into)
+        if (!moved.ok) failed.push(move.path)
+      }
+    } catch {
+      failed.push('…')
+    } finally {
+      await refresh()
+      noteIndexChanged()
+      setTidyBusy(false)
     }
-    for (const move of tidy.moves) {
-      // `fs:move` is the same path as a drag in the tree, so links follow.
-      await api.invoke(IPC.fsMove, move.path, move.into)
-    }
-    await refresh()
-    noteIndexChanged()
-    setTidyBusy(false)
-    setTidy(null)
+    // What did not move is said, with the plan left open, rather than the
+    // dialog closing as if it all went.
+    if (failed.length === 0) setTidy(null)
+    else setTidy({ ...tidy, moves: [], skipped: [...failed.map((path) => ({ path, reason: 'could not be moved' })), ...tidy.skipped] })
   }, [tidy, refresh])
 
   return { tidy, setTidy, tidyBusy, openTidy, runTidy }

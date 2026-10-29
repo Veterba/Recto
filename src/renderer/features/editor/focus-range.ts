@@ -51,8 +51,10 @@ function sentenceAt(doc: Text, pos: number): { from: number; to: number } {
   }
   // Skip the whitespace that separates this sentence from the last.
   while (start < end && /\s/.test(text[start] ?? '')) start++
-  // A caret sitting in that gap still belongs to the sentence just ended.
-  if (start > offset) return sentenceAt(doc, Math.max(block.from, pos - 1) === pos ? pos : pos - 1)
+  // A caret sitting in that gap still belongs to the sentence just ended. At
+  // the very start of the block there is none before it (leading spaces, as
+  // in an indented list item): the sentence after the gap is the one.
+  if (start > offset && pos > block.from) return sentenceAt(doc, pos - 1)
   return { from: block.from + start, to: block.from + end }
 }
 

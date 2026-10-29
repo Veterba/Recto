@@ -176,6 +176,9 @@ describe('TSV and CSV', () => {
   it('does not take prose for a CSV', () => {
     expect(parseDelimited('Hello, world.\nAnother line, with a comma, or two.')).toBeNull()
     expect(parseDelimited('just text')).toBeNull()
+    // One line with a comma is a sentence, not a row; one line with tabs is a row.
+    expect(parseDelimited('Oslo, Norway')).toBeNull()
+    expect(parseDelimited('Oslo\tNorway')).toEqual([['Oslo', 'Norway']])
   })
 
   it('writes TSV and a markdown table from cells', () => {

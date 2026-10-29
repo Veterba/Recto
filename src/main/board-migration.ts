@@ -64,9 +64,18 @@ function writeFile(file: string, text: string): void {
 
 export function migrateBoards(vault: string, names: Readonly<Record<string, string>> = {}, now: Date = new Date()): BoardMigrationResult {
   const boardsJson = readBoardsJson(vault)
+  const record = path.join(vault, MIGRATION_RECORD)
+  // Once per vault. After a run, or a first open that found nothing to move,
+  // only boards.json coming back runs it again. Without this, a note with a
+  // `board:` key of its own (or synced from Obsidian) was taken for an old
+  // card on every open and lost its keys, and every note was read to see.
+  if (boardsJson === undefined && fs.existsSync(record)) return { state: 'none' }
   const notes = notesOf(vault)
   const plan = planMigration(boardsJson, notes, names)
-  if (plan.done) return { state: 'none' }
+  if (plan.done) {
+    writeFile(record, `${JSON.stringify({ state: 'none' } satisfies BoardMigrationResult, null, 2)}\n`)
+    return { state: 'none' }
+  }
   if (plan.conflicts.length > 0) return { state: 'conflicts', conflicts: plan.conflicts }
 
   const changed = [...plan.edits.map((e) => e.path), ...(boardsJson === undefined ? [] : [BOARDS_JSON])]

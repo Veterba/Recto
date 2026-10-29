@@ -19,6 +19,7 @@ beforeEach(() => {
           files.set(args[0]!, args[1]!)
           return { ok: true }
         }
+        if (channel === IPC.fsRename) return { ok: false, error: 'not in this test' }
         if (channel === IPC.fsCreate) {
           const path = `${args[0]}/${args[1]}`
           files.set(path, '')
@@ -46,5 +47,16 @@ describe('appending turns', () => {
     expect(messages.every((m) => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$/.test(m.at ?? ''))).toBe(true)
     expect(messages[1]).toMatchObject({ content: 'Compost.', model: 'qwen3.5:9b' })
     expect(files.get(path)).toContain('"model":"qwen3.5:9b"')
+  })
+})
+
+describe('retitling', () => {
+  it('reads the file again first, so a question main added meanwhile is kept', async () => {
+    const { model, path } = await topicWithAnswer()
+    // Main appends the next question while the title is being asked for.
+    files.set(path, `${files.get(path)!}\n\n**You:** And how often to turn it?\n`)
+    await model.retitle(path, 'Compost mix')
+    expect(files.get(path)).toContain('And how often to turn it?')
+    expect(files.get(path)).toContain('Compost mix')
   })
 })

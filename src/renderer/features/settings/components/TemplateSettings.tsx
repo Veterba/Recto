@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { commands } from '../../../app/commands'
 import { normaliseFolder, isInFolder } from '@shared/templates'
 import type { SettingsDeps } from '../settings-deps'
@@ -23,6 +23,8 @@ export function FolderField({
 }): React.ReactElement {
   const [draft, setDraft] = useState(value)
   useEffect(() => setDraft(value), [value])
+  // Escape blurs, and the blur would commit what was typed (see NoteTitle).
+  const cancelled = useRef(false)
   const normalised = normaliseFolder(draft)
   const invalid = draft.trim() !== '' && normalised === null
 
@@ -47,11 +49,15 @@ export function FolderField({
       aria-label={label}
       aria-invalid={invalid}
       onChange={(event) => setDraft(event.target.value)}
-      onBlur={commit}
+      onBlur={() => {
+        if (cancelled.current) cancelled.current = false
+        else commit()
+      }}
       onKeyDown={(event) => {
         event.stopPropagation()
         if (event.key === 'Enter') event.currentTarget.blur()
         if (event.key === 'Escape') {
+          cancelled.current = true
           setDraft(value)
           event.currentTarget.blur()
         }

@@ -43,6 +43,18 @@ describe('what tidy leaves alone', () => {
     expect(result.moves).toEqual([])
   })
 
+  it('never invents a folder named like a reserved one', () => {
+    // Two notes tagged #tasks would make a new folder "Tasks" - which on a Mac
+    // disk is the card folder itself.
+    const result = plan({
+      notes: ['a.md', 'b.md'],
+      folders: ['tasks'],
+      reserved: ['tasks'],
+      context: ctx({ 'a.md': { tags: ['#tasks'] }, 'b.md': { tags: ['#tasks'] } }),
+    })
+    expect(result.moves).toEqual([])
+  })
+
   it('never moves a note that is already inside a reserved folder', () => {
     const result = plan({ notes: ['tasks/card.md'], folders: ['tasks', 'work'], reserved: ['tasks'] })
     expect(result.moves).toEqual([])

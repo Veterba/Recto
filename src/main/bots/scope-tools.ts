@@ -1,7 +1,7 @@
 import type { CatalogNote } from '../../shared/indexer-protocol'
 import { isDaily } from '../../shared/tasks'
 import type { NoteCard } from './cards'
-import { nameSimilarity, type Scope } from './resolve'
+import { fold, nameSimilarity, type Scope } from './resolve'
 
 /**
  * The tools for questions about many notes at once - "improve my math
@@ -133,15 +133,26 @@ export function vaultMap(notes: readonly ScopeNote[], cards: ReadonlyMap<string,
     orphans.map((n) => n.title).join('; ') || 'none',
   )
 
-  const looks: string[] = []
-  for (let i = 0; i < notes.length; i++)
-    for (let j = i + 1; j < notes.length; j++) {
+  // Look-alikes (similarity 0.8 or more) are within a fifth of each other's
+  // length, since the edit distance is at least the difference. So titles are
+  // taken shortest first and each is compared only with those close enough in
+  // length: every pair was n² edit distances on the main thread, minutes on a
+  // vault of thousands. Reported in note order, as before.
+  const byLength = notes.map((n, i) => ({ i, length: fold(n.title).length })).sort((a, b) => a.length - b.length)
+  const pairs: [number, number][] = []
+  for (let x = 0; x < byLength.length; x++) {
+    const short = byLength[x]!
+    for (let y = x + 1; y < byLength.length && byLength[y]!.length * 0.8 <= short.length; y++) {
+      const i = Math.min(short.i, byLength[y]!.i)
+      const j = Math.max(short.i, byLength[y]!.i)
       const a = notes[i]!.title
       const b = notes[j]!.title
       // "Unit 4" and "Unit 5" are a series, not a duplicate.
       const series = a.replace(/\d+/g, '#') === b.replace(/\d+/g, '#')
-      if (a !== b && !series && !/^\d{4}-/.test(a) && nameSimilarity(a, b) >= 0.8) looks.push(`"${a}" ~ "${b}"`)
+      if (a !== b && !series && !/^\d{4}-/.test(a) && nameSimilarity(a, b) >= 0.8) pairs.push([i, j])
     }
+  }
+  const looks = pairs.sort((p, q) => p[0] - q[0] || p[1] - q[1]).map(([i, j]) => `"${notes[i]!.title}" ~ "${notes[j]!.title}"`)
   if (looks.length > 0) lines.push('', '### Look-alike titles', looks.join('; '))
 
   const dated = notes.filter((n) => /^\d{4}-\d{2}-\d{2}/.test(n.title)).length

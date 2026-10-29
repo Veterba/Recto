@@ -16,6 +16,7 @@ import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutt
 import { tags } from '@lezer/highlight'
 import { extensionOf } from '@shared/file-kind'
 import { findInNote, openFind } from './find'
+import { isCrlf, toLf, withEndings } from '@shared/line-endings'
 
 /**
  * The code editor: a vault file that is not a note - json, yaml, a script, a
@@ -114,6 +115,9 @@ export function createCodeEditor(parent: HTMLElement, options: CodeOptions): Cod
   const ext = extensionOf(options.path)
   const jsonl = ext === 'jsonl' || ext === 'ndjson'
 
+  // CodeMirror keeps `\n` inside; a CRLF file is handed back CRLF.
+  let crlf = isCrlf(options.doc)
+  const outward = (text: string): string => withEndings(text, crlf)
   const extensions: Extension[] = [
     lineNumbers(),
     foldGutter(),
@@ -133,7 +137,7 @@ export function createCodeEditor(parent: HTMLElement, options: CodeOptions): Cod
     EditorView.editable.of(!options.readOnly),
     keymap.of([...historyKeymap, ...foldKeymap, indentWithTab, ...defaultKeymap]),
     EditorView.updateListener.of((update) => {
-      if (update.docChanged) options.onChange(update.state.doc.toString())
+      if (update.docChanged) options.onChange(outward(update.state.doc.toString()))
     }),
   ]
 
@@ -149,8 +153,10 @@ export function createCodeEditor(parent: HTMLElement, options: CodeOptions): Cod
   }
 
   return {
-    getValue: () => view.state.doc.toString(),
-    setValue: (next) => {
+    getValue: () => outward(view.state.doc.toString()),
+    setValue: (value) => {
+      crlf = isCrlf(value)
+      const next = toLf(value)
       if (next === view.state.doc.toString()) return
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next } })
     },

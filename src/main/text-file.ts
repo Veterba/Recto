@@ -8,7 +8,7 @@
  * around it.
  *
  * Two ways a file fails: a NUL byte in the first 8 KB (no text format uses one,
- * every image and PDF does), or bytes that are not valid UTF-8 - which is a
+ * every image and PDF does), or bytes anywhere that are not valid UTF-8 - which is a
  * note saved in UTF-16 or a legacy encoding, not a damaged one. They get
  * different messages, because the second is worth explaining.
  */
@@ -24,12 +24,13 @@ type NotText = 'binary' | 'encoding'
  * "Refused to overwrite a file that is not text".
  */
 export function notTextReason(data: Uint8Array, partial = false): NotText | null {
-  const head = data.subarray(0, SNIFF)
-  if (head.includes(0)) return 'binary'
+  if (data.subarray(0, SNIFF).includes(0)) return 'binary'
   try {
-    // `stream: true` so a multi-byte character cut off at the end of what we
-    // looked at does not count as invalid.
-    new TextDecoder('utf-8', { fatal: true }).decode(head, { stream: partial || data.length > SNIFF })
+    // All of it, not just the head: a file whose invalid bytes started after
+    // the first 8 KB was opened, decoded to U+FFFD, and the next save wrote
+    // the loss back. `stream` when `data` is only the start of the file, so a
+    // multi-byte character cut off at the end does not count as invalid.
+    new TextDecoder('utf-8', { fatal: true }).decode(data, { stream: partial })
     return null
   } catch {
     return 'encoding'

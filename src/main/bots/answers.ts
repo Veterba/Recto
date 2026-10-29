@@ -103,9 +103,11 @@ async function readTopic(path: string, bot: Bot): Promise<TopicText | null> {
   }
 }
 
+/** Throws when the write fails: an answer that never reached the file must not end as done. */
 async function writeTopic(path: string, t: TopicText): Promise<void> {
   markSelfWrite(path)
-  await vaultFs.writeFile(path, topicFile(t.meta, t.extra, t.body))
+  const written = await vaultFs.writeFile(path, topicFile(t.meta, t.extra, t.body))
+  if (!written.ok) throw new Error(`Could not save the topic: ${written.error ?? 'unknown error'}`)
 }
 
 /**
@@ -137,14 +139,16 @@ export async function send(request: {
     const created = await vaultFs.create(botThreadFolder(bot.id), name, 'file')
     if (!created.ok) return { ok: false, error: 'Could not start a topic.' }
     topic = created.path
-    await writeTopic(topic, { meta, extra: [], body: appendTurns('', [turn], bot.name) })
+    const first = await writeTopic(topic, { meta, extra: [], body: appendTurns('', [turn], bot.name) }).catch((err: unknown) => err)
+    if (first instanceof Error) return { ok: false, error: first.message }
     return { ok: true, topic, job: jobs.enqueue({ botId: bot.id, topic, model, question: null, lang: langOfText(text) }) }
   }
   if (jobs.busy(topic))
     return { ok: true, topic, job: jobs.enqueue({ botId: bot.id, topic, model, question: text, lang: langOfText(text) }) }
   const current = await readTopic(topic, bot)
   if (current === null) return { ok: false, error: 'That topic is gone.' }
-  await writeTopic(topic, { ...current, body: appendTurns(current.body, [turn], bot.name) })
+  const added = await writeTopic(topic, { ...current, body: appendTurns(current.body, [turn], bot.name) }).catch((err: unknown) => err)
+  if (added instanceof Error) return { ok: false, error: added.message }
   return { ok: true, topic, job: jobs.enqueue({ botId: bot.id, topic, model, question: null, lang: langOfText(text) }) }
 }
 
@@ -276,7 +280,9 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
       controls.update({ state: 'streaming', text })
       if (Date.now() - lastWrite > WRITE_EVERY_MS) {
         lastWrite = Date.now()
-        writing = writing.then(() => save(false))
+        // A failed in-between save is not the end: the final one below is
+        // what must land, and it throws if it does not.
+        writing = writing.then(() => save(false)).catch((err: unknown) => console.error('[bots] save', err))
       }
     }
   } catch (err) {

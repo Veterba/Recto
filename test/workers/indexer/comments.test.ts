@@ -49,4 +49,18 @@ describe('HTML comments in the index', () => {
     const targets = requireDb().prepare('SELECT target_text FROM links WHERE source_path = ?').all('Ideas.md') as { target_text: string }[]
     expect(targets.map((t) => t.target_text)).toEqual(['Soil'])
   })
+
+  it('a backlink shows the line the link is on, in a note with frontmatter', () => {
+    vault({ 'Plan.md': '---\ntags: [a]\nup: "[[Home]]"\n---\n# Plan\n\nWater the [[Soil]] daily.\n' })
+    const rows = requireDb()
+      .prepare('SELECT target_text, context FROM links WHERE source_path = ? ORDER BY target_text')
+      .all('Plan.md') as {
+      target_text: string
+      context: string
+    }[]
+    expect(rows).toEqual([
+      { target_text: 'Home', context: 'up: "[[Home]]"' },
+      { target_text: 'Soil', context: 'Water the [[Soil]] daily.' },
+    ])
+  })
 })

@@ -12,8 +12,10 @@ export function App(): React.ReactElement {
     void api.invoke(IPC.appStartupState).then(setState)
   }, [])
 
+  /** Unmount first, like `switchVault`: open notes flush on unmount, and main must still have the vault open. */
   const closeVault = useCallback(() => {
-    void api.invoke(IPC.vaultClose).then(setState)
+    setState(null)
+    void new Promise((resolve) => setTimeout(resolve, 150)).then(() => api.invoke(IPC.vaultClose)).then(setState)
   }, [])
 
   /**

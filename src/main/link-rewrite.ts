@@ -15,6 +15,7 @@
  */
 
 import { CODE_FENCE } from '../shared/parse'
+import { isCrlf } from '../shared/line-endings'
 
 const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
 /** `[text](target)`, the other way to write a link. `!` in front is an embed. */
@@ -130,5 +131,6 @@ export function rewriteWikiLinks(text: string, oldPath: string, newPath: string,
     })
   })
 
-  return { text: out.join('\n'), count }
+  // A CRLF note stays CRLF: only the links change, not every line ending.
+  return { text: out.join(isCrlf(text) ? '\r\n' : '\n'), count }
 }

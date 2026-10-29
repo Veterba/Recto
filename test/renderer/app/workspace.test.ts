@@ -231,6 +231,26 @@ describe('tabs that outlive their notes', () => {
     expect(workspace.activeLeaf).toBeNull()
   })
 
+  it('closing a tab left of the shown one keeps showing the same tab', () => {
+    const workspace = withNotes(['a.md', 'b.md', 'c.md'])
+    const [a, b] = workspace.leaves()
+    workspace.setActiveLeaf(b!.id)
+    workspace.closeLeaf(a!.id)
+    const tabs = workspace.tabsContaining(b!.id)!
+    expect(tabs.children[tabs.active]?.id).toBe(b!.id)
+    expect(workspace.activeLeaf?.id).toBe(b!.id)
+  })
+
+  it('"Close other tabs" closes only the pane it is clicked in', () => {
+    const workspace = withNotes(['a.md', 'b.md'])
+    const b = workspace.leaves()[1]!
+    const right = workspace.splitLeaf(b.id, 'vertical')!
+    workspace.openView('markdown', { path: 'c.md' }, { inTabs: workspace.tabsContaining(right.id)!.id })
+    workspace.closeAll({ except: b.id })
+    expect(workspace.leaves().map((leaf) => leaf.state['path'])).toEqual(['b.md', 'b.md', 'c.md'])
+    expect(workspace.activeLeaf?.id).toBe(b.id)
+  })
+
   it('can keep one tab while clearing the others', () => {
     const workspace = withNotes(['a.md', 'b.md', 'c.md'])
     const keep = workspace.leaves()[1]!

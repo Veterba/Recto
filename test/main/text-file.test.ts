@@ -35,6 +35,13 @@ describe('looksBinary', () => {
   })
 })
 
+describe('the whole file is checked, not its first 8 KB', () => {
+  it('finds invalid UTF-8 past the sniff', () => {
+    const late = new Uint8Array([...text('a'.repeat(9000)), 0xff, 0xfe, ...text('tail')])
+    expect(notTextReason(late)).toBe('encoding')
+  })
+})
+
 describe('the 8 KB boundary can never refuse a real note again', () => {
   /**
    * The bug that broke saving one note: the write guard reads exactly 8192

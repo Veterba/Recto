@@ -18,6 +18,7 @@ import {
   SAMPLE_MEMBERS,
   active,
   putState,
+  exclusive,
 } from './service'
 import { topicLink, byName, TOPICS_PROPERTY, pending, allowed, renamePath } from './state'
 import * as vaultFs from '../vault-fs'
@@ -51,7 +52,9 @@ const INVALID_NAME = /[[\]|#^/\\:]/
  * Rename a topic everywhere: every `[[topics/Old]]` becomes `[[topics/New]]`
  * through the link rewrite, and the topic is never renamed automatically again.
  */
-export async function rename(id: string, name: string): Promise<{ ok: boolean; error?: string }> {
+export const rename = (id: string, name: string): Promise<{ ok: boolean; error?: string }> => exclusive(() => renameNow(id, name))
+
+async function renameNow(id: string, name: string): Promise<{ ok: boolean; error?: string }> {
   const clean = name.trim().replace(/\s+/g, ' ')
   if (clean === '' || INVALID_NAME.test(clean)) return { ok: false, error: 'A topic name cannot be empty or contain [ ] | # ^ / \\ :' }
   const state = readTopics()
@@ -83,7 +86,9 @@ export async function rename(id: string, name: string): Promise<{ ok: boolean; e
 }
 
 /** Delete a topic: out of every note's `topics`, and never created again. */
-export async function remove(id: string): Promise<void> {
+export const remove = (id: string): Promise<void> => exclusive(() => removeNow(id))
+
+async function removeNow(id: string): Promise<void> {
   const state = readTopics()
   const topic = state.topics.find((t) => t.id === id)
   if (topic === undefined) return
@@ -118,7 +123,9 @@ export async function remove(id: string): Promise<void> {
 }
 
 /** "Rebuild topics": cluster again, keeping ids and names where a cluster continues an old topic. */
-export async function rebuild(): Promise<void> {
+export const rebuild = (): Promise<void> => exclusive(rebuildNow)
+
+async function rebuildNow(): Promise<void> {
   const ctx = await context(readSettings())
   const now = Date.now()
   const state = reconcile(ctx, readTopics())
@@ -170,7 +177,9 @@ export function seen(): void {
 }
 
 /** Take back everything the most recent run changed (see runs.undoLast). */
-export async function undoLastRun(): Promise<number> {
+export const undoLastRun = (): Promise<number> => exclusive(undoLastRunNow)
+
+async function undoLastRunNow(): Promise<number> {
   const state = readTopics()
   const run = state.runs.at(-1)
   if (run === undefined) return 0
@@ -187,7 +196,9 @@ export async function undoLastRun(): Promise<number> {
 }
 
 /** A note moved in the app: its record moves with it. The link rewrite has already fixed the text. */
-export async function moved(from: string, to: string): Promise<void> {
+export const moved = (from: string, to: string): Promise<void> => exclusive(() => movedNow(from, to))
+
+async function movedNow(from: string, to: string): Promise<void> {
   saveTopics(renamePath(readTopics(), from, to))
   if (!active || states.size === 0) return
   const map = (p: string): string => (p === from ? to : p.startsWith(`${from}/`) ? `${to}${p.slice(from.length)}` : p)

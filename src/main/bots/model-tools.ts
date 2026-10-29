@@ -219,7 +219,9 @@ export async function* answerWithTools(
       } else asked = event.calls
     }
     if (LOOKS_LIKE_A_CALL.test(wrote)) options.result.parseFailures++
-    if (asked.length === 0) return
+    // Past the budget no tools are offered, but a local model may ask anyway;
+    // running none and asking again looped for as long as it kept asking.
+    if (asked.length === 0 || used >= max) return
     turns.push({ role: 'assistant', content: wrote, tool_calls: asked.map((a) => ({ function: { name: a.name, arguments: a.args } })) })
     for (const call of asked.slice(0, max - used)) {
       used++

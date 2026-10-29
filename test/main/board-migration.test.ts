@@ -105,6 +105,27 @@ describe('the boards migration on the fixture vault', () => {
     expect(tree(vault)).toEqual(after)
   })
 
+  it('does not run again for a note that has a `board:` key of its own', () => {
+    const vault = copy()
+    expect(migrateBoards(vault).state).toBe('migrated')
+    const own = '---\nboard: Marketing\nstatus: draft\n---\n# Campaign\n'
+    fs.writeFileSync(path.join(vault, 'Campaign.md'), own)
+    expect(migrateBoards(vault)).toEqual({ state: 'none' })
+    expect(read(vault, 'Campaign.md')).toBe(own)
+    expect(fs.existsSync(path.join(vault, 'tasks/Main.md'))).toBe(false)
+  })
+
+  it('a vault with nothing to move is marked done on its first open', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-boards-'))
+    dirs.push(base)
+    fs.writeFileSync(path.join(base, 'A.md'), '# A')
+    expect(migrateBoards(base)).toEqual({ state: 'none' })
+    expect(JSON.parse(read(base, MIGRATION_RECORD))).toEqual({ state: 'none' })
+    fs.writeFileSync(path.join(base, 'B.md'), '---\nboard: x\n---\n')
+    expect(migrateBoards(base)).toEqual({ state: 'none' })
+    expect(read(base, 'B.md')).toBe('---\nboard: x\n---\n')
+  })
+
   it('asks for another name when a note has the board\'s, and writes nothing until then', () => {
     const vault = copy()
     fs.writeFileSync(path.join(vault, 'Launch.md'), '# Launch\n')

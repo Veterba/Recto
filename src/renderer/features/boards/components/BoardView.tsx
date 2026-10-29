@@ -419,8 +419,13 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
           onConfirm={async (target) => {
             const column = deleting
             setDeleting(null)
-            // The cards move first, one line at a time; the column goes once it is empty.
-            for (const card of all.filter((c) => c.column === column.id)) await move(card.key, { column: target, index: Number.MAX_SAFE_INTEGER })
+            // The cards move first, one line at a time; the column goes once it
+            // is empty. Last card first: a line of text is keyed by its place
+            // in the column, and moving an earlier one shifted the keys after
+            // it, so cards were skipped. Each goes in at the same slot, which
+            // keeps their order.
+            const at = all.filter((c) => c.column === target).length
+            for (const card of all.filter((c) => c.column === column.id).reverse()) await move(card.key, { column: target, index: at })
             await editBoard((t) => {
               const lane = parseKanban(t).lanes.findIndex((l, i) => i === column.index && l.title === column.name)
               return lane === -1 ? t : setLook(removeLane(t, lane), column.name, { drop: true })

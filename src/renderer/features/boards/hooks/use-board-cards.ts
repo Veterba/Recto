@@ -208,8 +208,12 @@ export function useBoardCards(path: string): {
         try {
           const read = await api.invoke(IPC.fsRead, path)
           let target = next
-          if (read.ok && read.content !== base.current) {
-            // Changed under us: the same change, made to what is there now.
+          if (read.ok) {
+            // Always made again to what is there now, not only when the file
+            // changed under us: `next` was computed on the screen's text, which
+            // assumes every earlier queued write landed. One that failed or was
+            // refused left the file different, and writing `next` then brought
+            // its change back or wrote over an edit made meanwhile.
             try {
               target = change(read.content)
             } catch (err) {
@@ -246,28 +250,37 @@ export function useBoardCards(path: string): {
    * Read, edit, show, write one card's note. `shown` takes back whatever the
    * caller already put on screen for the same gesture.
    */
+  const cardQueues = useRef(new Map<string, Promise<boolean>>())
   const editCard = useCallback(
-    async (cardPath: string, edit: (text: string) => string, shown?: () => void): Promise<boolean> => {
-      const read = await api.invoke(IPC.fsRead, cardPath)
-      if (!read.ok) {
-        shown?.()
-        setNotice(`Couldn't read the card: ${read.error}`)
-        return false
+    (cardPath: string, edit: (text: string) => string, shown?: () => void): Promise<boolean> => {
+      const run = async (): Promise<boolean> => {
+        const read = await api.invoke(IPC.fsRead, cardPath)
+        if (!read.ok) {
+          shown?.()
+          setNotice(`Couldn't read the card: ${read.error}`)
+          return false
+        }
+        const next = edit(read.content)
+        if (next === read.content) return true
+        const undo = show(cardPath, cardFields(next))
+        const written = await api.invoke(IPC.fsWrite, cardPath, next)
+        if (!written.ok) {
+          undo()
+          shown?.()
+          setNotice(`Couldn't save the card, so the change was undone. ${written.error ?? ''}`.trim())
+          return false
+        }
+        noteIndexChanged()
+        // A field or a stamp adds no words; text typed in the panel does.
+        noteEdited(cardPath, read.content, next)
+        return true
       }
-      const next = edit(read.content)
-      if (next === read.content) return true
-      const undo = show(cardPath, cardFields(next))
-      const written = await api.invoke(IPC.fsWrite, cardPath, next)
-      if (!written.ok) {
-        undo()
-        shown?.()
-        setNotice(`Couldn't save the card, so the change was undone. ${written.error ?? ''}`.trim())
-        return false
-      }
-      noteIndexChanged()
-      // A field or a stamp adds no words; text typed in the panel does.
-      noteEdited(cardPath, read.content, next)
-      return true
+      // One at a time per card note: two edits close together (the notes
+      // debounce and a field, or a drop into Done) both read the same text,
+      // and the second write dropped the first edit.
+      const result = (cardQueues.current.get(cardPath) ?? Promise.resolve(true)).then(run, run)
+      cardQueues.current.set(cardPath, result)
+      return result
     },
     [show],
   )

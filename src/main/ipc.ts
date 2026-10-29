@@ -36,7 +36,7 @@ function handle<C extends keyof IpcApi>(
  * In memory only and capped: this is for "that rename was a mistake, put it
  * back" in the next minute, not a history feature.
  */
-const renameUndo = new Map<string, { from: string; to: string; entries: { path: string; before: string }[] }>()
+const renameUndo = new Map<string, { from: string; to: string; entries: vaultFs.RewrittenFile[] }>()
 
 /** Restart the watcher and the index whenever the open vault changes. */
 /** What the boards migration did when this vault opened, until the app has said so. */
@@ -252,7 +252,7 @@ export function registerIpc(): void {
       if (moved.ok) current = moved.path
     }
     const back = await vaultFs.rename(current, entry.to.slice(entry.to.lastIndexOf('/') + 1))
-    const restored = await vaultFs.restoreContents(entry.entries)
+    const { restored } = await vaultFs.restoreContents(entry.entries)
     return { ok: back.ok, restored }
   })
   // Deleting from the UI archives; `fs:trash` remains for a real, immediate delete.

@@ -4,6 +4,37 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.52.2 — 2026-10-29
+### Fixed
+- A note that can't be saved (disk full, no permission) keeps your text in the editor, says why next to "Unsaved", and tries again on the next keystroke, ⌘S or closing the tab; before, the editor was replaced by an error and the unsaved text was lost. Renaming such a note is refused instead of moving the old file.
+- Notes and files with Windows line endings (CRLF) stay that way: opening and closing one, editing a property or a card field, the boards migration and a rename's link updates no longer rewrite every line to LF.
+- A file whose invalid UTF-8 starts after its first 8 KB is no longer opened and saved back with those characters lost; it's refused like any other non-UTF-8 file.
+- Two saves to the same note at once (an autosave and a board or card edit) no longer collide on one temporary file.
+- A rename's link updates are written safely, like any save, and undoing the rename leaves alone a note you edited since, instead of putting its old text back over your changes.
+- Renaming or deleting a topic while topics were running no longer gets undone when the run ends, which could also strip the renamed topic from every note.
+- A bot's answer that can't be written to its topic ends with an error instead of "done" with nothing saved, and a question that can't be written is refused.
+- Naming or renaming a chat topic no longer writes an older copy over a question just sent, and waits while an answer is being written.
+- A board change after one that failed no longer brings the failed change back or writes over an edit made in Obsidian meanwhile; edits to one card's note made close together (notes and a field, or a move into Done) no longer drop one another.
+- The boards migration runs once per vault: a note with a `board:` key of its own no longer loses its `board`, `status` and `order` keys on every open, and opening a vault no longer reads every note to check.
+- Pressing Enter with Cancel focused in a delete confirmation cancels; before, it deleted.
+- Pressing Escape while renaming a note from its title, or in a folder field in Settings, puts the old name back instead of renaming to what was typed.
+- Closing a tab to the left of the one you're on keeps showing that tab; before, the pane jumped to its neighbour while ⌘W and the breadcrumb still acted on the hidden one.
+- "Close other tabs" closes only the tabs in that pane, not every pane's.
+- Closing a vault right after typing no longer loses the last keystrokes.
+- Renaming a note or folder when only the case changes (`ideas` to `Ideas`) works; before, it said the name already existed.
+- Pasting a sentence with a comma ("Oslo, Norway") into a table cell pastes it into that cell, instead of splitting it across the next cell too.
+- Backlinks show the line the link is on in notes with frontmatter; before, they showed a line further down or nothing.
+- Sentence focus no longer stops working at the start of an indented line.
+- A local bot model that keeps asking for tools after its last allowed call no longer keeps the answer running until stopped.
+- Purging from the archive only ever trashes items the archive holds.
+- Tidy no longer files notes into the tasks, templates or other reserved folders by making a new folder of the same name; a move that fails is listed in the dialog instead of the dialog closing as if it all went, and an error no longer leaves it stuck.
+- Deleting a column moves every card out, lines of text included, in their order; before, some text cards were skipped and the column couldn't be deleted.
+- Dragging a card from a board onto the file tree no longer moves its note out of tasks/.
+- Writing the word "constructor" no longer breaks the words-written count.
+- Switching Live Preview off shows hidden frontmatter, code fences, tables and maths at once, not after the caret moves; a sentence that starts with three backticks is no longer hidden as a code fence.
+- The graph no longer restarts its layout every time you open another note (unless it shows only the open note's neighbours).
+- Topics no longer search the whole vault for new topics on every run when nothing changed since the last search, and asking a bot what to change in a large vault no longer freezes the app comparing every note title with every other.
+
 ## v0.52.1 — 2026-10-19
 ### Changed
 - "Words written" is the words you added and kept, not the change in the vault's total: each save in the editor or a card's panel counts the words it brought in, and a word you typed and deleted again comes off. Deleting text that was there before that day takes nothing off, so it never goes below zero; moving text changes nothing; Recto's own writes (migrations, link updates on rename, `completed` stamps, board moves) and other apps' changes never count. It shows the week's words with today's beside them.

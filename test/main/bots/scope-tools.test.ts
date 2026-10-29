@@ -14,6 +14,7 @@ import {
   type ScopeNote,
 } from '../../../src/main/bots/scope-tools'
 import { codeCard, languageOfText, mainHeadings } from '../../../src/main/bots/cards'
+import { nameSimilarity } from '../../../src/main/bots/resolve'
 import { dailyThoughts, subjectFolder } from '../../../src/main/bots/tools'
 
 const DAILY =
@@ -64,6 +65,41 @@ describe('vault_map', () => {
     expect(map).toContain('notes opening with an italic "*Note about …*" line: 2')
     expect(map).toContain('- Daily: Tasks / Option tasks / Notes / Thoughts / What I Learned (Option)')
     expect(map).toContain('Travel · plan (1)')
+  })
+})
+
+describe('vault_map look-alikes on a larger vault', () => {
+  it('finds exactly the pairs comparing every title with every other would, in note order', () => {
+    const words = [
+      'plan',
+      'garden',
+      'budget',
+      'meeting',
+      'transcript',
+      'pipeline',
+      'notes',
+      'ideas',
+      'reading',
+      'travel',
+      'recipes',
+      'workout',
+    ]
+    const titles: string[] = []
+    for (const a of words) for (const b of words) if (a !== b) titles.push(`${a} ${b}`)
+    // Typo'd twins: two letters swapped, as in "Trasncript".
+    for (let i = 0; i < titles.length; i += 9) titles.push(titles[i]!.replace(/(\w)(\w)/, '$2$1'))
+    const notes = titles.map((t, i) => n(`F${i}/${t}.md`, 'x'))
+    const expected: string[] = []
+    for (let i = 0; i < notes.length; i++)
+      for (let j = i + 1; j < notes.length; j++) {
+        const a = notes[i]!.title
+        const b = notes[j]!.title
+        const series = a.replace(/\d+/g, '#') === b.replace(/\d+/g, '#')
+        if (a !== b && !series && !/^\d{4}-/.test(a) && nameSimilarity(a, b) >= 0.8) expected.push(`"${a}" ~ "${b}"`)
+      }
+    expect(expected.length).toBeGreaterThan(0)
+    const line = vaultMap(notes, new Map()).split('### Look-alike titles\n')[1]?.split('\n')[0] ?? ''
+    expect(line).toBe(expected.join('; '))
   })
 })
 

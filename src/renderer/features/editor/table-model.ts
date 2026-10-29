@@ -331,8 +331,10 @@ export function parseDelimited(text: string): string[][] | null {
   const widths = new Set(rows.map((r) => r.length))
   const columns = Math.max(...rows.map((r) => r.length))
   if (columns < 2 && rows.length < 2) return null
-  // Prose with a comma in it is not a CSV: every row must agree on the width.
-  if (separator === ',' && (widths.size > 1 || columns < 2)) return null
+  // Prose with a comma in it is not a CSV: every row must agree on the width,
+  // and one line agrees with itself trivially - "Oslo, Norway" pasted into a
+  // cell was split across two. A single row only counts when it has tabs.
+  if (separator === ',' && (widths.size > 1 || columns < 2 || rows.length < 2)) return null
   return rows.map((r) => [...r.map((c) => c.trim()), ...Array<string>(columns - r.length).fill('')])
 }
 

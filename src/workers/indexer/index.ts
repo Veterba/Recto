@@ -97,10 +97,15 @@ export function writeNote(relative: string, content: string, mtime: number, size
   const insertLink = handle.prepare(
     'INSERT INTO links (source_path, target_text, target_path, heading, alias, line, context, property) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   )
+  // A link's line counts from the top of the file; the body starts after the
+  // frontmatter. Read the body's own lines (comments blanked) for body links,
+  // and the file's for links in properties.
+  const fileLines = content.split(/\r?\n/)
   const bodyLines = parsed.body.split('\n')
+  const bodyStart = fileLines.length - bodyLines.length
   for (const link of parsed.links) {
     // Trim the context: a backlinks row shows a sentence, not a paragraph.
-    const raw = bodyLines[link.line] ?? ''
+    const raw = (link.line >= bodyStart ? bodyLines[link.line - bodyStart] : fileLines[link.line]) ?? ''
     const context = raw.trim().slice(0, 300)
     insertLink.run(relative, link.target, null, link.heading, link.alias, link.line, context, link.property ?? null)
   }
