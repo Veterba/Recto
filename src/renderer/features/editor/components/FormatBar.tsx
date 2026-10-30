@@ -78,12 +78,14 @@ type Props = {
   shortcutFor: (commandId: string) => string | null
   /** Insert a table of this size at the caret. */
   onInsertTable: (columns: number, rows: number) => void
+  /** A glass bar floating over the note while you edit it, rather than a row of its own. */
+  floating?: boolean
 }
 
-export function FormatBar({ active, onRun, shortcutFor, onInsertTable, trailing }: Props): React.ReactElement {
+export function FormatBar({ active, onRun, shortcutFor, onInsertTable, trailing, floating = false }: Props): React.ReactElement {
   const [picker, setPicker] = useState<{ anchor: DOMRect; trigger: HTMLElement } | null>(null)
   return (
-    <div className="formatbar" role="toolbar" aria-label="Formatting">
+    <div className={`formatbar${floating ? ' formatbar--floating glass-surface' : ''}`} role="toolbar" aria-label="Formatting">
       {/*
         The formatting buttons scroll on their own, so a narrow window pushes
         bold and italic out of sight rather than the focus and writing controls

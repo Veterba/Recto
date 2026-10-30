@@ -100,17 +100,22 @@
   border-bottom: 1px solid var(--border);
 }
 
+/*
+ * The bar is the tray the tabs sit in: grey, with a hairline along its foot.
+ * The hairline is an inset shadow rather than a border, so the tab you are on
+ * paints over it and runs straight into the page below.
+ */
 .tabs__bar {
   flex: none;
   display: flex;
   flex-direction: row;
   align-items: stretch;
   gap: var(--size-1);
-  padding: var(--size-1) var(--size-1) 0;
-  background: var(--tint);
-  border-bottom: 1px solid var(--border);
+  padding: 6px var(--size-2) 0;
+  background: var(--tabbar);
+  box-shadow: inset 0 -1px 0 var(--border);
 }
-/* The tabs scroll; the button after them does not - see `.tabs__clear`. */
+/* The tabs scroll; the buttons after them do not - see `.tabs__clear`. */
 .tabs__strip {
   flex: 1;
   min-width: 0;
@@ -118,27 +123,37 @@
   flex-direction: row;
   align-items: stretch;
   gap: 2px;
+  /* Room for the active tab's feet at either end of the row. */
+  padding: 0 10px;
   overflow-x: auto;
   scrollbar-width: none;
 }
 .tabs__strip::-webkit-scrollbar {
   display: none;
 }
+/* Scrolling: the row fades out at its right end rather than cutting a name off. */
+.tabs__strip.is-overflowing {
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
 
 /* Every tab the same width: the close button then sits in the same place in
    every one, which is what makes closing several in a row quick. They shrink
-   together when the bar runs out of room rather than scrolling away. */
+   together down to 120px, and past that the row scrolls (the "All tabs"
+   button appears then). */
 .tab {
-  flex: 0 1 var(--tab-w, 168px);
-  min-width: 96px;
+  position: relative;
+  flex: 0 1 var(--tab-w, 176px);
+  min-width: 120px;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  gap: var(--size-1);
-  padding: 5px var(--size-1) 5px var(--size-3);
-  border-radius: var(--radius-s) var(--radius-s) 0 0;
-  font-size: var(--font-size-12);
-  color: var(--text-muted);
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 24px 10px;
+  border-radius: 10px 10px 0 0;
+  font-size: var(--font-size-13);
+  font-weight: 500;
+  color: var(--tab-ink);
   cursor: default;
   white-space: nowrap;
   transition:
@@ -146,32 +161,62 @@
     color var(--anim-fast) var(--ease);
 }
 .tab:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--text-primary);
 }
 /*
- * The tab you are in: outlined in the accent, left, right and top.
- *
- * Same fill as every other tab - the bar's own grey - so nothing jumps out as
- * a white block; the accent outline alone says which one it is. The outline is
- * inset box-shadow rather than a border, so the tab does not change size when
- * it becomes active and the row never shifts.
+ * The tab that is open in this pane: a white card, the page's own surface,
+ * joined to the page with no line between them. Its two lower corners curve
+ * out into the tray (the ::before/::after "feet"), so it reads as the top of
+ * the sheet rather than a button on the bar.
  */
 .tab.is-active {
-  background: var(--tint);
+  z-index: 1;
+  background: var(--surface);
   color: var(--text-primary);
+  font-weight: 650;
+  /* A hairline of light along its top and sides (dark theme; none in light). */
   box-shadow:
-    inset 1px 0 0 var(--border),
-    inset -1px 0 0 var(--border),
-    inset 0 1px 0 var(--border);
+    inset 0 1px 0 var(--tab-edge),
+    inset 1px 0 0 var(--tab-edge),
+    inset -1px 0 0 var(--tab-edge);
 }
-/* The accent goes on ONE tab in the window: the note you are actually in.
-   With the editor split, the other pane's active tab keeps the plain outline. */
-.tabs.is-focused .tab.is-active {
-  box-shadow:
-    inset 1px 0 0 var(--accent),
-    inset -1px 0 0 var(--accent),
-    inset 0 1px 0 var(--accent);
+.tab.is-active::before,
+.tab.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+.tab.is-active::before {
+  left: -10px;
+  background: radial-gradient(circle at 0 0, transparent 9.5px, var(--surface) 10px);
+}
+.tab.is-active::after {
+  right: -10px;
+  background: radial-gradient(circle at 100% 0, transparent 9.5px, var(--surface) 10px);
+}
+/*
+ * The note you are actually in: a short dark bar under its name. One in the
+ * window - with the editor split, the other pane's open tab is a card without
+ * it.
+ */
+.tab__mark {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 28px;
+  height: 3px;
+  margin-left: -14px;
+  border-radius: 2px;
+  background: var(--ink);
+  opacity: 0;
+  transition: opacity var(--anim-fast) var(--ease);
+}
+.tabs.is-focused .tab.is-active .tab__mark {
+  opacity: 1;
 }
 /*
  * Close the other tabs.
@@ -208,8 +253,9 @@
   outline-offset: -2px;
 }
 
+/* Centred, as is the folder beside it; the close button sits apart at the right. */
 .tab__title {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -217,7 +263,9 @@
 
 .tab__close {
   all: unset;
-  flex: none;
+  position: absolute;
+  top: calc(50% - 9px);
+  right: 6px;
   width: 16px;
   height: 16px;
   display: grid;
@@ -239,6 +287,87 @@
 .tab__close:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+/* Beside a name another open tab shares: which folder this one is in. */
+.tab__folder {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-11);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Pinned: an icon at the left of the row, no title and no close button. */
+.tab.is-pinned {
+  flex: none;
+  min-width: 0;
+  width: 40px;
+  padding: 8px 0 10px;
+}
+
+/* The "All tabs" list hangs from its button. */
+.tabs__more-anchor {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-self: center;
+}
+.tabs__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 800;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: var(--radius-m);
+}
+.tabs__list-search {
+  all: unset;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 var(--size-2);
+  margin-bottom: 4px;
+  border-radius: var(--radius-s);
+  background: var(--sidebar-field);
+  font-size: var(--font-size-12);
+  color: var(--text-primary);
+}
+.tabs__list-items {
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.tabs__list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  height: 28px;
+  padding: 0 var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-12);
+  color: var(--text-secondary);
+  cursor: default;
+}
+.tabs__list-item[aria-selected='true'] {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.tabs__list-item.is-active {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.tabs__list-empty {
+  padding: var(--size-2);
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
 }
 
 .tabs__content {
@@ -264,4 +393,51 @@
   padding: var(--size-6);
   color: var(--text-muted);
   text-align: center;
+}
+
+/* ---------- a tab's ← and → (NavArrows) ---------- */
+
+/* At the top left of the view, pushing whatever else is on the row to the right. */
+.nav-arrows {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: auto;
+}
+.nav-arrows__btn {
+  all: unset;
+  box-sizing: border-box;
+  height: 24px;
+  min-width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 5px;
+  border-radius: var(--radius-s);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--anim-fast) var(--ease),
+    color var(--anim-fast) var(--ease);
+}
+.nav-arrows__btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.nav-arrows__btn:disabled {
+  color: var(--text-muted);
+  opacity: 0.45;
+  cursor: default;
+}
+.nav-arrows__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* How many steps that way. */
+.nav-arrows__count {
+  font-size: var(--font-size-11);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
 }

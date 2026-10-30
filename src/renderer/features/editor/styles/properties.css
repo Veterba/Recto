@@ -1,28 +1,70 @@
 /* ---------- properties ---------- */
 
+/*
+ * Inside the note, where its frontmatter is (block-hiding.ts): one quiet line
+ * - `› status active · due 2026-11-03` - that opens into the table in place.
+ * No band of its own, so the page runs unbroken from the tab to the text.
+ */
+.cm-props {
+  padding: 2px 0 var(--size-3);
+}
+
 .props {
-  flex: none;
-  border-bottom: 1px solid var(--border);
-  background: var(--tint);
+  font-family: var(--font-ui);
+}
+
+/* A note with no properties: "Add property" is there, above the first line,
+   but only shows when the pointer is over that strip or focus is in it. */
+.cm-props--empty {
+  padding-bottom: var(--size-1);
+}
+.cm-props--empty .props.is-collapsed {
+  opacity: 0;
+  transition: opacity var(--anim-fast) var(--ease);
+}
+.cm-props--empty:hover .props.is-collapsed,
+.cm-props--empty:focus-within .props.is-collapsed {
+  opacity: 1;
 }
 
 .props__head {
   all: unset;
   box-sizing: border-box;
-  width: 100%;
+  max-width: 100%;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: var(--size-2) var(--size-3);
-  font-size: var(--font-size-11);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-12);
   color: var(--text-muted);
   cursor: pointer;
 }
 .props__head:hover {
+  background: var(--bg-hover);
   color: var(--text-secondary);
+}
+.props__chevron {
+  flex: none;
+  display: inline-block;
+  transition: transform var(--anim-fast) var(--ease);
+}
+.props__chevron.is-open {
+  transform: rotate(90deg);
+}
+.props__summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.props__key {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.props__dot {
+  color: var(--border-strong);
 }
 
 .props__body {

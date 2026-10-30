@@ -15,6 +15,7 @@ import { LinkPeekHost } from './LinkPeekHost'
 import { closeNoteWindow, openNoteWindow } from '../note-windows'
 import { closeLinkPeek } from '../link-peek'
 import { setPaneDropHandler } from '../pane-drag'
+import { setRevealInTreeHandler } from '../reveal-in-tree'
 import type { DropZone } from '../pane-drop'
 import { registerStubViews } from './stub-views'
 import { useAppearance, type Theme } from '../appearance'
@@ -27,6 +28,7 @@ import { useWorkspace } from '../hooks/use-workspace'
 import { useWritingState } from '../hooks/use-writing-state'
 import { useSectionDefaults } from '../hooks/use-section-defaults'
 import { useShellNavigation } from '../hooks/use-shell-navigation'
+import { useTabHistory } from '../hooks/use-tab-history'
 import { useRegisterViews } from '../hooks/use-register-views'
 import { useAppCommands } from '../hooks/use-app-commands'
 import { useShellKeys } from '../hooks/use-shell-keys'
@@ -40,7 +42,16 @@ import { TemplatePicker, usePeriodicNotesAutoCreate, useTemplateActions, useTemp
 import { TidyDialog, useTidy } from '../../features/tidy'
 import { CHAT_FOLDER } from '../../features/ai'
 import { BotList, MAIN_BOT, onOpenTopic, reloadBots, requestTopic, useBots, useBotsEnabled } from '../../features/bots'
-import { BoardDeleteHost, BoardList, BoardsMigrationNotice, isTaskPath, refreshBoards, requestNewCard, useBoards, useCardPlaces } from '../../features/boards'
+import {
+  BoardDeleteHost,
+  BoardList,
+  BoardsMigrationNotice,
+  isTaskPath,
+  refreshBoards,
+  requestNewCard,
+  useBoards,
+  useCardPlaces,
+} from '../../features/boards'
 import { registerArchiveView } from '../../features/archive'
 import { HomeOverlay, forgetFigures, loadPlace } from '../../features/home'
 import { useUsageTracking } from '../usage'
@@ -171,7 +182,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const updateRef = useRef(update)
   updateRef.current = update
 
-  const { openFile, newChat, openBoard, openBoardCard, openBot } = useShellNavigation(sections, setActiveSection)
+  const { openFile, newChat, openBoard, openBoardCard, openBot } = useShellNavigation(sections, activeSection, setActiveSection)
+  useTabHistory(sections, activeSection)
 
   // A notification about a finished answer was clicked: open that bot's chat at that topic.
   const bots = useBots()
@@ -308,8 +320,12 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
       focusEditorOnOpen()
       activeRef.current?.placeInPane(tabsId, zone, { type: 'markdown', state: heading ? { path, heading } : { path } })
     }
-    setPaneDropHandler((payload, tabsId, zone) => {
-      if (payload.kind === 'leaf') activeRef.current?.placeInPane(tabsId, zone, { leafId: payload.leafId })
+    setPaneDropHandler((payload, tabsId, zone, slot) => {
+      if (payload.kind === 'leaf' && slot !== undefined) {
+        // Dropped on a tab strip: the tab goes to that place in the row.
+        activeRef.current?.moveLeaf(payload.leafId, tabsId, slot.index)
+        activeRef.current?.setActiveLeaf(payload.leafId)
+      } else if (payload.kind === 'leaf') activeRef.current?.placeInPane(tabsId, zone, { leafId: payload.leafId })
       else if (payload.kind === 'path') open(tabsId, zone, payload.path, payload.heading)
       else if (payload.kind === 'window') {
         // The window becomes the pane: the note opens there, and the window goes.
@@ -340,8 +356,13 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const linkCandidatesRef = useRef<LinkCandidate[]>([])
   linkCandidatesRef.current = useMemo(() => noteEntries(tree.roots), [tree.roots])
 
+  // Set further down, once what they point at exists; read only when an overview tab is used.
+  const openFolderRef = useRef<(name: string) => void>(() => {})
+  const noteExistsRef = useRef<(path: string) => boolean>(() => false)
   useRegisterViews({
     openFile: openFileRef,
+    openFolder: openFolderRef,
+    noteExists: noteExistsRef,
     openBoardCard: openBoardCardRef,
     openBoard: openBoardRef,
     linkCandidates: linkCandidatesRef,
@@ -371,6 +392,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     },
     [setActiveSection],
   )
+  openFolderRef.current = openFolderFromHome
+  noteExistsRef.current = noteExists
   const { insertTemplate, updateTemplates, openPeriodicNote, openTodayNote } = useTemplateActions({
     activePath,
     closePicker: () => setTemplatesOpen(false),
@@ -418,13 +441,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const followRename = useCallback(
     (from: string, to: string) => {
       if (sections === null) return
-      for (const workspace of Object.values(sections))
-        for (const leaf of workspace.leaves()) {
-          const path = leaf.state['path']
-          if (typeof path !== 'string') continue
-          if (path === from) workspace.setLeafState(leaf.id, { path: to })
-          else if (path.startsWith(`${from}/`)) workspace.setLeafState(leaf.id, { ...leaf.state, path: to + path.slice(from.length) })
-        }
+      // Its steps in every tab's history follow too.
+      for (const workspace of Object.values(sections)) workspace.renamePath(from, to)
     },
     [sections],
   )
@@ -453,6 +471,21 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const toggleSidebar = useCallback(() => {
     update({ sidebarOpen: !appearance.sidebarOpen })
   }, [appearance.sidebarOpen, update])
+
+  /** A file shown in the Data tree: sidebar open, its folders expanded. */
+  useEffect(() => {
+    setRevealInTreeHandler((path) => {
+      setActiveSection('data')
+      if (!appearance.sidebarOpen) update({ sidebarOpen: true })
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        const parts = path.split('/')
+        for (let i = 1; i < parts.length; i++) next.add(parts.slice(0, i).join('/'))
+        return next
+      })
+    })
+    return () => setRevealInTreeHandler(null)
+  }, [appearance.sidebarOpen, update, setActiveSection])
 
   const cycleTheme = useCallback(() => {
     const at = THEME_CYCLE.indexOf(appearance.theme)
@@ -529,9 +562,19 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
           requestNewCard()
         },
       },
+      {
+        // The overview as a tab rather than the overlay: its lists, and notes opened from it, are steps in the tab's history.
+        id: 'home:overview-tab',
+        name: 'Open overview in a tab',
+        section: 'Vault',
+        icon: 'house',
+        run: () => {
+          sections?.[activeSection].openView('overview', { view: { kind: 'main' } })
+        },
+      },
     ])
     return off
-  }, [openPeriodicNote, openTodayNote, activeBoard, boards, openBoard])
+  }, [openPeriodicNote, openTodayNote, activeBoard, boards, openBoard, sections, activeSection])
 
   useShellKeys({
     paletteOpen,
@@ -584,7 +627,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
                 templateFolder={templates.settings.folder}
               />
             ) : activeSection === 'tasks' ? (
-              <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} onRenamed={followRename} />
+              <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} vaultPath={vault.path} onRenamed={followRename} />
             ) : botsOn === false ? (
               <p className="bots-off">
                 Bots are off ·{' '}
@@ -694,7 +737,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         vaultName={vault.name}
         exists={noteExists}
         isTemplate={isTemplate}
-        onOpenNote={openFile}
+        // The overview you opened it from is a step back from the note.
+        onOpenNote={(path, view) => openFile(path, null, { type: 'overview', state: { view } })}
         onOpenCard={openCardFromHome}
         onOpenFolder={openFolderFromHome}
       />

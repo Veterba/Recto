@@ -13,7 +13,8 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  max-width: 260px;
+  /* Wide enough for a one-line explanation; longer ones wrap inside the bubble. */
+  max-width: 320px;
   padding: 5px var(--size-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-s);
@@ -36,11 +37,8 @@
 .tip__label {
   white-space: nowrap;
 }
+/* A hint wraps rather than running out past the bubble's edge. */
 .tip__hint {
   color: var(--text-muted);
   font-size: var(--font-size-10-5);
-  white-space: nowrap;
-}
-.tip--wrap .tip__hint {
-  white-space: normal;
 }

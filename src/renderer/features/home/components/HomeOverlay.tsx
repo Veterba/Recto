@@ -66,7 +66,8 @@ type Props = {
   /** A template, not a note: never flagged as needing attention. */
   isTemplate: (path: string) => boolean
   /** A board's Done column, and its name. */
-  onOpenNote: (path: string) => void
+  /** A note picked here, and the overview view it was picked from. */
+  onOpenNote: (path: string, from: OverviewView) => void
   onOpenCard: (path: string) => void
   onOpenFolder: (name: string) => void
 }
@@ -307,7 +308,7 @@ export function HomeOverlay({
       // Leaving to a note keeps everything as it is: ⌃⌘H comes back to it.
       openNote: (path) => {
         onClose()
-        onOpenNote(path)
+        onOpenNote(path, view)
       },
       openCard: (path) => {
         onClose()
@@ -318,7 +319,7 @@ export function HomeOverlay({
         onOpenFolder(name)
       },
     }),
-    [go, onClose, onOpenNote, onOpenCard, onOpenFolder],
+    [go, onClose, onOpenNote, onOpenCard, onOpenFolder, view],
   )
 
   useEffect(() => {
@@ -401,7 +402,11 @@ export function HomeOverlay({
       ? null
       : {
           ...data,
-          index: { ...data.index, orphans: data.index.orphans.filter((n) => !isTemplate(n.path)), broken: data.index.broken.filter((b) => !isTemplate(b.path)) },
+          index: {
+            ...data.index,
+            orphans: data.index.orphans.filter((n) => !isTemplate(n.path)),
+            broken: data.index.broken.filter((b) => !isTemplate(b.path)),
+          },
         }
   const binding = commands.bindingFor('app:home')
 
@@ -510,7 +515,12 @@ export function HomeOverlay({
           </section>
 
           <section className="home__pane home__pane--stats" aria-label="Statistics">
-            <div className={`overview__scroller${scrolling ? ' is-scrolling' : ''}`} ref={scrollerRef as React.RefObject<HTMLDivElement>} onScroll={onScroll} data-view={view.kind}>
+            <div
+              className={`overview__scroller${scrolling ? ' is-scrolling' : ''}`}
+              ref={scrollerRef as React.RefObject<HTMLDivElement>}
+              onScroll={onScroll}
+              data-view={view.kind}
+            >
               {/* Drawn by the shader, like the hero: the DOM keeps its place and its name for screen readers. */}
               <div className="overview__title" ref={titleRef}>
                 <h1 className="overview__name" data-hero-line>

@@ -111,7 +111,7 @@
 .md > .md__bar,
 .md > .note-title,
 .md > .note-title__notice,
-.md > .props,
+.md .cm-props,
 .md > .backlinks,
 .split__pane,
 .split__divider,
@@ -135,7 +135,7 @@
 .md > .note-title {
   max-height: 240px;
 }
-.md > .props,
+.md .cm-props,
 .md > .backlinks {
   max-height: 100vh;
 }
@@ -151,7 +151,7 @@
     .md > .md__bar,
     .md > .note-title,
     .md > .note-title__notice,
-    .md > .props,
+    .md .cm-props,
     .md > .backlinks,
     .outline
   ) {
@@ -171,7 +171,7 @@
   margin-left: -42px;
 }
 :root[data-focus='on']
-  :is(.tabs__bar, .md > .formatbar, .md > .md__bar, .md > .note-title, .md > .note-title__notice, .md > .props, .md > .backlinks) {
+  :is(.tabs__bar, .md > .formatbar, .md > .md__bar, .md > .note-title, .md > .note-title__notice, .md .cm-props, .md > .backlinks) {
   max-height: 0;
   padding-top: 0;
   padding-bottom: 0;

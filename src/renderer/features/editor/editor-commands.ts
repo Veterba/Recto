@@ -279,6 +279,17 @@ export function registerEditorCommands(registry: CommandRegistry, onToggleLivePr
       isAvailable: () => getActiveEditor() !== null,
       run: () => getActiveEditor()?.unfoldAll(),
     },
+    // A note with no frontmatter shows no properties line; this starts one.
+    editorCommand(
+      'editor:add-properties',
+      'Add properties to note',
+      undefined,
+      (state) => {
+        if (/^---\s*$/.test(state.doc.line(1).text)) return null
+        return { changes: { from: 0, insert: '---\n---\n' }, selection: { anchor: state.selection.main.head + 8 } }
+      },
+      'Editor',
+    ),
     {
       id: 'editor:toggle-outline',
       name: 'Toggle outline',

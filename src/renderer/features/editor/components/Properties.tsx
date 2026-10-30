@@ -9,6 +9,7 @@ import { Tip } from '../../../ui/Tip'
 import { parseFrontmatter, removeField, renameField, setField, splitItems, type Field, type FieldType } from '@shared/frontmatter'
 import { IPC } from '@shared/ipc'
 import { Toggle } from '../../../ui/Toggle'
+import { summary } from '../property-summary'
 
 /**
  * Typed frontmatter, above the editor.
@@ -284,6 +285,8 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates }: Pr
     const key = newKey.trim()
     setAdding(false)
     setNewKey('')
+    // Nothing typed on a note with no properties: back to the faint line.
+    if (key === '' && count === 0) setCollapsed(true)
     if (key === '' || parsed.fields.some((field) => field.key === key)) return
     // `null`, not `''`: an empty string serialises to `key: ""` whereas null
     // gives a bare `key:`, which is what a human would have typed.
@@ -292,11 +295,32 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates }: Pr
 
   return (
     <section className={`props${collapsed ? ' is-collapsed' : ''}`}>
-      <button className="props__head" onClick={() => setCollapsed(!collapsed)} aria-expanded={!collapsed}>
-        <span className={`backlinks__chevron${collapsed ? '' : ' is-open'}`}>{'›'}</span>
-        <span className="backlinks__title">Properties</span>
-        <span className="backlinks__count">{count}</span>
-      </button>
+      {count === 0 && collapsed ? (
+        <button
+          className="props__head"
+          onClick={() => {
+            // Straight to the name field: there is no table yet to open.
+            setCollapsed(false)
+            setAdding(true)
+          }}
+        >
+          <Icon name="plus" size={12} />
+          <span className="props__summary">Add property</span>
+        </button>
+      ) : (
+        <button className="props__head" onClick={() => setCollapsed(!collapsed)} aria-expanded={!collapsed}>
+          <span className={`props__chevron${collapsed ? '' : ' is-open'}`}>{'›'}</span>
+          <span className="props__summary">
+            {parsed.fields.map((field, i) => (
+              <span key={field.key}>
+                {i > 0 && <span className="props__dot"> · </span>}
+                <span className="props__key">{field.key}</span> {summary(field.value)}
+              </span>
+            ))}
+            {parsed.fields.length === 0 && 'Properties'}
+          </span>
+        </button>
+      )}
 
       {!collapsed && (
         <div className="props__body">

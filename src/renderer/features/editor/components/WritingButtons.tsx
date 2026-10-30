@@ -74,7 +74,6 @@ export function WritingButtons({
         label="Writing tools"
         hint={toolKeys.length === 0 ? 'Focus, syntax, style check, authors' : toolKeys.join(' · ')}
         placement={tip}
-        wrap
       >
         <button
           ref={toolsButton}

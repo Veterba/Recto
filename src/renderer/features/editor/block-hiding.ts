@@ -3,8 +3,8 @@
  * which need block decorations and so a state field of their own.
  */
 
-import { Decoration, type DecorationSet, EditorView } from '@codemirror/view'
-import { StateField } from '@codemirror/state'
+import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view'
+import { Facet, StateField } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
 import { livePreviewEnabled } from './live-preview-state'
 import { mathSource, MathWidget, stripContainers } from './rich-widgets'
@@ -31,6 +31,44 @@ const FENCE_LINE = /^---\s*$/
 const FENCE = /^\s*(`{3,}|~{3,})/
 
 const hiddenBlock = Decoration.replace({ block: true })
+
+/**
+ * Where the note's properties are drawn: an element the view that owns the
+ * editor renders them into (MarkdownView, through a portal). Without one - a
+ * read-only reader, a floating note - the frontmatter is simply hidden.
+ */
+export const propertiesSlot = Facet.define<HTMLElement, HTMLElement | null>({ combine: (values) => values[0] ?? null })
+
+/**
+ * The properties, in place of the frontmatter, inside the note: they scroll
+ * with the text and take no room on a note that has none.
+ *
+ * The slot is one element for the life of the editor, so what React drew in it
+ * - an open table, a value being typed - survives the widget being redrawn. It
+ * goes into a fresh wrapper each time, so an old widget's DOM being removed
+ * never takes the slot with it. Every event inside is the properties' own.
+ */
+class PropertiesWidget extends WidgetType {
+  constructor(
+    readonly slot: HTMLElement,
+    /** The note has no frontmatter: only "Add property", on hover. */
+    readonly empty = false,
+  ) {
+    super()
+  }
+  override eq(other: PropertiesWidget): boolean {
+    return other.slot === this.slot && other.empty === this.empty
+  }
+  toDOM(): HTMLElement {
+    const wrap = document.createElement('div')
+    wrap.className = this.empty ? 'cm-props cm-props--empty' : 'cm-props'
+    wrap.append(this.slot)
+    return wrap
+  }
+  override ignoreEvent(): boolean {
+    return true
+  }
+}
 
 /**
  * A horizontal rule, drawn ON its line rather than instead of it.
@@ -88,9 +126,17 @@ export const blockHiding = StateField.define<DecorationSet>({
         let cursorInside = false
         for (let n = 1; n <= frontmatterEnd; n++) if (touched.has(n)) cursorInside = true
         if (!cursorInside) {
-          ranges.push({ from: 0, to: doc.line(frontmatterEnd).to, deco: hiddenBlock })
+          const slot = state.facet(propertiesSlot)
+          const deco = slot === null ? hiddenBlock : Decoration.replace({ block: true, widget: new PropertiesWidget(slot) })
+          ranges.push({ from: 0, to: doc.line(frontmatterEnd).to, deco })
         }
       }
+    }
+    // No properties yet: the same widget above the first line, drawn faint
+    // until the pointer is over it, so "Add property" is where they would go.
+    const slot = state.facet(propertiesSlot)
+    if (frontmatterEnd === 0 && slot !== null && editable) {
+      ranges.push({ from: 0, to: 0, deco: Decoration.widget({ block: true, side: -1, widget: new PropertiesWidget(slot, true) }) })
     }
 
     // --- rules, maths blocks and tables, from the grammar -----------------

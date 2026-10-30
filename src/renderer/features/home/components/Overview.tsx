@@ -94,7 +94,10 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
   const run = streak(data.edits, today)
 
   const avg = averagePerDay(data.active, data.activeSince, week, today) ?? 0
-  const avgBefore = data.activeSince !== null && data.activeSince <= lastWeek ? averagePerDay(data.active, data.activeSince, lastWeek, addDays(week, -1)) : null
+  const avgBefore =
+    data.activeSince !== null && data.activeSince <= lastWeek
+      ? averagePerDay(data.active, data.activeSince, lastWeek, addDays(week, -1))
+      : null
   const monthStart = `${today.slice(0, 8)}01`
   const month = secondsBetween(data.active, monthStart, today)
   const total = Object.values(data.active).reduce((a, b) => a + b, 0)
@@ -163,10 +166,20 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
           <span className="overview__label">Needs attention</span>
           <div className="overview__attention">
             {index.orphans.length > 0 && (
-              <Attention count={index.orphans.length} title="Notes with no links" detail="Nothing points to them and they point nowhere" onClick={() => actions.go({ kind: 'orphans' })} />
+              <Attention
+                count={index.orphans.length}
+                title="Notes with no links"
+                detail="Nothing points to them and they point nowhere"
+                onClick={() => actions.go({ kind: 'orphans' })}
+              />
             )}
             {index.broken.length > 0 && (
-              <Attention count={index.broken.length} title="Broken links" detail="[[Links]] to notes that don’t exist" onClick={() => actions.go({ kind: 'broken' })} />
+              <Attention
+                count={index.broken.length}
+                title="Broken links"
+                detail="[[Links]] to notes that don’t exist"
+                onClick={() => actions.go({ kind: 'broken' })}
+              />
             )}
             {late.length > 0 && (
               <Attention
@@ -225,21 +238,21 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
       )}
 
       {(again.onThisDay !== null || again.unopened !== null) && (
-      <section className="overview__section" aria-label="Rediscover">
-        <span className="overview__label">Rediscover</span>
-        {again.onThisDay !== null && (
-          <button type="button" className="overview__again" onClick={() => actions.openNote(again.onThisDay!.path)}>
-            <b>{again.onThisDay.name}</b>
-            <span>Written a {again.onThisDay.ago} ago today</span>
-          </button>
-        )}
-        {again.unopened !== null && (
-          <button type="button" className="overview__again" onClick={() => actions.openNote(again.unopened!.path)}>
-            <b>{again.unopened.name}</b>
-            <span>Not opened for {plural(again.unopened.days, 'day')}</span>
-          </button>
-        )}
-      </section>
+        <section className="overview__section" aria-label="Rediscover">
+          <span className="overview__label">Rediscover</span>
+          {again.onThisDay !== null && (
+            <button type="button" className="overview__again" onClick={() => actions.openNote(again.onThisDay!.path)}>
+              <b>{again.onThisDay.name}</b>
+              <span>Written a {again.onThisDay.ago} ago today</span>
+            </button>
+          )}
+          {again.unopened !== null && (
+            <button type="button" className="overview__again" onClick={() => actions.openNote(again.unopened!.path)}>
+              <b>{again.unopened.name}</b>
+              <span>Not opened for {plural(again.unopened.days, 'day')}</span>
+            </button>
+          )}
+        </section>
       )}
 
       <p className="overview__foot">Counted on this Mac from your notes; nothing is sent anywhere.</p>
@@ -319,7 +332,14 @@ function Heatmap({ edits, today, onDay }: { edits: Record<Day, string[]>; today:
           return n === 0 ? (
             <i key={day} className="overview__cell" title={label} />
           ) : (
-            <button key={day} type="button" className={`overview__cell overview__cell--${heatLevel(n, max)}`} title={label} aria-label={label} onClick={() => onDay(day)} />
+            <button
+              key={day}
+              type="button"
+              className={`overview__cell overview__cell--${heatLevel(n, max)}`}
+              title={label}
+              aria-label={label}
+              onClick={() => onDay(day)}
+            />
           )
         })}
       </div>
@@ -334,7 +354,19 @@ function Heatmap({ edits, today, onDay }: { edits: Record<Day, string[]>; today:
   )
 }
 
-function Attention({ count, title, detail, warn, onClick }: { count: number; title: string; detail: string; warn?: boolean; onClick: () => void }): React.ReactElement {
+function Attention({
+  count,
+  title,
+  detail,
+  warn,
+  onClick,
+}: {
+  count: number
+  title: string
+  detail: string
+  warn?: boolean
+  onClick: () => void
+}): React.ReactElement {
   return (
     <button type="button" className="overview__attn" onClick={onClick}>
       <span className={`overview__attn-n${warn === true ? ' overview__attn-n--warn' : ''}`}>{count}</span>
@@ -413,7 +445,9 @@ export function OverviewList({
       case 'orphans':
         return {
           title: 'Notes with no links',
-          rows: data.index.orphans.map((n) => <Row key={n.path} name={n.name} count={folderOf(n.path)} onClick={() => actions.openNote(n.path)} />),
+          rows: data.index.orphans.map((n) => (
+            <Row key={n.path} name={n.name} count={folderOf(n.path)} onClick={() => actions.openNote(n.path)} />
+          )),
         }
       case 'broken':
         return {
@@ -426,14 +460,23 @@ export function OverviewList({
         return {
           title: 'Overdue tasks',
           rows: overdue(data.index.dueCards, today).map((c) => (
-            <Row key={c.path} name={c.name} count={`due ${shortDay(c.due)}${c.board === null ? '' : ` · ${c.board}`}`} onClick={() => actions.openCard(c.path)} />
+            <Row
+              key={c.path}
+              name={c.name}
+              count={`due ${shortDay(c.due)}${c.board === null ? '' : ` · ${c.board}`}`}
+              onClick={() => actions.openCard(c.path)}
+            />
           )),
         }
       case 'day':
         return {
           title: `Edited on ${longDay(view.day)}`,
           rows: (data.edits[view.day] ?? []).map((p) =>
-            exists(p) ? <Row key={p} name={nameOf(p)} count={folderOf(p)} onClick={() => actions.openNote(p)} /> : <Row key={p} name={nameOf(p)} count="no longer here" />,
+            exists(p) ? (
+              <Row key={p} name={nameOf(p)} count={folderOf(p)} onClick={() => actions.openNote(p)} />
+            ) : (
+              <Row key={p} name={nameOf(p)} count="no longer here" />
+            ),
           ),
         }
       case 'topic': {
@@ -451,7 +494,9 @@ export function OverviewList({
         <h2 className="overview__heading">{list.title}</h2>
         <span className="overview__aside">{data === null ? '' : list.rows.length}</span>
       </div>
-      <div className="overview__list">{data !== null && list.rows.length === 0 ? <p className="overview__quiet">Nothing here any more</p> : list.rows}</div>
+      <div className="overview__list">
+        {data !== null && list.rows.length === 0 ? <p className="overview__quiet">Nothing here any more</p> : list.rows}
+      </div>
     </section>
   )
 }

@@ -628,7 +628,7 @@ async function smoke(page, vault) {
   const file = path.join(vault, 'Ideas.md')
   const before = fs.readFileSync(file, 'utf8')
   await page.locator('[role=treeitem]', { has: page.locator('.tree__name', { hasText: /^Ideas$/ }) }).click()
-  await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Ideas.md')
+  await page.waitForFunction(() => document.querySelector('.md[data-path]')?.dataset.path === 'Ideas.md')
   await page.locator('.cm-content').click()
   await page.keyboard.press('Meta+ArrowDown')
   await page.keyboard.type('\nEdited by the snapshot run.')
@@ -841,7 +841,9 @@ async function periodicShots(dir, theme) {
     await page.evaluate(() => document.activeElement?.blur())
     await shoot(page, dir, '28c-editor-no-toolbar', 1000)
 
+    // Tooltips show while ⌘ is held (ui/meta-key.ts).
     await page.locator('.status [aria-label="Writing tools"]').hover()
+    await page.keyboard.down('Meta')
     await page.waitForSelector('.tip')
     await sleep(700)
     await page.screenshot({
@@ -850,6 +852,7 @@ async function periodicShots(dir, theme) {
       caret: 'hide',
       animations: 'disabled',
     })
+    await page.keyboard.up('Meta')
     console.log('  28-periodic')
   } finally {
     await app.close()
@@ -1005,6 +1008,54 @@ async function boardShots(dir, theme) {
 }
 
 /**
+ * The tab bar, in its own run: more tabs than fit (the row scrolls and the
+ * "All tabs" button shows), two notes called Ideas with their folders, a
+ * pinned tab, a tab's menu, and the All tabs list searched.
+ */
+async function tabShots(dir, theme) {
+  const { base, vault, userData } = prepareVault(theme, `${theme}-tabs`)
+  fs.writeFileSync(path.join(vault, 'Garden', 'Ideas.md'), '# Ideas\n\nFor the garden.\n')
+  // Enough notes that their tabs cannot all fit at 120px.
+  const extra = ['Apples', 'Beans', 'Carrots', 'Dill', 'Endive', 'Fennel', 'Garlic', 'Herbs']
+  for (const name of extra) fs.writeFileSync(path.join(vault, 'Kitchen', `${name}.md`), `# ${name}\n`)
+  const { app, page } = await launch(userData)
+  // ⌘-click: a tab each. A plain click opens a note in the tab you are in.
+  const open = async (name) => {
+    await page.locator('[role=treeitem]', { hasText: name }).first().click({ modifiers: ['Meta'] })
+    await sleep(250)
+  }
+  try {
+    for (const name of ['Handbook', 'Ideas', 'Reading list', 'Garden', 'Basil', 'Soil', 'Tomatoes', 'Kitchen', 'Bread schedule', 'Sourdough', ...extra]) {
+      await open(name)
+    }
+    // Both notes called Ideas: one is open already, so one of these clicks adds the second.
+    for (const n of [0, 1]) {
+      await page.locator('[role=treeitem]', { hasText: 'Ideas' }).nth(n).click({ modifiers: ['Meta'] })
+      await sleep(250)
+    }
+    await page.locator('.tab', { hasText: 'Handbook' }).click({ button: 'right' })
+    await page.locator('.menu button', { hasText: 'Pin' }).click()
+    await page.waitForSelector('.tabs__clear[aria-label="All tabs"]')
+    await page.evaluate(() => document.activeElement?.blur())
+    await shoot(page, dir, '32-tabs-overflow', 600)
+
+    await page.locator('.tab', { hasText: 'Soil' }).click({ button: 'right' })
+    await page.waitForSelector('.menu')
+    await shoot(page, dir, '32b-tab-menu', 400)
+    await page.keyboard.press('Escape')
+    await page.mouse.click(700, 600)
+
+    await page.locator('.tabs__clear[aria-label="All tabs"]').click()
+    await page.keyboard.type('i')
+    await shoot(page, dir, '32c-all-tabs', 400)
+    console.log('  32-tabs')
+  } finally {
+    await app.close()
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
+/**
  * Editing tables, in their own run: the toolbar's size picker, a row's handle
  * with its menu, and a rectangle of selected cells (test/fixtures/table-edit).
  */
@@ -1143,6 +1194,7 @@ for (const theme of ['light', 'dark']) {
     await linkCompleteShots(dir, theme)
     await settingsGlassShots(dir, theme)
     await boardShots(dir, theme)
+    await tabShots(dir, theme)
     if (COMPARE !== null) {
       for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.png'))) {
         const old = path.join(COMPARE, theme, name)

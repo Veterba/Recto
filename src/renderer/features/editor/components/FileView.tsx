@@ -4,6 +4,7 @@ import { IPC } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { vaultFileUrl } from '../../../app/vault-url'
 import { Icon } from '../../../ui/Icon'
+import { NavArrows } from '../../../app/components/NavArrows'
 
 const nameOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 
@@ -53,7 +54,13 @@ export function BinaryCard({
  * Images are shown as images and PDFs in Chromium's own viewer; one that fails
  * to load falls back to the card.
  */
-export function FileView({ path }: { path: string }): React.ReactElement {
+export function FileView({
+  path,
+  leafId,
+}: {
+  path: string
+  /** The tab it is shown in, for ← and →. */ leafId?: string | undefined
+}): React.ReactElement {
   const [failed, setFailed] = useState(false)
   const kind = fileKind(path)
   // Only vault files, served by vault:// (which refuses anything outside the
@@ -63,9 +70,9 @@ export function FileView({ path }: { path: string }): React.ReactElement {
     return <BinaryCard path={path} reason={failed ? 'This file could not be loaded.' : undefined} />
   }
   return (
-    <div className="file-view">
+    <div className="file-view" data-path={path}>
       <div className="md__bar">
-        <span className="md__path">{path}</span>
+        {leafId !== undefined && <NavArrows leafId={leafId} />}
         <button className="btn btn--ghost btn--sm" onClick={() => void api.invoke(IPC.fsReveal, path)}>
           Show in Finder
         </button>

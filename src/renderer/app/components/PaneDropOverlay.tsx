@@ -14,13 +14,18 @@ export function PaneDropOverlay(): React.ReactElement | null {
   const session = useSyncExternalStore(subscribePaneDrag, paneDragSnapshot)
   const last = useRef<Rect | null>(null)
   const over = session?.over ?? null
-  if (over !== null) last.current = zonePreview(over.rect, over.zone)
-  if (session === null) last.current = null
+  // Over a tab strip the drop is a place in the row, shown as a line in the gap.
+  const slot = over?.slot
+  if (over !== null && slot === undefined) last.current = zonePreview(over.rect, over.zone)
+  if (session === null || slot !== undefined) last.current = null
   const preview = last.current
 
   return (
     <div className="pane-drop" aria-hidden="true">
-      {over !== null && (
+      {over !== null && slot !== undefined && (
+        <div className="pane-drop__slot" style={{ left: slot.x - 1, top: over.rect.top + 4, height: over.rect.height - 4 }} />
+      )}
+      {over !== null && slot === undefined && (
         <svg className="pane-drop__zones" style={box(over.rect)} viewBox="0 0 1 1" preserveAspectRatio="none">
           {/* The centre, and the diagonals that divide the four edge bands. */}
           <rect x={EDGE} y={EDGE} width={1 - 2 * EDGE} height={1 - 2 * EDGE} vectorEffect="non-scaling-stroke" />

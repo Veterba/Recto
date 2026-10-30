@@ -1,3 +1,6 @@
+Architecture is just a file for people who want to understand how the project works under the hood.
+People who would like to extend project or do something for Recto.
+
 # Architecture
 
 Recto is an Electron app over a folder of markdown files. The files are the truth; everything else
@@ -179,13 +182,25 @@ src/renderer/
 test/            the same folders as src/
 ```
 
+**Tabs and their history.** Each section (Data, AI, Tasks) is a `Workspace` (`app/workspace.ts`):
+splits of tab groups of leaves, each leaf `{type, state}`, saved to `.recto/workspace.json`. A leaf
+also keeps its own `history` - steps back and forward, each `{type, state, at}` where `at` is where
+in a note you were (top line and caret) - up to 100, saved with it. Opening a note, board or card goes
+through `use-shell-navigation.ts`: it `navigate`s the tab you are in (the old view becomes a step back)
+unless ⌘ is held, the tab is pinned, or it shows a chat or the graph, which get a new tab instead.
+`app/tab-history.ts` is what views use: the ← → buttons (`components/NavArrows.tsx`) read a tab's
+history, a note reports its place (`setPlaceSource`) and lands back on it (`takeRestore`), and a
+board records an opened card as a step (`step`); the shell does the travelling
+(`hooks/use-tab-history.ts`, also ⌘[ ⌘] and mouse buttons 4/5). Renames move every step
+(`renamePath`); steps to deleted notes are dropped (`pruneMissing`).
+
 | feature | what | CSS block(s) |
 |---|---|---|
 | `editor` | CodeMirror, live preview, properties, backlinks, outline, history, writing tools, the autocomplete list (`link-complete.ts`; glass, `styles/complete.css`) | `md`, `prop(s)`, `backlinks`, `outline`, `history`, `formatbar`, `focusbar`, `wmenu`, `note-title`, `link-suggest` |
 | `file-tree` | the Data tree, drag and drop, context menu, the note preview card (`NotePreviewCard`; a board's shows its columns and progress). The card's lifecycle is the app's one controller, `app/link-peek.ts`, for tree rows and editor links alike: tied to its anchor element, put away by any press, key, scroll, blur or navigation, or when the anchor goes or moves | `tree`, `note-peek` |
 | `search` | full-text search, quick switcher | `search-result` (inside the shared `palette`) |
 | `graph` | the link graph and its settings panel | `graph`, `gset`, `gwheel`, `glegend` |
-| `boards` | kanban boards as notes in the Obsidian Kanban format (`shared/kanban.ts`: parse, and line-level edits that never touch a line they do not mean to): full-height glass columns, a card panel that edits a card note's frontmatter one key at a time (`shared/card-fields.ts`), and a widget strip (`widgets/registry.ts`). `hooks/use-board-cards.ts` reads the board note and the cards' notes; every change is shown first and written second, every board write re-reads the file and makes the same change to what is there now (found by the card's own lines), edits to one card's note go one at a time, and a failed write is undone with a notice. A board note opens as a board in a note tab too (`BoardNote`, through the editor's `NoteHosts`), with its Markdown a click away; a link to a board or a card opens it in Tasks (`use-shell-navigation.ts`). The card panel edits the note's body with the editor's `NoteBodyEditor` (frontmatter stays the panel's fields', `withBody`). `boards-store.ts` lists boards and where each card stands (from the index), publishes the link icons (`app/link-kinds.ts`) and holds `isTaskPath`, the one rule that keeps tasks/, boards and cards out of the Data tree. The one-time move from `boards.json` is `shared/board-migration.ts` (plan) and `main/board-migration.ts` (backup, write) | `board`, `board-col`, `board-card`, `board-pri`, `board-cal`, `board-seg`, `board-done`, `board-due`, `board-pris`, `board-widget`, `card-panel`, `new-card`, `boards` |
+| `boards` | kanban boards as notes in the Obsidian Kanban format (`shared/kanban.ts`: parse, and line-level edits that never touch a line they do not mean to): full-height glass columns, a card panel that edits a card note's frontmatter one key at a time (`shared/card-fields.ts`), and a widget strip (`widgets/registry.ts`). `hooks/use-board-cards.ts` reads the board note and the cards' notes; every change is shown first and written second, every board write re-reads the file and makes the same change to what is there now (found by the card's own lines), edits to one card's note go one at a time, and a failed write is undone with a notice. A board note opens as a board in a note tab too (`BoardNote`, through the editor's `NoteHosts`), with its Markdown a click away; a link to a board or a card opens it in the tab you are in, or in Tasks when that tab is not one to move on from (`use-shell-navigation.ts`); a card opened on a board is a step in the tab's history. The card panel edits the note's body with the editor's `NoteBodyEditor` (frontmatter stays the panel's fields', `withBody`). `boards-store.ts` lists boards and where each card stands (from the index), publishes the link icons (`app/link-kinds.ts`) and holds `isTaskPath`, the one rule that keeps tasks/, boards and cards out of the Data tree. The one-time move from `boards.json` is `shared/board-migration.ts` (plan) and `main/board-migration.ts` (backup, write) | `board`, `board-col`, `board-card`, `board-pri`, `board-cal`, `board-seg`, `board-done`, `board-due`, `board-pris`, `board-widget`, `card-panel`, `new-card`, `boards` |
 | `topics` | topics settings and the run notice | `topics` |
 | `tidy` | filing loose notes | `tidy` |
 | `home` | the overlay on ⌃⌘H: one WebGL scene (`scene.ts`) behind two panes that slide - the welcome, whose text the shader draws (`hero-text.ts`, `scene-text.ts`), and the vault overview, a pane that scrolls as a whole: the vault's name drawn by the shader (moved by a scroll uniform), then a solid card (`components/Overview.tsx`). Main gathers the raw material (`main/overview.ts`: one `overview` query on the index, the `.recto/stats/` files, the userData usage file); every figure is a pure sum in `shared/overview.ts` worked out against the renderer's clock. Where it was left (pane, page, scroll) is `overviewPlace` in `app-state.json`. Edits, active time and last opened are reported from `app/usage.ts` | `home`, `overview` |

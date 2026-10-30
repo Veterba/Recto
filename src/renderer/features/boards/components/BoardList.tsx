@@ -21,17 +21,22 @@ import { requestBoardDelete } from './DeleteBoardDialog'
  * name: renaming it here renames the note.
  */
 
+/** A failed copy (clipboard permission refused) is not worth a dialog. */
+const copy = (text: string): void => void navigator.clipboard.writeText(text).catch(() => {})
+
 type Props = {
   /** The board note on screen. */
   activeBoard: string | null
   /** The sidebar's search box, shared with the file tree next door. */
   query: string
   onOpen: (path: string) => void
+  /** For "Copy full path". */
+  vaultPath: string
   /** A board note was renamed: its tabs follow. */
   onRenamed: (from: string, to: string) => void
 }
 
-export function BoardList({ activeBoard, query, onOpen, onRenamed }: Props): React.ReactElement {
+export function BoardList({ activeBoard, query, onOpen, vaultPath, onRenamed }: Props): React.ReactElement {
   const boards = useBoards()
   const [adding, setAdding] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -42,6 +47,13 @@ export function BoardList({ activeBoard, query, onOpen, onRenamed }: Props): Rea
     { kind: 'heading', label: 'This board' },
     { kind: 'item', label: 'Open', icon: 'square-kanban', run: () => onOpen(board.path) },
     { kind: 'item', label: 'Rename', icon: 'pencil', run: () => setRenaming(board.path) },
+    { kind: 'item', label: 'Copy relative path', icon: 'copy', run: () => copy(board.path) },
+    {
+      kind: 'item',
+      label: 'Copy full path',
+      icon: 'clipboard-copy',
+      run: () => copy(vaultPath === '' ? board.path : `${vaultPath}/${board.path}`),
+    },
     { kind: 'item', label: 'Reveal in Finder', icon: 'external-link', run: () => void api.invoke(IPC.fsReveal, board.path) },
     { kind: 'separator' },
     { kind: 'item', label: 'Delete board…', icon: 'trash', danger: true, run: () => requestBoardDelete(board.path) },
@@ -101,7 +113,12 @@ export function BoardList({ activeBoard, query, onOpen, onRenamed }: Props): Rea
             />
           ) : (
             <>
-              <button className="boards__name" title={board.path} onClick={() => onOpen(board.path)} onDoubleClick={() => setRenaming(board.path)}>
+              <button
+                className="boards__name"
+                title={board.path}
+                onClick={() => onOpen(board.path)}
+                onDoubleClick={() => setRenaming(board.path)}
+              >
                 <Icon name="square-kanban" size={14} />
                 {board.name}
               </button>
@@ -115,7 +132,9 @@ export function BoardList({ activeBoard, query, onOpen, onRenamed }: Props): Rea
         </div>
       ))}
 
-      {boards.length === 0 && !adding && <p className="sidebar__empty">No boards yet. A board is a note; it opens in Obsidian's Kanban plugin too.</p>}
+      {boards.length === 0 && !adding && (
+        <p className="sidebar__empty">No boards yet. A board is a note; it opens in Obsidian's Kanban plugin too.</p>
+      )}
       {boards.length > 0 && shown.length === 0 && <p className="sidebar__empty">No board matches “{trimmed}”.</p>}
       {error !== null && (
         <p className="sidebar__empty boards__error" role="alert">

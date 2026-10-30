@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { metaHeld, subscribeMeta, useMetaHeld } from './meta-key'
 
 /**
  * A tooltip that appears immediately.
@@ -44,11 +45,14 @@ export function placeTip(a: DOMRect, b: DOMRect, placement: TipPlacement): { x: 
 
 /**
  * The same tooltip for an element that is not React - a CodeMirror widget's
- * button. Shown on hover and focus, gone on press, in the same layer.
+ * button. Shown on hover with ⌘ held and on keyboard focus, gone on press, in
+ * the same layer.
  */
 export function attachTip(anchor: HTMLElement, label: string, placement: TipPlacement = 'bottom'): void {
   let bubble: HTMLDivElement | null = null
   let watch = 0
+  /** Stops following ⌘, once the pointer has left. */
+  let off: (() => void) | null = null
   const hide = (): void => {
     bubble?.remove()
     bubble = null
@@ -69,13 +73,28 @@ export function attachTip(anchor: HTMLElement, label: string, placement: TipPlac
     bubble.style.top = `${at.y}px`
     // A button redrawn away under the pointer never sends pointerleave.
     watch = window.setInterval(() => {
-      if (!anchor.isConnected) hide()
+      if (anchor.isConnected) return
+      hide()
+      off?.()
+      off = null
     }, 250)
   }
-  anchor.addEventListener('pointerenter', show)
-  anchor.addEventListener('pointerleave', hide)
+  // Hovered, it shows while ⌘ is held (meta-key.ts) and goes when ⌘ is let go.
+  const follow = (): void => (metaHeld() ? show() : hide())
+  anchor.addEventListener('pointerenter', () => {
+    off?.()
+    off = subscribeMeta(follow)
+    follow()
+  })
+  anchor.addEventListener('pointerleave', () => {
+    off?.()
+    off = null
+    hide()
+  })
   anchor.addEventListener('pointerdown', hide)
-  anchor.addEventListener('focus', show)
+  anchor.addEventListener('focus', () => {
+    if (anchor.matches(':focus-visible')) show()
+  })
   anchor.addEventListener('blur', hide)
 }
 
@@ -85,15 +104,17 @@ type Props = {
   /** Second line, smaller - for a shortcut or a one-line explanation. */
   hint?: string | undefined
   placement?: TipPlacement | undefined
-  /** Let the hint wrap - for a sentence rather than a shortcut. */
-  wrap?: boolean
   children: React.ReactElement
 }
 
-export function Tip({ label, hint, placement = 'bottom', wrap = false, children }: Props): React.ReactElement {
+export function Tip({ label, hint, placement = 'bottom', children }: Props): React.ReactElement {
   const wrapper = useRef<HTMLSpanElement | null>(null)
   const bubble = useRef<HTMLDivElement | null>(null)
-  const [shown, setShown] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const meta = useMetaHeld()
+  // Under the pointer it waits for ⌘ (meta-key.ts); reached by keyboard it shows at once.
+  const shown = (hovered && meta) || focused
   const [at, setAt] = useState({ x: 0, y: 0 })
 
   useLayoutEffect(() => {
@@ -112,18 +133,22 @@ export function Tip({ label, hint, placement = 'bottom', wrap = false, children 
       <span
         className="tip__anchor"
         ref={wrapper}
-        onPointerEnter={() => setShown(true)}
-        onPointerLeave={() => setShown(false)}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
         // A tooltip that survives the click it describes is noise.
-        onPointerDown={() => setShown(false)}
-        onFocus={() => setShown(true)}
-        onBlur={() => setShown(false)}
+        onPointerDown={() => {
+          setHovered(false)
+          setFocused(false)
+        }}
+        // Keyboard focus only: a click focuses a button too, and that is not asking.
+        onFocus={(event) => setFocused((event.target as Element).matches(':focus-visible'))}
+        onBlur={() => setFocused(false)}
       >
         {children}
       </span>
       {shown &&
         createPortal(
-          <div className={`tip${wrap ? ' tip--wrap' : ''}`} ref={bubble} role="tooltip" style={{ left: at.x, top: at.y }}>
+          <div className="tip" ref={bubble} role="tooltip" style={{ left: at.x, top: at.y }}>
             <span className="tip__label">{label}</span>
             {hint !== undefined && hint !== '' && <span className="tip__hint">{hint}</span>}
           </div>,

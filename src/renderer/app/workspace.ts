@@ -15,7 +15,31 @@ export type LeafNode = {
   id: string
   type: string
   state: Record<string, unknown>
+  /** A pinned tab sits at the left of its group, narrow, and survives "close others". */
+  pinned?: true
+  /** Where this tab has been and, after going back, where it can go forward to. */
+  history?: TabHistory
 }
+
+/**
+ * Where in a note you were: the line at the top of the view (as a position in
+ * the text, so it lands right before the note is measured), and the caret.
+ */
+export type Place = { scroll: number; cursor: number }
+
+/** One step of a tab's history: what it showed, and where in it you were. */
+export type HistoryEntry = { type: string; state: Record<string, unknown>; at?: Place }
+
+/**
+ * A tab's own history, nearest first in both lists: `back[0]` is one step
+ * back. Saved with the layout, so it survives a restart.
+ */
+export type TabHistory = { back: HistoryEntry[]; forward: HistoryEntry[] }
+
+/** Steps a tab keeps, back and forward together; the oldest go first. */
+export const HISTORY_LIMIT = 100
+
+const pathOfState = (state: Record<string, unknown>): string | null => (typeof state['path'] === 'string' ? state['path'] : null)
 
 export type TabsNode = {
   kind: 'tabs'
@@ -64,6 +88,18 @@ function makeSplit(direction: SplitNode['direction'], children: WorkspaceNode[])
 }
 
 const evenSizes = (n: number): number[] => (n === 0 ? [] : Array.from({ length: n }, () => 1 / n))
+
+/** A history kept to HISTORY_LIMIT steps: the oldest back first, then the furthest forward. */
+function trimHistory(history: TabHistory): TabHistory {
+  while (history.back.length + history.forward.length > HISTORY_LIMIT) {
+    if (history.back.length > 0) history.back.pop()
+    else history.forward.pop()
+  }
+  return history
+}
+
+/** How many tabs at the left of a group are pinned. */
+const pinnedCount = (tabs: TabsNode): number => tabs.children.filter((leaf) => leaf.pinned).length
 
 export class Workspace extends Events<WorkspaceEvents> {
   private root: WorkspaceContainer
@@ -191,12 +227,13 @@ export class Workspace extends Events<WorkspaceEvents> {
     const group = keep === undefined ? null : this.tabsContaining(keep)
     if (group !== null) {
       // "Close other tabs" is about the pane it was clicked in; the panes
-      // beside it keep their tabs.
-      group.children = group.children.filter((leaf) => leaf.id === keep)
-      group.active = 0
+      // beside it keep their tabs. Pinned tabs stay, so the kept one is
+      // found again rather than assumed to be first.
+      group.children = group.children.filter((leaf) => leaf.id === keep || leaf.pinned)
+      group.active = Math.max(0, group.children.findIndex((leaf) => leaf.id === keep))
     } else {
       for (const tabs of this.allTabs()) {
-        tabs.children = []
+        tabs.children = tabs.children.filter((leaf) => leaf.pinned)
         tabs.active = 0
       }
     }
@@ -206,6 +243,40 @@ export class Workspace extends Events<WorkspaceEvents> {
       this.activeLeafId = next?.id ?? null
       this.trigger('active-leaf-change', this.activeLeaf)
     }
+    this.trigger('layout-change')
+  }
+
+  /** Close the unpinned tabs to the right of `leafId` in its group. */
+  closeToRight(leafId: string): void {
+    const tabs = this.tabsContaining(leafId)
+    if (!tabs) return
+    const i = tabs.children.findIndex((leaf) => leaf.id === leafId)
+    const closing = tabs.children.slice(i + 1).filter((leaf) => !leaf.pinned)
+    if (closing.length === 0) return
+    tabs.children = tabs.children.filter((leaf) => !closing.includes(leaf))
+    tabs.active = Math.max(0, Math.min(tabs.active, tabs.children.length - 1))
+    if (this.activeLeafId !== null && closing.some((leaf) => leaf.id === this.activeLeafId)) {
+      this.activeLeafId = tabs.children[tabs.active]?.id ?? null
+      this.trigger('active-leaf-change', this.activeLeaf)
+    }
+    this.trigger('layout-change')
+  }
+
+  /**
+   * Pin or unpin a tab. Pinned tabs are kept together at the left of their
+   * group: pinning moves the tab to the end of that run, unpinning to the
+   * start of the unpinned ones, so its neighbours do not change order.
+   */
+  setPinned(leafId: string, pinned: boolean): void {
+    const tabs = this.tabsContaining(leafId)
+    const leaf = this.getLeaf(leafId)
+    if (!tabs || !leaf || Boolean(leaf.pinned) === pinned) return
+    const active = tabs.children[tabs.active]
+    tabs.children.splice(tabs.children.indexOf(leaf), 1)
+    if (pinned) leaf.pinned = true
+    else delete leaf.pinned
+    tabs.children.splice(pinnedCount(tabs), 0, leaf)
+    if (active) tabs.active = tabs.children.indexOf(active)
     this.trigger('layout-change')
   }
 
@@ -222,7 +293,92 @@ export class Workspace extends Events<WorkspaceEvents> {
       return typeof path === 'string' && path !== '' && !exists(path)
     })
     for (const leaf of gone) this.closeLeaf(leaf.id)
+    // Steps back or forward to a note that is gone are skipped: dropped here.
+    const kept = (entry: HistoryEntry): boolean => {
+      const path = pathOfState(entry.state)
+      return path === null || path === '' || exists(path)
+    }
+    let dropped = false
+    for (const leaf of this.leaves()) {
+      if (leaf.history === undefined) continue
+      const back = leaf.history.back.filter(kept)
+      const forward = leaf.history.forward.filter(kept)
+      if (back.length === leaf.history.back.length && forward.length === leaf.history.forward.length) continue
+      leaf.history = { back, forward }
+      dropped = true
+    }
+    if (dropped && gone.length === 0) this.trigger('layout-change')
     return gone.length
+  }
+
+  /**
+   * Show something else in a tab, keeping what it showed as one step back and
+   * forgetting the steps forward. `at` is where in it you were; `via` is a
+   * step recorded in between - the overview a note was opened from.
+   */
+  navigate(leafId: string, to: { type: string; state: Record<string, unknown> }, options: { at?: Place; via?: HistoryEntry } = {}): void {
+    const leaf = this.getLeaf(leafId)
+    if (!leaf) return
+    if (leaf.type === to.type && JSON.stringify(leaf.state) === JSON.stringify(to.state) && options.via === undefined) return
+    const here: HistoryEntry = { type: leaf.type, state: leaf.state, ...(options.at === undefined ? {} : { at: options.at }) }
+    const history: TabHistory = { back: [...(options.via === undefined ? [] : [options.via]), here, ...(leaf.history?.back ?? [])], forward: [] }
+    leaf.history = trimHistory(history)
+    leaf.type = to.type
+    leaf.state = to.state
+    if (this.activeLeafId === leafId) this.trigger('active-leaf-change', leaf)
+    this.trigger('layout-change')
+  }
+
+  /**
+   * Go `steps` back (negative) or forward (positive) in a tab's history. The
+   * steps passed over move to the other list in order, so going back three
+   * and forward three lands where you started. `at` is where you are now.
+   * Returns the step arrived at - with where in it you were - or null.
+   */
+  travel(leafId: string, steps: number, at?: Place): HistoryEntry | null {
+    const leaf = this.getLeaf(leafId)
+    const history = leaf?.history
+    if (!leaf || history === undefined || steps === 0) return null
+    const [from, to] = steps < 0 ? [history.back, history.forward] : [history.forward, history.back]
+    const n = Math.abs(steps)
+    if (n > from.length) return null
+    const passed = from.splice(0, n)
+    const target = passed[n - 1]!
+    to.unshift(...passed.slice(0, n - 1).reverse(), { type: leaf.type, state: leaf.state, ...(at === undefined ? {} : { at }) })
+    leaf.history = trimHistory(history)
+    leaf.type = target.type
+    leaf.state = target.state
+    if (this.activeLeafId === leafId) this.trigger('active-leaf-change', leaf)
+    this.trigger('layout-change')
+    return target
+  }
+
+  /**
+   * A file or folder renamed: every tab showing it - or anything inside the
+   * folder - and every step of history pointing there follow it.
+   */
+  renamePath(from: string, to: string): void {
+    const moved = (state: Record<string, unknown>): Record<string, unknown> | null => {
+      const path = pathOfState(state)
+      if (path === from) return { ...state, path: to }
+      if (path?.startsWith(`${from}/`)) return { ...state, path: to + path.slice(from.length) }
+      return null
+    }
+    let changed = false
+    for (const leaf of this.leaves()) {
+      const next = moved(leaf.state)
+      if (next !== null) {
+        leaf.state = next
+        changed = true
+      }
+      for (const entry of [...(leaf.history?.back ?? []), ...(leaf.history?.forward ?? [])]) {
+        const state = moved(entry.state)
+        if (state === null) continue
+        entry.state = state
+        changed = true
+      }
+    }
+    if (changed) this.trigger('layout-change')
   }
 
   /**
@@ -279,8 +435,11 @@ export class Workspace extends Events<WorkspaceEvents> {
     if (i === -1) return
     const [leaf] = from.children.splice(i, 1)
     if (!leaf) return
-    const at = index ?? to.children.length
-    to.children.splice(Math.max(0, Math.min(at, to.children.length)), 0, leaf)
+    // Pinned tabs stay in the run at the left, unpinned ones after it.
+    const pins = pinnedCount(to)
+    const [min, max] = leaf.pinned ? [0, pins] : [pins, to.children.length]
+    const at = index ?? max
+    to.children.splice(Math.max(min, Math.min(at, max)), 0, leaf)
     to.active = to.children.indexOf(leaf)
     if (from !== to && i < from.active) from.active--
     from.active = Math.max(0, Math.min(from.active, from.children.length - 1))

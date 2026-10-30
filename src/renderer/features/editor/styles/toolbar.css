@@ -6,8 +6,35 @@
   align-items: center;
   gap: 1px;
   padding: var(--size-1) var(--size-2);
+}
+/* As a row (the focus bar's copy): a band of its own. */
+.formatbar:not(.formatbar--floating) {
   border-bottom: 1px solid var(--border);
   background: var(--tint);
+}
+
+/*
+ * The note's own bar floats: glass, like the find card, centred over the top
+ * of the note, there while you are editing it and gone when you are not. It
+ * takes no row of its own, so the tab you are on runs straight into the page.
+ */
+.formatbar--floating {
+  position: absolute;
+  top: var(--size-2);
+  left: 50%;
+  z-index: 20;
+  max-width: calc(100% - 2 * var(--size-4));
+  padding: 4px 6px;
+  border-radius: 14px;
+  transform: translateX(-50%);
+  transition:
+    opacity var(--anim-base) var(--ease),
+    transform var(--anim-base) var(--ease);
+}
+.md:not(:focus-within) > .formatbar--floating {
+  opacity: 0;
+  transform: translate(-50%, -6px);
+  pointer-events: none;
 }
 
 /* "Show formatting toolbar" off: the row goes from every editor pane. The

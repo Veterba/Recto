@@ -7,6 +7,7 @@ import { registerUnresolvedView } from '../../features/links'
 import { registerGraphView } from '../../features/graph'
 import { BoardNote, registerBoardView, useIsBoard } from '../../features/boards'
 import { registerBotView } from '../../features/bots'
+import { registerOverviewView } from '../../features/home'
 import type { Appearance } from '../appearance'
 
 /**
@@ -16,6 +17,9 @@ import type { Appearance } from '../appearance'
  */
 export function useRegisterViews(refs: {
   openFile: React.RefObject<(path: string, heading?: string | null) => void>
+  /** For the overview tab: a folder from "Most written in", and whether a note is there. */
+  openFolder: React.RefObject<(name: string) => void>
+  noteExists: React.RefObject<(path: string) => boolean>
   openBoardCard: React.RefObject<(path: string) => void>
   openBoard: React.RefObject<(path: string, card?: string) => void>
   linkCandidates: React.RefObject<LinkCandidate[]>
@@ -50,6 +54,11 @@ export function useRegisterViews(refs: {
     (card, board) => refs.openBoard.current(board, card),
   )
   registerBoardView((p) => refs.openBoardCard.current(p), renderNoteEditor)
+  registerOverviewView({
+    openFile: (p) => refs.openFile.current(p),
+    openFolder: (name) => refs.openFolder.current(name),
+    exists: (p) => refs.noteExists.current(p),
+  })
   registerBotView(
     (p, heading) => refs.openFile.current(p, heading ?? null),
     () => refs.linkCandidates.current,

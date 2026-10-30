@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { beginPaneDrag } from '../../../app/pane-drag'
 import { hoverLink } from '../../../app/link-peek'
 import { api } from '../../../app/api'
@@ -26,6 +27,8 @@ import { NoteTitle } from './NoteTitle'
 import { FileView } from './FileView'
 import { CodeView } from './CodeView'
 import { insertTableSpec } from '../table-editor'
+import { NavArrows } from '../../../app/components/NavArrows'
+import { setPlaceSource, takeRestore } from '../../../app/tab-history'
 import { fileKind } from '@shared/file-kind'
 
 /**
@@ -79,6 +82,7 @@ export function focusEditorOnOpen(): void {
 
 function MarkdownEditor({
   path,
+  leafId,
   heading,
   onOpenLink,
   onOpenPath,
@@ -89,6 +93,8 @@ function MarkdownEditor({
   onRenamed,
 }: {
   path: string
+  /** The tab it is shown in, for its history: ← and →, and where in the note to land. */
+  leafId?: string | undefined
   /** Show the editable note name above the text. */
   showTitle: boolean
   /** The note now lives at a new path; the tab follows it. */
@@ -107,6 +113,14 @@ function MarkdownEditor({
   const [status, setStatus] = useState<'loaded' | 'dirty' | 'saving' | 'saved'>('loaded')
   const saveTimer = useRef<number | undefined>(undefined)
   const handle = useRef<EditorHandle | null>(null)
+  /** The note's properties are portalled into this, which the editor places where the frontmatter is. */
+  const [propertiesSlot] = useState(() => document.createElement('div'))
+  // Where you are in the note - its scroll and caret - is what the tab's history keeps for it.
+  useEffect(() => {
+    if (leafId === undefined) return
+    setPlaceSource(leafId, () => handle.current?.getPlace() ?? null)
+    return () => setPlaceSource(leafId, null)
+  }, [leafId])
   /** Bumped after each save, so the backlinks list refreshes. */
   const [savedAt, setSavedAt] = useState(0)
   const [active, setActive] = useState<ReadonlySet<Format>>(new Set())
@@ -353,9 +367,10 @@ function MarkdownEditor({
   if (initial === null) return <div className="pane-empty" />
 
   return (
-    <div className="md">
+    <div className="md" data-path={path}>
       {writing.focus && <FocusBar active={active} text={text} onAfter={() => handle.current?.focus()} />}
       <FormatBar
+        floating
         active={active}
         onRun={(id) => {
           void commands.run(id)
@@ -369,22 +384,26 @@ function MarkdownEditor({
           handle.current?.run((state) => insertTableSpec(state, columns, rows))
         }}
       />
-      <Properties
-        text={text}
-        onOpenLink={onOpenLink}
-        getLinkCandidates={getLinkCandidates}
-        onChange={(next) => {
-          // Written through the editor, not straight to disk: that way the
-          // change is one undoable edit and the cursor is preserved.
-          handle.current?.setValue(next)
-          setText(next)
-          onChange(next)
-        }}
-      />
+      {/* Drawn inside the note, where its frontmatter is (block-hiding.ts). */}
+      {createPortal(
+        <Properties
+          text={text}
+          onOpenLink={onOpenLink}
+          getLinkCandidates={getLinkCandidates}
+          onChange={(next) => {
+            // Written through the editor, not straight to disk: that way the
+            // change is one undoable edit and the cursor is preserved.
+            handle.current?.setValue(next)
+            setText(next)
+            onChange(next)
+          }}
+        />,
+        propertiesSlot,
+      )}
       {/* The path bar stays where it always was, top left, whether the name is
           shown or not - the name goes under it, not the other way round. */}
       <div className="md__bar">
-        <span className="md__path">{path}</span>
+        {leafId !== undefined && <NavArrows leafId={leafId} />}
         <span className="md__mode">{livePreview ? 'Live Preview' : 'Source'}</span>
         <button
           className={`icon-btn md__outline-btn${outlineOpen ? ' is-on' : ''}`}
@@ -408,6 +427,7 @@ function MarkdownEditor({
       {renameNotice !== null && <p className="note-title__notice">{renameNotice}</p>}
       <Editor
         docKey={path}
+        propertiesSlot={propertiesSlot}
         initialValue={initial}
         onChange={onChange}
         onSave={flush}
@@ -444,6 +464,9 @@ function MarkdownEditor({
           refreshUnresolved(initial)
           // A link with a #heading opened this note; land on that heading.
           if (heading !== null && heading !== '') editor.revealHeading(heading)
+          // Back or forward to this note: where you were in it.
+          const at = leafId === undefined ? undefined : takeRestore(leafId)
+          if (at !== undefined) editor.setPlace(at)
         }}
       />
       <Backlinks path={path} revision={savedAt} onOpen={onOpenPath} />
@@ -494,10 +517,11 @@ export function registerMarkdownView(
   getShowTitle: () => boolean,
   hosts: NoteHosts,
 ): () => void {
-  const editor = (path: string, heading: string | null, onRenamed: (next: string) => void): React.ReactElement => (
+  const editor = (path: string, heading: string | null, onRenamed: (next: string) => void, leafId?: string): React.ReactElement => (
     <MarkdownEditor
       key={path}
       path={path}
+      leafId={leafId}
       heading={heading}
       onOpenLink={onOpenLink}
       onOpenPath={onOpenPath}
@@ -518,7 +542,7 @@ export function registerMarkdownView(
       if (typeof path !== 'string' || path === '') return 'Editor'
       return path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, '')
     },
-    render: ({ state, setState }) => {
+    render: ({ state, leafId, setState }) => {
       const path = (state as State).path
       const rawHeading = (state as State).heading
       const heading = typeof rawHeading === 'string' && rawHeading !== '' ? rawHeading : null
@@ -534,12 +558,12 @@ export function registerMarkdownView(
       // Only `.md` is a note. Images and PDFs are previewed; every other file
       // goes to the code editor, which shows the binary card if it is not text.
       const kind = fileKind(path)
-      if (kind === 'image' || kind === 'pdf') return <FileView key={path} path={path} />
-      if (kind !== 'note') return <CodeView key={path} path={path} />
+      if (kind === 'image' || kind === 'pdf') return <FileView key={path} path={path} leafId={leafId} />
+      if (kind !== 'note') return <CodeView key={path} path={path} leafId={leafId} />
       // The tab follows the file. The heading is dropped: it was where a link
       // landed when the note opened, and it is not worth re-scrolling to after
       // a rename.
-      return <NoteHost key={path} path={path} hosts={hosts} editor={editor(path, heading, (next) => setState({ path: next }))} />
+      return <NoteHost key={path} path={path} hosts={hosts} editor={editor(path, heading, (next) => setState({ path: next }), leafId)} />
     },
   })
 }

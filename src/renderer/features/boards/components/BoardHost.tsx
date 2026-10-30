@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from 'react'
 import { registerView } from '../../../app/view-registry'
+import { step } from '../../../app/tab-history'
 import { Icon } from '../../../ui/Icon'
 import { currentBoards, isBoardPath, useBoards } from '../boards-store'
 import { BoardView } from './BoardView'
@@ -31,15 +32,31 @@ export function BoardNote({
   card,
   editor,
   onOpenNote,
+  leafId,
 }: {
   path: string
   card?: string | null
   /** The note's editor, for the Markdown. */
   editor: React.ReactElement
   onOpenNote: (path: string) => void
+  /** The tab it is in: a card opened by hand is a step in its history. */
+  leafId?: string | undefined
 }): React.ReactElement {
   const showRaw = useRaw(path)
-  if (!showRaw) return <BoardView key={path} path={path} card={card ?? null} onOpenNote={onOpenNote} onShowMarkdown={() => setRaw(path, true)} />
+  if (!showRaw)
+    return (
+      <BoardView
+        key={path}
+        path={path}
+        card={card ?? null}
+        onOpenNote={onOpenNote}
+        onShowMarkdown={() => setRaw(path, true)}
+        leafId={leafId}
+        {...(leafId === undefined
+          ? {}
+          : { onCardChange: (key: string | null) => step(leafId, 'board', key === null ? { path } : { path, card: key }) })}
+      />
+    )
   return (
     <div className="board-raw">
       <div className="board-raw__bar">
@@ -80,8 +97,9 @@ export function registerBoardView(
       const path = state['path']
       return typeof path === 'string' ? path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '') : (currentBoards()[0]?.name ?? 'Board')
     },
-    render: ({ state, setState }) => (
+    render: ({ state, leafId, setState }) => (
       <BoardLeaf
+        leafId={leafId}
         path={state['path']}
         card={state['card']}
         onOpenNote={onOpenNote}
@@ -92,11 +110,13 @@ export function registerBoardView(
 }
 
 function BoardLeaf({
+  leafId,
   path,
   card,
   onOpenNote,
   renderEditor,
 }: {
+  leafId: string
   path: unknown
   card: unknown
   onOpenNote: (path: string) => void
@@ -109,5 +129,13 @@ function BoardLeaf({
     return <p className="board__empty">No boards yet. “New board” in the sidebar makes one, as a note in tasks/.</p>
   if (typeof path === 'string' && boards.length > 0 && !isBoardPath(path))
     return <p className="board__empty">“{path.replace(/\.md$/i, '')}” is not a board any more.</p>
-  return <BoardNote path={shown} card={typeof card === 'string' ? card : null} editor={renderEditor(shown)} onOpenNote={onOpenNote} />
+  return (
+    <BoardNote
+      path={shown}
+      card={typeof card === 'string' ? card : null}
+      editor={renderEditor(shown)}
+      onOpenNote={onOpenNote}
+      leafId={leafId}
+    />
+  )
 }

@@ -4,6 +4,7 @@ import { IPC, IPC_EVENT } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { createCodeEditor, type CodeHandle } from '../code-editor'
 import { BinaryCard, sizeLabel } from './FileView'
+import { NavArrows } from '../../../app/components/NavArrows'
 
 /**
  * A vault file that is not a note, in the code editor.
@@ -22,7 +23,13 @@ let activeCode: CodeHandle | null = null
 export const getActiveCodeEditor = (): CodeHandle | null =>
   activeCode !== null && document.activeElement?.closest('.code-view') != null ? activeCode : null
 
-export function CodeView({ path }: { path: string }): React.ReactElement {
+export function CodeView({
+  path,
+  leafId,
+}: {
+  path: string
+  /** The tab it is shown in, for ← and →. */ leafId?: string | undefined
+}): React.ReactElement {
   const [file, setFile] = useState<TextFileResult | null>(null)
   const [status, setStatus] = useState<'loaded' | 'dirty' | 'saving' | 'saved'>('loaded')
   const [formatError, setFormatError] = useState<string | null>(null)
@@ -121,9 +128,9 @@ export function CodeView({ path }: { path: string }): React.ReactElement {
 
   const isJson = extensionOf(path) === 'json'
   return (
-    <div className="code-view">
+    <div className="code-view" data-path={path}>
       <div className="md__bar">
-        <span className="md__path">{path}</span>
+        {leafId !== undefined && <NavArrows leafId={leafId} />}
         {readOnly && (
           <span className="code-view__notice" role="status">
             Read-only · {sizeLabel(file.size)} is too large to edit here

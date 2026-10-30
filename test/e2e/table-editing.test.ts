@@ -418,7 +418,7 @@ describe.skipIf(!RUN)('editing tables', () => {
       const file = path.join(dir(), 'Five.md')
       fs.writeFileSync(file, '# Five\n\n| N   |\n| --- |\n| r1  |\n| r2  |\n| r3  |\n| r4  |\n| r5  |\n')
       await page.locator('[role=treeitem]', { hasText: 'Five' }).click()
-      await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Five.md')
+      await page.waitForFunction(() => document.querySelector<HTMLElement>('.md[data-path]')?.dataset['path'] === 'Five.md')
       await page.waitForSelector('.cm-tbl')
       await sleep(300)
       const grip = page.locator('.cm-tbl-grip--row[data-index="2"]')
@@ -444,7 +444,7 @@ describe.skipIf(!RUN)('editing tables', () => {
     it('a note ending with a table: click below it, type - a paragraph after a blank line, never raw source; one undo takes it back', async () => {
       const file = path.join(dir(), 'Ends.md')
       await page.locator('[role=treeitem]', { hasText: 'Ends' }).click()
-      await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Ends.md')
+      await page.waitForFunction(() => document.querySelector<HTMLElement>('.md[data-path]')?.dataset['path'] === 'Ends.md')
       await page.waitForSelector('.cm-tbl')
       await sleep(300)
       const box = (await page.locator('.cm-tbl').boundingBox())!
@@ -461,7 +461,7 @@ describe.skipIf(!RUN)('editing tables', () => {
     it('arrow down from the last row, type - the same', async () => {
       const file = path.join(dir(), 'Down.md')
       await page.locator('[role=treeitem]', { hasText: 'Down' }).click()
-      await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Down.md')
+      await page.waitForFunction(() => document.querySelector<HTMLElement>('.md[data-path]')?.dataset['path'] === 'Down.md')
       await page.waitForSelector('.cm-tbl')
       await sleep(300)
       await page.locator('.cm-tbl td[data-row="1"][data-col="0"]').click()
@@ -473,7 +473,7 @@ describe.skipIf(!RUN)('editing tables', () => {
     it('a table in the middle of a note: click the line under it, type - its own paragraph, the next one untouched', async () => {
       const file = path.join(dir(), 'Middle.md')
       await page.locator('[role=treeitem]', { hasText: 'Middle' }).click()
-      await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Middle.md')
+      await page.waitForFunction(() => document.querySelector<HTMLElement>('.md[data-path]')?.dataset['path'] === 'Middle.md')
       await page.waitForSelector('.cm-tbl')
       await sleep(300)
       const box = (await page.locator('.cm-tbl').boundingBox())!
@@ -507,7 +507,7 @@ describe.skipIf(!RUN)('editing tables', () => {
         '# Menus\n\n| A   | B   | C   |\n| --- | --- | --- |\n| 1   | x   | p   |\n| 2   | y   | q   |\n| 3   | z   | r   |\n',
       )
       await page.locator('[role=treeitem]', { hasText: 'Menus' }).click()
-      await page.waitForFunction(() => document.querySelector('.md__path')?.textContent === 'Menus.md')
+      await page.waitForFunction(() => document.querySelector<HTMLElement>('.md[data-path]')?.dataset['path'] === 'Menus.md')
       await page.waitForSelector('.cm-tbl')
       await sleep(300)
     })

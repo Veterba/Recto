@@ -25,12 +25,15 @@ export type PaneDragSession = {
   native: boolean
   x: number
   y: number
-  over: { tabsId: string; rect: Rect; zone: DropZone } | null
+  /** `slot` is set over a tab strip: where in the row a dragged tab would go, and the x of that gap. */
+  over: { tabsId: string; rect: Rect; zone: DropZone; slot?: TabSlot } | null
 }
+
+export type TabSlot = { index: number; x: number }
 
 let session: PaneDragSession | null = null
 const listeners = new Set<() => void>()
-let onDrop: ((payload: PaneDragPayload, tabsId: string, zone: DropZone) => void) | null = null
+let onDrop: ((payload: PaneDragPayload, tabsId: string, zone: DropZone, slot?: TabSlot) => void) | null = null
 
 export const subscribePaneDrag = (listener: () => void): (() => void) => {
   listeners.add(listener)
@@ -52,9 +55,17 @@ const emit = (next: PaneDragSession | null): void => {
  * The pane and zone under a point. A pane that takes drops of its own - a
  * board column - is left to do so.
  */
-function hitTest(x: number, y: number): PaneDragSession['over'] {
+function hitTest(x: number, y: number, payload: PaneDragPayload): PaneDragSession['over'] {
   const element = document.elementFromPoint(x, y)
   if (element === null || element.closest('[data-accepts-drop]') !== null) return null
+  const strip = element.closest<HTMLElement>('.tabs__strip')
+  if (strip !== null && payload.kind === 'leaf') {
+    const tabsId = strip.closest<HTMLElement>('[data-tabs-id]')?.dataset['tabsId']
+    if (tabsId !== undefined) {
+      const box = strip.getBoundingClientRect()
+      return { tabsId, rect: { left: box.left, top: box.top, width: box.width, height: box.height }, zone: 'center', slot: slotAt(strip, x, payload.leafId) }
+    }
+  }
   const pane = element.closest<HTMLElement>('[data-tabs-id]')
   const tabsId = pane?.dataset['tabsId']
   if (pane == null || tabsId === undefined) return null
@@ -64,9 +75,24 @@ function hitTest(x: number, y: number): PaneDragSession['over'] {
   return zone === null ? null : { tabsId, rect, zone }
 }
 
+/**
+ * The gap in a tab strip nearest the pointer: before the first tab whose
+ * middle is right of it. The dragged tab itself is left out, so the index is
+ * the one `Workspace.moveLeaf` takes once the tab is lifted out of the row.
+ */
+function slotAt(strip: HTMLElement, x: number, dragged: string): TabSlot {
+  const tabs = [...strip.querySelectorAll<HTMLElement>('[data-leaf-id]')].filter((tab) => tab.dataset['leafId'] !== dragged)
+  for (const [index, tab] of tabs.entries()) {
+    const box = tab.getBoundingClientRect()
+    if (x < box.left + box.width / 2) return { index, x: box.left }
+  }
+  const last = tabs.at(-1)?.getBoundingClientRect()
+  return { index: tabs.length, x: last?.right ?? strip.getBoundingClientRect().left }
+}
+
 function moveTo(x: number, y: number): void {
   if (session === null) return
-  emit({ ...session, x, y, over: hitTest(x, y) })
+  emit({ ...session, x, y, over: hitTest(x, y, session.payload) })
 }
 
 function finish(commit: boolean): void {
@@ -75,7 +101,7 @@ function finish(commit: boolean): void {
   stopListening()
   document.body.classList.remove('is-pane-dragging')
   emit(null)
-  if (commit && ended.over !== null) onDrop?.(ended.payload, ended.over.tabsId, ended.over.zone)
+  if (commit && ended.over !== null) onDrop?.(ended.payload, ended.over.tabsId, ended.over.zone, ended.over.slot)
 }
 
 // --- pointer drags ---------------------------------------------------------

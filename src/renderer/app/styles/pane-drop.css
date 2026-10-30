@@ -35,6 +35,13 @@
   opacity: 1;
   transform: none;
 }
+/* Over a tab strip: the gap the tab will drop into. */
+.pane-drop__slot {
+  position: fixed;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
 /* What is being dragged, beside the pointer. Native drags bring their own. */
 .pane-drop__label {
   position: fixed;

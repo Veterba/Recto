@@ -28,6 +28,8 @@ type EditorProps = {
   onAuthorsChange?: () => void
   onFocus?: () => void
   onReady?: (handle: EditorHandle) => void
+  /** Where the note's properties are drawn, in place of its frontmatter. Read once, at mount. */
+  propertiesSlot?: HTMLElement
 }
 
 export function Editor({
@@ -45,6 +47,7 @@ export function Editor({
   onAuthorsChange,
   onFocus,
   onReady,
+  propertiesSlot,
 }: EditorProps): React.ReactElement {
   const host = useRef<HTMLDivElement | null>(null)
   const handle = useRef<EditorHandle | null>(null)
@@ -95,6 +98,7 @@ export function Editor({
       onFoldsChange: (lines) => callbacks.current.onFoldsChange?.(lines),
       onAuthorsChange: () => callbacks.current.onAuthorsChange?.(),
       onFocus: () => callbacks.current.onFocus?.(),
+      ...(propertiesSlot === undefined ? {} : { propertiesSlot }),
     })
     handle.current = editor
     callbacks.current.onReady?.(editor)

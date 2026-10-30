@@ -4,6 +4,29 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.53.0 — 2026-10-30
+### Added
+- Each tab keeps its own history - the note, where it was scrolled and where the caret was - up to 100 steps, kept when Recto restarts. ← and → at the top left of a note, board, file or the overview say how many steps they hold; ⌘ over one names where it goes. Right-click (or a long press) lists the steps, and picking one jumps there; ⌘ on a click opens that step in a new tab. ⌘[ and ⌘] and the mouse's back and forward buttons do the same. Renamed notes are followed and deleted ones skipped.
+- A card opened on a board is a step in the tab's history (← closes it again), and so is each list opened in the overview.
+- "Open overview in a tab" in the command palette: the overview as a tab, whose lists and the notes opened from them are steps in its history. A note opened from the ⌃⌘H overlay has the overview as its step back.
+- Pin a tab from its right-click menu: it becomes a narrow icon at the left of the row, stays there, and survives "Close others" and "Close to the right". Pins are kept when Recto restarts.
+- A tab's right-click menu: Close, Close others, Close to the right, Pin or Unpin, Copy link (`[[Note name]]`) and Reveal in tree, which opens the sidebar on the Data tree with the note's folders expanded. "Reveal in tree" is also in the command palette.
+- When the tabs no longer fit, the row scrolls sideways (with a mouse wheel too) and an "All tabs" button at the right lists every tab in the pane, with a search field.
+- Drag a tab along the row to reorder it; a line shows where it will go.
+- Hold ⌘ over a tab to see the note's path. Two open tabs with the same name show their folder in smaller text beside the name.
+- Tooltips and hover info (button names, shortcuts, Tidy's explanation) show only while ⌘ is held, everywhere in the app, so moving the pointer around shows nothing. Reaching a button with the keyboard still shows its tooltip.
+- A board's right-click menu has "Copy relative path" and "Copy full path".
+- A note with no properties has a faint "+ Add property" above its first line, shown when the pointer is over it; "Add properties to note" in the command palette does the same.
+### Changed
+- A note, board or card opens in the tab you are in, so ← takes you back; ⌘-click opens it in a new tab. A pinned tab is never replaced - what you open from it gets a tab of its own - and neither is a chat or the graph. A board reached from a note opens in that same tab.
+- Properties are inside the note, at the top of the text where the frontmatter is: one line, `› status active · due 2026-11-03`, that opens into the editable table in place. They scroll with the note, and a note without properties shows nothing. The file is unchanged: still plain YAML frontmatter. In Source mode the YAML shows as before.
+- The note's path is no longer shown at the top left of a note, code file or image; hold ⌘ over its tab instead.
+- The formatting toolbar floats over the top of the note as a glass bar while you are editing it, and fades out when you are not, instead of taking a row of its own.
+- Tabs: the tab open in a pane is a card of the page's own colour joined to the page, on a clearly darker bar, so which tab is open is plain to see in both themes; the others are quiet text. A short dark bar under the name marks the note you are in. Tabs shrink to 120px before the row scrolls.
+- Neutral colours in both themes: the light theme's beige chrome (tab bar, toolbars, borders, grey text) is plain grey on white, and the last tints are gone from the glass, the sidebar and the tab marking in both themes.
+### Fixed
+- A tooltip with a long explanation (Tidy's) no longer runs out past the edge of its bubble over whatever is behind it.
+
 ## v0.52.2 — 2026-10-29
 ### Fixed
 - A note that can't be saved (disk full, no permission) keeps your text in the editor, says why next to "Unsaved", and tries again on the next keystroke, ⌘S or closing the tab; before, the editor was replaced by an error and the unsaved text was lost. Renaming such a note is refused instead of moving the old file.

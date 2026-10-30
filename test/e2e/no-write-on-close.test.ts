@@ -123,7 +123,7 @@ describe.skipIf(!RUN)('closing a note it did not change', () => {
     for (const type of ['keyDown', 'keyUp'])
       await cdp.call('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
     await sleep(1000)
-    expect(await evaluate("document.querySelector('.md__path')?.textContent")).toBe('Notes/Слепой набор.md')
+    expect(await evaluate("document.querySelector('.md[data-path]')?.dataset.path")).toBe('Notes/Слепой набор.md')
 
     // Click into the text and walk the cursor to the end of the last line.
     const [x, y] = (await evaluate(

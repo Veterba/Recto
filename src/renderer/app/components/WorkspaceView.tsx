@@ -1,13 +1,10 @@
 import { useCallback, useRef } from 'react'
 import { commands } from '../commands'
-import { getView, viewTitle } from '../view-registry'
+import { getView } from '../view-registry'
 import type { SplitNode, TabsNode, Workspace, WorkspaceNode } from '../workspace'
-import { Icon } from '../../ui/Icon'
-import { Tip } from '../../ui/Tip'
 import { ViewBoundary } from './ViewBoundary'
+import { TabBar } from './TabBar'
 import { boundaryOf, evenPair, resizeSplit } from '../split-resize'
-import { beginPaneDrag } from '../pane-drag'
-import { pressOrDrag } from '../../ui/press-or-drag'
 
 /**
  * Renders the workspace tree. Recursive and dumb: it reads the tree and calls
@@ -170,58 +167,7 @@ function Tabs({ workspace, node }: { workspace: Workspace; node: TabsNode; revis
 
   return (
     <div className={`tabs${isFocusedGroup ? ' is-focused' : ''}`} data-tabs-id={node.id}>
-      <div className="tabs__bar">
-        <div className="tabs__strip" role="tablist">
-          {node.children.map((leaf, i) => (
-            <div
-              key={leaf.id}
-              role="tab"
-              aria-selected={i === node.active}
-              tabIndex={0}
-              className={`tab${i === node.active ? ' is-active' : ''}`}
-              onMouseDown={() => workspace.setActiveTab(node.id, i)}
-              // Dragged onto a pane, the tab moves there - or splits it.
-              onPointerDown={(ev) => {
-                if ((ev.target as HTMLElement).closest('.tab__close') !== null) return
-                pressOrDrag(ev, {
-                  onDrag: (x, y) => beginPaneDrag({ kind: 'leaf', leafId: leaf.id }, viewTitle(leaf.type, leaf.state), x, y),
-                })
-              }}
-              onKeyDown={(ev) => {
-                if (ev.key === 'Enter' || ev.key === ' ') workspace.setActiveTab(node.id, i)
-              }}
-              onAuxClick={(ev) => {
-                if (ev.button === 1) workspace.closeLeaf(leaf.id) // middle-click closes
-              }}
-            >
-              <span className="tab__title">{viewTitle(leaf.type, leaf.state)}</span>
-              <button
-                className="tab__close"
-                aria-label={`Close ${viewTitle(leaf.type, leaf.state)}`}
-                onMouseDown={(ev) => ev.stopPropagation()}
-                onClick={(ev) => {
-                  ev.stopPropagation()
-                  workspace.closeLeaf(leaf.id)
-                }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-        {node.children.length > 1 && (
-          <Tip label="Close other tabs" hint="Keeps the one you are in" placement="bottom">
-            <button
-              className="tabs__clear"
-              aria-label="Close other tabs"
-              onMouseDown={(ev) => ev.preventDefault()}
-              onClick={() => workspace.closeAll(active === undefined ? {} : { except: active.id })}
-            >
-              <Icon name="list-x" size={15} />
-            </button>
-          </Tip>
-        )}
-      </div>
+      <TabBar workspace={workspace} node={node} />
       <div className="tabs__content" role="tabpanel">
         {active ? <Leaf key={active.id} workspace={workspace} leafId={active.id} /> : <EmptyPane />}
       </div>

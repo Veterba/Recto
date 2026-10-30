@@ -6,6 +6,7 @@ import type { EditorState, TransactionSpec } from '@codemirror/state'
 import type { WritingSettings } from './writing-modes'
 import type { StoredRange, Author } from './authorship'
 import type { Format } from './active-formats'
+import type { Place } from '../../app/workspace'
 
 export type EditorHandle = {
   /** Current document text. */
@@ -46,6 +47,10 @@ export type EditorHandle = {
   revealLine: (line: number) => void
   /** The caret's line, 1-based. */
   getCursorLine: () => number
+  /** Where in the note you are - its scroll and caret - for the tab's history. */
+  getPlace: () => Place
+  /** Back where you were: the caret, then the scroll. */
+  setPlace: (place: Place) => void
   /** Fold or unfold the heading or list item under the caret. */
   toggleFold: () => boolean
   foldAll: () => void

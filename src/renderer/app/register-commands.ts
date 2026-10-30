@@ -2,6 +2,8 @@ import type { CommandRegistry } from './commands'
 import { EXTENSION_VIEWS, SECTIONS, type SectionId } from './sections'
 import { listViews } from './view-registry'
 import type { Workspace } from './workspace'
+import { revealInTree } from './reveal-in-tree'
+import { travel } from './tab-history'
 import { HOME_HOTKEY } from '../features/home'
 
 /**
@@ -88,6 +90,39 @@ export function registerAppCommands(registry: CommandRegistry, ctx: CommandConte
       hotkey: 'Mod+Alt+R',
       isAvailable: () => typeof workspace.activeLeaf?.state['path'] === 'string',
       run: ctx.revealActive,
+    }),
+    // The tab you are in, back and forward through its own history (tab-history.ts).
+    registry.register({
+      id: 'nav:back',
+      name: 'Go back',
+      section: 'Panes',
+      hotkey: 'Mod+[',
+      isAvailable: () => (workspace.activeLeaf?.history?.back.length ?? 0) > 0,
+      run: () => {
+        const leaf = workspace.activeLeaf
+        if (leaf !== null) travel(leaf.id, -1)
+      },
+    }),
+    registry.register({
+      id: 'nav:forward',
+      name: 'Go forward',
+      section: 'Panes',
+      hotkey: 'Mod+]',
+      isAvailable: () => (workspace.activeLeaf?.history?.forward.length ?? 0) > 0,
+      run: () => {
+        const leaf = workspace.activeLeaf
+        if (leaf !== null) travel(leaf.id, 1)
+      },
+    }),
+    registry.register({
+      id: 'vault:reveal-in-tree',
+      name: 'Reveal in tree',
+      section: 'Vault',
+      isAvailable: () => typeof workspace.activeLeaf?.state['path'] === 'string',
+      run: () => {
+        const path = workspace.activeLeaf?.state['path']
+        if (typeof path === 'string') revealInTree(path)
+      },
     }),
     registry.register({
       id: 'app:toggle-sidebar',

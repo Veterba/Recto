@@ -91,7 +91,7 @@
    * pull very slightly violet, which reads as a colour cast rather than as a
    * dark theme.
    */
-  --sidebar-rgb: 252 252 253;
+  --sidebar-rgb: 252 252 252;
   /* How far the transparency slider is allowed to take the panel. The dark
      theme fades less: a dark panel over a dark desktop runs out of contrast
      long before a dark panel over a bright one does. */
@@ -115,7 +115,7 @@
   /* One ink, two strengths, both driven from settings. Not pure white: at 100%
      over a mid-grey panel the text glows rather than reads, which is what made
      it look faded - too bright, not too dim. */
-  --sidebar-ink: 24 24 27;
+  --sidebar-ink: 24 24 24;
   --sidebar-ink-alpha: 0.94;
   --sidebar-dim-alpha: 0.68;
   --sidebar-text: rgb(var(--sidebar-ink) / var(--sidebar-ink-alpha));
@@ -143,7 +143,7 @@
    * grain. Ink at 28% is what the separator already used and what reads at any
    * grain setting, and it follows whatever colour the user tints the sidebar.
    */
-  --sidebar-line: rgb(var(--sidebar-ink, 244 244 245) / 0.28);
+  --sidebar-line: rgb(var(--sidebar-ink, 244 244 244) / 0.28);
 
   --chrome: var(--bg-secondary);
   --chrome-strong: var(--bg-secondary);
@@ -161,7 +161,7 @@
 /*
  * The light surfaces are deliberately far apart in value: an earlier pass had
  * the chrome 9 units off the content area and the whole window read as one flat
- * sheet. Content is pure white, chrome is warm grey.
+ * sheet. Content is pure white, chrome is neutral grey with no warm tint.
  *
  * Theme resolution, in precedence order:
  *   1. an explicit [data-theme] wins, always (the user chose);
@@ -180,6 +180,14 @@
   --bg-secondary: #1e1e1e;
   --bg-elevated: #262626;
   --bg-hover: #2f2f2f;
+  /* The tab bar: a tray far enough from the page that the open tab, a card
+     of the page's own colour, is plain to see. Darker than the page in the
+     dark, so the open tab is the lighter shape there too. */
+  --tabbar: #050505;
+  /* The open tab's lit edge, and the others' quieter names: in the dark
+     the card is told apart by light, not by a white fill. */
+  --tab-edge: rgb(255 255 255 / 0.1);
+  --tab-ink: var(--text-muted);
   --border: #303030;
   --border-strong: #434343;
   --text-primary: #ededed;
@@ -249,19 +257,22 @@
     --accent-s: 91%;
     --accent-l: 46%;
     --bg-primary: #ffffff;
-    --bg-secondary: #f1f0ed;
+    --bg-secondary: #f5f5f5;
     --bg-elevated: #ffffff;
-    --bg-hover: #e4e3df;
-    --border: #dededa;
-    --border-strong: #c3c2bc;
-    --text-primary: #1a1a18;
-    --text-secondary: #57574f;
-    --text-muted: #85847c;
+    --bg-hover: #e8e8e8;
+    --tabbar: #e6e6e6;
+    --tab-edge: transparent;
+    --tab-ink: var(--text-secondary);
+    --border: #e2e2e2;
+    --border-strong: #c4c4c4;
+    --text-primary: #1a1a1a;
+    --text-secondary: #555555;
+    --text-muted: #848484;
     --danger: #c2352b;
     --warning: #a96a12;
     --success: #2e8550;
     --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
-    --code-bg: #f3f3f1;
+    --code-bg: #f4f4f4;
     --highlight-bg: rgb(255 206 61 / 0.42);
     --highlight-red: rgb(255 92 92 / 0.28);
     --highlight-orange: rgb(255 150 50 / 0.32);
@@ -271,11 +282,11 @@
     --highlight-purple: rgb(160 100 250 / 0.24);
     --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
     --shadow-md: 0 6px 20px rgb(0 0 0 / 0.1);
-    --chrome-rgb: 250 249 247;
+    --chrome-rgb: 250 250 250;
     --glass-border: rgb(0 0 0 / 0.07);
     --ink: var(--text-primary);
     --on-ink: var(--bg-primary);
-    --glass-surface-bg: rgb(240 240 243 / 0.8);
+    --glass-surface-bg: rgb(242 242 242 / 0.8);
     --glass-surface-blur: blur(24px) saturate(180%);
     --glass-surface-sheen: rgb(255 255 255 / 1);
     --glass-surface-highlight: rgb(255 255 255 / 1);
@@ -302,19 +313,22 @@
   --accent-s: 91%;
   --accent-l: 46%;
   --bg-primary: #ffffff;
-  --bg-secondary: #f1f0ed;
+  --bg-secondary: #f5f5f5;
   --bg-elevated: #ffffff;
-  --bg-hover: #e4e3df;
-  --border: #dededa;
-  --border-strong: #c3c2bc;
-  --text-primary: #1a1a18;
-  --text-secondary: #57574f;
-  --text-muted: #85847c;
+  --bg-hover: #e8e8e8;
+  --tabbar: #e6e6e6;
+  --tab-edge: transparent;
+  --tab-ink: var(--text-secondary);
+  --border: #e2e2e2;
+  --border-strong: #c4c4c4;
+  --text-primary: #1a1a1a;
+  --text-secondary: #555555;
+  --text-muted: #848484;
   --danger: #c2352b;
   --warning: #a96a12;
   --success: #2e8550;
   --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.12);
-  --code-bg: #f3f3f1;
+  --code-bg: #f4f4f4;
   --highlight-bg: rgb(255 206 61 / 0.42);
   --highlight-red: rgb(255 92 92 / 0.28);
   --highlight-orange: rgb(255 150 50 / 0.32);
@@ -324,11 +338,11 @@
   --highlight-purple: rgb(160 100 250 / 0.24);
   --shadow-sm: 0 1px 4px rgb(0 0 0 / 0.08);
   --shadow-md: 0 6px 20px rgb(0 0 0 / 0.1);
-  --chrome-rgb: 250 249 247;
+  --chrome-rgb: 250 250 250;
   --glass-border: rgb(0 0 0 / 0.07);
   --ink: var(--text-primary);
   --on-ink: var(--bg-primary);
-  --glass-surface-bg: rgb(240 240 243 / 0.8);
+  --glass-surface-bg: rgb(242 242 242 / 0.8);
   --glass-surface-blur: blur(24px) saturate(180%);
   --glass-surface-sheen: rgb(255 255 255 / 1);
   --glass-surface-highlight: rgb(255 255 255 / 1);
@@ -354,6 +368,9 @@
   --bg-secondary: #1e1e1e;
   --bg-elevated: #262626;
   --bg-hover: #2f2f2f;
+  --tabbar: #050505;
+  --tab-edge: rgb(255 255 255 / 0.1);
+  --tab-ink: var(--text-muted);
   --border: #303030;
   --border-strong: #434343;
   --text-primary: #ededed;
@@ -432,7 +449,7 @@
   --sidebar-fade: 0.5;
   --sidebar-t: 0.8;
   --grain-base: 0.52;
-  --sidebar-ink: 244 244 245;
+  --sidebar-ink: 244 244 244;
   --sidebar-row: rgb(255 255 255 / 0.07);
   --sidebar-row-active: rgb(255 255 255 / 0.12);
   --sidebar-field: rgb(255 255 255 / 0.07);
@@ -441,12 +458,12 @@
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) {
-    --sidebar-rgb: 252 252 253;
+    --sidebar-rgb: 252 252 252;
     --sidebar-fade: 0.82;
     --sidebar-t: 1;
     /* Grain over a light frost reads as dirt, not as material. */
     --grain-base: 0.3;
-    --sidebar-ink: 24 24 27;
+    --sidebar-ink: 24 24 24;
     --sidebar-row: rgb(0 0 0 / 0.06);
     --sidebar-row-active: rgb(0 0 0 / 0.1);
     --sidebar-field: rgb(0 0 0 / 0.06);
@@ -455,11 +472,11 @@
 }
 
 :root[data-theme='light'] {
-  --sidebar-rgb: 252 252 253;
+  --sidebar-rgb: 252 252 252;
   --sidebar-fade: 0.82;
   --sidebar-t: 1;
   --grain-base: 0.3;
-  --sidebar-ink: 24 24 27;
+  --sidebar-ink: 24 24 24;
   --sidebar-row: rgb(0 0 0 / 0.06);
   --sidebar-row-active: rgb(0 0 0 / 0.1);
   --sidebar-field: rgb(0 0 0 / 0.06);

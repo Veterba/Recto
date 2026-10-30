@@ -27,6 +27,7 @@ import { widgetsOf } from '../widgets/registry'
 import { BoardColumn } from './BoardColumn'
 import { CardPanel } from './CardPanel'
 import { NewCardPopover } from './NewCardPopover'
+import { NavArrows } from '../../../app/components/NavArrows'
 
 const LEVEL_LABEL = { high: 'High', medium: 'Medium', low: 'Low', none: 'No priority' } as const
 
@@ -47,6 +48,10 @@ type Props = {
   onOpenNote: (path: string) => void
   /** The board note's Markdown, instead of the board. */
   onShowMarkdown?: () => void
+  /** A card opened or closed by hand, for the tab's history: ← closes it again. */
+  onCardChange?: (key: string | null) => void
+  /** The tab it is shown in, for ← and →. */
+  leafId?: string | undefined
 }
 
 /**
@@ -54,14 +59,20 @@ type Props = {
  * (an empty value drops its key), carried to `rename`, or dropped with the lane.
  * The block is left alone when nothing in it changes.
  */
-function setLook(text: string, title: string, change: { look?: Record<string, string | undefined>; rename?: string; drop?: boolean }): string {
+function setLook(
+  text: string,
+  title: string,
+  change: { look?: Record<string, string | undefined>; rename?: string; drop?: boolean },
+): string {
   const before = rectoSettings(parseKanban(text)).lanes ?? {}
   const lanes = { ...before }
   const current = lanes[title] ?? {}
   delete lanes[title]
   if (change.drop !== true) {
     const merged: Record<string, string | undefined> = { ...current, ...change.look }
-    const clean = Object.fromEntries(Object.entries(merged).filter((entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== ''))
+    const clean = Object.fromEntries(
+      Object.entries(merged).filter((entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== ''),
+    )
     if (Object.keys(clean).length > 0) lanes[change.rename ?? title] = clean
   }
   if (JSON.stringify(lanes) === JSON.stringify(before)) return text
@@ -79,8 +90,16 @@ function fileIndex(shown: readonly CardView[], at: number, moving: CardView | un
   return last === undefined ? 0 : shift(last.index) + 1
 }
 
-export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShowMarkdown }: Props): React.ReactElement {
-  const { board, cards, error, notice, clearNotice, editBoard, editCard, move, addCard, makeNote, removeCard, renameCard } = useBoardCards(path)
+export function BoardView({
+  path,
+  card: openOnArrival = null,
+  onOpenNote,
+  onShowMarkdown,
+  onCardChange,
+  leafId,
+}: Props): React.ReactElement {
+  const { board, cards, error, notice, clearNotice, editBoard, editCard, move, addCard, makeNote, removeCard, renameCard } =
+    useBoardCards(path)
   const [dragging, setDragging] = useState<string | null>(null)
   const [drop, setDrop] = useState<{ column: string; at: number } | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -95,9 +114,15 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
   const sortMenu = useContextMenu<null>()
   const today = isoDay(new Date())
 
+  // The tab's state says which card is open: on arrival, and when ← or → moves through the cards opened here.
   useEffect(() => {
-    if (openOnArrival !== null) setSelected(openOnArrival)
+    setSelected(openOnArrival)
   }, [openOnArrival])
+  /** A card opened or closed by you, as opposed to one that went away: a step in the tab's history. */
+  const choose = (key: string | null): void => {
+    setSelected(key)
+    onCardChange?.(key)
+  }
 
   const all = useMemo(() => cards ?? [], [cards])
   const sort: SortKey = isSortKey(board?.sort) ? board.sort : 'manual'
@@ -120,7 +145,7 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
       if (target.closest('input, select, textarea, [contenteditable="true"]') !== null) return
       if (target !== document.body && root.current?.contains(target) !== true) return
       event.preventDefault()
-      setSelected(null)
+      choose(null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -149,7 +174,10 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
     void editBoard((t) => {
       let out = t
       if (next.name !== column.name || next.wip !== column.wip) out = setLaneHeading(out, column.index, next.name, next.wip ?? null)
-      out = setLook(out, column.name, { look: { color: next.color ?? '', start: next.start ?? '', due: next.due ?? '' }, rename: next.name })
+      out = setLook(out, column.name, {
+        look: { color: next.color ?? '', start: next.start ?? '', due: next.due ?? '' },
+        rename: next.name,
+      })
       if (next.done === true && column.done !== true) {
         // One done lane: marking this one unmarks the other.
         for (const other of board.columns) if (other.done === true) out = setLaneComplete(out, other.index, false)
@@ -198,7 +226,12 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
             icon: 'copy',
             run: () => void navigator.clipboard.writeText(card.path).catch(() => undefined),
           } as MenuItem,
-          { kind: 'item', label: 'Reveal in Finder', icon: 'external-link', run: () => void api.invoke(IPC.fsReveal, card.path) } as MenuItem,
+          {
+            kind: 'item',
+            label: 'Reveal in Finder',
+            icon: 'external-link',
+            run: () => void api.invoke(IPC.fsReveal, card.path),
+          } as MenuItem,
         ]),
     { kind: 'separator' },
     { kind: 'heading', label: 'Move to' },
@@ -255,7 +288,7 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
         finishDrag()
         moveTo(key, id, at)
       },
-      onOpenCard: setSelected,
+      onOpenCard: choose,
       onCardMenu: (event: React.MouseEvent, card: CardView) => cardMenu.open(event, card),
       onNewCard: (anchor: DOMRect) => setNewCard({ column: id, anchor, choose: false }),
       onEdit: (next: Column) => editColumn(column, next),
@@ -267,6 +300,7 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
     <div className="board" ref={root}>
       <div className="board__main">
         <div className="board__toolbar">
+          {leafId !== undefined && <NavArrows leafId={leafId} />}
           <h1 className="board__name">{board.name}</h1>
           <label className="board__filter">
             <Icon name="search" size={12} />
@@ -331,7 +365,7 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
             cards={all.filter((card) => !card.light)}
             today={today}
             priority={priority}
-            onOpenCard={(cardPath) => setSelected(all.find((c) => c.path === cardPath)?.key ?? null)}
+            onOpenCard={(cardPath) => choose(all.find((c) => c.path === cardPath)?.key ?? null)}
             onFilterPriority={(level) => setPriority(priority === level ? null : level)}
             onEditWidgets={(next) => recto({ widgets: next })}
           />
@@ -348,12 +382,11 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
 
         {cards !== null && cards.length === 0 && board.columns.length > 0 && (
           <p className="board__empty">
-            No cards on <strong>{board.name}</strong> yet. Every card you add is a real note in <code>{CARD_FOLDER}/</code>, linked from this board.
+            No cards on <strong>{board.name}</strong> yet. Every card you add is a real note in <code>{CARD_FOLDER}/</code>, linked from
+            this board.
           </p>
         )}
-        {board.columns.length === 0 && (
-          <p className="board__empty">This board has no columns yet. Add one with + on the right.</p>
-        )}
+        {board.columns.length === 0 && <p className="board__empty">This board has no columns yet. Add one with + on the right.</p>}
       </div>
 
       {open !== undefined && (
@@ -365,14 +398,14 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
           move={move}
           onRename={async (name) => {
             const next = await renameCard(open.path, name)
-            if (next !== null) setSelected(next)
+            if (next !== null) choose(next)
           }}
           onMakeNote={async () => {
             const made = await makeNote(open.key)
-            if (made !== null) setSelected(made)
+            if (made !== null) choose(made)
           }}
           onOpenNote={onOpenNote}
-          onClose={() => setSelected(null)}
+          onClose={() => choose(null)}
         />
       )}
 
@@ -385,7 +418,7 @@ export function BoardView({ path, card: openOnArrival = null, onOpenNote, onShow
           onOpenExisting={(existing) => {
             setNewCard(null)
             const shown = all.find((card) => card.path === existing)
-            if (shown !== undefined) setSelected(shown.key)
+            if (shown !== undefined) choose(shown.key)
             else onOpenNote(existing)
           }}
           onClose={() => setNewCard(null)}

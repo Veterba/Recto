@@ -4,5 +4,6 @@ import './styles/home.css'
 import './styles/overview.css'
 
 export * from './components/HomeOverlay'
+export { registerOverviewView } from './components/OverviewTab'
 export { HOME_HOTKEY, typingInField } from './home-hotkey'
 export { forgetFigures, loadPlace } from './overview-store'

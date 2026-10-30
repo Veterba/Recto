@@ -453,3 +453,25 @@ button.overview__cell:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* ---------- the overview as a tab (OverviewTab) ----------
+ * The same card, on the page instead of the field: the overlay pane's colours,
+ * scrolling under the tab's own ← → row. */
+.overview-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  --paper: var(--bg-primary);
+  --heat-0: color-mix(in srgb, var(--text-primary) 7%, var(--paper));
+  --heat-1: color-mix(in srgb, var(--accent) 28%, var(--paper));
+  --heat-2: color-mix(in srgb, var(--accent) 52%, var(--paper));
+  --heat-3: color-mix(in srgb, var(--accent) 76%, var(--paper));
+  --heat-4: var(--accent);
+}
+.overview-tab__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--size-6);
+}

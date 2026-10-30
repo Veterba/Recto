@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Workspace, makeLeaf, makeTabs, type SplitNode, type WorkspaceLayout } from '../../../src/renderer/app/workspace'
+import { HISTORY_LIMIT, Workspace, makeLeaf, makeTabs, type SplitNode, type WorkspaceLayout } from '../../../src/renderer/app/workspace'
 import { DEFAULT_SECTION, SECTIONS, getSection, isSectionId } from '../../../src/renderer/app/sections'
 
 /** Narrow the root to a split, failing the test if it is not one. */
@@ -256,5 +256,157 @@ describe('tabs that outlive their notes', () => {
     const keep = workspace.leaves()[1]!
     workspace.closeAll({ except: keep.id })
     expect(workspace.leaves().map((leaf) => leaf.state['path'])).toEqual(['b.md'])
+  })
+})
+
+describe('pinned tabs', () => {
+  const withNotes = (paths: readonly string[]): Workspace => {
+    const workspace = new Workspace()
+    for (const path of paths) workspace.openView('markdown', { path })
+    return workspace
+  }
+  const paths = (workspace: Workspace): unknown[] => workspace.leaves().map((leaf) => leaf.state['path'])
+  const leafAt = (workspace: Workspace, path: string) => workspace.leaves().find((leaf) => leaf.state['path'] === path)!
+
+  it('moves a pinned tab to the end of the pinned run at the left, and back on unpin', () => {
+    const workspace = withNotes(['a.md', 'b.md', 'c.md', 'd.md'])
+    workspace.setPinned(leafAt(workspace, 'c.md').id, true)
+    workspace.setPinned(leafAt(workspace, 'd.md').id, true)
+    expect(paths(workspace)).toEqual(['c.md', 'd.md', 'a.md', 'b.md'])
+    workspace.setPinned(leafAt(workspace, 'c.md').id, false)
+    expect(paths(workspace)).toEqual(['d.md', 'c.md', 'a.md', 'b.md'])
+  })
+
+  it('keeps the same tab active while pinning reorders the row', () => {
+    const workspace = withNotes(['a.md', 'b.md', 'c.md'])
+    workspace.setPinned(leafAt(workspace, 'b.md').id, true)
+    expect(workspace.activeLeaf?.state['path']).toBe('c.md')
+    const tabs = workspace.tabsContaining(leafAt(workspace, 'c.md').id)!
+    expect(tabs.children[tabs.active]?.state['path']).toBe('c.md')
+  })
+
+  it('survives close others and close to the right', () => {
+    const workspace = withNotes(['a.md', 'b.md', 'c.md', 'd.md'])
+    workspace.setPinned(leafAt(workspace, 'd.md').id, true)
+    workspace.closeAll({ except: leafAt(workspace, 'b.md').id })
+    expect(paths(workspace)).toEqual(['d.md', 'b.md'])
+    expect(workspace.activeLeaf?.state['path']).toBe('b.md')
+
+    const more = withNotes(['a.md', 'b.md', 'c.md'])
+    more.setPinned(leafAt(more, 'c.md').id, true)
+    more.closeToRight(leafAt(more, 'c.md').id)
+    expect(paths(more)).toEqual(['c.md'])
+  })
+
+  it('closes only the tabs to the right', () => {
+    const workspace = withNotes(['a.md', 'b.md', 'c.md', 'd.md'])
+    workspace.closeToRight(leafAt(workspace, 'b.md').id)
+    expect(paths(workspace)).toEqual(['a.md', 'b.md'])
+    expect(workspace.activeLeaf?.state['path']).toBe('b.md')
+  })
+
+  it('reorders within a group without crossing the pinned boundary', () => {
+    const workspace = withNotes(['a.md', 'b.md', 'c.md'])
+    workspace.setPinned(leafAt(workspace, 'a.md').id, true)
+    const tabsId = workspace.tabsContaining(leafAt(workspace, 'a.md').id)!.id
+    workspace.moveLeaf(leafAt(workspace, 'c.md').id, tabsId, 0)
+    expect(paths(workspace)).toEqual(['a.md', 'c.md', 'b.md'])
+    workspace.moveLeaf(leafAt(workspace, 'a.md').id, tabsId, 2)
+    expect(paths(workspace)).toEqual(['a.md', 'c.md', 'b.md'])
+  })
+
+  it('keeps the pin through a save and restore', () => {
+    const workspace = withNotes(['a.md', 'b.md'])
+    workspace.setPinned(leafAt(workspace, 'b.md').id, true)
+    const restored = new Workspace(JSON.parse(JSON.stringify(workspace.serialize())) as WorkspaceLayout)
+    expect(restored.leaves().map((leaf) => [leaf.state['path'], leaf.pinned ?? false])).toEqual([
+      ['b.md', true],
+      ['a.md', false],
+    ])
+  })
+})
+
+describe('tab history', () => {
+  const tab = (): { workspace: Workspace; id: string } => {
+    const workspace = new Workspace()
+    return { workspace, id: workspace.openView('markdown', { path: 'a.md' }).id }
+  }
+  const go = (workspace: Workspace, id: string, path: string): void => workspace.navigate(id, { type: 'markdown', state: { path } })
+  const shown = (workspace: Workspace, id: string): unknown => workspace.getLeaf(id)?.state['path']
+  const lists = (workspace: Workspace, id: string): [unknown[], unknown[]] => {
+    const history = workspace.getLeaf(id)?.history
+    return [(history?.back ?? []).map((e) => e.state['path']), (history?.forward ?? []).map((e) => e.state['path'])]
+  }
+
+  it('keeps each note it showed as a step back, nearest first, and forgets the steps forward', () => {
+    const { workspace, id } = tab()
+    go(workspace, id, 'b.md')
+    go(workspace, id, 'c.md')
+    expect(lists(workspace, id)).toEqual([['b.md', 'a.md'], []])
+    workspace.travel(id, -1)
+    go(workspace, id, 'd.md')
+    expect(lists(workspace, id)).toEqual([['b.md', 'a.md'], []])
+    expect(shown(workspace, id)).toBe('d.md')
+  })
+
+  it('goes several steps at once and comes back to where it started', () => {
+    const { workspace, id } = tab()
+    for (const path of ['b.md', 'c.md', 'd.md']) go(workspace, id, path)
+    const arrived = workspace.travel(id, -3, { scroll: 40, cursor: 7 })
+    expect(arrived?.state['path']).toBe('a.md')
+    expect(lists(workspace, id)).toEqual([[], ['b.md', 'c.md', 'd.md']])
+    expect(workspace.travel(id, 3)?.state['path']).toBe('d.md')
+    expect(lists(workspace, id)).toEqual([['c.md', 'b.md', 'a.md'], []])
+    expect(workspace.travel(id, -1)?.state['path']).toBe('c.md')
+    expect(workspace.getLeaf(id)?.history?.forward[0]?.at).toBeUndefined()
+  })
+
+  it('remembers where in a note you were, for coming back to it', () => {
+    const { workspace, id } = tab()
+    workspace.navigate(id, { type: 'markdown', state: { path: 'b.md' } }, { at: { scroll: 120, cursor: 33 } })
+    expect(workspace.travel(id, -1)?.at).toEqual({ scroll: 120, cursor: 33 })
+  })
+
+  it('refuses to go further than it has been, and does nothing for the same note', () => {
+    const { workspace, id } = tab()
+    expect(workspace.travel(id, -1)).toBeNull()
+    go(workspace, id, 'a.md')
+    expect(lists(workspace, id)).toEqual([[], []])
+  })
+
+  it('keeps 100 steps, dropping the oldest', () => {
+    const { workspace, id } = tab()
+    for (let i = 0; i < 120; i++) go(workspace, id, `${i}.md`)
+    const [back] = lists(workspace, id)
+    expect(back).toHaveLength(HISTORY_LIMIT)
+    expect(back[0]).toBe('118.md')
+  })
+
+  it('follows a rename, of the note or a folder it is in, everywhere in the history', () => {
+    const { workspace, id } = tab()
+    go(workspace, id, 'Garden/b.md')
+    go(workspace, id, 'c.md')
+    workspace.travel(id, -1)
+    workspace.renamePath('Garden', 'Yard')
+    workspace.renamePath('c.md', 'see.md')
+    expect(shown(workspace, id)).toBe('Yard/b.md')
+    expect(lists(workspace, id)).toEqual([['a.md'], ['see.md']])
+  })
+
+  it('skips steps to notes that are gone', () => {
+    const { workspace, id } = tab()
+    go(workspace, id, 'gone.md')
+    go(workspace, id, 'c.md')
+    workspace.pruneMissing((path) => path !== 'gone.md')
+    expect(lists(workspace, id)).toEqual([['a.md'], []])
+  })
+
+  it('takes boards and other views as steps too, and keeps the history through a save and restore', () => {
+    const { workspace, id } = tab()
+    workspace.navigate(id, { type: 'board', state: { path: 'tasks/Launch.md', card: 'tasks/Design.md' } })
+    const restored = new Workspace(JSON.parse(JSON.stringify(workspace.serialize())) as WorkspaceLayout)
+    expect(restored.getLeaf(id)?.type).toBe('board')
+    expect(restored.travel(id, -1)?.state).toEqual({ path: 'a.md' })
+    expect(restored.getLeaf(id)?.type).toBe('markdown')
   })
 })

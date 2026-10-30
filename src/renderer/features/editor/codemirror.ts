@@ -18,6 +18,7 @@ import { authorAnnotation, authorField, fromStored, setAuthorRanges, toStored } 
 import { setWritingConfig, writingTools } from './writing'
 import { markdownDecorations, setUnresolvedTargets, unresolvedField } from './decorations'
 import { livePreview, livePreviewCompartment } from './live-preview'
+import { propertiesSlot } from './block-hiding'
 import { setLivePreview } from './live-preview-state'
 import { linkCompletion, type LinkCandidate } from './link-complete'
 import { editorTheme, markdownHighlighting } from './theme'
@@ -62,6 +63,8 @@ type EditorOptions = {
   onAuthorsChange?: () => void
   /** Focus entered this editor - its text or its find bar. */
   onFocus?: () => void
+  /** Where the note's properties are drawn, in place of its frontmatter (block-hiding.ts). */
+  propertiesSlot?: HTMLElement
 }
 
 const editable = new Compartment()
@@ -246,6 +249,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       doc: options.doc,
       selection: { anchor: Math.min(bodyStart, options.doc.length) },
       extensions: [
+        options.propertiesSlot === undefined ? [] : propertiesSlot.of(options.propertiesSlot),
         history(),
         drawSelection(),
         dropCursor(),
@@ -434,6 +438,19 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
       view.focus()
     },
     getCursorLine: () => view.state.doc.lineAt(view.state.selection.main.head).number,
+    getPlace: () => ({
+      // The line at the scroller's top edge: documentTop moves with the scroll already.
+      scroll: view.lineBlockAtHeight(Math.max(0, view.scrollDOM.getBoundingClientRect().top - view.documentTop)).from,
+      cursor: view.state.selection.main.head,
+    }),
+    setPlace: (place) => {
+      const length = view.state.doc.length
+      view.dispatch({
+        selection: { anchor: Math.min(place.cursor, length) },
+        // The line that was at the top goes back to the top - by position, not pixels.
+        effects: EditorView.scrollIntoView(Math.min(place.scroll, length), { y: 'start' }),
+      })
+    },
     save: () => options.onSave(),
     setWriting: (settings) => {
       view.dispatch({ effects: setWritingConfig.of(settings) })
