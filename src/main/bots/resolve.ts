@@ -150,7 +150,7 @@ const VAULT_WIDE =
   /\b(my|the|whole|entire) vault\b|\ball (of )?(my )?notes\b|\bnotes (currently )?in my vault\b|\bmy notes\b(?! (on|about))|хранилищ|все(х|м)? (мои(х|м)? )?заметк|по всем заметкам|hele hvelvet|alle notatene/i
 
 /** Folders that hold everything of one kind, never a subject: not a scope by name. */
-const GENERIC_FOLDERS = /^(daily|tasks|templates?|attachments|chats|other|weblinks|projects?|notes|inbox)$/i
+const GENERIC_FOLDERS = /^(daily|tasks|templates?|attachments|chats|recto|boards|unsorted|other|weblinks|projects?|notes|inbox)$/i
 
 /**
  * The scope the question names, if any: the whole vault, a folder (by the

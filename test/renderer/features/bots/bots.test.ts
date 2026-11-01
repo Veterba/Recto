@@ -7,6 +7,9 @@ import { OllamaProvider } from '../../../../src/main/bots/provider'
 import type { BotMessage } from '../../../../src/shared/bots'
 import type { FileNode } from '../../../../src/shared/vault'
 
+/** The tree as the app has it: chats under Recto/. */
+const inRecto = (children: FileNode[]): FileNode[] => [{ path: 'Recto', name: 'Recto', kind: 'folder', children }]
+
 describe('chat topics', () => {
   const messages: BotMessage[] = [
     { role: 'user', content: 'How do I mix soil?' },
@@ -43,38 +46,38 @@ describe('chat topics', () => {
   it('finds a bot’s topics, newest first, and reads a title from a file name', () => {
     const tree: FileNode[] = [
       {
-        path: 'chats',
-        name: 'chats',
+        path: 'Recto/Chats',
+        name: 'Chats',
         kind: 'folder',
         children: [
           {
-            path: 'chats/recto',
+            path: 'Recto/Chats/recto',
             name: 'recto',
             kind: 'folder',
             children: [
-              { path: 'chats/recto/2026-09-01 10-00 — Old.md', name: '2026-09-01 10-00 — Old.md', kind: 'file' },
-              { path: 'chats/recto/2026-09-20 10-00 — Soil mix.md', name: '2026-09-20 10-00 — Soil mix.md', kind: 'file' },
-              { path: 'chats/recto/notes.txt', name: 'notes.txt', kind: 'file' },
+              { path: 'Recto/Chats/recto/2026-09-01 10-00 — Old.md', name: '2026-09-01 10-00 — Old.md', kind: 'file' },
+              { path: 'Recto/Chats/recto/2026-09-20 10-00 — Soil mix.md', name: '2026-09-20 10-00 — Soil mix.md', kind: 'file' },
+              { path: 'Recto/Chats/recto/notes.txt', name: 'notes.txt', kind: 'file' },
             ],
           },
         ],
       },
     ]
-    expect(topicPaths(tree, 'recto')).toEqual(['chats/recto/2026-09-20 10-00 — Soil mix.md', 'chats/recto/2026-09-01 10-00 — Old.md'])
-    expect(topicPaths(tree, 'calm')).toEqual([])
+    expect(topicPaths(inRecto(tree), 'recto')).toEqual(['Recto/Chats/recto/2026-09-20 10-00 — Soil mix.md', 'Recto/Chats/recto/2026-09-01 10-00 — Old.md'])
+    expect(topicPaths(inRecto(tree), 'calm')).toEqual([])
     const sameMinute: FileNode[] = [
       {
-        path: 'chats',
-        name: 'chats',
+        path: 'Recto/Chats',
+        name: 'Chats',
         kind: 'folder',
         children: [
           {
-            path: 'chats/recto',
+            path: 'Recto/Chats/recto',
             name: 'recto',
             kind: 'folder',
             children: ['2026-09-20 10-00 — Soil mix.md', '2026-09-20 10-00 — Soil mix (2).md', '2026-09-20 09-59 — Zebra.md'].map(
               (name) => ({
-                path: `chats/recto/${name}`,
+                path: `Recto/Chats/recto/${name}`,
                 name,
                 kind: 'file' as const,
               }),
@@ -83,7 +86,7 @@ describe('chat topics', () => {
         ],
       },
     ]
-    expect(topicPaths(sameMinute, 'recto').map((p) => p.slice(12))).toEqual([
+    expect(topicPaths(inRecto(sameMinute), 'recto').map((p) => p.slice(18))).toEqual([
       '2026-09-20 10-00 — Soil mix (2).md',
       '2026-09-20 10-00 — Soil mix.md',
       '2026-09-20 09-59 — Zebra.md',

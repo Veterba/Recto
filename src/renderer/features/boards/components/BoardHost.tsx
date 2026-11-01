@@ -126,7 +126,7 @@ function BoardLeaf({
   const [fallback] = useState(() => (typeof path === 'string' ? null : (currentBoards()[0]?.path ?? null)))
   const shown = typeof path === 'string' ? path : (fallback ?? boards[0]?.path)
   if (shown === undefined || shown === null)
-    return <p className="board__empty">No boards yet. “New board” in the sidebar makes one, as a note in tasks/.</p>
+    return <p className="board__empty">No boards yet. “New board” in the sidebar makes one, as a note in its own folder under Recto/.</p>
   if (typeof path === 'string' && boards.length > 0 && !isBoardPath(path))
     return <p className="board__empty">“{path.replace(/\.md$/i, '')}” is not a board any more.</p>
   return (

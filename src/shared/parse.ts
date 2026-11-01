@@ -299,6 +299,24 @@ export function resolveLink(target: string, pathsByName: ReadonlyMap<string, str
   return [...matches].sort((a, b) => a.split('/').length - b.split('/').length || a.length - b.length)[0] ?? null
 }
 
+/**
+ * The shortest link that names `path` and no other note: its name when that
+ * is unique, else as few of its last folders as it takes (`[[Launch/Plan]]`),
+ * the whole path only when nothing shorter is unique. Obsidian resolves each
+ * of these to the same note.
+ */
+export function shortestLink(path: string, allPaths: Iterable<string>): string {
+  const bare = path.replace(/\.md$/i, '')
+  const others = [...allPaths].map((p) => normalizeName(p)).filter((p) => p !== normalizeName(path))
+  const segments = bare.split('/')
+  for (let n = 1; n < segments.length; n++) {
+    const tail = segments.slice(-n).join('/')
+    const key = normalizeName(tail)
+    if (!others.some((p) => p === key || p.endsWith(`/${key}`))) return tail
+  }
+  return bare
+}
+
 export const normalizeName = (value: string): string => value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
 
 /**

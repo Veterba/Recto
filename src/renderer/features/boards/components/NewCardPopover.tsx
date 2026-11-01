@@ -11,20 +11,28 @@ type Props = {
   /** The column it opens in, under its header; null centres it under the board's toolbar. */
   anchor: DOMRect | null
   onAdd: (column: string, title: string) => Promise<AddResult>
+  /** The note that has the name, put on the board as it is. */
+  onAddExisting: (column: string, path: string) => Promise<AddResult>
   onOpenExisting: (path: string) => void
   onClose: () => void
 }
 
 const WIDTH = 280
+
+const stemOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
+/** Where a note is, as a person reads it: its folder, or the vault's top. */
+export const folderOf = (path: string): string => (path.includes('/') ? `${path.slice(0, path.lastIndexOf('/'))}/` : 'the top of the vault')
 /** From a column's top edge to just under its header. */
 const HEADER = 42
 
 /**
  * The one way to add a card: a title field opened by a column's "+", over the top of that column.
  * Enter makes the card and closes; ⌘Enter makes it and stays for the next.
- * A name that is already a note is said here, and nothing is made.
+ * A name that is already a note is a choice, never a guess: put that note on
+ * the board as it is, or choose another name. Nothing is made, moved or
+ * overwritten until one is picked.
  */
-export function NewCardPopover({ column, columns, anchor, onAdd, onOpenExisting, onClose }: Props): React.ReactElement {
+export function NewCardPopover({ column, columns, anchor, onAdd, onAddExisting, onOpenExisting, onClose }: Props): React.ReactElement {
   const [title, setTitle] = useState('')
   const [target, setTarget] = useState(column)
   const [taken, setTaken] = useState<string | null>(null)
@@ -67,6 +75,24 @@ export function NewCardPopover({ column, columns, anchor, onAdd, onOpenExisting,
       } else onClose()
     } else if ('exists' in result) setTaken(result.exists)
     else setError(result.error)
+  }
+
+  const addExisting = async (existing: string): Promise<void> => {
+    if (busy.current) return
+    busy.current = true
+    const result = await onAddExisting(target, existing)
+    busy.current = false
+    if (result.ok) onClose()
+    else if ('error' in result) {
+      setTaken(null)
+      setError(result.error)
+    }
+  }
+
+  const anotherName = (): void => {
+    setTaken(null)
+    field.current?.focus()
+    field.current?.select()
   }
 
   return createPortal(
@@ -112,12 +138,23 @@ export function NewCardPopover({ column, columns, anchor, onAdd, onOpenExisting,
         }}
       />
       {taken !== null && (
-        <p className="new-card__taken" role="alert">
-          A note with that name exists:{' '}
-          <button type="button" className="new-card__link" onClick={() => onOpenExisting(taken)}>
-            {taken}
-          </button>
-        </p>
+        <div className="new-card__exists" role="alert">
+          <p className="new-card__taken">
+            A note “
+            <button type="button" className="new-card__link" onClick={() => onOpenExisting(taken)}>
+              {stemOf(taken)}
+            </button>
+            ” already exists in {folderOf(taken)}. Add it to this board?
+          </p>
+          <div className="new-card__choices">
+            <button type="button" className="btn btn--sm" onClick={() => void addExisting(taken)}>
+              Add it to this board
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={anotherName}>
+              Choose another name
+            </button>
+          </div>
+        </div>
       )}
       {error !== null && (
         <p className="new-card__taken" role="alert">

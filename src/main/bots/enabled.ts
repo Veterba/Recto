@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { BOTS_FOLDER, CHATS_FOLDER } from '../../shared/bots'
+import { LEGACY_CHATS_FOLDER } from '../../shared/recto-paths'
 import { readState, writeState } from '../state'
 import { currentVault } from '../vault'
 
@@ -22,7 +23,7 @@ export function botsEnabled(): boolean {
   if (vault === null) return false
   const stored = readState(FEATURE) as { enabled?: unknown } | null
   if (typeof stored?.enabled === 'boolean') return stored.enabled
-  const used = fs.existsSync(path.join(vault.path, BOTS_FOLDER)) || fs.existsSync(path.join(vault.path, CHATS_FOLDER))
+  const used = [BOTS_FOLDER, CHATS_FOLDER, LEGACY_CHATS_FOLDER].some((folder) => fs.existsSync(path.join(vault.path, folder)))
   writeState(FEATURE, { enabled: used })
   return used
 }

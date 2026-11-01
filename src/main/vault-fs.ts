@@ -9,7 +9,7 @@ import { rewriteWikiLinks } from './link-rewrite'
 import { leavesVault, resolveInVault } from './paths'
 import { currentVault } from './vault'
 import { notTextMessage, notTextReason } from './text-file'
-import { isHidden, nameOf, nameTaken, sortNodes } from '../shared/vault'
+import { isHidden, nameOf, nameProblem, nameTaken, sortNodes } from '../shared/vault'
 
 /**
  * All vault file access. Every path arriving from the renderer goes through
@@ -198,6 +198,28 @@ function allFiles(root: string): string[] {
   return out
 }
 
+/** Every file in the vault, hidden folders left out: the set names are unique in. */
+export function vaultFiles(): string[] {
+  return allFiles(requireVault())
+}
+
+/** Which of these vault paths exist on disk. A path outside the vault does not. */
+export function existing(paths: readonly string[]): string[] {
+  const root = requireVault()
+  return paths.filter((relative) => {
+    try {
+      return fs.existsSync(resolveInVault(root, relative))
+    } catch {
+      return false
+    }
+  })
+}
+
+/** The file that has this file name (`Plan.md`) anywhere in the vault, or null. One check, on disk, never the index. */
+export function nameTakenBy(fileName: string): string | null {
+  return nameTaken(sanitiseName(fileName), vaultFiles())
+}
+
 /**
  * File names are unique in the whole vault, not just in their folder: links go
  * by name, so a second `Plan.md` anywhere makes `[[Plan]]` ambiguous (see
@@ -286,6 +308,8 @@ export async function create(
 ): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   try {
     const root = requireVault()
+    const problem = nameProblem(name)
+    if (problem !== null) return { ok: false, error: problem }
     const bare = sanitiseName(name)
     if (bare.length === 0) return { ok: false, error: 'Name cannot be empty.' }
     let target = resolveInVault(root, path.join(parentRelative, bare))
@@ -320,6 +344,8 @@ export async function rename(relative: string, newName: string): Promise<{ ok: t
   try {
     const root = requireVault()
     const from = resolveInVault(root, relative)
+    const problem = nameProblem(newName)
+    if (problem !== null) return { ok: false, error: problem }
     const bare = sanitiseName(newName)
     if (bare.length === 0) return { ok: false, error: 'Name cannot be empty.' }
     const to = resolveInVault(root, path.join(path.dirname(relative), bare))

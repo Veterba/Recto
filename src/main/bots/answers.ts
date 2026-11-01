@@ -9,6 +9,8 @@ import { IPC_EVENT } from '../../shared/ipc'
 import { sendEvent } from '../events'
 import { markSelfWrite } from '../watcher'
 import * as vaultFs from '../vault-fs'
+import { currentVault } from '../vault'
+import { ensureReadme } from '../boards'
 import { Jobs, type RunControls } from './jobs'
 import { answerWithTools } from './model-tools'
 import { prepare } from './prepare'
@@ -137,6 +139,8 @@ export async function send(request: {
     const name = topicFileName(meta.created, meta.title)
     markSelfWrite(`${botThreadFolder(bot.id)}/${name}`)
     const created = await vaultFs.create(botThreadFolder(bot.id), name, 'file')
+    const vault = currentVault()
+    if (created.ok && vault !== null) ensureReadme(vault.path)
     if (!created.ok) return { ok: false, error: 'Could not start a topic.' }
     topic = created.path
     const first = await writeTopic(topic, { meta, extra: [], body: appendTurns('', [turn], bot.name) }).catch((err: unknown) => err)

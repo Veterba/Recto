@@ -31,44 +31,44 @@ const EMPTY_CHAT = '---\nrecto: chat\nmodel: claude-opus-5\n---\n\n# New chat\n'
 describe('chats become Recto topics', () => {
   it('moves every conversation into chats/recto with the topic frontmatter, the body byte for byte', () => {
     const root = vault({
-      'chats/2026-09-24 21-36-13.md': MAIN_CHAT,
-      'chats/2026-09-25 08-00-00.md': EMPTY_CHAT,
-      'chats/recto/2026-10-02 13-54-11.md': BOT_THREAD,
+      'Recto/Chats/2026-09-24 21-36-13.md': MAIN_CHAT,
+      'Recto/Chats/2026-09-25 08-00-00.md': EMPTY_CHAT,
+      'Recto/Chats/recto/2026-10-02 13-54-11.md': BOT_THREAD,
       'Garden/Soil.md': '# Soil',
     })
     const report = migrateChats(root, new Date('2026-10-03T09:00:00'))!
 
     expect(report.moved.map((m) => m.to).sort()).toEqual([
-      'chats/recto/2026-09-24 21-36 — Soil question.md',
-      'chats/recto/2026-10-02 13-54 — hei.md',
+      'Recto/Chats/recto/2026-09-24 21-36 — Soil question.md',
+      'Recto/Chats/recto/2026-10-02 13-54 — hei.md',
     ])
-    const moved = fs.readFileSync(path.join(root, 'chats/recto/2026-09-24 21-36 — Soil question.md'), 'utf8')
+    const moved = fs.readFileSync(path.join(root, 'Recto/Chats/recto/2026-09-24 21-36 — Soil question.md'), 'utf8')
     expect(moved).toBe(`---\nbot: recto\ncreated: 2026-09-24T21:36\ntitle: Soil question\nmodel: claude-opus-5\n---\n${MAIN_CHAT_BODY}`)
     const parsed = parseTopic(moved, ['Recto', 'Claude'])
     expect(parsed.messages.map((m) => [m.role, m.label])).toEqual([
       ['user', undefined],
       ['assistant', 'Claude'],
     ])
-    const thread = parseTopic(fs.readFileSync(path.join(root, 'chats/recto/2026-10-02 13-54 — hei.md'), 'utf8'), ['Recto'])
+    const thread = parseTopic(fs.readFileSync(path.join(root, 'Recto/Chats/recto/2026-10-02 13-54 — hei.md'), 'utf8'), ['Recto'])
     expect(thread.messages.at(-1)!.sources).toEqual([{ path: 'Garden/Soil.md', heading: null }])
     expect(thread.body).toBe(BOT_THREAD_BODY)
 
     // The old files are gone, the empty chat is not carried over, nothing else is touched.
-    expect(fs.readdirSync(path.join(root, 'chats')).sort()).toEqual(['recto'])
-    expect(report.skipped).toEqual([{ path: 'chats/2026-09-25 08-00-00.md', reason: 'no messages (kept in the backup)' }])
+    expect(fs.readdirSync(path.join(root, 'Recto/Chats')).sort()).toEqual(['recto'])
+    expect(report.skipped).toEqual([{ path: 'Recto/Chats/2026-09-25 08-00-00.md', reason: 'no messages (kept in the backup)' }])
     expect(fs.readFileSync(path.join(root, 'Garden/Soil.md'), 'utf8')).toBe('# Soil')
   })
 
   it('keeps each conversation’s own time', () => {
-    const root = vault({ 'chats/2026-09-24 21-36-13.md': MAIN_CHAT })
+    const root = vault({ 'Recto/Chats/2026-09-24 21-36-13.md': MAIN_CHAT })
     const then = new Date('2026-09-24T21:40:00')
-    fs.utimesSync(path.join(root, 'chats/2026-09-24 21-36-13.md'), then, then)
+    fs.utimesSync(path.join(root, 'Recto/Chats/2026-09-24 21-36-13.md'), then, then)
     migrateChats(root)
-    expect(fs.statSync(path.join(root, 'chats/recto/2026-09-24 21-36 — Soil question.md')).mtime.getTime()).toBe(then.getTime())
+    expect(fs.statSync(path.join(root, 'Recto/Chats/recto/2026-09-24 21-36 — Soil question.md')).mtime.getTime()).toBe(then.getTime())
   })
 
   it('copies the whole chats folder to .recto/backups first', () => {
-    const root = vault({ 'chats/2026-09-24 21-36-13.md': MAIN_CHAT, 'chats/2026-09-25 08-00-00.md': EMPTY_CHAT })
+    const root = vault({ 'Recto/Chats/2026-09-24 21-36-13.md': MAIN_CHAT, 'Recto/Chats/2026-09-25 08-00-00.md': EMPTY_CHAT })
     const report = migrateChats(root, new Date('2026-10-03T09:00:00'))!
     expect(report.backup).toBe('.recto/backups/chats-2026-10-03')
     expect(fs.readFileSync(path.join(root, '.recto/backups/chats-2026-10-03/2026-09-24 21-36-13.md'), 'utf8')).toBe(MAIN_CHAT)
@@ -76,12 +76,12 @@ describe('chats become Recto topics', () => {
   })
 
   it('runs once: the record in .recto stops it ever running again', () => {
-    const root = vault({ 'chats/2026-09-24 21-36-13.md': MAIN_CHAT })
+    const root = vault({ 'Recto/Chats/2026-09-24 21-36-13.md': MAIN_CHAT })
     expect(migrateChats(root)).not.toBeNull()
     expect(fs.existsSync(path.join(root, MIGRATION_RECORD))).toBe(true)
-    fs.writeFileSync(path.join(root, 'chats/2026-09-30 10-00-00.md'), MAIN_CHAT)
+    fs.writeFileSync(path.join(root, 'Recto/Chats/2026-09-30 10-00-00.md'), MAIN_CHAT)
     expect(migrateChats(root)).toBeNull()
-    expect(fs.existsSync(path.join(root, 'chats/2026-09-30 10-00-00.md'))).toBe(true)
+    expect(fs.existsSync(path.join(root, 'Recto/Chats/2026-09-30 10-00-00.md'))).toBe(true)
   })
 
   it('a vault with no chats only records that it ran', () => {
@@ -90,11 +90,11 @@ describe('chats become Recto topics', () => {
   })
 
   it('two conversations that would get the same name both survive', () => {
-    const root = vault({ 'chats/2026-09-24 21-36-13.md': MAIN_CHAT, 'chats/2026-09-24 21-36-50.md': MAIN_CHAT })
+    const root = vault({ 'Recto/Chats/2026-09-24 21-36-13.md': MAIN_CHAT, 'Recto/Chats/2026-09-24 21-36-50.md': MAIN_CHAT })
     const report = migrateChats(root)!
     expect(report.moved.map((m) => m.to).sort()).toEqual([
-      'chats/recto/2026-09-24 21-36 — Soil question (2).md',
-      'chats/recto/2026-09-24 21-36 — Soil question.md',
+      'Recto/Chats/recto/2026-09-24 21-36 — Soil question (2).md',
+      'Recto/Chats/recto/2026-09-24 21-36 — Soil question.md',
     ])
   })
 })

@@ -17,6 +17,7 @@ import type {
 import { linkStage, type CardStage } from '../../shared/kanban'
 import type { OverviewIndex } from '../../shared/overview'
 import { requireDb } from './db'
+import { CHATS_FOLDER, RECTO_FOLDER, RECTO_README, RECTO_README_FALLBACK } from '../../shared/recto-paths'
 import { pathsByName, resolveLink } from '../../shared/parse'
 import { cardDescription, checklist } from '../../shared/card-fields'
 
@@ -291,8 +292,15 @@ function stagesByPath(): Map<string, { stage: CardStage | 'mixed'; lane: string;
   return new Map([...out].map(([path, v]) => [path, { stage: linkStage(v.stages)!, lane: v.lane, board: v.board }]))
 }
 
-/** Notes that are cards: some board lists them. Board notes are left out of the overview's lists too. */
-const NOT_CARD = `NOT EXISTS (SELECT 1 FROM board_items bi WHERE bi.target_path = n.path)
+/**
+ * Chats are research history, not notes, and Recto's README is the app's:
+ * the overview counts and lists neither them nor their links.
+ */
+const NOT_RECTO_OWN = (column: string): string =>
+  `${column} NOT LIKE '${CHATS_FOLDER}/%' AND ${column} NOT IN ('${RECTO_README}', '${RECTO_README_FALLBACK}')`
+
+/** Notes that are cards: some board lists them. Board notes are left out of the overview's lists too, and chats. */
+const NOT_CARD = `${NOT_RECTO_OWN('n.path')} AND NOT EXISTS (SELECT 1 FROM board_items bi WHERE bi.target_path = n.path)
   AND NOT EXISTS (SELECT 1 FROM properties kp WHERE kp.path = n.path AND kp.key = 'kanban-plugin')`
 
 /**
@@ -317,7 +325,7 @@ export function overview(days: readonly string[]): OverviewIndex {
         // the table's own column, so grouping by the alias silently grouped by
         // filename and every folder came back with a count of one.
         `SELECT substr(path, 1, instr(path, '/') - 1) AS folder, COUNT(*) AS count
-           FROM notes WHERE instr(path, '/') > 0
+           FROM notes WHERE instr(path, '/') > 0 AND substr(path, 1, instr(path, '/') - 1) <> '${RECTO_FOLDER}'
           GROUP BY folder ORDER BY count DESC, folder LIMIT 4`,
       )
       .all() as { folder: string; count: number }[]
@@ -330,9 +338,9 @@ export function overview(days: readonly string[]): OverviewIndex {
     .prepare(
       `SELECT n.path AS path, n.title AS title, n.name AS name, COUNT(*) AS links
          FROM (
-           SELECT source_path AS path FROM links WHERE target_path IS NOT NULL AND target_path <> source_path
+           SELECT source_path AS path FROM links WHERE target_path IS NOT NULL AND target_path <> source_path AND ${NOT_RECTO_OWN('source_path')}
            UNION ALL
-           SELECT target_path AS path FROM links WHERE target_path IS NOT NULL AND target_path <> source_path
+           SELECT target_path AS path FROM links WHERE target_path IS NOT NULL AND target_path <> source_path AND ${NOT_RECTO_OWN('source_path')}
          ) AS ends
          JOIN notes n ON n.path = ends.path
         WHERE ${NOT_CARD}
@@ -345,7 +353,7 @@ export function overview(days: readonly string[]): OverviewIndex {
     handle
       .prepare(
         `SELECT n.path, n.title, n.name FROM notes n
-          WHERE ${NOT_CARD}
+          WHERE ${NOT_CARD} AND n.path NOT LIKE '${RECTO_FOLDER}/%'
             AND NOT EXISTS (SELECT 1 FROM links l WHERE l.source_path = n.path AND l.target_path IS NOT NULL AND l.target_path <> n.path)
             AND NOT EXISTS (SELECT 1 FROM links l WHERE l.target_path = n.path AND l.source_path <> n.path)
           ORDER BY n.name`,
@@ -358,7 +366,7 @@ export function overview(days: readonly string[]): OverviewIndex {
       .prepare(
         `SELECT DISTINCT n.path, n.title, n.name, l.target_text AS target
            FROM links l JOIN notes n ON n.path = l.source_path
-          WHERE l.target_path IS NULL ORDER BY n.name, l.target_text`,
+          WHERE l.target_path IS NULL AND ${NOT_RECTO_OWN('n.path')} ORDER BY n.name, l.target_text`,
       )
       .all() as { path: string; title: string | null; name: string; target: string }[]
   ).map((row) => ({ path: row.path, name: name(row), target: row.target }))
@@ -394,10 +402,10 @@ export function overview(days: readonly string[]): OverviewIndex {
         ).map((row) => ({ path: row.path, name: name(row), date: row.written }))
 
   return {
-    notes: one('SELECT COUNT(*) AS n FROM notes'),
-    words: one('SELECT COALESCE(SUM(words), 0) AS n FROM notes'),
-    links: one('SELECT COUNT(*) AS n FROM links'),
-    tags: one('SELECT COUNT(DISTINCT tag) AS n FROM tags'),
+    notes: one(`SELECT COUNT(*) AS n FROM notes WHERE ${NOT_RECTO_OWN('path')}`),
+    words: one(`SELECT COALESCE(SUM(words), 0) AS n FROM notes WHERE ${NOT_RECTO_OWN('path')}`),
+    links: one(`SELECT COUNT(*) AS n FROM links WHERE ${NOT_RECTO_OWN('source_path')}`),
+    tags: one(`SELECT COUNT(DISTINCT tag) AS n FROM tags WHERE ${NOT_RECTO_OWN('path')}`),
     oldest: (handle.prepare('SELECT MIN(note_date) AS d FROM notes').get() as { d: string | null }).d,
     folders,
     hubs: linked.slice(0, 4),

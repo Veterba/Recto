@@ -20,7 +20,7 @@ vi.mock('electron', () => ({ shell: {}, app: { on: () => undefined, getPath: () 
 vi.mock('../../src/main/vault', () => ({ currentVault: () => ({ path: root, name: 'v' }) }))
 
 const vaultFs = await import('../../src/main/vault-fs')
-const { createCard } = await import('../../src/renderer/features/boards/create-card')
+const { createBoard, createCard } = await import('../../src/renderer/features/boards/create-card')
 const { ensurePeriodicNote } = await import('../../src/renderer/features/templates/periodic-notes')
 
 const put = (relative: string, content = ''): void => {
@@ -41,6 +41,7 @@ beforeEach(() => {
         if (channel === IPC.fsWrite) return vaultFs.writeFile(args[0] as string, args[1] as string)
         if (channel === IPC.fsTrash) return { ok: true }
         if (channel === IPC.indexResolveLink) return null
+        if (channel === IPC.fsNameTaken) return vaultFs.nameTakenBy(args[0] as string)
         throw new Error(`unexpected ${channel}`)
       },
       on: () => () => undefined,
@@ -143,7 +144,7 @@ describe('card creation', () => {
 
   it('numbers the sidebar’s "New task"', async () => {
     put('Inbox/New task.md')
-    expect(await createCard('tasks/B.md', 'New task', 'number')).toEqual({ ok: true, path: 'tasks/New task 2.md' })
+    expect(await createCard('Recto/Boards/B/B.md', 'New task', 'number')).toEqual({ ok: true, path: 'Recto/Boards/B/New task 2.md' })
   })
 })
 
@@ -160,5 +161,24 @@ describe('periodic notes', () => {
     const result = await ensurePeriodicNote('daily', settings, [], day)
     expect(result).toMatchObject({ ok: false, error: '"2026-10-16.md" already exists: Old/2026-10-16.md' })
     expect(fs.readFileSync(path.join(root, 'Old/2026-10-16.md'), 'utf8')).toBe('# old')
+  })
+})
+
+describe('a name with “/” is refused, never changed', () => {
+  it('a new note, from the tree or a link, is refused and nothing is made', async () => {
+    expect(await vaultFs.create('', 'Basil/Soil.md', 'file')).toEqual({ ok: false, error: '“/” can\'t be used in a name' })
+    expect(await vaultFs.create('Projects', 'a:b.md', 'file')).toEqual({ ok: false, error: '“:” can\'t be used in a name' })
+    expect(exists('BasilSoil.md') || exists('Basil Soil.md') || exists('Basil/Soil.md')).toBe(false)
+  })
+
+  it('a rename in the tree is refused and the note keeps its name', async () => {
+    expect(await vaultFs.rename('Projects/Plan.md', 'Plan/B.md')).toEqual({ ok: false, error: '“/” can\'t be used in a name' })
+    expect(exists('Projects/Plan.md')).toBe(true)
+  })
+
+  it('a new board is refused, by name, before anything is asked of main', async () => {
+    expect(await createBoard('Basil/Soil')).toEqual({ ok: false, error: '“/” can\'t be used in a name' })
+    expect(await createBoard('Plan [draft]')).toEqual({ ok: false, error: '“[” can\'t be used in a name' })
+    expect(exists('Recto')).toBe(false)
   })
 })

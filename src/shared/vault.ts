@@ -108,3 +108,20 @@ export function nameTaken(path: string, paths: readonly string[]): string | null
   const name = nameKey(path)
   return paths.find((other) => nameKey(other) === name) ?? null
 }
+
+/** What a file name cannot hold: a path separator, or what macOS, Windows or Obsidian refuse. */
+const NOT_IN_NAME = /[/\\:*?"<>|\u0000-\u001f]/
+/** What a `[[link]]` to a note cannot hold: cards and boards are linked by name. */
+const NOT_IN_LINK_NAME = /[#^[\]|]/
+
+/**
+ * Why a typed name cannot be used, or null. A name is never changed to fit:
+ * "Basil/Soil" is refused, not made "Basil Soil". `linked` adds what a link
+ * cannot hold, for cards and boards.
+ */
+export function nameProblem(name: string, linked = false): string | null {
+  const bad = NOT_IN_NAME.exec(name)?.[0] ?? (linked ? NOT_IN_LINK_NAME.exec(name)?.[0] : undefined)
+  if (bad !== undefined) return `“${bad}” can't be used in a name`
+  if (name.trim().startsWith('.')) return "A name can't start with “.”"
+  return null
+}

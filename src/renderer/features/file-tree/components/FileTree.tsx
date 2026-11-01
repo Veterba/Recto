@@ -21,7 +21,7 @@ import { TreeRow } from './TreeRow'
 /**
  * A row being dragged, by its own type. Drops read only this: text/plain is
  * also set by a board card (its note's path) and by selected text, and taking
- * that for a tree drag moved a card's note out of tasks/.
+ * that for a tree drag moved a card's note out of its board's folder.
  */
 const TREE_DRAG = 'application/x-recto-tree-path'
 

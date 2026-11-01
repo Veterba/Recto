@@ -33,8 +33,9 @@ type GraphSettings = {
   /**
    * Conversations with Claude are notes too, and each one links to whatever it
    * quoted - so a vault with a lot of chatting grows a cluster of them that is
-   * not really part of your notes. On by default, because they ARE notes and
-   * hiding them without asking is how things go missing.
+   * not really part of your notes. Off by default: chats are research history
+   * you can search and link to, not the notes the graph is for; the switch
+   * brings them in.
    */
   showChats: boolean
   /** Colours, node and link styling, labels, backdrop. */
@@ -56,7 +57,7 @@ export const DEFAULT_SETTINGS: GraphSettings = {
   showOrphans: true,
   showBoards: true,
   showTasks: false,
-  showChats: true,
+  showChats: false,
   look: DEFAULT_LOOK,
   layout: DEFAULT_LAYOUT,
   linkRange: ALL_LINKS,
@@ -109,7 +110,7 @@ export function parseSettings(raw: unknown): GraphSettings {
     showOrphans: typeof record['showOrphans'] === 'boolean' ? record['showOrphans'] : true,
     showBoards: typeof record['showBoards'] === 'boolean' ? record['showBoards'] : true,
     showTasks: typeof record['showTasks'] === 'boolean' ? record['showTasks'] : false,
-    showChats: typeof record['showChats'] === 'boolean' ? record['showChats'] : true,
+    showChats: typeof record['showChats'] === 'boolean' ? record['showChats'] : false,
     look: coerceLook(record['look']),
     layout,
     linkRange: coerceLinkRange(record['linkRange']),

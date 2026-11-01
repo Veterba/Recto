@@ -2,13 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IPC } from '@shared/ipc'
 import type { BoardCardInfo } from '@shared/index-results'
 import { cardFields, isoDay, setCardField } from '@shared/card-fields'
+import { cardFolderFor, isPlacedCard } from '@shared/recto-paths'
+import { nameProblem } from '@shared/vault'
 import { cardLink, findItem, insertItem, moveItem, parseKanban, removeItem, replaceItem, type KanbanBoard } from '@shared/kanban'
 import { api } from '../../../app/api'
 import { noteIndexChanged, useNoteBus } from '../../../app/note-bus'
 import { noteEdited } from '../../../app/usage'
 import { boardFrom, doneColumn, type Board } from '../boards'
 import { toView, type CardView } from '../board-view'
-import { cardExists, cardName, createCardNote } from '../create-card'
+import { cardName, createCardNote, noteNamed } from '../create-card'
 
 /** How long to trust our own write over what the index says. */
 const OVERRIDE_TTL_MS = 15_000
@@ -52,7 +54,9 @@ export function useBoardCards(path: string): {
   editCard: (path: string, edit: (text: string) => string) => Promise<boolean>
   move: (key: string, target: Drop) => Promise<void>
   addCard: (column: string, title: string) => Promise<AddResult>
-  /** A plain-text card becomes a note in tasks/, and its line a link to it. Resolves to the note's path. */
+  /** A note that exists already, put on this board as a card; its file is not made or copied. */
+  addExisting: (column: string, notePath: string) => Promise<AddResult>
+  /** A plain-text card becomes a note in this board's folder, and its line a link to it. Resolves to the note's path. */
   makeNote: (key: string) => Promise<string | null>
   /** Take a card off the board: its line goes; its note, if any, stays. */
   removeCard: (key: string) => Promise<boolean>
@@ -317,18 +321,31 @@ export function useBoardCards(path: string): {
   /** Names being created right now: a second Enter during the first write must not make a second card. */
   const creating = useRef(new Set<string>())
 
-  /** A new card: its note in tasks/, then its line at the top of the column. */
+  /** After a card's line went or came: its file goes where the layout rules say (main/boards.ts). */
+  const place = useCallback(
+    (cardPath: string): void => {
+      if (!isPlacedCard(cardPath)) return
+      void api.invoke(IPC.boardsPlace, [cardPath], [path]).then((moved) => {
+        if (moved.length > 0) noteIndexChanged()
+      })
+    },
+    [path],
+  )
+
+  /** A new card: its note in the board's folder, then its line at the top of the column. */
   const addCard = useCallback(
     async (column: string, title: string): Promise<AddResult> => {
       const name = cardName(title)
       const key = lower(name)
       if (name === '') return { ok: false, error: 'A card needs a name.' }
+      const problem = nameProblem(name, true)
+      if (problem !== null) return { ok: false, error: problem }
       if (creating.current.has(key)) return { ok: false, error: 'That card is already being made.' }
       creating.current.add(key)
       try {
-        const existing = await cardExists(name)
+        const existing = await noteNamed(name)
         if (existing !== null) return { ok: false, exists: existing }
-        const created = await createCardNote(name)
+        const created = await createCardNote(name, cardFolderFor(path, textRef.current))
         if (!created.ok) return created
         const stem = showMade(created.path)
         const ok = await editBoard((t) => insertItem(t, Number(column), 0, cardLink(stem)))
@@ -342,7 +359,26 @@ export function useBoardCards(path: string): {
         creating.current.delete(key)
       }
     },
-    [editBoard, showMade],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `textRef` is a ref
+    [editBoard, showMade, path],
+  )
+
+  /**
+   * An existing note as a card: `[[Name]]` at the top of the column - the
+   * shortest path that names it alone when another note shares the name - and
+   * nothing made. A note already on this board is said, not added twice.
+   */
+  const addExisting = useCallback(
+    async (column: string, notePath: string): Promise<AddResult> => {
+      const stem = notePath.slice(notePath.lastIndexOf('/') + 1).replace(/\.md$/i, '')
+      if (cardsRef.current?.some((c) => c.path === notePath)) return { ok: false, error: `“${stem}” is on this board already.` }
+      const target = await api.invoke(IPC.fsLinkTarget, notePath)
+      const ok = await editBoard((t) => insertItem(t, Number(column), 0, cardLink(target)))
+      if (!ok) return { ok: false, error: 'Could not add it to the board.' }
+      place(notePath)
+      return { ok: true, path: notePath }
+    },
+    [editBoard, place],
   )
 
   const makeNote = useCallback(
@@ -355,12 +391,17 @@ export function useBoardCards(path: string): {
         setNotice('This card has no text to name a note after.')
         return null
       }
-      const existing = await cardExists(name)
+      const problem = nameProblem(name, true)
+      if (problem !== null) {
+        setNotice(`Couldn't make the note: ${problem}.`)
+        return null
+      }
+      const existing = await noteNamed(name)
       if (existing !== null) {
         setNotice(`A note called “${name}” exists already (${existing}). Rename the card first.`)
         return null
       }
-      const created = await createCardNote(name, rest.join('\n').trim())
+      const created = await createCardNote(name, cardFolderFor(path, textRef.current), rest.join('\n').trim())
       if (!created.ok) {
         setNotice(`Couldn't make the note. ${created.error}`)
         return null
@@ -373,18 +414,20 @@ export function useBoardCards(path: string): {
       }
       return created.path
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `find` and `locate` read refs
-    [editBoard, showMade],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `find`, `locate` and `textRef` read refs
+    [editBoard, showMade, path],
   )
 
   const removeCard = useCallback(
     async (key: string): Promise<boolean> => {
       const card = find(key)
       if (card === undefined) return false
-      return editBoard((t) => removeItem(t, locate(card)(t)))
+      const ok = await editBoard((t) => removeItem(t, locate(card)(t)))
+      if (ok && !card.light && card.path !== '') place(card.path)
+      return ok
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `find` and `locate` read refs
-    [editBoard],
+    [editBoard, place],
   )
 
   /**
@@ -395,6 +438,11 @@ export function useBoardCards(path: string): {
     const title = cardName(name)
     const slash = cardPath.lastIndexOf('/')
     if (title === '' || `${cardPath.slice(slash + 1)}` === `${title}.md`) return null
+    const problem = nameProblem(title, true)
+    if (problem !== null) {
+      setNotice(`Couldn't rename the card: ${problem}.`)
+      return null
+    }
     const result = await api.invoke(IPC.fsRename, cardPath, `${title}.md`)
     if (!result.ok) {
       setNotice(`Couldn't rename the card. ${result.error}`)
@@ -417,6 +465,7 @@ export function useBoardCards(path: string): {
     editCard,
     move,
     addCard,
+    addExisting,
     makeNote,
     removeCard,
     renameCard,

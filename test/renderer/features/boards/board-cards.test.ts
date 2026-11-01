@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { shortestLink } from '../../../../src/shared/parse'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -18,7 +19,7 @@ import { useBoardCards } from '../../../../src/renderer/features/boards/hooks/us
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const BOARD = 'tasks/Launch.md'
+const BOARD = 'Recto/Boards/Launch/Launch.md'
 const boardText = [
   '---',
   '',
@@ -70,10 +71,10 @@ const rowOf = (path: string): BoardCardInfo => ({
 beforeEach(() => {
   files = new Map([
     [BOARD, boardText],
-    ['tasks/Ship it.md', '---\npriority: low\n---\n\n- [ ] Pack\n'],
-    ['tasks/Old one.md', '---\ncompleted: 2026-10-01\n---\n'],
+    ['Recto/Boards/Launch/Ship it.md', '---\npriority: low\n---\n\n- [ ] Pack\n'],
+    ['Recto/Boards/Launch/Old one.md', '---\ncompleted: 2026-10-01\n---\n'],
   ])
-  indexed = new Set(['tasks/Ship it.md', 'tasks/Old one.md'])
+  indexed = new Set(['Recto/Boards/Launch/Ship it.md', 'Recto/Boards/Launch/Old one.md'])
   calls = []
   pendingWrites = null
   failWrites = () => false
@@ -86,7 +87,7 @@ beforeEach(() => {
       case IPC.indexCards: {
         const out: Record<string, BoardCardInfo | null> = {}
         for (const link of args[0] as string[]) {
-          const path = `tasks/${link}.md`
+          const path = `Recto/Boards/Launch/${link}.md`
           out[link] = indexed.has(path) ? (seen.get(path) ?? rowOf(path)) : null
         }
         return out
@@ -123,6 +124,14 @@ beforeEach(() => {
         indexed.add(to)
         return { ok: true, path: to, rewrittenLinks: 1, rewrittenFiles: 1 }
       }
+      case IPC.fsNameTaken: {
+        const name = String(args[0]).toLowerCase()
+        return [...files.keys()].find((p) => p.slice(p.lastIndexOf('/') + 1).toLowerCase() === name) ?? null
+      }
+      case IPC.fsLinkTarget:
+        return shortestLink(args[0] as string, files.keys())
+      case IPC.boardsPlace:
+        return []
       case IPC.indexResolveLink:
         return [...files.keys()].find((p) => p.toLowerCase().endsWith(`/${String(args[0]).toLowerCase()}.md`)) ?? null
       case IPC.fsTrash:
@@ -185,7 +194,7 @@ describe('moving cards', () => {
     const key = card(hook, 'Buy stamps')!.key
     await act(async () => hook.current.move(key, { column: '0', index: 0 }))
     expect(board()).toBe(boardText.replace('- [ ] [[Ship it]]\n- [ ] Buy stamps\n    at the post office', '- [ ] Buy stamps\n    at the post office\n- [ ] [[Ship it]]'))
-    expect(files.get('tasks/Ship it.md')).toBe('---\npriority: low\n---\n\n- [ ] Pack\n')
+    expect(files.get('Recto/Boards/Launch/Ship it.md')).toBe('---\npriority: low\n---\n\n- [ ] Pack\n')
   })
 
   it('into Done: on screen first, then the line ticked and moved, and completed on the note', async () => {
@@ -193,7 +202,7 @@ describe('moving cards', () => {
     pendingWrites = []
     let done: Promise<void> = Promise.resolve()
     await act(async () => {
-      done = hook.current.move('tasks/Ship it.md', { column: '1', index: 0 })
+      done = hook.current.move('Recto/Boards/Launch/Ship it.md', { column: '1', index: 0 })
     })
     expect(card(hook, 'Ship it')?.column).toBe('1')
     expect(board()).toBe(boardText)
@@ -209,23 +218,23 @@ describe('moving cards', () => {
       for (const w of pendingWrites!.splice(0)) w.resolve({ ok: true })
       await done
     })
-    expect(files.get('tasks/Ship it.md')).toMatch(/^completed: \d{4}-\d{2}-\d{2}$/m)
+    expect(files.get('Recto/Boards/Launch/Ship it.md')).toMatch(/^completed: \d{4}-\d{2}-\d{2}$/m)
   })
 
   it('out of Done: unticked, and completed gone from the note', async () => {
     const hook = await mount()
-    await act(async () => hook.current.move('tasks/Old one.md', { column: '0', index: 0 }))
+    await act(async () => hook.current.move('Recto/Boards/Launch/Old one.md', { column: '0', index: 0 }))
     expect(board()).toContain('## To do\n\n- [ ] [[Old one]]\n- [ ] [[Ship it]]')
-    expect(files.get('tasks/Old one.md')).not.toContain('completed')
+    expect(files.get('Recto/Boards/Launch/Old one.md')).not.toContain('completed')
   })
 
   it('a board write that fails is undone on screen and said', async () => {
     const hook = await mount()
     failWrites = (path) => path === BOARD
-    await act(async () => hook.current.move('tasks/Ship it.md', { column: '1', index: 0 }))
+    await act(async () => hook.current.move('Recto/Boards/Launch/Ship it.md', { column: '1', index: 0 }))
     expect(card(hook, 'Ship it')?.column).toBe('0')
     expect(hook.current.notice).toMatch(/Couldn't save the board.*Disk full/)
-    expect(files.get('tasks/Ship it.md')).not.toContain('completed')
+    expect(files.get('Recto/Boards/Launch/Ship it.md')).not.toContain('completed')
   })
 
   it('when the board changed under it (Obsidian, sync), the same move is made to what is there now', async () => {
@@ -272,8 +281,8 @@ describe('board writes in a queue', () => {
     let a: Promise<boolean> = Promise.resolve(true)
     let b: Promise<boolean> = Promise.resolve(true)
     await act(async () => {
-      a = hook.current.editCard('tasks/Ship it.md', (t) => setCardField(t, 'priority', 'high'))
-      b = hook.current.editCard('tasks/Ship it.md', (t) => setCardField(t, 'due', '2026-11-01'))
+      a = hook.current.editCard('Recto/Boards/Launch/Ship it.md', (t) => setCardField(t, 'priority', 'high'))
+      b = hook.current.editCard('Recto/Boards/Launch/Ship it.md', (t) => setCardField(t, 'due', '2026-11-01'))
     })
     for (let i = 0; i < 2; i++) {
       await act(async () => {
@@ -284,8 +293,8 @@ describe('board writes in a queue', () => {
     await act(async () => {
       await Promise.all([a, b])
     })
-    expect(files.get('tasks/Ship it.md')).toContain('priority: high')
-    expect(files.get('tasks/Ship it.md')).toContain('due: 2026-11-01')
+    expect(files.get('Recto/Boards/Launch/Ship it.md')).toContain('priority: high')
+    expect(files.get('Recto/Boards/Launch/Ship it.md')).toContain('due: 2026-11-01')
   })
 })
 
@@ -308,16 +317,16 @@ describe("a card's note", () => {
     pendingWrites = []
     let done: Promise<boolean> = Promise.resolve(false)
     await act(async () => {
-      done = hook.current.editCard('tasks/Ship it.md', (t) => setCardField(t, 'priority', 'high'))
+      done = hook.current.editCard('Recto/Boards/Launch/Ship it.md', (t) => setCardField(t, 'priority', 'high'))
     })
     expect(pendingWrites).toHaveLength(1)
     expect(card(hook, 'Ship it')?.level).toBe('high')
-    expect(files.get('tasks/Ship it.md')).toContain('priority: low')
+    expect(files.get('Recto/Boards/Launch/Ship it.md')).toContain('priority: low')
     await act(async () => {
       pendingWrites![0]!.resolve({ ok: true })
       await done
     })
-    expect(files.get('tasks/Ship it.md')).toContain('priority: high')
+    expect(files.get('Recto/Boards/Launch/Ship it.md')).toContain('priority: high')
     // The index still says low; a reload does not snap it back.
     await act(async () => hook.current.reload())
     expect(card(hook, 'Ship it')?.level).toBe('high')
@@ -326,7 +335,7 @@ describe("a card's note", () => {
   it('ticks a checklist item on the card at once', async () => {
     const hook = await mount()
     await act(async () => {
-      await hook.current.editCard('tasks/Ship it.md', (t) => toggleCheck(t, 0))
+      await hook.current.editCard('Recto/Boards/Launch/Ship it.md', (t) => toggleCheck(t, 0))
     })
     expect(card(hook, 'Ship it')?.checklist).toEqual({ done: 1, total: 1 })
   })
@@ -336,7 +345,7 @@ describe("a card's note", () => {
     failWrites = () => true
     let ok = true
     await act(async () => {
-      ok = await hook.current.editCard('tasks/Ship it.md', (t) => setCardField(t, 'due', '2026-10-20'))
+      ok = await hook.current.editCard('Recto/Boards/Launch/Ship it.md', (t) => setCardField(t, 'due', '2026-10-20'))
     })
     expect(ok).toBe(false)
     expect(card(hook, 'Ship it')?.span).toBeNull()
@@ -345,18 +354,18 @@ describe("a card's note", () => {
 })
 
 describe('adding a card', () => {
-  it('makes the note in tasks/, empty, and its line at the top of the column', async () => {
+  it('makes the note in the board’s folder, empty, and its line at the top of the column', async () => {
     const hook = await mount()
     let result: unknown = null
     await act(async () => {
       result = await hook.current.addCard('0', 'Write notes')
     })
-    expect(result).toEqual({ ok: true, path: 'tasks/Write notes.md' })
-    expect(files.get('tasks/Write notes.md')).toBe('')
+    expect(result).toEqual({ ok: true, path: 'Recto/Boards/Launch/Write notes.md' })
+    expect(files.get('Recto/Boards/Launch/Write notes.md')).toBe('')
     expect(board()).toContain('## To do\n\n- [ ] [[Write notes]]\n- [ ] [[Ship it]]')
     expect(changedLines(boardText, board())[0]).toBe('- [ ] [[Write notes]]')
     // Shown before the index has read it.
-    expect(card(hook, 'Write notes')).toMatchObject({ column: '0', path: 'tasks/Write notes.md', light: false })
+    expect(card(hook, 'Write notes')).toMatchObject({ column: '0', path: 'Recto/Boards/Launch/Write notes.md', light: false })
   })
 
   it('makes one card when Enter comes twice before the first is done', async () => {
@@ -393,23 +402,23 @@ describe('adding a card', () => {
       result = await hook.current.addCard('0', 'Doomed')
     })
     expect(result).toMatchObject({ ok: false })
-    expect(files.has('tasks/Doomed.md')).toBe(false)
+    expect(files.has('Recto/Boards/Launch/Doomed.md')).toBe(false)
     expect(card(hook, 'Doomed')).toBeUndefined()
   })
 })
 
 describe('a line of text', () => {
-  it('becomes a note in tasks/ - its first line the name, the rest the body - and its line a link', async () => {
+  it('becomes a note in the board’s folder - its first line the name, the rest the body - and its line a link', async () => {
     const hook = await mount()
     const key = card(hook, 'Buy stamps')!.key
     let made: string | null = null
     await act(async () => {
       made = await hook.current.makeNote(key)
     })
-    expect(made).toBe('tasks/Buy stamps.md')
-    expect(files.get('tasks/Buy stamps.md')).toBe('at the post office\n')
+    expect(made).toBe('Recto/Boards/Launch/Buy stamps.md')
+    expect(files.get('Recto/Boards/Launch/Buy stamps.md')).toBe('at the post office\n')
     expect(board()).toBe(boardText.replace('- [ ] Buy stamps\n    at the post office', '- [ ] [[Buy stamps]]'))
-    expect(card(hook, 'Buy stamps')).toMatchObject({ light: false, path: 'tasks/Buy stamps.md' })
+    expect(card(hook, 'Buy stamps')).toMatchObject({ light: false, path: 'Recto/Boards/Launch/Buy stamps.md' })
   })
 
   it('is not made a note when one has its name; the board is left alone', async () => {
@@ -436,12 +445,12 @@ describe('the title is the file name', () => {
     const hook = await mount()
     let next: string | null = null
     await act(async () => {
-      next = await hook.current.renameCard('tasks/Ship it.md', 'Ship it today')
+      next = await hook.current.renameCard('Recto/Boards/Launch/Ship it.md', 'Ship it today')
     })
     await act(async () => undefined)
-    expect(next).toBe('tasks/Ship it today.md')
+    expect(next).toBe('Recto/Boards/Launch/Ship it today.md')
     expect(board()).toContain('- [ ] [[Ship it today]]')
-    expect(card(hook, 'Ship it today')?.path).toBe('tasks/Ship it today.md')
+    expect(card(hook, 'Ship it today')?.path).toBe('Recto/Boards/Launch/Ship it today.md')
     expect(hook.current.cards?.map((c) => c.title)).toEqual(['Ship it today', 'Buy stamps', 'Old one'])
   })
 
@@ -449,9 +458,95 @@ describe('the title is the file name', () => {
     const hook = await mount()
     failRename = true
     await act(async () => {
-      await hook.current.renameCard('tasks/Ship it.md', 'Taken')
+      await hook.current.renameCard('Recto/Boards/Launch/Ship it.md', 'Taken')
     })
-    expect(card(hook, 'Ship it')?.path).toBe('tasks/Ship it.md')
+    expect(card(hook, 'Ship it')?.path).toBe('Recto/Boards/Launch/Ship it.md')
     expect(hook.current.notice).toMatch(/already exists/)
+  })
+})
+
+describe('a note that exists already', () => {
+  it('goes on the board as a link, its file left where it is and nothing made', async () => {
+    files.set('Notes/Groceries.md', '# Groceries\n')
+    const hook = await mount()
+    let result: unknown = null
+    await act(async () => {
+      result = await hook.current.addExisting('0', 'Notes/Groceries.md')
+    })
+    expect(result).toEqual({ ok: true, path: 'Notes/Groceries.md' })
+    expect(board()).toBe(boardText.replace('- [ ] [[Ship it]]', '- [ ] [[Groceries]]\n- [ ] [[Ship it]]'))
+    expect(files.get('Notes/Groceries.md')).toBe('# Groceries\n')
+    expect(calls.some((c) => c.channel === IPC.fsCreate)).toBe(false)
+    // A note outside Recto's folders is never placed.
+    expect(calls.some((c) => c.channel === IPC.boardsPlace)).toBe(false)
+  })
+
+  it('is said, not added twice, when it is on this board already', async () => {
+    const hook = await mount()
+    let result: unknown = null
+    await act(async () => {
+      result = await hook.current.addExisting('0', 'Recto/Boards/Launch/Ship it.md')
+    })
+    expect(result).toEqual({ ok: false, error: '“Ship it” is on this board already.' })
+    expect(board()).toBe(boardText)
+  })
+
+  it('a card from Unsorted is placed after it goes on a board', async () => {
+    files.set('Recto/Unsorted/Later.md', '')
+    const hook = await mount()
+    await act(async () => {
+      await hook.current.addExisting('0', 'Recto/Unsorted/Later.md')
+    })
+    expect(calls.filter((c) => c.channel === IPC.boardsPlace).map((c) => c.args)).toEqual([[['Recto/Unsorted/Later.md'], [BOARD]]])
+  })
+})
+
+describe('taking a card off a board', () => {
+  it('asks main to place its file when it is one of Recto’s, and leaves an outside note alone', async () => {
+    files.set(BOARD, boardText.replace('- [ ] Buy stamps', '- [ ] [[Basil]]\n- [ ] Buy stamps'))
+    files.set('Garden/Basil.md', '')
+    const hook = await mount()
+    await act(async () => {
+      await hook.current.removeCard(card(hook, 'Ship it')!.key)
+    })
+    await act(async () => {
+      await hook.current.removeCard(card(hook, 'Basil')!.key)
+    })
+    expect(calls.filter((c) => c.channel === IPC.boardsPlace).map((c) => c.args[0])).toEqual([['Recto/Boards/Launch/Ship it.md']])
+    expect(files.has('Garden/Basil.md')).toBe(true)
+  })
+})
+
+describe('a name with “/”', () => {
+  it('a new card is refused, not renamed to fit; nothing is made', async () => {
+    const hook = await mount()
+    let result: unknown = null
+    await act(async () => {
+      result = await hook.current.addCard('0', 'Basil/Soil')
+    })
+    expect(result).toEqual({ ok: false, error: '“/” can\'t be used in a name' })
+    expect(calls.some((c) => c.channel === IPC.fsCreate)).toBe(false)
+    expect(board()).toBe(boardText)
+  })
+
+  it('a line of text is not made a note, and says why', async () => {
+    files.set(BOARD, boardText.replace('- [ ] Buy stamps', '- [ ] Buy stamps/envelopes'))
+    const hook = await mount()
+    await act(async () => {
+      await hook.current.makeNote(card(hook, 'Buy stamps/envelopes')!.key)
+    })
+    expect(hook.current.notice).toBe('Couldn\'t make the note: “/” can\'t be used in a name.')
+    expect(calls.some((c) => c.channel === IPC.fsCreate)).toBe(false)
+  })
+
+  it('renaming a card is refused and it keeps its name', async () => {
+    const hook = await mount()
+    let next: string | null = 'unset'
+    await act(async () => {
+      next = await hook.current.renameCard('Recto/Boards/Launch/Ship it.md', 'Ship/it')
+    })
+    expect(next).toBeNull()
+    expect(hook.current.notice).toBe('Couldn\'t rename the card: “/” can\'t be used in a name.')
+    expect(calls.some((c) => c.channel === IPC.fsRename)).toBe(false)
   })
 })

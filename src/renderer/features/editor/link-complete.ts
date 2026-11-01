@@ -1,3 +1,4 @@
+import { nameProblem } from '@shared/vault'
 import {
   autocompletion,
   insertCompletionText,
@@ -127,8 +128,9 @@ export function linkCompletion(getCandidates: () => readonly LinkCandidate[]): E
 
           // No note has this name yet: the last row makes one. Names are
           // unique in the vault ignoring case, so that is how they are compared.
+          // A name main would refuse (`a/b` is a path) gets no row.
           const name = typed.trim()
-          if (name !== '' && !candidates.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+          if (name !== '' && nameProblem(name) === null && !candidates.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
             options.push({
               label: `Create “${name}”`,
               type: 'create',

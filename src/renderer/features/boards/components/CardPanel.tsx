@@ -17,7 +17,7 @@ type Props = {
   move: (key: string, target: Drop) => Promise<void>
   /** Rename the card's note: its title is its file name. */
   onRename: (name: string) => Promise<void>
-  /** A plain-text card becomes a note in tasks/. */
+  /** A plain-text card becomes a note in the board's folder. */
   onMakeNote: () => Promise<void>
   onOpenNote: (path: string) => void
   onClose: () => void

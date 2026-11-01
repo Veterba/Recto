@@ -17,7 +17,8 @@ import { quitApp, removeDir } from './helpers/app'
 
 const RUN = process.env['RECTO_E2E'] === '1'
 const ROOT = path.resolve(__dirname, '../..')
-const BOARD = 'tasks/Launch.md'
+const DIR = 'Recto/Boards/Launch'
+const BOARD = `${DIR}/Launch.md`
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 const pad = (n: number): string => String(n).padStart(2, '0')
 const day = (offset = 0): string => {
@@ -41,7 +42,7 @@ describe.skipIf(!RUN)('boards as notes', () => {
   let vault = ''
   let boardPath = BOARD
   const read = (rel: string): string => fs.readFileSync(path.join(vault, rel), 'utf8')
-  const file = (name: string): string => read(`tasks/${name}.md`)
+  const file = (name: string): string => read(`${DIR}/${name}.md`)
   const board = (): string => read(boardPath)
   const lanes = (): [string, string[]][] => parseKanban(board()).lanes.map((l) => [l.title, l.items.map((i) => i.text)])
   const recto = (): ReturnType<typeof rectoSettings> => rectoSettings(parseKanban(board()))
@@ -53,7 +54,7 @@ describe.skipIf(!RUN)('boards as notes', () => {
     vault = path.join(base, 'vault')
     fs.cpSync(path.join(ROOT, 'test/fixtures/snapshot-vault'), vault, { recursive: true })
     // A card dated around today for the calendar, and a line of text.
-    fs.writeFileSync(path.join(vault, 'tasks', 'This week.md'), `---\npriority: low\nstart: ${day(-1)}\ndue: ${day()}\n---\n`)
+    fs.writeFileSync(path.join(vault, DIR, 'This week.md'), `---\npriority: low\nstart: ${day(-1)}\ndue: ${day()}\n---\n`)
     fs.writeFileSync(
       path.join(vault, BOARD),
       read(BOARD).replace('- [ ] [[Record the demo]]', '- [ ] [[Record the demo]]\n- [ ] [[This week]]\n- [ ] Buy stamps\n    at the post office'),
@@ -107,7 +108,7 @@ describe.skipIf(!RUN)('boards as notes', () => {
     expect(file('Record the demo')).toBe(note)
   }, 30_000)
 
-  it("a column's +: Enter makes the note in tasks/ and its line at the top, ⌘Enter stays, a taken name is refused", async () => {
+  it("a column's +: Enter makes the note in the board’s folder and its line at the top, ⌘Enter stays, a taken name is a choice", async () => {
     const popover = page.getByRole('dialog', { name: 'New card' })
     const title = popover.getByRole('textbox', { name: 'Card title' })
 
@@ -130,17 +131,29 @@ describe.skipIf(!RUN)('boards as notes', () => {
     await title.fill('Only once')
     await title.press('Enter')
     await page.keyboard.press('Enter')
-    await until(() => fs.existsSync(path.join(vault, 'tasks', 'Only once.md')))
+    await until(() => fs.existsSync(path.join(vault, DIR, 'Only once.md')))
     await sleep(600)
-    expect(fs.readdirSync(path.join(vault, 'tasks')).filter((f) => f.startsWith('Only once'))).toEqual(['Only once.md'])
+    expect(fs.readdirSync(path.join(vault, DIR)).filter((f) => f.startsWith('Only once'))).toEqual(['Only once.md'])
     expect(board().match(/\[\[Only once\]\]/g)).toHaveLength(1)
 
     await column('To do').getByRole('button', { name: 'New card in To do' }).click()
     await title.fill('Handbook')
     await title.press('Enter')
-    await popover.getByText('A note with that name exists').waitFor()
-    expect(fs.existsSync(path.join(vault, 'tasks', 'Handbook.md'))).toBe(false)
+    await popover.getByText('A note “').waitFor()
+    expect(await popover.locator('.new-card__taken').textContent()).toBe('A note “Handbook” already exists in the top of the vault. Add it to this board?')
+    expect(fs.existsSync(path.join(vault, DIR, 'Handbook.md'))).toBe(false)
     expect(board()).not.toContain('[[Handbook]]')
+    // Choose another name: the field is back, nothing made.
+    await popover.getByRole('button', { name: 'Choose another name' }).click()
+    expect(await popover.locator('.new-card__exists').count()).toBe(0)
+    // Add it: the existing note goes on the board as a link, its file left where it is.
+    await title.press('Enter')
+    await popover.getByRole('button', { name: 'Add it to this board' }).click()
+    await until(() => board().includes('- [ ] [[Handbook]]'))
+    expect(fs.existsSync(path.join(vault, 'Handbook.md'))).toBe(true)
+    expect(fs.existsSync(path.join(vault, DIR, 'Handbook.md'))).toBe(false)
+    await card('Handbook').waitFor()
+    await column('To do').getByRole('button', { name: 'New card in To do' }).click()
     await title.press('Escape')
     await popover.waitFor({ state: 'detached' })
   }, 30_000)
@@ -158,11 +171,11 @@ describe.skipIf(!RUN)('boards as notes', () => {
     await until(() => board().includes('- [ ] [[From the palette]]'))
   }, 20_000)
 
-  it('a line of text becomes a note in tasks/, and its line a link to it', async () => {
+  it('a line of text becomes a note in the board’s folder, and its line a link to it', async () => {
     await card('Buy stamps').click()
     const panel = page.locator('.card-panel')
     await panel.getByRole('button', { name: 'Make it a note' }).click()
-    await until(() => fs.existsSync(path.join(vault, 'tasks', 'Buy stamps.md')) && file('Buy stamps') !== '')
+    await until(() => fs.existsSync(path.join(vault, DIR, 'Buy stamps.md')) && file('Buy stamps') !== '')
     expect(file('Buy stamps')).toBe('at the post office\n')
     await until(() => board().includes('- [ ] [[Buy stamps]]'))
     expect(board()).not.toContain('at the post office')
@@ -237,7 +250,7 @@ describe.skipIf(!RUN)('boards as notes', () => {
     const name = page.locator('.card-panel').getByRole('textbox', { name: 'Card title' })
     await name.fill('Draft the notes')
     await name.press('Enter')
-    await until(() => fs.existsSync(path.join(vault, 'tasks', 'Draft the notes.md')))
+    await until(() => fs.existsSync(path.join(vault, DIR, 'Draft the notes.md')))
     await until(() => board().includes('[[Draft the notes]]'))
     expect(board()).not.toContain('[[Draft notes]]')
     await card('Draft the notes').waitFor()
@@ -245,7 +258,7 @@ describe.skipIf(!RUN)('boards as notes', () => {
   }, 20_000)
 
   it('the calendar places a card on its days, and clicking the bar opens it', async () => {
-    const bar = page.locator('[data-widget="calendar"] .board-cal__bar[data-path="tasks/This week.md"]')
+    const bar = page.locator('[data-widget="calendar"] .board-cal__bar[data-path="Recto/Boards/Launch/This week.md"]')
     await bar.waitFor()
     expect(await bar.getAttribute('title')).toMatch(/^This week · /)
     await bar.click()
@@ -280,7 +293,7 @@ describe.skipIf(!RUN)('boards as notes', () => {
     await dialog.getByRole('button', { name: 'Move cards and delete' }).click()
     await until(() => !lanes().some(([t]) => t === 'Doing'))
     expect(lanes()[0]![1]).toContain('[[Fix the export bug]]')
-    expect(fs.existsSync(path.join(vault, 'tasks', 'Fix the export bug.md'))).toBe(true)
+    expect(fs.existsSync(path.join(vault, DIR, 'Fix the export bug.md'))).toBe(true)
   }, 30_000)
 
   it("the board note's Markdown is a click away, with a word about what Obsidian removes", async () => {
@@ -305,12 +318,12 @@ describe.skipIf(!RUN)('boards as notes', () => {
     await link('Record the demo').locator('.cm-link-icon--done').waitFor({ timeout: 10_000 })
   }, 30_000)
 
-  it("tasks/ - boards and cards - is not in the Data tree; a [[link]] to a board or a card opens it in Tasks", async () => {
+  it("Recto/ - boards and cards - is not in the Data tree; a [[link]] to a board or a card opens it as the board, in the tab you are in", async () => {
     const names = await page.locator('[role=treeitem]').allTextContents()
-    expect(names.some((n) => /^tasks$|Launch|Record the demo/.test(n.trim()))).toBe(false)
-    // A card moved out of tasks/ stays out of the tree.
+    expect(names.some((n) => /^Recto$|Launch|Record the demo/.test(n.trim()))).toBe(false)
+    // A card moved out of Recto/ stays out of the tree.
     fs.mkdirSync(path.join(vault, 'Garden', 'Moved'), { recursive: true })
-    fs.renameSync(path.join(vault, 'tasks', 'This week.md'), path.join(vault, 'Garden', 'Moved', 'This week.md'))
+    fs.renameSync(path.join(vault, DIR, 'This week.md'), path.join(vault, 'Garden', 'Moved', 'This week.md'))
     await sleep(1500)
     await page.locator('[role=treeitem]', { hasText: 'Garden' }).click()
     await page.locator('[role=treeitem]', { hasText: 'Moved' }).click()
@@ -320,8 +333,9 @@ describe.skipIf(!RUN)('boards as notes', () => {
     await page.locator('[role=treeitem]', { hasText: 'Plans' }).click()
     await page.locator('.cm-wikilink', { hasText: 'Launch' }).locator('.cm-link-icon').click()
     await page.locator('.board__name', { hasText: 'Launch' }).waitFor()
-    await page.locator('.boards__row', { hasText: 'Launch' }).waitFor()
-    // A link to a card opens it beside its board, in Tasks - not its Markdown in Data.
+    // In place (since tabs keep their own history): ← goes back to Plans.
+    await page.getByRole('button', { name: 'Back to Plans' }).waitFor()
+    // A link to a card opens it beside its board - not its Markdown.
     await page.keyboard.press('Meta+1')
     await page.locator('[role=treeitem]', { hasText: 'Plans' }).click()
     await page.locator('.cm-wikilink', { hasText: 'Record the demo' }).click()
@@ -330,14 +344,16 @@ describe.skipIf(!RUN)('boards as notes', () => {
     await page.locator('.card-panel [aria-label="Close card"]').click()
   }, 30_000)
 
-  it('"New board" in the Tasks list makes a board note in tasks/, beside the cards', async () => {
+  it('"New board" in the Tasks list makes a board note in its own folder, with new-note-folder set', async () => {
     await page.keyboard.press('Meta+3')
     await page.locator('.boards__add').click()
     const field = page.getByRole('textbox', { name: 'New board name' })
     await field.fill('Side project')
     await field.press('Enter')
-    await until(() => fs.existsSync(path.join(vault, 'tasks', 'Side project.md')) && read('tasks/Side project.md') !== '')
-    expect(read('tasks/Side project.md')).toMatch(/^---\n\nkanban-plugin: board\n\n---\n\n## To do\n/)
+    const side = 'Recto/Boards/Side project/Side project.md'
+    await until(() => fs.existsSync(path.join(vault, side)) && read(side) !== '')
+    expect(read(side)).toMatch(/^---\n\nkanban-plugin: board\n\n---\n\n## To do\n/)
+    expect(parseKanban(read(side)).settings['new-note-folder']).toBe('Recto/Boards/Side project')
     await page.locator('.board__name', { hasText: 'Side project' }).waitFor()
     await page.locator('.boards__row', { hasText: 'Launch' }).click()
   }, 20_000)
@@ -364,16 +380,18 @@ describe.skipIf(!RUN)('boards as notes', () => {
     await page.keyboard.press('Meta+G')
   }, 30_000)
 
-  it('renaming a board renames its note; its tab follows', async () => {
+  it('renaming a board renames its note and its folder, cards and new-note-folder with it; its tab follows', async () => {
     await page.keyboard.press('Meta+3')
     await page.locator('.boards__row', { hasText: 'Launch' }).click({ button: 'right' })
     await page.getByText('Rename', { exact: true }).click()
     const field = page.getByRole('textbox', { name: 'Board name' })
     await field.fill('Launch plan')
     await field.press('Enter')
-    await until(() => fs.existsSync(path.join(vault, 'tasks', 'Launch plan.md')))
-    expect(fs.existsSync(path.join(vault, BOARD))).toBe(false)
-    boardPath = 'tasks/Launch plan.md'
+    boardPath = 'Recto/Boards/Launch plan/Launch plan.md'
+    // The board note moves first, its cards one by one after it, the old folder last.
+    await until(() => fs.existsSync(path.join(vault, boardPath)) && !fs.existsSync(path.join(vault, DIR)))
+    expect(fs.existsSync(path.join(vault, 'Recto/Boards/Launch plan/Record the demo.md'))).toBe(true)
+    expect(parseKanban(board()).settings['new-note-folder']).toBe('Recto/Boards/Launch plan')
     await page.locator('.board__name', { hasText: 'Launch plan' }).waitFor()
     // The note that linked the board links it under its new name.
     await until(() => read('Plans.md').includes('[[Launch plan]]'))

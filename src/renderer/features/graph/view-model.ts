@@ -1,5 +1,6 @@
 import type { GraphInfo } from '@shared/index-results'
 import { CHAT_FOLDER } from '../ai'
+import { isRectoReadme } from '@shared/recto-paths'
 import type { GraphNodeView } from './render-state'
 import { histogram, inRange, type LinkRange } from './degree-bins'
 
@@ -58,7 +59,7 @@ export function visibleGraph(
   }
 
   // Boards and their cards by what they are, not by folder: a card is a note
-  // a board lists, wherever it lives, and a note in tasks/ that no board lists
+  // a board lists, wherever it lives, and a note in Recto/ that no board lists
   // is just a note.
   //
   // Templates used to be filtered here too, back when their folder was
@@ -69,7 +70,8 @@ export function visibleGraph(
     (node) =>
       (showBoards || node.board !== true) &&
       (showTasks || node.stage === undefined) &&
-      (showChats || !node.path.startsWith(`${CHAT_FOLDER}/`)),
+      (showChats || !node.path.startsWith(`${CHAT_FOLDER}/`)) &&
+      !isRectoReadme(node.path),
   )
   let kept = visible.filter((node) => (showOrphans || node.degree > 0) && inRange(node.degree, linkRange))
 

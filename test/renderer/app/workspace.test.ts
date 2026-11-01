@@ -401,6 +401,14 @@ describe('tab history', () => {
     expect(lists(workspace, id)).toEqual([['a.md'], []])
   })
 
+  it('lists every path its tabs and their steps point at, for checking on disk before a prune', () => {
+    const { workspace, id } = tab()
+    go(workspace, id, 'b.md')
+    go(workspace, id, 'c.md')
+    workspace.travel(id, -1)
+    expect(workspace.paths().sort()).toEqual(['a.md', 'b.md', 'c.md'])
+  })
+
   it('takes boards and other views as steps too, and keeps the history through a save and restore', () => {
     const { workspace, id } = tab()
     workspace.navigate(id, { type: 'board', state: { path: 'tasks/Launch.md', card: 'tasks/Design.md' } })

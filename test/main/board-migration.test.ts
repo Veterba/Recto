@@ -22,7 +22,8 @@ function copy(): string {
   dirs.push(base)
   const vault = path.join(base, 'vault')
   fs.cpSync(FIXTURE, vault, { recursive: true })
-  fs.rmSync(path.join(vault, 'tasks', 'Launch.md'), { force: true })
+  // The fixture is in today's layout; before boards were notes, the cards were in tasks/ (from BEFORE).
+  fs.rmSync(path.join(vault, 'Recto'), { recursive: true, force: true })
   fs.cpSync(BEFORE, vault, { recursive: true })
   return vault
 }
@@ -45,7 +46,8 @@ const read = (vault: string, rel: string): string => fs.readFileSync(path.join(v
 
 describe('the boards migration on the fixture vault', () => {
   it('writes the board note, strips the cards, backs everything up first, and runs once', () => {
-    const vaultBoard = fs.readFileSync(path.join(FIXTURE, 'tasks/Launch.md'), 'utf8')
+    // The fixture's board as the boards migration writes it: without the folder the layout migration adds later.
+    const vaultBoard = fs.readFileSync(path.join(FIXTURE, 'Recto/Boards/Launch/Launch.md'), 'utf8').replace(',"new-note-folder":"Recto/Boards/Launch"', '')
     const vault = copy()
     const before = tree(vault)
     const now = new Date(2026, 9, 18, 12)

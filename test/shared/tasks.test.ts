@@ -34,7 +34,7 @@ describe('reading tasks out of a note', () => {
   it('a card is not a task of its own note (boards list cards); templates and chats have none', () => {
     expect(extractTasks('tasks/Weekly goals.md', '# Weekly goals\n\nText.')).toEqual([])
     expect(extractTasks('Template/Daily.md', '## Tasks\n- [ ] x')).toEqual([])
-    expect(extractTasks('chats/recto/t.md', '- [ ] x')).toEqual([])
+    expect(extractTasks('Recto/Chats/recto/t.md', '- [ ] x')).toEqual([])
   })
 
   it('a note’s day: the daily’s name, else frontmatter, else its file time', () => {

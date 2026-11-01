@@ -14,7 +14,7 @@ import { ChatTopics, UNTITLED } from '../chat-topics-model'
 import { onNewTopicRequest, onTopicRequest } from '../new-topic'
 import { reloadBots, useBotStatus, useBots } from '../hooks/use-bots'
 import { markRead } from '../unread'
-import { isActive } from '@shared/bots'
+import { botThreadFolder, isActive } from '@shared/bots'
 import { jobForTopic, ordinal, topicJobs, useJobs } from '../jobs-store'
 import { statusPhrases } from '@shared/bot-status'
 import { StatusText, useStatusText } from './BotStatus'
@@ -453,7 +453,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
                 <div className="chat__welcome">
                   <h2>Ask {bot.name}</h2>
                   <p>
-                    {bot.name} reads your notes to answer. Each topic is a note in <code>chats/{bot.id}/</code>.
+                    {bot.name} reads your notes to answer. Each topic is a note in <code>{botThreadFolder(bot.id)}/</code>.
                   </p>
                 </div>
               )}

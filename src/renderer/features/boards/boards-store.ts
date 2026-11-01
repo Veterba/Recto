@@ -4,7 +4,7 @@ import type { BoardSummaryInfo, CardPlaceInfo } from '@shared/index-results'
 import { linkStage } from '@shared/kanban'
 import { api } from '../../app/api'
 import { setLinkKinds, type LinkKind } from '../../app/link-kinds'
-import { CARD_FOLDER } from './create-card'
+import { inRecto } from '@shared/recto-paths'
 
 /**
  * The vault's boards and where each card stands, from the index.
@@ -95,14 +95,13 @@ export const isBoardPath = (path: string): boolean => boards.some((b) => b.path 
 export const boardOfCard = (path: string): string | null => places.find((p) => p.path === path)?.board ?? null
 
 /**
- * What the Data tree leaves to the Tasks tab, in one rule: the tasks/ folder,
- * and any board note or card note wherever it is - so a board or a card moved
- * out of tasks/ does not turn up among the notes.
+ * What the Data tree leaves to the Tasks tab, in one rule: the Recto folder
+ * (boards, cards, chats), and any board note or card note wherever it is - so
+ * a board or a card kept elsewhere does not turn up among the notes.
  */
 export function isTaskPath(path: string): boolean {
   return (
-    path === CARD_FOLDER ||
-    path.startsWith(`${CARD_FOLDER}/`) ||
+    inRecto(path) ||
     boards.some((b) => b.path === path) ||
     places.some((p) => p.path === path)
   )

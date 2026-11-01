@@ -44,6 +44,22 @@ describe('vault overview from the index', () => {
     expect(o.linked.map((n) => n.path)).toEqual(['Hub.md', 'Leaf.md'])
   })
 
+  it('leaves chats and Recto’s README out of every count and list, and Recto/ out of the folders', () => {
+    vault({
+      'A.md': '# A\n\nOne two [[B]] #x',
+      'B.md': '# B\n\nthree',
+      'Recto/README.md': 'This folder is managed by Recto.',
+      'Recto/Recto README.md': 'This folder is managed by Recto.',
+      'Recto/Chats/recto/2026-10-01 10-00 — Talk.md': 'Talked about [[A]] and [[Gone]] #y',
+    })
+    const o = overview([])
+    expect(o).toMatchObject({ notes: 2, links: 1, tags: 1 })
+    expect(o.orphans).toEqual([])
+    expect(o.broken).toEqual([])
+    expect(o.folders.map((f) => f.name)).toEqual([])
+    expect(o.linked.map((n) => n.path)).toEqual(['A.md', 'B.md'])
+  })
+
   it('counts notes, words, links and tags', () => {
     vault({
       'A.md': '---\nstatus: draft\n---\n# A\n\nOne two three #x [[B]]',

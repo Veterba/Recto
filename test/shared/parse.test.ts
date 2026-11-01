@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractTargets, normalizeName, parseNote, pathsByName, resolveLink } from '../../src/shared/parse'
+import { extractTargets, normalizeName, parseNote, pathsByName, resolveLink, shortestLink } from '../../src/shared/parse'
 
 describe('parsing a note', () => {
   it('splits frontmatter from body and types the values', () => {
@@ -224,5 +224,24 @@ describe('HTML comments', () => {
 
   it('inside a code fence are code, left as they are', () => {
     expect(parseNote(note).body).toContain('<!-- inside code, kept -->')
+  })
+})
+
+describe('shortestLink', () => {
+  const paths = ['Recto/Boards/Launch/Choose a name.md', 'Kitchen/Choose a name.md', 'Projects/A/Plan.md', 'Projects/B/Plan.md', 'Solo.md', 'Deep/Only.md']
+  it('is the name when no other note has it', () => {
+    expect(shortestLink('Deep/Only.md', paths)).toBe('Only')
+    expect(shortestLink('Solo.md', paths)).toBe('Solo')
+  })
+  it('is as few last folders as make it unique, not the whole path', () => {
+    expect(shortestLink('Recto/Boards/Launch/Choose a name.md', paths)).toBe('Launch/Choose a name')
+    expect(shortestLink('Kitchen/Choose a name.md', paths)).toBe('Kitchen/Choose a name')
+    expect(shortestLink('Projects/A/Plan.md', paths)).toBe('A/Plan')
+  })
+  it('ignores case, as names do', () => {
+    expect(shortestLink('Deep/Only.md', [...paths, 'Other/only.md'])).toBe('Deep/Only')
+  })
+  it('the whole path only when nothing shorter is unique', () => {
+    expect(shortestLink('A/Plan.md', ['A/Plan.md', 'X/A/Plan.md'])).toBe('A/Plan')
   })
 })

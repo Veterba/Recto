@@ -4,7 +4,7 @@ import { CODE_FENCE } from './parse'
 
 /**
  * A conversation with a bot is split into chat topics, and each topic is a
- * markdown file of its own: `chats/<bot>/YYYY-MM-DD HH-mm — <title>.md`.
+ * markdown file of its own: `Recto/Chats/<bot>/YYYY-MM-DD HH-mm — <title>.md`.
  * (Chat topics are not the vault's topics feature - the clustering one - and
  * the code says "chat topic" to keep the two apart.)
  *

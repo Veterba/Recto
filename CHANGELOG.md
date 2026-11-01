@@ -4,6 +4,22 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.53.1 — 2026-10-31
+### Added
+- Recto keeps the notes its features make in one `Recto/` folder: boards in `Recto/Boards/<Board>/` with their cards beside them, cards on no board in `Recto/Unsorted/`, chats in `Recto/Chats/`, and a `Recto/README.md` saying what the folder is. They are ordinary Markdown notes: indexed, searchable, linkable by name and synced. Chats and `Recto/README.md` stay out of the overview's counts and lists and out of the graph (chats can be shown in it).
+- On first open, an existing vault's `tasks/` and `chats/` are moved into that layout once, with a copy of everything it touches in `.recto/backup/layout-<date>/`, a notice afterwards saying what moved, and nothing written if a target is already taken. History follows each moved note. Links keep working as they are; only a link that would otherwise point at another note or at a path that no longer exists (such as `[[tasks/X]]` when another X exists) is rewritten, to the shortest path that names the note alone (`[[Launch/Choose a name]]`, not the full path); Markdown-style links get the full vault path.
+- Deleting a board asks where its cards go: Unsorted, another board (lines merged, never twice), or the macOS Trash. The board note itself goes to the Trash too (not the archive). A card another board still lists is never trashed. Every delete has an Undo that puts back the board, the trashed cards, the moved cards and the lines added to the other board, as long as they have not changed since.
+- New boards set Obsidian Kanban's `new-note-folder` to their own folder (nothing else in the settings block changes), and new cards are made there.
+- Settings → Vault → "Show the Recto folder" shows the folder in the Data tree.
+### Changed
+- Renaming a board renames its folder and file, moves its cards one by one (history and links follow) and updates `new-note-folder`.
+- After you take a card off a board, delete a board or add an existing note to one, a card file in `Recto/Boards` or `Recto/Unsorted` is filed again: on no board it goes to Unsorted, on exactly one board to that board's folder, on several it stays. Notes outside `Recto/` that sit on a board are never moved or trashed.
+- The Data tree hides `Recto/` with one rule, replacing the separate rules for `tasks/` and `chats/`.
+### Fixed
+- A name is never changed silently. A name with "/" (or another character a file name cannot hold: \ : * ? " < > |, or a leading ".") is refused with "“/” can't be used in a name" for new notes, tree renames, cards, boards and their renames; cards and boards also refuse # ^ [ ] | because they break links. Before, "Basil/Soil" became "Basil Soil". The [[ "Create" row is not offered for such a name.
+- A tab showing a note made a moment ago (a new board opened at once, say) was closed again because the file tree had not caught up. Tabs are now closed only after the disk confirms the file is gone.
+- Creating a board or card with a name that was already taken gave one of two different messages, and the first check could be stale. There is now one check, against the files on disk. The "+" popover says "A note “X” already exists in <folder>. Add it to this board?" and offers "Add it to this board" (adds `[[X]]` in the shortest form that names it, the file is not moved or copied) or "Choose another name"; a new board with a taken name says the same, with "Open that board" when that note is a board.
+
 ## v0.53.0 — 2026-10-30
 ### Added
 - Each tab keeps its own history - the note, where it was scrolled and where the caret was - up to 100 steps, kept when Recto restarts. ← and → at the top left of a note, board, file or the overview say how many steps they hold; ⌘ over one names where it goes. Right-click (or a long press) lists the steps, and picking one jumps there; ⌘ on a click opens that step in a new tab. ⌘[ and ⌘] and the mouse's back and forward buttons do the same. Renamed notes are followed and deleted ones skipped.

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { IPC } from '@shared/ipc'
 import type { BoardMigrationResult } from '@shared/board-migration'
+import { BOARDS_FOLDER, CHATS_FOLDER, UNSORTED_FOLDER, type LayoutMigrationResult } from '@shared/recto-paths'
 import { api } from '../../../app/api'
 import { noteIndexChanged } from '../../../app/note-bus'
 import { refreshBoards } from '../boards-store'
@@ -12,21 +13,35 @@ import { refreshBoards } from '../boards-store'
  * the copy of every changed file is. When a board's name was already a
  * note's, nothing was written: this asks for another name and runs it again.
  */
-export function BoardsMigrationNotice({ vaultPath, onOpenBoard }: { vaultPath: string; onOpenBoard: (path: string) => void }): React.ReactElement | null {
-  const [result, setResult] = useState<BoardMigrationResult>({ state: 'none' })
+export function BoardsMigrationNotice({
+  vaultPath,
+  onOpenBoard,
+  onSettled,
+}: {
+  vaultPath: string
+  onOpenBoard: (path: string) => void
+  /** Nothing (more) to say: the next notice may show. */
+  onSettled: () => void
+}): React.ReactElement | null {
+  const [result, setResult] = useState<BoardMigrationResult | null>(null)
 
   useEffect(() => {
+    setResult(null)
     void api.invoke(IPC.boardsMigration).then(setResult)
   }, [vaultPath])
 
   useEffect(() => {
-    if (result.state === 'migrated') {
+    if (result?.state === 'none') onSettled()
+  }, [result, onSettled])
+
+  useEffect(() => {
+    if (result?.state === 'migrated') {
       noteIndexChanged()
       refreshBoards()
     }
   }, [result])
 
-  if (result.state === 'none') return null
+  if (result === null || result.state === 'none') return null
   if (result.state === 'conflicts')
     return (
       <NamesDialog
@@ -145,6 +160,96 @@ function NamesDialog({
           </button>
         </footer>
       </form>
+    </div>,
+    document.body,
+  )
+}
+
+/**
+ * What moving tasks/ and chats/ into Recto/ did when this vault opened
+ * (main/layout-migration.ts), said once: how many files moved, which links
+ * were rewritten, and where the copies are.
+ */
+export function LayoutMigrationNotice({ vaultPath, asks }: { vaultPath: string; asks: number }): React.ReactElement | null {
+  const [result, setResult] = useState<LayoutMigrationResult>({ state: 'none' })
+
+  // Asked each time the boards notice has had its say: that migration runs
+  // first, and a retry after its names dialog is what lets this one run.
+  useEffect(() => {
+    if (asks > 0) void api.invoke(IPC.layoutMigration).then(setResult)
+  }, [vaultPath, asks])
+
+  useEffect(() => {
+    if (result.state === 'migrated') {
+      noteIndexChanged()
+      refreshBoards()
+    }
+  }, [result])
+
+  if (result.state === 'none') return null
+  const close = (): void => setResult({ state: 'none' })
+  return createPortal(
+    <div className="dialog__backdrop" role="presentation">
+      <div
+        className="dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label="Boards and chats moved"
+        onKeyDown={(event) => {
+          event.stopPropagation()
+          if (event.key === 'Escape' || event.key === 'Enter') close()
+        }}
+      >
+        <header className="dialog__head">
+          <h2 className="dialog__title">{result.state === 'migrated' ? 'Boards and chats are in Recto/ now' : "Boards and chats weren't moved"}</h2>
+        </header>
+        {result.state === 'failed' && (
+          <p className="dialog__lede">Recto tried to move tasks/ and chats/ into Recto/ and stopped: {result.error} Nothing was deleted.</p>
+        )}
+        {result.state === 'conflicts' && (
+          <>
+            <p className="dialog__lede">These files are in the way, so nothing was moved. Move or rename them, then open the vault again:</p>
+            <ul className="board-migrated">
+              {result.conflicts.map((c) => (
+                <li key={c.from}>
+                  {c.from} → <code>{c.to}</code>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {result.state === 'migrated' && (
+          <>
+            <p className="dialog__lede">
+              Each board has its own folder in {BOARDS_FOLDER}/, with its cards; cards on no board are in {UNSORTED_FOLDER}/, and chats in {CHATS_FOLDER}/.
+              They are ordinary notes, hidden from the Data tree (Settings → Vault shows them). {result.moves.length}{' '}
+              {result.moves.length === 1 ? 'file' : 'files'} moved; links by name work as before.
+            </p>
+            {result.links.length > 0 && (
+              <>
+                <p className="dialog__lede">These links spelled out a path that moved, so they now name the same note another way:</p>
+                <ul className="board-migrated">
+                  {result.links.map((l) => (
+                    <li key={`${l.path}:${l.from}`}>
+                      {l.path}: <code>{l.from}</code> → <code>{l.to}</code>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {result.backup !== null && (
+              <p className="dialog__lede">
+                A copy of every file before the move is in <code>{result.backup}</code>.
+              </p>
+            )}
+          </>
+        )}
+        <footer className="dialog__actions">
+          <button className="dialog__submit" autoFocus onClick={close}>
+            OK
+          </button>
+        </footer>
+      </div>
     </div>,
     document.body,
   )

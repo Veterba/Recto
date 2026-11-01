@@ -280,6 +280,18 @@ export class Workspace extends Events<WorkspaceEvents> {
     this.trigger('layout-change')
   }
 
+  /** Every note path a tab shows or a step of its history points at. */
+  paths(): string[] {
+    const out = new Set<string>()
+    for (const leaf of this.leaves()) {
+      for (const state of [leaf.state, ...(leaf.history?.back ?? []).map((e) => e.state), ...(leaf.history?.forward ?? []).map((e) => e.state)]) {
+        const path = pathOfState(state)
+        if (path !== null && path !== '') out.add(path)
+      }
+    }
+    return [...out]
+  }
+
   /**
    * Drop tabs whose note is gone - deleted, or renamed by another app.
    *

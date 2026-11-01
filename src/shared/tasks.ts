@@ -3,7 +3,7 @@ import { isEvalsPath } from './bots'
 /**
  * Tasks, as the user writes them: checkboxes anywhere ("- [ ] call the bank"),
  * plain list items under a heading named Tasks / Задачи / TODO / Option tasks,
- * and cards in tasks/ on a board. Pure, so the indexer, the bots and the tests
+ * and cards on a board. Pure, so the indexer, the bots and the tests
  * all read them the same way.
  *
  * A daily note copies yesterday's open tasks into today's; the same task in
@@ -32,7 +32,7 @@ const FENCE = /^\s*(```|~~~)/
 const TASK_HEADING = /^(tasks?|to-?dos?|option(al)? tasks|задачи|дела|список дел|oppgaver|gjøremål)$/i
 
 /** Folders whose notes never hold real tasks: templates (placeholders) and the bots' own chats. */
-export const NO_TASK_FOLDERS = /^(templates?|шаблоны|chats)\//i
+export const NO_TASK_FOLDERS = /^(templates?|шаблоны|recto\/chats)\//i
 
 /** The text of a task as written, minus Markdown that only decorates it. */
 const clean = (text: string): string =>

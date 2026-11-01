@@ -200,7 +200,7 @@ board records an opened card as a step (`step`); the shell does the travelling
 | `file-tree` | the Data tree, drag and drop, context menu, the note preview card (`NotePreviewCard`; a board's shows its columns and progress). The card's lifecycle is the app's one controller, `app/link-peek.ts`, for tree rows and editor links alike: tied to its anchor element, put away by any press, key, scroll, blur or navigation, or when the anchor goes or moves | `tree`, `note-peek` |
 | `search` | full-text search, quick switcher | `search-result` (inside the shared `palette`) |
 | `graph` | the link graph and its settings panel | `graph`, `gset`, `gwheel`, `glegend` |
-| `boards` | kanban boards as notes in the Obsidian Kanban format (`shared/kanban.ts`: parse, and line-level edits that never touch a line they do not mean to): full-height glass columns, a card panel that edits a card note's frontmatter one key at a time (`shared/card-fields.ts`), and a widget strip (`widgets/registry.ts`). `hooks/use-board-cards.ts` reads the board note and the cards' notes; every change is shown first and written second, every board write re-reads the file and makes the same change to what is there now (found by the card's own lines), edits to one card's note go one at a time, and a failed write is undone with a notice. A board note opens as a board in a note tab too (`BoardNote`, through the editor's `NoteHosts`), with its Markdown a click away; a link to a board or a card opens it in the tab you are in, or in Tasks when that tab is not one to move on from (`use-shell-navigation.ts`); a card opened on a board is a step in the tab's history. The card panel edits the note's body with the editor's `NoteBodyEditor` (frontmatter stays the panel's fields', `withBody`). `boards-store.ts` lists boards and where each card stands (from the index), publishes the link icons (`app/link-kinds.ts`) and holds `isTaskPath`, the one rule that keeps tasks/, boards and cards out of the Data tree. The one-time move from `boards.json` is `shared/board-migration.ts` (plan) and `main/board-migration.ts` (backup, write) | `board`, `board-col`, `board-card`, `board-pri`, `board-cal`, `board-seg`, `board-done`, `board-due`, `board-pris`, `board-widget`, `card-panel`, `new-card`, `boards` |
+| `boards` | kanban boards as notes in the Obsidian Kanban format (`shared/kanban.ts`: parse, and line-level edits that never touch a line they do not mean to): full-height glass columns, a card panel that edits a card note's frontmatter one key at a time (`shared/card-fields.ts`), and a widget strip (`widgets/registry.ts`). `hooks/use-board-cards.ts` reads the board note and the cards' notes; every change is shown first and written second, every board write re-reads the file and makes the same change to what is there now (found by the card's own lines), edits to one card's note go one at a time, and a failed write is undone with a notice. A board note opens as a board in a note tab too (`BoardNote`, through the editor's `NoteHosts`), with its Markdown a click away; a link to a board or a card opens it in the tab you are in, or in Tasks when that tab is not one to move on from (`use-shell-navigation.ts`); a card opened on a board is a step in the tab's history. The card panel edits the note's body with the editor's `NoteBodyEditor` (frontmatter stays the panel's fields', `withBody`). `boards-store.ts` lists boards and where each card stands (from the index), publishes the link icons (`app/link-kinds.ts`) and holds `isTaskPath`, the one rule that keeps Recto/ (boards, cards, chats) out of the Data tree unless Settings → Vault → "Show the Recto folder" is on (`recto-folder-setting.ts`, kept per vault in `.recto/recto-folder.json`). Where the files live is `shared/recto-paths.ts` and nothing else; rename, delete and filing of cards are `main/boards.ts` (see Recto's folder, below). The one-time move from `boards.json` is `shared/board-migration.ts` (plan) and `main/board-migration.ts` (backup, write) | `board`, `board-col`, `board-card`, `board-pri`, `board-cal`, `board-seg`, `board-done`, `board-due`, `board-pris`, `board-widget`, `card-panel`, `new-card`, `boards` |
 | `topics` | topics settings and the run notice | `topics` |
 | `tidy` | filing loose notes | `tidy` |
 | `home` | the overlay on ⌃⌘H: one WebGL scene (`scene.ts`) behind two panes that slide - the welcome, whose text the shader draws (`hero-text.ts`, `scene-text.ts`), and the vault overview, a pane that scrolls as a whole: the vault's name drawn by the shader (moved by a scroll uniform), then a solid card (`components/Overview.tsx`). Main gathers the raw material (`main/overview.ts`: one `overview` query on the index, the `.recto/stats/` files, the userData usage file); every figure is a pure sum in `shared/overview.ts` worked out against the renderer's clock. Where it was left (pane, page, scroll) is `overviewPlace` in `app-state.json`. Edits, active time and last opened are reported from `app/usage.ts` | `home`, `overview` |
@@ -216,6 +216,50 @@ Features import each other only through `index.ts`. The app shell imports featur
 `app/` for the api, the note bus and the view registry, and `ui/` for primitives. `ui/` imports
 neither `app/` nor any feature, and `shared/` imports nothing outside itself.
 
+## Recto's folder
+
+Boards, cards and chats live under `Recto/` (`shared/recto-paths.ts` is the one place that knows
+the names; it also holds `placeFor` and `cardFolderFor`, pure and tested). They are notes like any
+other - indexed, searched, linked by name, synced - so nothing about them is special to the index
+except what it leaves out: the overview counts and lists neither chats nor board notes, and the
+graph hides chats unless asked. `Recto/README.md` (and `Recto README.md`) is left out of the graph
+(`graph/view-model.ts`) and of every overview count and list (`workers/indexer/queries.ts`).
+
+**Placement.** `main/boards.ts` (`createBoardOps`) keeps card files where their boards say. It acts
+only after a Recto action (a card taken off a board, a board deleted, an existing note added), and
+only on files already in `Recto/Boards/<Board>/` or `Recto/Unsorted/` (`isPlacedCard`). Which boards
+list a card is read from the board files on disk, not the index, so a board written a moment ago
+counts. `placeFor`: on no board, Unsorted; on exactly one, that board's folder; on several, it
+stays. Every move goes through the same `relocate` as a rename in the tree, one file at a time, so
+links follow and version history moves with the note. A note outside `Recto/` that sits on a board
+is never moved or trashed. Renaming a board renames its folder and file, moves the cards one by one
+and updates `new-note-folder`. Deleting a board takes a choice (Unsorted, another board, or the
+macOS Trash through `shell.trashItem`); the board note goes to the Trash too, not the archive, and a
+card another board lists is never trashed. Every delete returns an undo id: `undoDelete` puts back
+the board, the trashed cards, the moved cards and the lines added to the other board, each only if
+the file is unchanged since.
+
+**Names.** Notes are found by name, so a new note's name is checked once, against the files on disk
+(`fs:name-taken`, `vault-fs.nameTakenBy`), never the index, which can lag. Names are refused, never changed: `nameProblem` in `shared/vault.ts`
+rejects `/ \ : * ? " < > |` and a leading `.` (and, for cards and boards, `# ^ [ ] |`, which break
+links), and `vault-fs` create and rename enforce it. The `[[` "Create" row is not offered for such a name.
+
+**Link targets.** `shortestLink` in `shared/parse.ts` gives the shortest path that names a note alone. The
+layout migration uses it for rewritten wikilinks (Markdown-style links get the full vault path), and
+so does "Add it to this board" (`fs:link-target`).
+
+**Tabs and new files.** `VaultShell`'s prune effect closes a tab only after `fs:existing` confirms on
+disk that the file is gone (`Workspace.paths()` lists the candidates), since the tree can lag behind
+a note made a moment ago.
+
+**Layout migration.** On the first open of a vault, `main/layout-migration.ts` moves `tasks/` and
+`chats/` into `Recto/`. `planLayout` is pure (files in, moves, edits, creates and conflicts out);
+`migrateLayout` backs up what it touches, applies the plan and writes `.recto/layout-migration.json`.
+If any target is taken it stops and writes nothing. Each move is announced to the indexer as
+`note-renamed` before the reindex, so history carries over. Links resolve by name and mostly need no
+change; only a link whose target would otherwise change, or that spells a path that no longer
+exists, is rewritten (`mapLinkTargets` in `link-rewrite.ts`). Boards it moves get `new-note-folder`.
+
 ## On disk
 
 In the vault:
@@ -225,10 +269,11 @@ In the vault:
 | `**/*.md` | markdown with optional YAML-ish frontmatter; unrecognised frontmatter is kept byte for byte | the user |
 | `attachments/` | images pasted or dropped into notes | editor |
 | `templates/`, `Daily/` (configurable) | ordinary notes | templates |
-| `tasks/` | boards and cards. A board is a note in the Obsidian Kanban format: `kanban-plugin: board`, a `## heading` per lane (`Doing (3)` for a WIP limit, `**Complete**` under the done lane), a `- [ ]` item per card (`[[Card]]` for a card that is a note, plain text otherwise), and a `%% kanban:settings` JSON block at the end whose `recto` key holds lane colours and dates, widgets and sort. A card note has only its own fields - `priority`, `start`, `due`, `tags`, `completed` (set on entering the done lane, removed on leaving it) - and its text; where it sits is the board's | boards |
+| `Recto/` | what Recto's features make, as ordinary notes (layout in `shared/recto-paths.ts`): `README.md`; `Boards/<Board>/<Board>.md`, a board in the Obsidian Kanban format (`kanban-plugin: board`, a `## heading` per lane - `Doing (3)` for a WIP limit, `**Complete**` under the done lane - a `- [ ]` item per card, `[[Card]]` for a card that is a note, plain text otherwise, and a `%% kanban:settings` JSON block at the end whose `recto` key holds lane colours and dates, widgets and sort; `new-note-folder` there is where its new cards go) with its cards beside it; `Unsorted/`, cards on no board; `Chats/` (below). A card note has only its own fields - `priority`, `start`, `due`, `tags`, `completed` (set on entering the done lane, removed on leaving it) - and its text; where it sits is the board's | boards |
 | `.recto/boards-migration.json`, `.recto/backup/<date>/` | the one-time move from `boards.json` to board notes: what it made and changed (or `none` when there was nothing to move; once it exists, only a `boards.json` coming back runs it again), and a copy of every file it changed (boards.json included) from before (`main/board-migration.ts`) | `main/board-migration.ts` |
-| `chats/<bot>/` | a bot's chat topics, one note each: `YYYY-MM-DD HH-mm — <title>.md`, frontmatter `bot`, `created`, `title`; `## You` / `## <Bot>` turns (an old main-chat answer keeps `## Claude`), each answer's sources in a `<!-- recto:sources … -->` comment; turns are appended, never rewritten (`shared/chat-topics.ts`) | bots |
-| `.recto/chats-migration.json`, `.recto/backups/chats-<date>/` | the one-time move of the old main chats and first bot threads into Recto's topics: what moved, and a copy of `chats/` from before (`main/bots/migration.ts`) | `main/bots` |
+| `Recto/Chats/<bot>/` | a bot's chat topics, one note each: `YYYY-MM-DD HH-mm — <title>.md`, frontmatter `bot`, `created`, `title`; `## You` / `## <Bot>` turns (an old main-chat answer keeps `## Claude`), each answer's sources in a `<!-- recto:sources … -->` comment; turns are appended, never rewritten (`shared/chat-topics.ts`) | bots |
+| `.recto/layout-migration.json`, `.recto/backup/layout-<date>/` | the one-time move of `tasks/` and `chats/` into `Recto/`: what moved and which links were rewritten (or `none`, `conflicts` with nothing written, `failed`), and a copy of every file it moved or changed from before; read by the notice (`main/layout-migration.ts`) | `main/layout-migration.ts` |
+| `.recto/chats-migration.json`, `.recto/backups/chats-<date>/` | the one-time move of the old main chats and first bot threads into Recto's topics: what moved, and a copy of `chats/` from before (`main/bots/migration.ts`; that folder is then moved into `Recto/Chats/` by the layout migration) | `main/bots` |
 | `.recto/bots/<id>/` | a bot: `bot.json` (name, specialty, look, personality, model, excluded folders), `SYSTEM.md` and `EXAMPLES.md` (one example answer per kind); Recto is written once into a vault with no `bots` folder, and an unedited SYSTEM.md or EXAMPLES.md is brought up to date | `main/bots` |
 | `.recto/evals/<run id>/` | an eval run's `config.json` and `results.jsonl`, and `graded.jsonl` beside them; the run's report is a note in the evals folder | `scripts/evals` |
 | `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive` | `main/state.ts` |

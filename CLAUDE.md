@@ -31,6 +31,16 @@ local EmbeddingGemma embedder. Markdown files are the source of truth; the index
 
 Checks before saying something is done: `npm run typecheck`, `npm run lint`, `npm test`,
 `npm run snapshots -- --compare snapshots/baseline` for anything visual.
+Every finished feature: list each changed screenshot with one line of why, then promote the run to
+`snapshots/baseline` (keep the old one as `snapshots/baseline-<date>` until the commit).
+
+## Model use
+- Main session (Opus): design, all source code and tests, reviewing every diff, including the subagents' output.
+- `explorer` (Sonnet, read-only): finding code paths, reading external docs/specs/repos, "how does X work now".
+- `verifier` (Sonnet, no edits): running typecheck, lint, unit, e2e and snapshots; returns only failures.
+- `docs-writer` (Sonnet, no source code): CHANGELOG entry, `docs/ARCHITECTURE.md`, draft of
+  "How it works (for vell)", Later note appends. The main session checks the draft before it ships.
+- Agents live in `.claude/agents/`; the explorer's Bash is kept read-only by `.claude/hooks/readonly-bash.sh`.
 
 ---
 

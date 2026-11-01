@@ -81,3 +81,9 @@
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+
+.boards__taken-choices {
+  display: flex;
+  gap: 6px;
+  padding: 0 8px 6px;
+}

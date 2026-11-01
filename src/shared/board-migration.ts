@@ -1,4 +1,5 @@
 import { parseFrontmatter, removeField } from './frontmatter'
+import { LEGACY_TASKS_FOLDER } from './recto-paths'
 import { addLane, boardText, insertItem, isKanban, parseKanban, rectoSettings, type NewLane } from './kanban'
 
 /**
@@ -15,8 +16,11 @@ import { addLane, boardText, insertItem, isKanban, parseKanban, rectoSettings, t
  * name is taken until the person has chosen another.
  */
 
-/** Where migrated boards go: beside their cards, in the folder the Data tree hides. */
-export const BOARDS_FOLDER = 'tasks'
+/**
+ * Where migrated boards go: beside their cards in the old flat folder, which
+ * the layout migration (main/layout-migration.ts) then moves into Recto/.
+ */
+const BOARDS_FOLDER = LEGACY_TASKS_FOLDER
 /** The lane for cards whose status names no column, at the end of their board. */
 export const UNKNOWN_LANE = 'Unknown status'
 /** The keys a card no longer carries. */

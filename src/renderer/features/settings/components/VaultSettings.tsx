@@ -8,6 +8,9 @@ import { IPC } from '@shared/ipc'
 import { SettingRow } from '../../../ui/SettingRow'
 import { SettingGroup } from '../../../ui/SettingGroup'
 import { Icon } from '../../../ui/Icon'
+import { Toggle } from '../../../ui/Toggle'
+import { RECTO_FOLDER } from '@shared/recto-paths'
+import { setShowRectoFolder, useShowRectoFolder } from '../../boards'
 
 export function VaultSettings({ vault, onCloseVault, onSwitchVault, attachments }: SettingsDeps): React.ReactElement {
   const [stats, setStats] = useState<IndexStats | null>(null)
@@ -16,6 +19,7 @@ export function VaultSettings({ vault, onCloseVault, onSwitchVault, attachments 
   const [switchError, setSwitchError] = useState<string | null>(null)
   const [switching, setSwitching] = useState(false)
   const [busy, setBusy] = useState(false)
+  const showRecto = useShowRectoFolder()
 
   useEffect(() => {
     void api.invoke(IPC.indexStats).then(setStats)
@@ -112,6 +116,13 @@ export function VaultSettings({ vault, onCloseVault, onSwitchVault, attachments 
           >
             Show in Finder
           </button>
+        </SettingRow>
+
+        <SettingRow
+          label="Show the Recto folder"
+          hint={`Boards, their cards and chats live in ${RECTO_FOLDER}/. Off: they stay out of the Data tree and have their own screens.`}
+        >
+          <Toggle on={showRecto} onChange={() => setShowRectoFolder(!showRecto)} />
         </SettingRow>
 
         <SettingRow label="Keep deleted notes for" hint="Then they go to the system trash, still recoverable in Finder.">

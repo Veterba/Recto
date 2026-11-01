@@ -7,9 +7,10 @@
 
 import type { AiMessage } from './ai'
 import type { BotLook, BotPersonality } from './bot-presets'
+import { CHATS_FOLDER } from './recto-paths'
 
-/** Where conversations live, the main chat's and the bots'. A real folder, hidden from the file tree. */
-export const CHATS_FOLDER = 'chats'
+/** Where conversations live, the main chat's and the bots': Recto/Chats (shared/recto-paths.ts). */
+export { CHATS_FOLDER }
 
 /**
  * The eval runner's folder in the vault (found by this name anywhere) and its

@@ -1,6 +1,7 @@
 import type { SettingsDeps } from '../settings-deps'
 import { useState, useEffect } from 'react'
 import { api } from '../../../app/api'
+import { CHATS_FOLDER } from '@shared/recto-paths'
 import { IPC } from '@shared/ipc'
 import { SettingRow } from '../../../ui/SettingRow'
 import { SettingGroup } from '../../../ui/SettingGroup'
@@ -63,7 +64,7 @@ export function AiSettings(_: SettingsDeps): React.ReactElement {
         more={
           <>
             <Icon name="sparkles" size={13} />
-            Every conversation is saved as a markdown note in <code>chats/</code>, so it is searchable, linkable and readable without this
+            Every conversation is saved as a markdown note in <code>{CHATS_FOLDER}/</code>, so it is searchable, linkable and readable without this
             app. Nothing is sent anywhere until you send it: there is no telemetry, and the key goes straight from this machine to Anthropic
             over TLS with no relay of ours in between.
           </>

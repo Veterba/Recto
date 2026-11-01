@@ -134,3 +134,42 @@ export function rewriteWikiLinks(text: string, oldPath: string, newPath: string,
   // A CRLF note stays CRLF: only the links change, not every line ending.
   return { text: out.join(isCrlf(text) ? '\r\n' : '\n'), count }
 }
+
+/**
+ * Change link targets one by one: `map` is handed each target as written (a
+ * markdown link's decoded path) and returns its replacement, or null to leave
+ * it. Aliases, headings, encoding and code blocks are kept as
+ * `rewriteWikiLinks` keeps them. Returns the new text and each change.
+ */
+export function mapLinkTargets(
+  text: string,
+  map: (target: string, kind: 'wiki' | 'markdown') => string | null,
+): { text: string; changes: { from: string; to: string }[] } {
+  const changes: { from: string; to: string }[] = []
+  let inCode = false
+  const out = text.split(/\r?\n/).map((line) => {
+    if (CODE_FENCE.test(line)) {
+      inCode = !inCode
+      return line
+    }
+    if (inCode) return line
+    const wiki = line.replace(WIKILINK, (whole, target: string, heading = '', alias = '') => {
+      const next = map(target.trim(), 'wiki')
+      if (next === null) return whole
+      changes.push({ from: target.trim(), to: next })
+      const leading = /^\s*/.exec(target)?.[0] ?? ''
+      const trailing = /\s*$/.exec(target)?.[0] ?? ''
+      return `[[${leading}${next}${trailing}${heading}${alias}]]`
+    })
+    return wiki.replace(MARKDOWN_LINK, (whole, label: string, url: string) => {
+      const parsed = splitUrl(url)
+      if (parsed === null) return whole
+      const next = map(parsed.path, 'markdown')
+      if (next === null) return whole
+      changes.push({ from: parsed.path, to: next })
+      const encoded = parsed.encoded ? next.replace(/ /g, '%20') : next
+      return `${label}(${parsed.prefix}${encoded}${parsed.suffix})`
+    })
+  })
+  return { text: out.join(isCrlf(text) ? '\r\n' : '\n'), changes }
+}

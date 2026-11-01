@@ -180,6 +180,36 @@
 .board-delete__error {
   color: var(--danger);
 }
+.board-delete__note {
+  display: block;
+  margin-top: var(--size-2);
+  color: var(--text-muted);
+}
+.board-undo {
+  position: fixed;
+  z-index: 95;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-12);
+}
+.board-undo__button {
+  all: unset;
+  color: var(--accent);
+  cursor: pointer;
+}
+.board-undo__close {
+  all: unset;
+  display: flex;
+  color: var(--text-muted);
+  cursor: pointer;
+}
 
 /* ---------- columns: full height, cards scroll inside ---------- */
 
@@ -998,6 +1028,18 @@ button.board-cal__bar:focus-visible {
   margin: 0;
   font-size: var(--font-size-11-5);
   color: var(--danger);
+}
+.new-card__exists {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.new-card__exists .new-card__taken {
+  color: var(--text);
+}
+.new-card__choices {
+  display: flex;
+  gap: 6px;
 }
 .new-card__link {
   all: unset;

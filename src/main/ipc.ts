@@ -6,6 +6,10 @@ import * as bots from './bots'
 import * as answers from './bots/answers'
 import { migrateChats } from './bots/migration'
 import { migrateBoards } from './board-migration'
+import { createBoardOps, ensureReadme } from './boards'
+import { migrateLayout, type LayoutMigrationResult } from './layout-migration'
+import { inRecto } from '../shared/recto-paths'
+import { shortestLink } from '../shared/parse'
 import type { BoardMigrationResult } from '../shared/board-migration'
 import * as topics from './topics/service'
 import * as topicCommands from './topics/commands'
@@ -52,13 +56,42 @@ function runBoardsMigration(vault: string, names: Record<string, string> = {}): 
   }
 }
 
+/** What the layout migration did when this vault opened, until the app has said so. */
+let layoutMigration: LayoutMigrationResult = { state: 'none' }
+
+/** tasks/ and chats/ into Recto/, once (main/layout-migration.ts); a failure is said, and the vault opens anyway. */
+function runLayoutMigration(vault: string): LayoutMigrationResult {
+  try {
+    const result = migrateLayout(vault)
+    // What follows a note by its path - authorship, the overview's edits - follows it here too.
+    if (result.state === 'migrated')
+      for (const move of result.moves) {
+        moveAuthorship(move.from, move.to)
+        overview.moved(move.from, move.to)
+      }
+    return result
+  } catch (err) {
+    console.error('[layout] migration', err)
+    return { state: 'failed', error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+const movedBy = (result: LayoutMigrationResult): { from: string; to: string }[] => (result.state === 'migrated' ? result.moves : [])
+
 function rewatch(): void {
   // Before the watcher starts, so the files it moves are not reported as edits.
   const vault = currentVault()
   boardsMigration = vault === null ? { state: 'none' } : runBoardsMigration(vault.path)
-  // Bots on or off is decided first, from the vault as it is: the chat
-  // migration below makes a chats folder, which would read as "has bots".
-  if (vault !== null && bots.botsEnabled()) {
+  // Bots on or off is decided first, from the vault as it is: the migrations
+  // below make a chats folder, which would read as "has bots".
+  const botsOn = vault !== null && bots.botsEnabled()
+  // After the boards migration, which writes boards into tasks/; while it
+  // waits for names, so does this.
+  layoutMigration =
+    vault === null || boardsMigration.state === 'conflicts' || boardsMigration.state === 'failed'
+      ? { state: 'none' }
+      : runLayoutMigration(vault.path)
+  if (vault !== null && botsOn) {
     try {
       const report = migrateChats(vault.path)
       if (report !== null) console.log(`[bots] chats became Recto's topics: ${report.moved.length} moved, ${report.skipped.length} skipped`)
@@ -69,8 +102,10 @@ function rewatch(): void {
   const window = BrowserWindow.getAllWindows()[0]
   if (window) startWatching(window)
   // Topics reads the index, so it starts once the index is open.
-  void openIndexForVault()
+  const moved = movedBy(layoutMigration)
+  void openIndexForVault(moved)
     .then(async () => {
+      for (const move of moved) await topicCommands.moved(move.from, move.to).catch((err: unknown) => console.error('[topics]', err))
       // Edits before counting began, from version history, once; and the
       // day's first word count, taken before anything is typed into it.
       await overview.backfillEdits().catch((err: unknown) => console.error('[overview]', err))
@@ -169,9 +204,12 @@ export function registerIpc(): void {
     markSelfWrite(p)
     return vaultFs.writeFile(p, content)
   })
-  handle(IPC.fsCreate, (parent, name, kind, onTaken) => {
+  handle(IPC.fsCreate, async (parent, name, kind, onTaken) => {
     markSelfWrite(parent === '' ? name : `${parent}/${name}`)
-    return vaultFs.create(parent, name, kind, onTaken)
+    const created = await vaultFs.create(parent, name, kind, onTaken)
+    const vault = currentVault()
+    if (created.ok && vault !== null && inRecto(parent)) ensureReadme(vault.path)
+    return created
   })
   /**
    * Rename and move are the same operation to a user: the note ends up
@@ -235,6 +273,20 @@ export function registerIpc(): void {
   }
 
   handle(IPC.fsRename, (p, newName) => relocate(p, () => vaultFs.rename(p, newName)))
+  const boardOps = createBoardOps({
+    relocate,
+    listBoards: async () => {
+      const response = await send({ kind: 'boards' }, 30_000)
+      return response.kind === 'boards-result' ? response.boards.map((b) => b.path) : []
+    },
+  })
+  handle(IPC.fsNameTaken, (fileName) => vaultFs.nameTakenBy(fileName))
+  handle(IPC.fsExisting, (paths) => vaultFs.existing(paths))
+  handle(IPC.fsLinkTarget, (p) => shortestLink(p, vaultFs.vaultFiles().filter((f) => f.toLowerCase().endsWith('.md'))))
+  handle(IPC.boardsPlace, (cards, boards) => boardOps.placeCards(cards, boards))
+  handle(IPC.boardsRename, (p, name) => boardOps.renameBoard(p, name))
+  handle(IPC.boardsDelete, (p, choice) => boardOps.deleteBoard(p, choice))
+  handle(IPC.boardsUndoDelete, (undoId) => boardOps.undoDelete(undoId))
   handle(IPC.fsMove, (p, newParent) => relocate(p, () => vaultFs.move(p, newParent)))
 
   handle(IPC.linksUndoRename, async (undoId) => {
@@ -415,6 +467,16 @@ export function registerIpc(): void {
     boardsMigration = runBoardsMigration(vault.path, names)
     const result = boardsMigration
     if (result.state !== 'conflicts') boardsMigration = { state: 'none' }
+    if (result.state === 'migrated' || result.state === 'none') {
+      // The boards are in tasks/ now; the layout migration waited for them.
+      layoutMigration = runLayoutMigration(vault.path)
+      for (const move of movedBy(layoutMigration)) void send({ kind: 'note-renamed', from: move.from, to: move.to }, 15_000).catch(() => undefined)
+    }
+    return result
+  })
+  handle(IPC.layoutMigration, () => {
+    const result = layoutMigration
+    layoutMigration = { state: 'none' }
     return result
   })
   handle(IPC.overviewPlace, () => readAppState().overviewPlace ?? START_PLACE)

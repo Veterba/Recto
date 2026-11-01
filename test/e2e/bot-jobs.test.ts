@@ -28,7 +28,7 @@ describe.skipIf(!RUN)('answers survive leaving the chat; the queue', () => {
   let base = ''
   let vault = ''
 
-  const folder = (): string => path.join(vault, 'chats', 'recto')
+  const folder = (): string => path.join(vault, 'Recto', 'Chats', 'recto')
   const files = (): string[] => (fs.existsSync(folder()) ? fs.readdirSync(folder()).filter((f) => f.endsWith('.md')) : [])
   /** Finished answers in all topic files (an answer still streaming carries its job's id). */
   const answersInFiles = (): number =>

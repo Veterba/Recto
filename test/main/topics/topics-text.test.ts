@@ -129,8 +129,8 @@ describe('exclusions', () => {
   const templates = { ...DEFAULT_TEMPLATE_SETTINGS, folder: 'Template', daily: { enabled: true, folder: 'Daily', template: null } }
   const excluded = excludedFolders(templates, ['Archive/'])
 
-  it('leaves out daily notes, templates, chats, tasks, attachments and listed folders', () => {
-    for (const p of ['Daily/2026/09/W39/2026-09-24.md', 'Template/Daily.md', 'chats/x.md', 'tasks/card.md', 'Archive/old.md']) {
+  it('leaves out daily notes, templates, Recto/ (chats, boards, cards), attachments and listed folders', () => {
+    for (const p of ['Daily/2026/09/W39/2026-09-24.md', 'Template/Daily.md', 'Recto/Chats/x.md', 'Recto/Boards/B/card.md', 'Archive/old.md']) {
       expect(isEligible(p, excluded)).toBe(false)
     }
   })

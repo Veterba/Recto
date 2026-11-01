@@ -32,8 +32,14 @@ const basename = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 
 /** A bot's topic files in the tree, newest first (the name starts with when the topic began). */
 export function topicPaths(tree: readonly FileNode[], botId: string): string[] {
-  const [chats, folder] = botThreadFolder(botId).split('/')
-  const bot = tree.find((n) => n.path === chats)?.children?.find((n) => n.kind === 'folder' && n.name === folder)
+  // Down the tree one folder at a time: Recto, Recto/Chats, Recto/Chats/<bot>.
+  const segments = botThreadFolder(botId).split('/')
+  let level: readonly FileNode[] | undefined = tree
+  let bot: FileNode | undefined
+  for (let i = 0; i < segments.length; i++) {
+    bot = level?.find((n) => n.kind === 'folder' && n.path === segments.slice(0, i + 1).join('/'))
+    level = bot?.children
+  }
   return (bot?.children ?? [])
     .filter((n) => n.kind === 'file' && n.name.toLowerCase().endsWith('.md'))
     .map((n) => n.path)

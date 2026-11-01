@@ -32,7 +32,7 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
 
   const answersOnScreen = (): Promise<number> => page.evaluate(() => document.querySelectorAll('.bot-chat .msg--bot').length)
   const answersInFile = (): number => {
-    const folder = path.join(vault, 'chats', 'recto')
+    const folder = path.join(vault, 'Recto', 'Chats', 'recto')
     const files = fs.readdirSync(folder).filter((f) => f.endsWith('.md'))
     expect(files).toHaveLength(1)
     return (fs.readFileSync(path.join(folder, files[0]!), 'utf8').match(/^## Recto$/gm) ?? []).length
@@ -97,7 +97,7 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
 
   const topicFiles = (): string[] =>
     fs
-      .readdirSync(path.join(vault, 'chats', 'recto'))
+      .readdirSync(path.join(vault, 'Recto', 'Chats', 'recto'))
       .filter((f) => f.endsWith('.md'))
       .sort()
   const ask = async (question: string): Promise<void> => {
@@ -126,7 +126,7 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
       sameMinute ? ['— Soil mix (2).md', '— Soil mix.md'] : ['— Soil mix.md', '— Soil mix.md'],
     )
     const newest = fs.readFileSync(
-      path.join(vault, 'chats', 'recto', sameMinute ? files.find((f) => f.includes('(2)'))! : [...files].sort().at(-1)!),
+      path.join(vault, 'Recto', 'Chats', 'recto', sameMinute ? files.find((f) => f.includes('(2)'))! : [...files].sort().at(-1)!),
       'utf8',
     )
     expect(newest).toMatch(/^---\nbot: recto\ncreated: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?\ntitle: Soil mix\n---/)
@@ -152,13 +152,13 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
     await page.waitForFunction(() => document.querySelector('.bot-history__title')?.textContent === 'Greetings')
     const renamed = topicFiles().find((f) => f.endsWith(' — Greetings.md'))
     expect(renamed).toBeDefined()
-    expect(fs.readFileSync(path.join(vault, 'chats', 'recto', renamed!), 'utf8')).toContain('title: Greetings\n')
+    expect(fs.readFileSync(path.join(vault, 'Recto', 'Chats', 'recto', renamed!), 'utf8')).toContain('title: Greetings\n')
   }, 60_000)
 
   it('delete takes a topic away, and Undo brings it back as it was', async () => {
     const before = topicFiles()
     const greetings = before.find((f) => f.endsWith(' — Greetings.md'))!
-    const content = fs.readFileSync(path.join(vault, 'chats', 'recto', greetings), 'utf8')
+    const content = fs.readFileSync(path.join(vault, 'Recto', 'Chats', 'recto', greetings), 'utf8')
     const row = page.locator('.bot-history__row', { hasText: 'Greetings' })
     await row.hover()
     await row.getByRole('button', { name: /^Delete/ }).click()
@@ -170,7 +170,7 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
     // The toast is outside History, so the click closes it (a click elsewhere); open it again.
     if ((await page.locator('.bot-history__row').count()) === 0) await page.getByRole('button', { name: 'History' }).click()
     await page.waitForFunction(() => document.querySelectorAll('.bot-history__row').length === 2)
-    expect(fs.readFileSync(path.join(vault, 'chats', 'recto', greetings), 'utf8')).toBe(content)
+    expect(fs.readFileSync(path.join(vault, 'Recto', 'Chats', 'recto', greetings), 'utf8')).toBe(content)
   }, 60_000)
 
   it('Clear all says how many topics go, and takes them all', async () => {

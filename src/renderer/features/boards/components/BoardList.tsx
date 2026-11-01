@@ -7,18 +7,19 @@ import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextM
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { fuzzyMatch } from '../../../ui/fuzzy'
-import { boardMade, refreshBoards, useBoards } from '../boards-store'
+import { boardMade, isBoardPath, refreshBoards, useBoards } from '../boards-store'
 import { createBoard } from '../create-card'
 import { requestBoardDelete } from './DeleteBoardDialog'
+import { folderOf } from './NewCardPopover'
 
 /**
  * The Tasks sidebar: the vault's boards, which are notes.
  *
  * Deliberately the same shape as the file tree next door — a list you pick
  * from — because Tasks is a workspace like Data, not a different kind of app.
- * Boards are notes in tasks/, which the Data tree hides, so this list is where
- * they are made, renamed, deleted and opened. A board's name is its note's
- * name: renaming it here renames the note.
+ * Boards are notes in Recto/Boards/, which the Data tree hides, so this list
+ * is where they are made, renamed, deleted and opened. A board's name is its
+ * note's name: renaming it here renames the note and its folder.
  */
 
 /** A failed copy (clipboard permission refused) is not worth a dialog. */
@@ -41,6 +42,8 @@ export function BoardList({ activeBoard, query, onOpen, vaultPath, onRenamed }: 
   const [adding, setAdding] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** A new board's name that a note has: the name typed and the note that has it. */
+  const [taken, setTaken] = useState<{ name: string; path: string } | null>(null)
   const contextMenu = useContextMenu<BoardSummaryInfo>()
 
   const menuFor = (board: BoardSummaryInfo): MenuItem[] => [
@@ -65,10 +68,14 @@ export function BoardList({ activeBoard, query, onOpen, vaultPath, onRenamed }: 
     if (trimmed === '') return
     const created = await createBoard(trimmed)
     if (!created.ok) {
-      setError(created.error)
+      if ('exists' in created) {
+        setError(null)
+        setTaken({ name: trimmed, path: created.exists })
+      } else setError(created.error)
       return
     }
     setError(null)
+    setTaken(null)
     boardMade(created.path)
     onOpen(created.path)
   }
@@ -77,12 +84,14 @@ export function BoardList({ activeBoard, query, onOpen, vaultPath, onRenamed }: 
     setRenaming(null)
     const trimmed = name.trim()
     if (trimmed === '' || trimmed === board.name) return
-    const result = await api.invoke(IPC.fsRename, board.path, `${trimmed}.md`)
+    const result = await api.invoke(IPC.boardsRename, board.path, trimmed)
     if (!result.ok) {
       setError(result.error)
       return
     }
     setError(null)
+    // Listed at once: the index reads the moved folder a moment later.
+    boardMade(result.path)
     onRenamed(board.path, result.path)
     noteIndexChanged()
     refreshBoards()
@@ -142,16 +151,45 @@ export function BoardList({ activeBoard, query, onOpen, vaultPath, onRenamed }: 
         </p>
       )}
 
+      {taken !== null && !adding && (
+        <div className="boards__taken" role="alert">
+          <p className="sidebar__empty">
+            A note “{taken.name}” already exists in {folderOf(taken.path)}.
+          </p>
+          <div className="boards__taken-choices">
+            {isBoardPath(taken.path) && (
+              <button
+                className="btn btn--sm"
+                onClick={() => {
+                  setTaken(null)
+                  onOpen(taken.path)
+                }}
+              >
+                Open that board
+              </button>
+            )}
+            <button className="btn btn--ghost btn--sm" onClick={() => setAdding(true)}>
+              Choose another name
+            </button>
+          </div>
+        </div>
+      )}
+
       {adding ? (
         <input
           className="boards__rename"
+          defaultValue={taken?.name ?? ''}
+          onFocus={(event) => event.currentTarget.select()}
           placeholder="Board name"
           aria-label="New board name"
           autoFocus
           onBlur={(event) => void add(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') event.currentTarget.blur()
-            if (event.key === 'Escape') setAdding(false)
+            if (event.key === 'Escape') {
+              setAdding(false)
+              setTaken(null)
+            }
           }}
         />
       ) : (

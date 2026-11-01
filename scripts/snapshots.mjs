@@ -444,9 +444,9 @@ async function screens(page, dir, vault) {
   // messages, and an answer with its steps and sources. It arrives only now -
   // as a note it would change every screen above - begun at 09:30 by the run's
   // clock: written aside, dated, then moved in, so the watcher sees it whole.
-  const folder = path.join(vault, 'chats', 'recto')
+  const folder = path.join(vault, 'Recto', 'Chats', 'recto')
   fs.mkdirSync(folder, { recursive: true })
-  const aside = path.join(vault, 'chats', '.topic.tmp')
+  const aside = path.join(vault, 'Recto', 'Chats', '.topic.tmp')
   const meta = (fields) => `<!-- recto:meta ${JSON.stringify(fields)} -->`
   const sources = ['Garden/Soil.md', 'Garden/Beds/Raised beds.md', 'Garden/Tomatoes.md', 'Garden/Basil.md', 'Handbook.md', 'Ideas.md'].map(
     (p) => ({ path: p, heading: null }),
@@ -963,7 +963,7 @@ async function linkCompleteShots(dir, theme) {
  */
 async function boardShots(dir, theme) {
   const { base, vault, userData } = prepareVault(theme, `${theme}-boards`)
-  const board = path.join(vault, 'tasks', 'Launch.md')
+  const board = path.join(vault, 'Recto', 'Boards', 'Launch', 'Launch.md')
   fs.writeFileSync(board, fs.readFileSync(board, 'utf8').replace('- [ ] [[Record the demo]]', '- [ ] [[Record the demo]]\n- [ ] Buy stamps\n    at the post office'))
   fs.writeFileSync(
     path.join(vault, 'Plans.md'),

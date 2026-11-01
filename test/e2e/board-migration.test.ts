@@ -7,9 +7,9 @@ import { quitApp, removeDir } from './helpers/app'
 
 /**
  * A vault from before boards were notes (boards.json, cards with board and
- * status) opened in this version: the board note is made in tasks/, a notice
- * says what changed and where the backup is, and the board is there. Runs
- * with `npm run test:e2e`.
+ * status) opened in this version: the board note is made in tasks/, then
+ * moved into Recto/ with its cards; each step's notice says what changed and
+ * where the backup is, and the board is there. Runs with `npm run test:e2e`.
  */
 
 const RUN = process.env['RECTO_E2E'] === '1'
@@ -25,7 +25,7 @@ describe.skipIf(!RUN)('the boards migration on first open', () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-e2e-migrate-'))
     vault = path.join(base, 'vault')
     fs.cpSync(path.join(ROOT, 'test/fixtures/snapshot-vault'), vault, { recursive: true })
-    fs.rmSync(path.join(vault, 'tasks', 'Launch.md'))
+    fs.rmSync(path.join(vault, 'Recto'), { recursive: true })
     fs.cpSync(path.join(ROOT, 'test/fixtures/boards-before-0.52'), vault, { recursive: true })
     fs.mkdirSync(path.join(base, 'profile'))
     fs.writeFileSync(path.join(base, 'profile', 'app-state.json'), JSON.stringify({ lastVaultPath: vault }))
@@ -48,9 +48,17 @@ describe.skipIf(!RUN)('the boards migration on first open', () => {
     await notice.getByText('tasks/Launch.md').waitFor()
     await notice.getByText(/\.recto\/backup\/\d{4}-\d{2}-\d{2}/).waitFor()
     expect(fs.existsSync(path.join(vault, '.recto', 'boards.json'))).toBe(false)
-    expect(fs.readFileSync(path.join(vault, 'tasks', 'Record the demo.md'), 'utf8')).not.toMatch(/^(board|status|order):/m)
     await notice.getByRole('button', { name: 'OK' }).click()
     await notice.waitFor({ state: 'detached' })
+
+    // Then, in the same open, tasks/ moves into Recto/: the board to its folder, its cards beside it.
+    const layout = page.getByRole('alertdialog', { name: 'Boards and chats moved' })
+    await layout.waitFor({ timeout: 20_000 })
+    expect(fs.existsSync(path.join(vault, 'tasks'))).toBe(false)
+    expect(fs.readFileSync(path.join(vault, 'Recto/Boards/Launch/Record the demo.md'), 'utf8')).not.toMatch(/^(board|status|order):/m)
+    expect(fs.readFileSync(path.join(vault, 'Recto/Boards/Launch/Launch.md'), 'utf8')).toContain('"new-note-folder":"Recto/Boards/Launch"')
+    await layout.getByRole('button', { name: 'OK' }).click()
+    await layout.waitFor({ state: 'detached' })
 
     await page.keyboard.press('Meta+3')
     await page.locator('.boards__row', { hasText: 'Launch' }).click()

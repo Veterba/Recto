@@ -76,11 +76,14 @@ describe.skipIf(!RUN)('focus mode from a split pane', () => {
     // Panes fold over 420ms, then scroll positions are put back.
     await sleep(1100)
   }
+  /**
+   * Click into pane `n` where it shows text, as a person would: halfway down
+   * what is on screen. Not the top of `.cm-content` - that is the properties
+   * line, and reaching it scrolled the pane to the top first.
+   */
   const focusPane = async (n: number): Promise<void> => {
-    await page
-      .locator('.cm-content')
-      .nth(n)
-      .click({ position: { x: 20, y: 20 } })
+    const box = (await page.locator('.cm-scroller').nth(n).boundingBox())!
+    await page.mouse.click(box.x + 60, box.y + box.height / 2)
     await sleep(200)
   }
   const scrollPane = (n: number, top: number): Promise<void> =>

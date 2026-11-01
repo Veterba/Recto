@@ -127,8 +127,13 @@ function post(proc: UtilityProcess, request: IndexRequest, timeoutMs: number): P
   })
 }
 
-/** Open the index for the current vault and bring it up to date. */
-export async function openIndexForVault(): Promise<void> {
+/**
+ * Open the index for the current vault and bring it up to date. `moved` are
+ * notes moved on disk while the index was closed (the layout migration): their
+ * history is carried over before the reindex, which would otherwise drop it
+ * with the old path.
+ */
+export async function openIndexForVault(moved: readonly { from: string; to: string }[] = []): Promise<void> {
   const vault = currentVault()
   if (!vault) return
 
@@ -148,6 +153,7 @@ export async function openIndexForVault(): Promise<void> {
   // (mtime, size) have not changed, an ordinary reindex would skip every file
   // and the new data would stay empty until each note happened to be edited.
   const migrated = opened.kind === 'opened' && opened.migratedTo > opened.migratedFrom
+  for (const move of moved) await send({ kind: 'note-renamed', from: move.from, to: move.to })
   await send({ kind: 'reindex', force: migrated })
 }
 

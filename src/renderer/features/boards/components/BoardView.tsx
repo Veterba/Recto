@@ -20,7 +20,6 @@ import { Tip } from '../../../ui/Tip'
 import { newColumnName, type Board, type Column } from '../boards'
 import { filterCards, isSortKey, sortCards, SORTS, type CardView, type SortKey } from '../board-view'
 import { takeNewCardRequest, useNewCardRequest } from '../boards-store'
-import { CARD_FOLDER } from '../create-card'
 import { useBoardCards, type Drop } from '../hooks/use-board-cards'
 import { WidgetStrip } from '../widgets/WidgetStrip'
 import { widgetsOf } from '../widgets/registry'
@@ -35,8 +34,8 @@ const LEVEL_LABEL = { high: 'High', medium: 'Medium', low: 'Low', none: 'No prio
  * The kanban board: a board note in the Obsidian Kanban format, drawn.
  *
  * The note says which columns there are, in what order, and which cards sit
- * in each, in order; a card is either a line of text or a link to a note in
- * tasks/, whose own frontmatter holds its priority, dates and tags. Every
+ * in each, in order; a card is either a line of text or a link to a note
+ * (usually in the board's folder), whose own frontmatter holds its priority, dates and tags. Every
  * change here is a change to one of those two files, never to anything else.
  */
 
@@ -98,7 +97,7 @@ export function BoardView({
   onCardChange,
   leafId,
 }: Props): React.ReactElement {
-  const { board, cards, error, notice, clearNotice, editBoard, editCard, move, addCard, makeNote, removeCard, renameCard } =
+  const { board, cards, error, notice, clearNotice, editBoard, editCard, move, addCard, addExisting, makeNote, removeCard, renameCard } =
     useBoardCards(path)
   const [dragging, setDragging] = useState<string | null>(null)
   const [drop, setDrop] = useState<{ column: string; at: number } | null>(null)
@@ -382,8 +381,8 @@ export function BoardView({
 
         {cards !== null && cards.length === 0 && board.columns.length > 0 && (
           <p className="board__empty">
-            No cards on <strong>{board.name}</strong> yet. Every card you add is a real note in <code>{CARD_FOLDER}/</code>, linked from
-            this board.
+            No cards on <strong>{board.name}</strong> yet. Every card you add is a real note in this board's folder, linked from this
+            board.
           </p>
         )}
         {board.columns.length === 0 && <p className="board__empty">This board has no columns yet. Add one with + on the right.</p>}
@@ -415,6 +414,7 @@ export function BoardView({
           columns={newCard.choose ? board.columns : undefined}
           anchor={newCard.anchor}
           onAdd={addCard}
+          onAddExisting={addExisting}
           onOpenExisting={(existing) => {
             setNewCard(null)
             const shown = all.find((card) => card.path === existing)

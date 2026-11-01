@@ -26,6 +26,7 @@ import type { FileNode, OpenVaultResult, RecentVault, RenameOutcome, StartupStat
 import type { TextFileResult } from './file-kind'
 import type { OverviewData, OverviewPlace, OverviewTopic } from './overview'
 import type { BoardMigrationResult } from './board-migration'
+import type { LayoutMigrationResult } from './recto-paths'
 
 /**
  * How sharp the backdrop stays, sharpest first.
@@ -75,6 +76,13 @@ export const IPC = {
   fsRename: 'fs:rename',
   fsTrash: 'fs:trash',
   fsMove: 'fs:move',
+  fsNameTaken: 'fs:name-taken',
+  fsLinkTarget: 'fs:link-target',
+  fsExisting: 'fs:existing',
+  boardsPlace: 'boards:place',
+  boardsRename: 'boards:rename',
+  boardsDelete: 'boards:delete',
+  boardsUndoDelete: 'boards:undo-delete',
   fsReveal: 'fs:reveal',
   fsImportImages: 'fs:import-images',
   fsImportData: 'fs:import-data',
@@ -150,6 +158,7 @@ export const IPC = {
   overviewPlace: 'overview:place',
   overviewSetPlace: 'overview:set-place',
   boardsMigration: 'boards:migration',
+  layoutMigration: 'layout:migration',
   boardsMigrate: 'boards:migrate',
 } as const
 
@@ -170,6 +179,12 @@ export const IPC_EVENT = {
   botsCardsStatus: 'bots:cards-status',
   botsEnabledChanged: 'bots:enabled-changed',
 } as const
+
+/** What becomes of a deleted board's cards. */
+export type BoardDeleteChoice = { kind: 'unsorted' } | { kind: 'board'; to: string } | { kind: 'trash' }
+export type BoardDeleteResult =
+  | { ok: true; moved: { from: string; to: string }[]; trashed: string[]; undoId?: string }
+  | { ok: false; error: string }
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
 export type IpcEventChannel = (typeof IPC_EVENT)[keyof typeof IPC_EVENT]
@@ -274,6 +289,18 @@ export type IpcApi = Exhaustive<
     [IPC.fsTrash]: (path: string) => { ok: boolean; error?: string }
     [IPC.fsMove]: (path: string, newParent: string) => RenameOutcome | { ok: false; error: string }
     [IPC.fsReveal]: (path: string) => { ok: boolean }
+    /** The file that already has this file name (`Plan.md`) anywhere in the vault, read from disk; null when it is free. */
+    [IPC.fsNameTaken]: (fileName: string) => string | null
+    /** The shortest `[[link]]` target that names this note and no other (shared/parse.ts `shortestLink`). */
+    [IPC.fsLinkTarget]: (path: string) => string
+    /** Which of these vault paths are on disk now, whatever the tree has caught up with. */
+    [IPC.fsExisting]: (paths: string[]) => string[]
+    /** Put placed cards where the layout rules say, after a change in Recto; `boards` are board notes written since the index last read. */
+    [IPC.boardsPlace]: (cards: string[], boards: string[]) => { from: string; to: string }[]
+    /** Rename a board, its folder with it. */
+    [IPC.boardsRename]: (path: string, name: string) => { ok: true; path: string } | { ok: false; error: string }
+    [IPC.boardsDelete]: (path: string, choice: BoardDeleteChoice) => BoardDeleteResult
+    [IPC.boardsUndoDelete]: (undoId: string) => { ok: boolean; error?: string }
     /** Pick image files and copy them into the vault. Empty when cancelled. */
     [IPC.fsImportImages]: () => { ok: true; paths: string[] } | { ok: false; error: string }
     /**
@@ -407,6 +434,8 @@ export type IpcApi = Exhaustive<
     [IPC.overviewSetPlace]: (place: OverviewPlace) => { ok: boolean }
     /** What the boards migration did on this vault's open, once; `none` afterwards. */
     [IPC.boardsMigration]: () => BoardMigrationResult
+    /** What moving tasks/ and chats/ into Recto/ did on this open; said once. */
+    [IPC.layoutMigration]: () => LayoutMigrationResult
     /** Run it again with names for the boards whose own was taken. */
     [IPC.boardsMigrate]: (names: Record<string, string>) => BoardMigrationResult
     /** A bot's model, written to its bot.json: an API model id, an Ollama model, or null for the local default. Returns the bots. */

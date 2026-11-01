@@ -90,15 +90,18 @@ describe.skipIf(!RUN)('periodic notes and the hideable toolbar', () => {
     expect(fs.existsSync(path.join(vault, 'Daily'))).toBe(false)
 
     await page.keyboard.press('Escape')
-    await until(() => fs.existsSync(path.join(vault, week.path)) && fs.existsSync(path.join(vault, month.path)))
-    // Weekly and monthly together share a month folder; no week folder without daily notes.
-    expect(path.dirname(week.path)).toBe(path.dirname(month.path))
+    // Made empty, then written: wait for the text, not just the file.
+    const written = (p: string): boolean => fs.existsSync(path.join(vault, p)) && fs.readFileSync(path.join(vault, p), 'utf8') !== ''
+    await until(() => written(week.path) && written(month.path))
+    // A week sits in the month folder its Monday is in - this month's, except
+    // in the days of a month before its first Monday; no week folder without daily notes.
     expect(week.path).toMatch(/^Daily\/\d{4}\/\d{2}\/\d{4}-W\d{2}\.md$/)
     expect(month.path).toMatch(/^Daily\/\d{4}\/\d{2}\/\d{4}-\d{2}\.md$/)
     expect(fs.readFileSync(path.join(vault, week.path), 'utf8')).toContain(`month: "[[`)
     expect(fs.readFileSync(path.join(vault, month.path), 'utf8')).toBe(`# ${month.key}\n\n`)
     // No daily note: it was off before and still is.
-    expect(fs.readdirSync(path.join(vault, path.dirname(month.path))).sort()).toEqual([month.name, week.name].sort())
+    const folders = new Set([path.dirname(month.path), path.dirname(week.path)])
+    expect([...folders].flatMap((f) => fs.readdirSync(path.join(vault, f))).sort()).toEqual([month.name, week.name].sort())
 
     const saved = JSON.parse(fs.readFileSync(path.join(vault, '.recto', 'templates.json'), 'utf8')) as { periodic: PeriodicSettings }
     expect(saved.periodic.folder).toBe('Daily')
@@ -130,7 +133,13 @@ describe.skipIf(!RUN)('periodic notes and the hideable toolbar', () => {
     await openTab('Periodic notes')
     for (const name of ['Weekly notes', 'Monthly notes', 'Yearly notes']) await page.locator(`[aria-label="${name}"]`).click()
     await page.keyboard.press('Escape')
-    const listing = (): string[] => fs.readdirSync(vault, { recursive: true }).map(String).sort()
+    // The vault's own files: .recto/ holds the index, whose -wal and -shm come and go on their own.
+    const listing = (): string[] =>
+      fs
+        .readdirSync(vault, { recursive: true })
+        .map(String)
+        .filter((p) => !p.startsWith('.recto'))
+        .sort()
     const vaultBefore = listing()
     await page.locator('.status [aria-label="Today\'s note"]').click()
     await page.locator('.status__notice', { hasText: 'No periodic notes are on' }).waitFor()

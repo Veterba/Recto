@@ -40,6 +40,8 @@ describe.skipIf(!RUN)('hotkeys', () => {
       path.join(vault, 'Keys.md'),
       '# Keys\n\nA plain paragraph to type in.\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n\nThe end.\n',
     )
+    // A second note, for a tab with a step back and a step forward (⌘[ and ⌘]).
+    fs.writeFileSync(path.join(vault, 'Other.md'), '# Other\n')
     fs.mkdirSync(path.join(base, 'profile'))
     fs.writeFileSync(path.join(base, 'profile', 'app-state.json'), JSON.stringify({ lastVaultPath: vault }))
     app = await _electron.launch({
@@ -144,7 +146,14 @@ describe.skipIf(!RUN)('hotkeys', () => {
   it('every command with a binding runs from the keyboard', async () => {
     await page.reload()
     await page.waitForSelector('[role=treeitem]')
+    // Other, Keys, Other, then back: on Keys with a step each way, so Go back
+    // and Go forward have somewhere to go.
+    await page.locator('[role=treeitem]', { hasText: 'Other' }).first().click()
     await openNote()
+    await page.locator('[role=treeitem]', { hasText: 'Other' }).first().click()
+    await page.locator('.nav-arrows button[aria-label="Back to Keys"]').click()
+    await page.waitForSelector('.cm-tbl td')
+    await page.locator('.nav-arrows button[aria-label="Forward to Other"]').waitFor()
     // Every command's action replaced by a recorder: pressing a key must reach
     // the right command, without the command then changing the screen.
     const rows = await page.evaluate(() => {

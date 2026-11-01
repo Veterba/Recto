@@ -40,17 +40,19 @@ import { QuickSwitcher, SearchPanel } from '../../features/search'
 import { SettingsPanel, SidebarThemePicker, type SettingsTab } from '../../features/settings'
 import { TemplatePicker, usePeriodicNotesAutoCreate, useTemplateActions, useTemplateSettings } from '../../features/templates'
 import { TidyDialog, useTidy } from '../../features/tidy'
-import { CHAT_FOLDER } from '../../features/ai'
 import { BotList, MAIN_BOT, onOpenTopic, reloadBots, requestTopic, useBots, useBotsEnabled } from '../../features/bots'
 import {
   BoardDeleteHost,
   BoardList,
   BoardsMigrationNotice,
+  LayoutMigrationNotice,
   isTaskPath,
+  loadRectoFolderSetting,
   refreshBoards,
   requestNewCard,
   useBoards,
   useCardPlaces,
+  useShowRectoFolder,
 } from '../../features/boards'
 import { registerArchiveView } from '../../features/archive'
 import { HomeOverlay, forgetFigures, loadPlace } from '../../features/home'
@@ -87,6 +89,9 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const { appearance, ready, update } = useAppearance()
   const boards = useBoards()
   const { tree, refresh } = useVault(true)
+  /** Read by the tab pruning without running it again on every window change. */
+  const noteWindowsRef = useRef(noteWindows)
+  noteWindowsRef.current = noteWindows
   const templates = useTemplateSettings(vault.path)
   const [homeOpen, setHomeOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -204,8 +209,9 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   // --- sidebar list -------------------------------------------------------
 
   /**
-   * The Data tree, without what the Tasks tab owns: tasks/, and every board
-   * and card note wherever it is (isTaskPath, one rule).
+   * The Data tree, without what Recto's own screens own: the Recto folder, and
+   * every board and card note wherever it is (isTaskPath, one rule). A
+   * setting (Settings → Vault) shows them.
    *
    * Cards, boards and templates are real notes and have to live somewhere, but
    * that somewhere is an implementation detail of the features that own them -
@@ -214,14 +220,19 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
    * a [[link]] opens them; only this one list hides them.
    */
   const cardPlaces = useCardPlaces()
+  const showRecto = useShowRectoFolder()
+  /** Times the boards migration's notice closed (or had nothing to say): each lets the layout one ask again. */
+  const [boardsNoticeSettled, setBoardsNoticeSettled] = useState(0)
+  const onBoardsNoticeSettled = useCallback(() => setBoardsNoticeSettled((n) => n + 1), [])
+  useEffect(() => loadRectoFolderSetting(vault.path), [vault.path])
   const visibleTree = useMemo(() => {
     // Templates are NOT hidden: they are notes the user writes and edits, so
     // the folder sits in the tree with its own icon. Chats and attachments are
     // the app's storage for features that have their own screens.
-    const hidden = new Set<string>([CHAT_FOLDER, ATTACHMENTS_FOLDER])
+    const hidden = new Set<string>([ATTACHMENTS_FOLDER])
     const prune = (nodes: readonly FileNode[]): FileNode[] =>
       nodes.flatMap((node) => {
-        if (isTaskPath(node.path) || (node.kind === 'folder' && hidden.has(node.path))) return []
+        if ((!showRecto && isTaskPath(node.path)) || (node.kind === 'folder' && hidden.has(node.path))) return []
         return node.children === undefined ? [node] : [{ ...node, children: prune(node.children) }]
       })
     const withoutCards = { roots: prune(tree.roots), byPath: tree.byPath }
@@ -230,7 +241,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     return { roots, byPath: tree.byPath }
     // `boards` and `cardPlaces` are what isTaskPath reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tree, query, boards, cardPlaces])
+  }, [tree, query, boards, cardPlaces, showRecto])
 
   /** Files in the attachments folder, for Settings - it is not in the tree any more. */
   const attachmentFiles = useMemo(() => {
@@ -245,13 +256,29 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
    * had open - including ones since deleted or renamed elsewhere, which then
    * sit in the bar and fail to open. Runs once the tree is known and again on
    * every vault change.
+   *
+   * A path the tree does not list is asked of the disk before its tab goes:
+   * the tree can be a moment behind a note just made (a new board opened at
+   * once was closed again, and Tasks fell back to its first board).
    */
   useEffect(() => {
     if (sections === null || tree.roots.length === 0) return
     const files = new Set(allFilePaths(tree.roots))
-    for (const workspace of Object.values(sections)) workspace.pruneMissing((path) => files.has(path))
-    // A pinned note that is gone takes its window with it, as its tab would.
-    setNoteWindows((prev) => (prev.every((w) => files.has(w.path)) ? prev : prev.filter((w) => files.has(w.path))))
+    const unlisted = [...new Set([...Object.values(sections).flatMap((workspace) => workspace.paths()), ...noteWindowsRef.current.map((w) => w.path)])].filter(
+      (path) => !files.has(path),
+    )
+    if (unlisted.length === 0) return
+    let stale = false
+    void api.invoke(IPC.fsExisting, unlisted).then((onDisk) => {
+      if (stale) return
+      const exists = (path: string): boolean => files.has(path) || onDisk.includes(path)
+      for (const workspace of Object.values(sections)) workspace.pruneMissing(exists)
+      // A pinned note that is gone takes its window with it, as its tab would.
+      setNoteWindows((prev) => (prev.every((w) => exists(w.path)) ? prev : prev.filter((w) => exists(w.path))))
+    })
+    return () => {
+      stale = true
+    }
   }, [sections, tree])
 
   /** Every folder in the vault, for expand-all. */
@@ -726,7 +753,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         />
       )}
       <BoardDeleteHost />
-      <BoardsMigrationNotice vaultPath={vault.path} onOpenBoard={(path) => openBoard(path)} />
+      <BoardsMigrationNotice vaultPath={vault.path} onOpenBoard={(path) => openBoard(path)} onSettled={onBoardsNoticeSettled} />
+      <LayoutMigrationNotice vaultPath={vault.path} asks={boardsNoticeSettled} />
       {tidy !== null && <TidyDialog plan={tidy} busy={tidyBusy} onConfirm={() => void runTidy()} onCancel={() => setTidy(null)} />}
       <HomeOverlay
         open={homeOpen}

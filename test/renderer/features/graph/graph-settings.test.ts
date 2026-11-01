@@ -100,10 +100,10 @@ describe('graph settings', () => {
 })
 
 describe('showChats', () => {
-  it('shows chats unless told otherwise', () => {
-    expect(parseSettings({}).showChats).toBe(true)
-    expect(parseSettings({ showChats: false }).showChats).toBe(false)
-    expect(parseSettings({ showChats: 'no' }).showChats).toBe(true)
+  it('hides chats unless told otherwise', () => {
+    expect(parseSettings({}).showChats).toBe(false)
+    expect(parseSettings({ showChats: true }).showChats).toBe(true)
+    expect(parseSettings({ showChats: 'yes' }).showChats).toBe(false)
   })
 })
 
