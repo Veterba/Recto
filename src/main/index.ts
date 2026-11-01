@@ -6,6 +6,8 @@ import { isolateDevState } from './dev-guard'
 import { registerIpc } from './ipc'
 import { handleVaultScheme, registerVaultScheme } from './vault-protocol'
 import { createWindow } from './window'
+import { writeLauncher } from './vault-tools/launcher'
+import { startMcpSocket, stopMcpSocket } from './vault-tools/socket'
 
 app.setName('Recto')
 // Before anything reads userData: a dev build keeps its own state (see dev-guard).
@@ -44,6 +46,15 @@ if (job !== undefined) {
     handleVaultScheme()
     registerIpc()
     createWindow()
+    // AI clients reach Recto through these (main/vault-tools): the launcher
+    // they run, refreshed every start, and the socket it talks to.
+    try {
+      writeLauncher()
+    } catch (err) {
+      console.error('[mcp] launcher', err)
+    }
+    startMcpSocket().catch((err: unknown) => console.error('[mcp] socket', err))
+    app.on('will-quit', stopMcpSocket)
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

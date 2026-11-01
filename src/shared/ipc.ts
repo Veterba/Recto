@@ -27,6 +27,8 @@ import type { TextFileResult } from './file-kind'
 import type { OverviewData, OverviewPlace, OverviewTopic } from './overview'
 import type { BoardMigrationResult } from './board-migration'
 import type { LayoutMigrationResult } from './recto-paths'
+import type { ActivityEntry, AiAccessSettings, ClientId, ClientPlan, ClientStatus, Proposal } from './ai-access'
+import type { Finding, FormattingProfile } from './formatting'
 
 /**
  * How sharp the backdrop stays, sharpest first.
@@ -160,6 +162,21 @@ export const IPC = {
   boardsMigration: 'boards:migration',
   layoutMigration: 'layout:migration',
   boardsMigrate: 'boards:migrate',
+  aiAccessSettings: 'ai-access:settings',
+  aiAccessSetSettings: 'ai-access:set-settings',
+  aiAccessDetectFormatting: 'ai-access:detect-formatting',
+  aiAccessDraftGuide: 'ai-access:draft-guide',
+  aiAccessSaveGuide: 'ai-access:save-guide',
+  aiAccessActivity: 'ai-access:activity',
+  aiProposals: 'ai-proposals:list',
+  aiProposalApply: 'ai-proposals:apply',
+  aiProposalDiscard: 'ai-proposals:discard',
+  aiClients: 'ai-clients:list',
+  aiClientPlan: 'ai-clients:plan',
+  aiClientConnect: 'ai-clients:connect',
+  aiClientDisconnect: 'ai-clients:disconnect',
+  aiClientInstallExtension: 'ai-clients:install-extension',
+  aiClientTest: 'ai-clients:test',
 } as const
 
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
@@ -178,6 +195,8 @@ export const IPC_EVENT = {
   botsPullProgress: 'bots:pull-progress',
   botsCardsStatus: 'bots:cards-status',
   botsEnabledChanged: 'bots:enabled-changed',
+  aiProposalsChanged: 'ai-proposals:changed',
+  aiProposalsOpen: 'ai-proposals:open',
 } as const
 
 /** What becomes of a deleted board's cards. */
@@ -230,6 +249,10 @@ export type IpcEvents = Exhaustive<
     [IPC_EVENT.botsCardsStatus]: (status: NoteCardsStatus) => void
     /** Bots were turned on or off (Settings → Bots). */
     [IPC_EVENT.botsEnabledChanged]: (on: boolean) => void
+    /** An AI client proposed a change, or one was applied or discarded. */
+    [IPC_EVENT.aiProposalsChanged]: () => void
+    /** A suggested-edit notification was clicked: show Suggested edits. */
+    [IPC_EVENT.aiProposalsOpen]: () => void
   }
 >
 
@@ -438,6 +461,24 @@ export type IpcApi = Exhaustive<
     [IPC.layoutMigration]: () => LayoutMigrationResult
     /** Run it again with names for the boards whose own was taken. */
     [IPC.boardsMigrate]: (names: Record<string, string>) => BoardMigrationResult
+    [IPC.aiAccessSettings]: () => AiAccessSettings
+    [IPC.aiAccessSetSettings]: (next: AiAccessSettings) => { ok: boolean; error?: string }
+    /** Linter's settings (when the plugin is on) and the habits in the vault's notes. */
+    [IPC.aiAccessDetectFormatting]: () => { profile: FormattingProfile; findings: Finding[]; linter: 'imported' | 'off' | 'missing'; notes: number }
+    [IPC.aiAccessDraftGuide]: () => string
+    /** A new note at the top of the vault, set as the AI guide. */
+    [IPC.aiAccessSaveGuide]: (name: string, text: string) => { ok: true; path: string } | { ok: false; error: string }
+    [IPC.aiAccessActivity]: () => ActivityEntry[]
+    [IPC.aiProposals]: () => Proposal[]
+    [IPC.aiProposalApply]: (id: string) => { ok: boolean; error?: string; stale?: boolean }
+    [IPC.aiProposalDiscard]: (id: string) => { ok: boolean }
+    [IPC.aiClients]: () => ClientStatus[]
+    [IPC.aiClientPlan]: (id: ClientId, action: 'connect' | 'disconnect') => ClientPlan
+    [IPC.aiClientConnect]: (id: ClientId) => { ok: boolean; error?: string }
+    [IPC.aiClientDisconnect]: (id: ClientId) => { ok: boolean; error?: string }
+    /** Claude Desktop: build Recto.mcpb and open it with Claude Desktop. */
+    [IPC.aiClientInstallExtension]: () => { ok: boolean; error?: string }
+    [IPC.aiClientTest]: () => { ok: boolean; message: string }
     /** A bot's model, written to its bot.json: an API model id, an Ollama model, or null for the local default. Returns the bots. */
     [IPC.botsSetModel]: (botId: string, model: string | null) => Bot[]
     /** A 2-5 word title for a chat topic from its first exchange, by the bot's model; null when it cannot make one. */

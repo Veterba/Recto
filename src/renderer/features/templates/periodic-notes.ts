@@ -1,17 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { api } from '../../app/api'
-import { setField } from '@shared/frontmatter'
-import { nameTakenElsewhere, parentLink, periodNotePath, todayPeriod } from '@shared/periodic'
-import {
-  BUILT_IN_DAILY,
-  coerceTemplateSettings,
-  DEFAULT_TEMPLATE_SETTINGS,
-  fillTemplate,
-  PERIODS,
-  templateBody,
-  type Period,
-  type TemplateSettings,
-} from '@shared/templates'
+import { nameTakenElsewhere, periodicNoteText, periodNotePath, todayPeriod } from '@shared/periodic'
+import { coerceTemplateSettings, DEFAULT_TEMPLATE_SETTINGS, PERIODS, type Period, type TemplateSettings } from '@shared/templates'
 import { IPC } from '@shared/ipc'
 
 /**
@@ -129,25 +119,9 @@ export const dayKey = (date: Date = new Date()): string => `${date.getFullYear()
 
 /** What a periodic note made from these settings would contain, before anyone edits it. */
 async function generatedText(period: Period, settings: TemplateSettings, now: Date): Promise<string> {
-  const target = periodNotePath(period, now, settings.periodic)
   const chosen = settings.periodic[period].template
-  let body = period === 'daily' ? BUILT_IN_DAILY : '# {{title}}\n\n'
-  if (chosen !== null) {
-    const template = await api.invoke(IPC.fsRead, chosen)
-    // An EMPTY template counts as no template. That is not hypothetical: a
-    // template file created and never written in produced a blank, 0-byte
-    // daily note with nothing to say why - which looks exactly like the
-    // feature being broken. The built-in heading at least says what day it is;
-    // Settings flags the empty template so it gets filled in.
-    // The WHOLE template, frontmatter included: a daily template's properties
-    // are the point of writing them there, and stripping them left every daily
-    // note with none. (A template inserted into an existing note is the other
-    // case - see `mergeTemplateProperties`.)
-    if (template.ok && templateBody(template.content).trim() !== '') body = template.content
-  }
-  const text = fillTemplate(body, { title: target.key, path: target.path, now, weekStart: settings.periodic.weekStart })
-  const link = parentLink(period, now, settings.periodic)
-  return link === null ? text : setField(text, link.key, link.value)
+  const template = chosen === null ? null : await api.invoke(IPC.fsRead, chosen)
+  return periodicNoteText(period, settings.periodic, now, template?.ok === true ? template.content : null)
 }
 
 /**

@@ -25,6 +25,7 @@ import * as vaultFs from './vault-fs'
 import { chooseVaultFolder, closeVault, currentVault, forgetRecentVault, openVault, pickVault, recentVaults, startupState } from './vault'
 import { clearKey, keyStatus, writeKey } from './secrets'
 import { markSelfWrite, startWatching, stopWatching } from './watcher'
+import { registerAiAccessIpc } from './vault-tools/ipc'
 
 /** Typed handler registration - the channel name and its signature stay in sync. */
 function handle<C extends keyof IpcApi>(
@@ -194,6 +195,7 @@ export function registerIpc(): void {
     return closeVault()
   })
 
+  registerAiAccessIpc(handle)
   handle(IPC.fsTree, () => vaultFs.listTree())
   handle(IPC.fsOutsideLinks, () => vaultFs.takeOutsideLinks())
   handle(IPC.fsRead, (p) => vaultFs.readFile(p))

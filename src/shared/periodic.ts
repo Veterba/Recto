@@ -16,7 +16,19 @@
  * note stays where it always went, under its own calendar year and month.
  */
 
-import { dailyNotePath, isoWeek, periodKey, PERIODS, thursdayOf, type Period, type PeriodicSettings } from './templates'
+import { setField } from './frontmatter'
+import {
+  BUILT_IN_DAILY,
+  dailyNotePath,
+  fillTemplate,
+  isoWeek,
+  periodKey,
+  PERIODS,
+  templateBody,
+  thursdayOf,
+  type Period,
+  type PeriodicSettings,
+} from './templates'
 
 export type NotePlace = { folder: string; name: string; path: string; key: string }
 
@@ -82,6 +94,29 @@ export function parentLink(period: Period, date: Date, settings: PeriodicSetting
   if (parent === undefined) return null
   const at = period === 'weekly' ? thursdayOf(date) : date
   return { key: PROPERTY[parent], value: `[[${periodKey(parent, at)}]]` }
+}
+
+/**
+ * What a new periodic note contains: its template (`template`, the chosen
+ * template's text; null for the built-in one) filled in, and the link to its
+ * parent period's note.
+ */
+export function periodicNoteText(period: Period, settings: PeriodicSettings, now: Date, template: string | null): string {
+  const target = periodNotePath(period, now, settings)
+  // An EMPTY template counts as no template. That is not hypothetical: a
+  // template file created and never written in produced a blank, 0-byte
+  // daily note with nothing to say why - which looks exactly like the
+  // feature being broken. The built-in heading at least says what day it is;
+  // Settings flags the empty template so it gets filled in.
+  // The WHOLE template, frontmatter included: a daily template's properties
+  // are the point of writing them there, and stripping them left every daily
+  // note with none. (A template inserted into an existing note is the other
+  // case - see `mergeTemplateProperties`.)
+  const body =
+    template !== null && templateBody(template).trim() !== '' ? template : period === 'daily' ? BUILT_IN_DAILY : '# {{title}}\n\n'
+  const text = fillTemplate(body, { title: target.key, path: target.path, now, weekStart: settings.weekStart })
+  const link = parentLink(period, now, settings)
+  return link === null ? text : setField(text, link.key, link.value)
 }
 
 export { nameTakenElsewhere } from './vault'

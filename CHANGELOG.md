@@ -4,6 +4,18 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.54.0 — 2026-11-01
+### Added
+- Recto is an MCP server: Claude Code, Codex, Claude Desktop, Cursor and other AI clients can work with your vault through Recto, with 19 tools: search by words and by meaning, read a note, a note with short summaries of the notes it links to and that link to it, list a folder, recent notes, tags, daily and other periodic notes, boards and tasks, and propose changes. Recto must be open; when it is not, the client gets a clear "Open Recto" message.
+- AI clients never write straight into your notes by default: their changes arrive as Suggested edits, each with a diff and Apply or Discard. A count shows in the status bar, and a notification appears when Recto is not in front. A proposal made against an older version of a note writes nothing.
+- Settings → AI → Write mode: Read only (the AI sees the vault and writes nothing), Propose (the default) or Write directly, which backs up every changed file in `.recto/backup/ai/` first.
+- Recto's rules apply to what the AI writes: note names stay unique, links must resolve and use the vault's link form, periodic notes are made from their template in the folder Settings point to, boards change only through the board tools, and excluded folders and notes are never returned or changed.
+- Formatting profile with 8 rules for notes the AI writes. "Detect from my notes" imports Obsidian Linter's matching settings when the plugin is on, then fills the other rules from what at least 80% of your notes do (mixed habits stay "Leave as written"), with a before/after preview. The rules apply only to the lines the AI writes, never to the rest of a note.
+- AI guide: choose any note as the guide AI clients read first, or let Recto draft one from a template for you to edit. A vault profile (folders, templates, periodic notes, link style, properties, tags, boards, topics when on, the formatting rules) is available to the client too.
+- Activity log of what AI clients did (tool, note paths, outcome), without any note text.
+- Connect a client with one click in Settings → AI: Recto shows the exact lines it will add, copies the client's file to a backup first and leaves every other entry untouched. Each client shows its status and a "Test connection" button. Claude Desktop is connected with a `.mcpb` extension built on demand, or through its config file.
+- The command AI clients run is refreshed on every start, so updating or moving Recto does not break a connected client.
+
 ## v0.53.1 — 2026-10-31
 ### Added
 - Recto keeps the notes its features make in one `Recto/` folder: boards in `Recto/Boards/<Board>/` with their cards beside them, cards on no board in `Recto/Unsorted/`, chats in `Recto/Chats/`, and a `Recto/README.md` saying what the folder is. They are ordinary Markdown notes: indexed, searchable, linkable by name and synced. Chats and `Recto/README.md` stay out of the overview's counts and lists and out of the graph (chats can be shown in it).

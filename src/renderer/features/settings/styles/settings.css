@@ -517,3 +517,57 @@
 .setting__note--bad {
   color: var(--danger);
 }
+
+/* Settings → AI: the guide draft, formatting findings and preview, the activity log. */
+.ai-access__draft {
+  width: 100%;
+  min-height: 220px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12-5);
+  resize: vertical;
+}
+.ai-access__findings {
+  margin: 0;
+  padding-left: var(--size-4);
+  color: var(--text-muted);
+  font-size: var(--font-size-12-5);
+  line-height: 1.6;
+}
+.ai-access__compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--size-2);
+}
+.ai-access__pre {
+  margin: var(--size-1) 0 0;
+  padding: var(--size-2);
+  overflow-x: auto;
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-11-5);
+  line-height: 1.5;
+  white-space: pre;
+}
+.ai-access__activity {
+  max-height: 280px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-11-5);
+  line-height: 1.6;
+}
+.ai-access__activity li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.ai-access__activity li strong {
+  color: var(--text-primary);
+}
+.ai-access__activity li.is-error em {
+  color: var(--danger);
+}

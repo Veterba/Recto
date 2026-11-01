@@ -149,6 +149,13 @@ export type CatalogNote = {
   headings: { text: string; level: number }[]
 }
 
+/** Every note's path, mtime and size, with its tags and properties: what the AI tools' vault profile, filters and lists read. */
+export type VaultMeta = {
+  notes: { path: string; title: string | null; mtime: number; size: number }[]
+  tags: { path: string; tag: string }[]
+  properties: { path: string; key: string; value: string | null }[]
+}
+
 /** A note card (main/bots/cards.ts), as stored: the card is JSON. */
 export type StoredCard = { hash: string; model: string; path: string; card: string }
 
@@ -191,6 +198,7 @@ export type IndexRequest =
   | { kind: 'inferred-get'; hash: string }
   | { kind: 'inferred-put'; hash: string; path: string; items: string[] }
   | { kind: 'bot-catalog' }
+  | { kind: 'vault-meta' }
   | { kind: 'cards-get'; model: string }
   | { kind: 'card-put'; card: StoredCard }
   /** Cards and loose-task readings, for carrying them from one eval run to the next (same notes, same model). */
@@ -226,6 +234,7 @@ export type IndexResponse =
   | { kind: 'notes-in-period-result'; notes: PeriodNote[] }
   | { kind: 'inferred-result'; items: string[] | null }
   | { kind: 'bot-catalog-result'; notes: CatalogNote[] }
+  | { kind: 'vault-meta-result'; meta: VaultMeta }
   | { kind: 'cards-result'; cards: StoredCard[] }
   | { kind: 'model-cache'; cards: StoredCard[]; inferred: { hash: string; path: string; items: string[] }[] }
   | { kind: 'ok' }

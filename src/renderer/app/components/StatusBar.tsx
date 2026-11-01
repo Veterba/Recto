@@ -5,6 +5,7 @@ import { TopicsNotice } from '../../features/topics'
 import { OutsideLinksNotice } from '../../features/file-tree'
 import { PeriodicNotice } from '../../features/templates'
 import { WritingButtons } from '../../features/editor'
+import { SuggestedEditsNotice } from '../../features/suggested-edits'
 import { Icon } from '../../ui/Icon'
 import { Tip } from '../../ui/Tip'
 
@@ -38,6 +39,7 @@ export function StatusBar({ workspace, vaultName, graphOpen, onToggleGraph, onOp
           toolbar, so they are there even with the toolbar hidden. */}
       <WritingButtons buttonClass="status__btn" iconSize={13} menuPlacement="above" />
       <TopicsNotice />
+      <SuggestedEditsNotice />
       <Tip label="Today's note" hint={commands.label('daily:open') ?? undefined} placement="top">
         <button className="status__btn" onClick={onOpenDaily} aria-label="Today's note">
           <Icon name="calendar-days" size={13} />

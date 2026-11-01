@@ -1,0 +1,94 @@
+/* ---------- suggested edits ---------- */
+
+.edits__badge {
+  gap: 4px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.dialog.edits {
+  width: min(760px, calc(100vw - 2 * var(--size-6)));
+  max-height: calc(100vh - 2 * var(--size-6));
+  display: flex;
+  flex-direction: column;
+}
+
+.edits__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4);
+  margin-top: var(--size-3);
+  overflow-y: auto;
+}
+
+.edits__item {
+  padding: var(--size-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+
+.edits__itemhead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.edits__meta,
+.edits__path {
+  color: var(--text-muted);
+  font-size: var(--font-size-11-5);
+}
+
+.edits__path {
+  margin-top: var(--size-2);
+  font-family: var(--font-mono);
+}
+
+.edits__diff {
+  margin: var(--size-1) 0 0;
+  padding: var(--size-2) 0;
+  overflow-x: auto;
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12-5);
+  line-height: 1.5;
+}
+
+.edits__line {
+  padding: 0 var(--size-2) 0 calc(var(--size-2) + 1.5ch);
+  text-indent: -1.5ch;
+  /* Notes are prose: long lines wrap rather than run off the edge. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.edits__line span {
+  display: inline-block;
+  width: 1.5ch;
+  color: var(--text-muted);
+}
+.edits__line--added {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+}
+.edits__line--removed {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--danger) 50%, transparent);
+}
+.edits__fold {
+  padding: 0 var(--size-2);
+  color: var(--text-muted);
+}
+
+.edits__error {
+  margin: var(--size-2) 0 0;
+  color: var(--danger);
+  font-size: var(--font-size-12-5);
+}
+
+.edits__buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--size-1);
+  margin-top: var(--size-2);
+}

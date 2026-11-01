@@ -12,6 +12,7 @@ import { EditorSettings } from './EditorSettings'
 import { TemplateSettingsTab } from './TemplateSettings'
 import { PeriodicSettingsTab } from './PeriodicSettings'
 import { AiSettings } from './AiSettings'
+import { AiAccessSettings } from './AiAccessSettings'
 import { VaultSettings } from './VaultSettings'
 import { BotsSettings } from '../../bots'
 import { clampInside, resizeFrom, type Bounds, type Edges, type Rect } from '../../../app/note-windows'
@@ -123,8 +124,13 @@ const SECTIONS: readonly Section[] = [
     id: 'ai',
     label: 'AI',
     group: 'Connections',
-    description: 'Your Anthropic API key, for the API models.',
-    render: (deps) => <AiSettings {...deps} />,
+    description: 'What AI clients may do with this vault, and your Anthropic API key.',
+    render: (deps) => (
+      <>
+        <AiAccessSettings {...deps} />
+        <AiSettings {...deps} />
+      </>
+    ),
     searchable: true,
   },
   {

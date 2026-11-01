@@ -9,7 +9,7 @@ import { isKanban, parseKanban, stageOf } from '../../shared/kanban'
 import type { CatalogNote, IndexRequest, IndexResponse, PeriodNote, StoredCard, TaskRowData } from '../../shared/indexer-protocol'
 import { isHidden } from '../../shared/vault'
 import { vaultRoot, requireDb, open, closeDb } from './db'
-import { search, backlinks, resolveOne, unresolved, graph, cards, boards, cardPlaces, context, overview } from './queries'
+import { search, backlinks, resolveOne, unresolved, graph, cards, boards, cardPlaces, context, overview, vaultMeta } from './queries'
 
 /**
  * The indexer, running in its own process.
@@ -592,6 +592,8 @@ function handle(request: IndexRequest): IndexResponse {
         .prepare('INSERT OR REPLACE INTO inferred_tasks (hash, path, items, created) VALUES (?, ?, ?, ?)')
         .run(request.hash, request.path, JSON.stringify(request.items), Date.now())
       return { kind: 'inferred-result', items: request.items }
+    case 'vault-meta':
+      return { kind: 'vault-meta-result', meta: vaultMeta() }
     case 'bot-catalog':
       return { kind: 'bot-catalog-result', notes: botCatalog() }
     case 'cards-get':

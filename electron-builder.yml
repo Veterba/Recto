@@ -39,6 +39,9 @@ files:
 # inside an asar archive, so the native parts stay unpacked on disk.
 asarUnpack:
   - '**/*.node'
+  # recto-mcp (main/vault-tools/launcher.ts) runs outside the app, on Electron
+  # as Node or on Claude Desktop's Node: it is read as a plain file.
+  - out/mcp/**
   - node_modules/better-sqlite3/**
   # The embedder's runtime: onnxruntime-node's binding loads libonnxruntime
   # from beside itself, and transformers.js imports sharp (libvips) at load

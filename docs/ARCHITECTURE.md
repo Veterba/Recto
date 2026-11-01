@@ -216,6 +216,66 @@ Features import each other only through `index.ts`. The app shell imports featur
 `app/` for the api, the note bus and the view registry, and `ui/` for primitives. `ui/` imports
 neither `app/` nor any feature, and `shared/` imports nothing outside itself.
 
+## Recto as an MCP server (AI access)
+
+AI clients (Claude Code, Codex, Claude Desktop, Cursor) reach the vault through Recto, so Recto's
+rules apply to them. Nothing in the client touches the files.
+
+```
+AI client ──stdio──▶ <userData>/bin/recto-mcp         shell script, rewritten on every start
+                       │  ELECTRON_RUN_AS_NODE=1 <Recto's Electron> out/mcp/recto-mcp.mjs
+                       ▼
+                     src/mcp/index.ts  (MCP SDK; tools from the shared catalogue)
+                       │  newline-delimited JSON over a Unix socket (src/mcp/bridge.ts)
+                       ▼   <userData>/recto.sock + token in <userData>/mcp-token, both 0600
+main: vault-tools/socket.ts  (first line must carry the token)
+                       ▼
+      vault-tools/index.ts  callTool: validate → scope → run → log → answer
+         ├─ scope.ts    built fresh for each call: vault, .recto/ai-access.json, exclusions
+         ├─ read.ts     search (FTS + meaning), notes, context, folders, recent, tags,
+         │              periodic notes, boards, tasks; asks the indexer, never the renderer
+         └─ write.ts    propose_* build a Draft (files before/after, formatted by the profile)
+              └─ proposals.ts   Read only: refused · Propose: queued · Write directly:
+                                backup, then write through vault-fs
+```
+
+- **One catalogue.** `shared/vault-tools.ts` holds the 19 tools (zod schemas, titles, descriptions,
+  which ones write) and the prompts; the MCP program and main both use it, so the two ends cannot
+  disagree. Note text in an answer is always wrapped in `<note path="…">` blocks, so a client can tell
+  a note's words from Recto's.
+- **Why a socket.** The client starts `recto-mcp` as its own process, but only the running app has
+  the index, the vault and the settings. The socket (mode 0600, plus a random per-install token compared in constant time) lets that process ask
+  main, and when Recto is closed the connect fails and the client is told to open Recto.
+- **The launcher.** `main/vault-tools/launcher.ts` rewrites `<userData>/bin/recto-mcp` on every start
+  with this install's paths, so clients keep one stable command while Recto updates or moves. It runs
+  on Recto's own Electron as Node, so no Node install is needed.
+- **The build.** `recto-mcp.mjs` is one self-contained bundle (SDK and zod inlined) made by the
+  `mcpProgram` plugin in `electron.vite.config.ts` into `out/mcp/`. `electron-builder.yml` lists
+  `out/mcp/**` in `asarUnpack`, since other Node runtimes cannot read inside an asar. Claude Desktop
+  uses the same file in a `.mcpb` that `buildMcpb` makes on demand.
+- **Writes.** Every write tool returns a `Draft`; the mode in `ai-access.json` decides what happens.
+  `shared/formatting.ts` (8 rules, detected from the vault or the Obsidian Linter's config) is applied
+  only to the lines the AI wrote. A proposal keeps the file's text it was made against; Apply on a
+  note that has changed since writes nothing (stale). Names, links, periodic-note templates, boards
+  (changed only through the board tools) and excluded folders are checked in `write.ts`.
+  `shared/line-diff.ts` makes the diff shown in Suggested edits
+  (`renderer/features/suggested-edits/`).
+- **Indexer.** Reads that need the whole vault's notes, tags and properties (profile, folders) use the
+  `vault-meta` request, answered with `VaultMeta` (`shared/indexer-protocol.ts`).
+- **Settings.** `renderer/features/settings/components/AiAccessSettings.tsx` edits the write mode,
+  AI guide, formatting profile, exclusions and clients over `main/vault-tools/ipc.ts`. `clients.ts`
+  adds Recto's entry to a client's config file (shown first, original backed up, other entries left
+  alone) and tests the connection.
+
+| where | what |
+|---|---|
+| `<vault>/.recto/ai-access.json` | write mode, AI guide note, formatting profile, exclusions |
+| `<vault>/.recto/ai-proposals.json` | Suggested edits: pending and settled (kept a while) |
+| `<vault>/.recto/ai-activity.jsonl` | one line per tool call: tool, paths, outcome; no note text |
+| `<vault>/.recto/backup/ai/<time>/` | files as they were before a direct write |
+| `<userData>/backup/clients/<time>/` | a client's config file as it was before Recto edited it |
+| `<userData>/bin/recto-mcp`, `recto.sock`, `mcp-token` | launcher, socket, token |
+
 ## Recto's folder
 
 Boards, cards and chats live under `Recto/` (`shared/recto-paths.ts` is the one place that knows

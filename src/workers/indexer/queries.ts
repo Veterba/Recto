@@ -13,6 +13,7 @@ import type {
   BoardSummary,
   CardPlace,
   NoteContext,
+  VaultMeta,
 } from '../../shared/indexer-protocol'
 import { linkStage, type CardStage } from '../../shared/kanban'
 import type { OverviewIndex } from '../../shared/overview'
@@ -451,4 +452,14 @@ export function context(): NoteContext[] {
     tags: byTag.get(note.path) ?? [],
     links: byLink.get(note.path) ?? [],
   }))
+}
+
+/** Every note with its tags and properties, for the AI tools (main/vault-tools). */
+export function vaultMeta(): VaultMeta {
+  const handle = requireDb()
+  return {
+    notes: handle.prepare('SELECT path, title, mtime, size FROM notes ORDER BY path').all() as VaultMeta['notes'],
+    tags: handle.prepare('SELECT DISTINCT path, tag FROM tags').all() as VaultMeta['tags'],
+    properties: handle.prepare('SELECT path, key, value FROM properties').all() as VaultMeta['properties'],
+  }
 }

@@ -1,10 +1,39 @@
 import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import { build, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+
+/**
+ * `recto-mcp` (src/mcp), the program AI clients start, built beside main as
+ * ONE self-contained file: the MCP SDK and zod inlined, nothing from
+ * node_modules needed at run time. It runs outside the app - on Recto's
+ * Electron as Node, or on Claude Desktop's Node from a .mcpb - so it cannot
+ * share main's chunks or its externalised dependencies.
+ */
+function mcpProgram(): Plugin {
+  return {
+    name: 'recto-mcp',
+    apply: 'build',
+    async closeBundle() {
+      await build({
+        configFile: false,
+        logLevel: 'warn',
+        ssr: { noExternal: true, target: 'node' },
+        build: {
+          ssr: resolve('src/mcp/index.ts'),
+          outDir: resolve('out/mcp'),
+          emptyOutDir: false,
+          minify: false,
+          rollupOptions: { output: { format: 'es', entryFileNames: 'recto-mcp.mjs', inlineDynamicImports: true } },
+        },
+      })
+    },
+  }
+}
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), mcpProgram()],
     build: {
       rollupOptions: {
         input: {
