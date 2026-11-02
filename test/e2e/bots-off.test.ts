@@ -55,10 +55,10 @@ describe.skipIf(!RUN)('bots off', () => {
     removeDir(base)
   }, 30_000)
 
-  it('a new vault starts with bots off, and the AI tab says so in one line', async () => {
+  it('a new vault starts with bots off, and the Chats panel says so in one line', async () => {
     expect(JSON.parse(fs.readFileSync(path.join(vault, '.recto', 'bots-settings.json'), 'utf8'))).toEqual({ enabled: false })
-    await page.locator('[role=tab]', { hasText: 'AI' }).first().click()
-    await page.waitForSelector('.bots-off')
+    await page.locator('.tabs__chats').click()
+    await page.waitForSelector('.chats .bots-off')
     expect((await page.locator('.bots-off').textContent())?.replace(/\s+/g, ' ').trim()).toBe('Bots are off · Turn on in Settings')
   })
 
@@ -71,7 +71,8 @@ describe.skipIf(!RUN)('bots off', () => {
   })
 
   it('two minutes idle and editing notes: not one request to Ollama, no bot folders made', async () => {
-    await page.locator('[role=tab]', { hasText: 'Data' }).first().click()
+    await page.getByRole('button', { name: 'Close chats' }).click()
+    await page.waitForSelector('.chats', { state: 'detached' })
     await page.locator('[role=treeitem]', { hasText: 'Plans' }).click()
     await page.waitForSelector('.cm-content')
     const started = Date.now()
@@ -91,8 +92,8 @@ describe.skipIf(!RUN)('bots off', () => {
   }, 200_000)
 
   it('Settings shows the switch, marked Experimental', async () => {
-    await page.locator('[role=tab]', { hasText: 'AI' }).first().click()
-    await page.locator('.bots-off__link').click()
+    await page.locator('.tabs__chats').click()
+    await page.locator('.chats .bots-off__link').click()
     await page.waitForSelector('.settings-panel')
     expect(await page.locator('.settings-panel .settings__tab.is-active').textContent()).toMatch(/^Bots/)
     expect(await page.locator('.settings-panel').textContent()).toContain('Experimental')

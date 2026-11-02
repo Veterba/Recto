@@ -158,8 +158,8 @@ describe('Workspace tree', () => {
 })
 
 describe('sections', () => {
-  it('is exactly three workspaces - Home and Graph are extensions, not sections', () => {
-    expect(SECTIONS.map((s) => s.id)).toEqual(['data', 'ai', 'tasks'])
+  it('is exactly three workspaces - Home and Graph are extensions, chats a panel, not sections', () => {
+    expect(SECTIONS.map((s) => s.id)).toEqual(['data', 'canvas', 'tasks'])
   })
 
   it('every section maps to a distinct view type', () => {
@@ -168,7 +168,8 @@ describe('sections', () => {
   })
 
   it('getSection falls back rather than returning undefined', () => {
-    expect(getSection('ai').label).toBe('AI')
+    expect(getSection('canvas').label).toBe('Canvas')
+    expect(isSectionId('ai')).toBe(false)
     expect(getSection('nope' as never).id).toBe('data')
   })
 
@@ -183,9 +184,13 @@ describe('sections', () => {
     expect(SECTIONS.some((s) => s.id === DEFAULT_SECTION)).toBe(true)
   })
 
-  it('each section carries its own search placeholder and new-item label', () => {
+  it('each section carries its own search placeholder and new-item label (none for Canvas, which has nothing to make yet)', () => {
     for (const section of SECTIONS) {
       expect(section.searchPlaceholder.length).toBeGreaterThan(0)
+      if (section.id === 'canvas') {
+        expect(section.newLabel).toBe('')
+        continue
+      }
       expect(section.newLabel.length).toBeGreaterThan(0)
       // Short enough to sit beside the "Folder" button without truncating.
       expect(section.newLabel.length).toBeLessThanOrEqual(6)

@@ -1,8 +1,8 @@
 import { syncVectors } from './vectors'
 import { BrowserWindow, Notification, powerSaveBlocker } from 'electron'
 import type { AiMessage } from '../../shared/ai'
-import { botThreadFolder, isActive, type Bot, type BotJob, type BotMessage, type BotSource } from '../../shared/bots'
-import { appendTurns, createdStamp, parseTopic, topicFile, topicFileName, type ChatTopicMeta } from '../../shared/chat-topics'
+import { botThreadFolder, isActive, type Bot, type BotJob, type BotMessage, type BotSource, type BotStep } from '../../shared/bots'
+import { appendTurns, cleanTitle, createdStamp, parseTopic, topicFile, topicFileName, type ChatTopicMeta } from '../../shared/chat-topics'
 import { langOfText } from '../../shared/bot-status'
 import { answerLang, honestAnswer } from './honesty'
 import { IPC_EVENT } from '../../shared/ipc'
@@ -16,6 +16,13 @@ import { answerWithTools } from './model-tools'
 import { prepare } from './prepare'
 import type { BotModelProvider } from './provider'
 import type { BotHarness, BotModelStatus, BotSettings } from '../../shared/bots'
+import { AI_ACCESS_STATE, coerceAiAccess } from '../../shared/ai-access'
+import { isCloudModel, providerInfo, providerOf } from '../../shared/providers'
+import { readState } from '../state'
+import { closeSession, openSession } from '../vault-tools'
+import { run as runProvider } from '../providers'
+import { ProviderError } from '../providers/run'
+import { chatSystem, forCloud } from '../providers/prompts'
 
 /**
  * Answers, run by main from the question to the last token and written into
@@ -29,6 +36,8 @@ export type AnswerDeps = {
   bots: () => Bot[]
   modelOf: (bot: Bot) => string
   providerFor: (model: string) => BotModelProvider
+  /** Whether the model can answer: a local model's state, or a cloud provider's readiness. */
+  status: (model: string) => Promise<BotModelStatus>
   settings: () => BotSettings
   /** Before a run: the background note cards give the model back. */
   beforeRun: () => void
@@ -128,7 +137,7 @@ export async function send(request: {
   const text = request.text.trim()
   if (text === '') return { ok: false, error: 'Nothing to send.' }
   const model = deps.modelOf(bot)
-  const ready = await deps.providerFor(model).status(model)
+  const ready = await deps.status(model)
   if (ready.state !== 'ready' && ready.state !== 'loading') return { ok: false, error: 'The model is not available.', status: ready }
 
   let topic = request.topic
@@ -154,6 +163,28 @@ export async function send(request: {
   const added = await writeTopic(topic, { ...current, body: appendTurns(current.body, [turn], bot.name) }).catch((err: unknown) => err)
   if (added instanceof Error) return { ok: false, error: added.message }
   return { ok: true, topic, job: jobs.enqueue({ botId: bot.id, topic, model, question: null, lang: langOfText(text) }) }
+}
+
+/**
+ * A Quick ask thread kept: a new topic with the bot, holding the thread's
+ * turns as they were, so it continues in the chat panel like any other.
+ */
+export async function saveThread(request: { botId: string; messages: BotMessage[] }): Promise<{ ok: true; topic: string } | { ok: false; error: string }> {
+  const bot = botOf(request.botId)
+  if (bot === undefined) return { ok: false, error: 'That bot no longer exists.' }
+  const first = request.messages.find((m) => m.role === 'user')
+  if (first === undefined) return { ok: false, error: 'Nothing to keep yet.' }
+  const at = first.at !== undefined && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(first.at) ? first.at : createdStamp(new Date())
+  const meta: ChatTopicMeta = { bot: bot.id, created: at, title: cleanTitle(first.content) ?? UNTITLED }
+  const name = topicFileName(meta.created, meta.title)
+  markSelfWrite(`${botThreadFolder(bot.id)}/${name}`)
+  const created = await vaultFs.create(botThreadFolder(bot.id), name, 'file')
+  if (!created.ok) return { ok: false, error: 'Could not keep it as a chat.' }
+  const vault = currentVault()
+  if (vault !== null) ensureReadme(vault.path)
+  const written = await writeTopic(created.path, { meta, extra: [], body: appendTurns('', request.messages, bot.name) }).catch((err: unknown) => err)
+  if (written instanceof Error) return { ok: false, error: written.message }
+  return { ok: true, topic: created.path }
 }
 
 /** Ask again for the topic as it stands: after an error or an interrupted answer. */
@@ -192,7 +223,7 @@ function notify(job: BotJob): void {
 /** One answer, from reading its topic to its last token; written into the topic as it streams. */
 async function runJob(job: BotJob, controls: RunControls): Promise<void> {
   const d = deps
-  const bot = botOf(job.botId)
+  let bot = botOf(job.botId)
   if (d === null || bot === undefined) throw new Error('That bot no longer exists.')
   const started = performance.now()
   d.beforeRun()
@@ -205,6 +236,7 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
     controls.update({ question: null })
   }
   const parsed = parseTopic(topicFile(topic.meta, topic.extra, topic.body), assistantsOf(bot))
+  const excluded = coerceAiAccess(readState(AI_ACCESS_STATE)).excluded
   // An interrupted answer is not part of the conversation the model sees - nor one left half
   // written by a job that never finished (the app was killed): it still carries the job's id.
   const turns = parsed.messages.filter((m) => !(m.role === 'assistant' && (m.interrupted === true || m.job !== undefined)))
@@ -217,8 +249,12 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
     .slice(-2)
     .flatMap((m) => m.sources ?? [])
 
+  if (isCloudModel(job.model)) return runCloudJob(job, controls, d, bot, topic, forCloud(turns, excluded), started)
+
   const harness: BotHarness = d.settings().harness
   const provider = d.providerFor(job.model)
+  // Folders excluded from AI (Settings → AI) are excluded for every provider, this Mac's too.
+  bot = { ...bot, exclude: [...(bot.exclude ?? []), ...excluded] }
   // The vectors are built in the background only on the charger and while
   // you are away (background-gate.ts): here, the notes changed since are
   // brought up to date first, so a question never searches stale ones.
@@ -301,6 +337,77 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
     if (jobs.abortReason(job.id) !== 'discard') await save(true, jobs.abortReason(job.id) !== 'cancel')
     return
   }
+  await save(true)
+}
+
+/**
+ * An answer from a cloud provider: an agent with Recto's tools, not the
+ * local pipeline (router, retrieval, scope tools) a small model needs. It
+ * streams into the topic like any answer; its steps are its tool calls, its
+ * sources the notes those calls returned, its writes Suggested edits.
+ */
+async function runCloudJob(
+  job: BotJob,
+  controls: RunControls,
+  d: AnswerDeps,
+  bot: Bot,
+  topic: TopicText,
+  messages: AiMessage[],
+  started: number,
+): Promise<void> {
+  const session = openSession({ client: `recto-chat · ${providerInfo(providerOf(job.model)).name}`, tools: null, notes: null, writable: null })
+  const base = topic.body
+  let text = ''
+  let steps: BotStep[] = []
+  let first = 0
+  const sources = (): BotSource[] => [...session.seen].map((path) => ({ path, heading: null }))
+  const turn = (final: boolean, interrupted = false): BotMessage => ({
+    role: 'assistant',
+    content: text,
+    at: job.at,
+    model: job.model,
+    sources: sources(),
+    ...(steps.length > 0 ? { steps } : {}),
+    ...(final ? {} : { job: job.id }),
+    ...(final && first > 0 ? { ttftMs: Math.round(first - started) } : {}),
+    ...(final ? { totalMs: Math.round(performance.now() - started) } : {}),
+    ...(interrupted ? { interrupted: true } : {}),
+  })
+  const save = (final: boolean, interrupted = false): Promise<void> =>
+    text.trim() === '' ? Promise.resolve() : writeTopic(job.topic, { ...topic, body: appendTurns(base, [turn(final, interrupted)], bot.name) })
+  let lastWrite = 0
+  let writing: Promise<void> = Promise.resolve()
+  try {
+    const system = await chatSystem(session)
+    for await (const event of runProvider({ model: job.model, system, messages, session, signal: controls.signal }, d.providerFor(''))) {
+      if (event.type === 'steps') {
+        steps = event.steps
+        controls.update({ steps, sources: sources() })
+        continue
+      }
+      if (first === 0) first = performance.now()
+      text += event.text
+      controls.update({ state: 'streaming', text })
+      if (Date.now() - lastWrite > WRITE_EVERY_MS) {
+        lastWrite = Date.now()
+        writing = writing.then(() => save(false)).catch((err: unknown) => console.error('[bots] save', err))
+      }
+    }
+  } catch (err) {
+    await writing
+    if (err instanceof ProviderError) controls.update({ problem: err.problem })
+    const reason = jobs.abortReason(job.id)
+    if (reason !== 'discard') await save(true, reason !== 'cancel')
+    throw err
+  } finally {
+    closeSession(session.id)
+  }
+  await writing
+  if (controls.signal.aborted) {
+    if (jobs.abortReason(job.id) !== 'discard') await save(true, jobs.abortReason(job.id) !== 'cancel')
+    return
+  }
+  controls.update({ sources: sources() })
   await save(true)
 }
 

@@ -248,6 +248,25 @@
   color: var(--text-primary);
   background: var(--bg-hover);
 }
+/* After the last tab, like a browser's: a new note in this pane. */
+.tabs__new {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  margin-left: 4px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.tabs__new:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
 .tabs__clear:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
@@ -439,5 +458,121 @@
 .nav-arrows__count {
   font-size: var(--font-size-11);
   font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* ---------- the new-tab page: open a note here, or make one ---------- */
+
+.new-tab {
+  height: 100%;
+  overflow-y: auto;
+  background: var(--bg-primary);
+}
+.new-tab__column {
+  box-sizing: border-box;
+  width: min(560px, 100%);
+  margin: 0 auto;
+  padding: 14vh var(--size-4) var(--size-6);
+}
+.new-tab__title {
+  margin: 0 0 var(--size-3);
+  font-size: var(--font-size-13);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-align: center;
+}
+.new-tab__field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-sm);
+  cursor: text;
+}
+.new-tab__field:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.new-tab__input {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-15);
+  color: var(--text-primary);
+}
+.new-tab__input::placeholder {
+  color: var(--text-muted);
+}
+.new-tab__error {
+  margin: var(--size-2) 4px 0;
+  font-size: var(--font-size-12);
+  color: var(--danger);
+}
+.new-tab__list {
+  list-style: none;
+  margin: var(--size-3) 0 0;
+  padding: 0;
+}
+.new-tab__heading {
+  margin: var(--size-3) 10px 4px;
+  font-size: var(--font-size-11);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.new-tab__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  cursor: default;
+}
+.new-tab__row.is-active {
+  background: var(--bg-hover);
+}
+.new-tab__row.is-action {
+  color: var(--accent);
+}
+.new-tab__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-13-5);
+  color: var(--text-primary);
+}
+.new-tab__row.is-action .new-tab__name {
+  color: var(--accent);
+  font-weight: 500;
+}
+.new-tab__folder {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
+.new-tab__key {
+  flex: none;
+  font: inherit;
+  font-size: var(--font-size-11);
+  color: var(--text-muted);
+}
+.new-tab__none {
+  padding: var(--size-3) 10px;
+  font-size: var(--font-size-13);
   color: var(--text-muted);
 }

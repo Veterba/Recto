@@ -735,6 +735,43 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
+.glass-menu__note {
+  padding: 0 10px 4px 34px;
+  font-size: var(--font-size-12);
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.glass-menu__note.is-warn {
+  color: color-mix(in srgb, var(--danger) 70%, var(--text-muted));
+}
+/* A maker's mark: a monogram on its colour. */
+.vendor-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+.vendor-mark--anthropic {
+  background: #c96442;
+}
+.vendor-mark--openai {
+  background: #111;
+}
+:root[data-theme='dark'] .vendor-mark--openai {
+  background: #fff;
+  color: #111;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .vendor-mark--openai {
+    background: #fff;
+    color: #111;
+  }
+}
 .glass-menu__sep {
   height: 1px;
   margin: 4px 8px;

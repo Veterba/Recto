@@ -4,6 +4,26 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.55.0 — 2026-11-02
+### Added
+- Recto's chat and Quick ask can answer with another provider than the model on your Mac, picked in the composer's model menu: Ollama on this Mac (the default), Codex CLI, ChatGPT plan (Preview), Claude Code (Experimental), or an OpenAI or Anthropic API key. The menu groups the cloud by maker - Anthropic, OpenAI - each with its own page of ways in and models. Settings → AI → Providers shows each one's state and signs in; the keys are under "Advanced · API keys".
+- Plan limits where the provider reports them: Codex's windows (read without spending anything) and Claude Code's 5-hour and weekly windows (after its first answer), with when they reset, in the model menu and in Settings. For every provider, the tokens Recto used today and this week. Every answer remembers which model wrote it, the composer says "cloud" or "on this Mac", and switching provider mid-chat shows "Switched to …".
+- Cloud is off for each vault until you turn it on in Settings → AI → Providers. Background work (note cards, tasks, topic titles) and the other bots always stay on your Mac.
+- Codex CLI and Claude Code are found automatically (shell PATH, Homebrew, npm, bun, volta, pnpm, nvm, and the Codex CLI inside ChatGPT.app). They run with their own tools turned off and see your vault only through Recto, so Recto's rules, excluded folders and Suggested edits apply. Claude Code shows a one-line warning that Anthropic does not bless using a subscription through other apps; an API key is the supported way.
+- Sign in with ChatGPT inside Recto (browser sign-in; tokens kept in the macOS keychain, sign-out revokes them). Plan limits, a plan that does not include it and a service outage each get their own message, with "Manage usage" for limits.
+- Clear states for a missing CLI (with an Install link), not signed in, an expired sign-in, a plan limit, a provider that is down and cloud being off (with "Turn on"). Cancelling stops the answer mid-way.
+- Chats panel on the right (⌘⇧C, or the button in the top-right of the tab bar, which steps aside while the panel is open): your bots, then the chat of the one you pick. It can be resized (never so narrow that a model's name is cut off) and remembers its width. The panel and the graph take turns on the right.
+- A + after the last tab opens a new tab: one field to open something in it or name a new one ("Create “…”", ⌘↵) - notes in Data ("New note" and the notes edited lately below), boards in Tasks. What you pick takes the new tab's place, and ← comes back to it.
+- Floating bot (the bot button in the status bar, ⌘⇧B, or the chat's ⋯ menu): Recto's bot floating over the page, no button around it; drag it and it snaps to the nearest edge and remembers its place, never onto a note's Linked mentions. ⌘⇧H hides and shows all floating windows and the bot.
+- Quick ask (click the floating bot or press ⌘J): a bubble out of the bot to ask about the note you have open, showing which note goes with the question, with Copy and Save as chat; follow-up questions go in the same bubble. Each question carries that note and the notes it links to; answers use only those, and edits to that note arrive as Suggested edits. The thread is forgotten when closed and never saved in History; "Save as chat" moves it into the Chats panel.
+- Canvas in the top switcher, next to Data and Tasks, as a "Coming soon" placeholder.
+### Changed
+- A note's text keeps a margin that grows with its pane, so beside the Chats panel it no longer runs to the pane's edge.
+- Linked mentions, closed, is as tall as the sidebar's footer, so the two read as one row along the bottom.
+- Chats are no longer an "AI" section in the top switcher; they live in the Chats panel.
+- Excluded folders now also apply to Recto's own local chat (they already did for AI clients), and answers whose sources are in an excluded folder are never sent to a cloud provider.
+- Anthropic models are now Opus 5.5, Sonnet 5.5 and Haiku 5.5; chats using the older ones carry over.
+
 ## v0.54.0 — 2026-11-01
 ### Added
 - Recto is an MCP server: Claude Code, Codex, Claude Desktop, Cursor and other AI clients can work with your vault through Recto, with 19 tools: search by words and by meaning, read a note, a note with short summaries of the notes it links to and that link to it, list a folder, recent notes, tags, daily and other periodic notes, boards and tasks, and propose changes. Recto must be open; when it is not, the client gets a clear "Open Recto" message.

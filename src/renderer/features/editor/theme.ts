@@ -23,7 +23,9 @@ export const editorTheme = (): Extension =>
     '.cm-scroller': {
       fontFamily: 'var(--font-editor, var(--font-mono))',
       lineHeight: '1.75',
-      padding: '0 var(--size-6) 40vh',
+      // The sides grow with the pane (a share of its width, not a fixed gap), so
+      // a narrow pane - beside the Chats panel, say - still keeps the text off its edge.
+      padding: '0 max(var(--size-6), 18%) 40vh',
       overflow: 'auto',
     },
     // A long tail of blank space at the bottom, so the last line of a note can
@@ -31,6 +33,8 @@ export const editorTheme = (): Extension =>
     '.cm-content': {
       caretColor: 'var(--accent)',
       maxWidth: '78ch',
+      // Free to be narrower than a wide table inside it: the table scrolls in its own box, the page never sideways.
+      minWidth: '0',
       margin: '0 auto',
       padding: 'var(--size-4) 0 0',
     },

@@ -6,6 +6,7 @@
  */
 
 import type { AiMessage } from './ai'
+import type { ProviderProblem } from './providers'
 import type { BotLook, BotPersonality } from './bot-presets'
 import { CHATS_FOLDER } from './recto-paths'
 
@@ -92,6 +93,8 @@ export type BotModelStatus =
   | { state: 'no-key'; model: string }
   /** Being loaded into memory (after a switch, or on opening the chat): Send waits for it. */
   | { state: 'loading'; model: string }
+  /** A cloud provider that cannot answer yet, and why (shared/providers.ts). */
+  | { state: 'provider'; model: string; problem: ProviderProblem }
 
 /** A local model in the picker: installed or recommended, its size on disk, and what it means on this Mac. */
 export type ModelChoice = {
@@ -163,6 +166,8 @@ export type BotJob = {
   /** When the answer began (local ISO), for its message. */
   at: string
   error: string | null
+  /** A cloud provider's failure, with its way out (sign in, install, manage usage). */
+  problem?: ProviderProblem
 }
 
 export const isActive = (job: Pick<BotJob, 'state'>): boolean =>

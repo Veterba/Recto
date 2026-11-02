@@ -39,8 +39,10 @@ describe.skipIf(!RUN)('answers survive leaving the chat; the queue', () => {
       )
     }, 0)
   const openRecto = async (): Promise<void> => {
-    await page.keyboard.press('Meta+2')
-    await page.locator('.bot-row').first().click()
+    // Chats live in the panel on the right (⌘⇧C), Recto's open under the list. It stays open
+    // across a reload, so it is only opened when it is not.
+    if ((await page.locator('.chats').count()) === 0) await page.keyboard.press('Meta+Shift+C')
+    await page.locator('.chats .bot-row').first().click()
     await page.waitForSelector('.bot-chat .composer__input')
   }
   const type = async (question: string): Promise<void> => {

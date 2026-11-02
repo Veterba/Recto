@@ -6,6 +6,8 @@ import { folderHints, linkTo } from '../tab-labels'
 import { revealInTree } from '../reveal-in-tree'
 import { beginPaneDrag } from '../pane-drag'
 import { Icon } from '../../ui/Icon'
+import { commands } from '../commands'
+import { toggleChats, useChatsOpen } from '../../features/chats/chats-store'
 import { Tip, placeTip } from '../../ui/Tip'
 import { ContextMenu, useContextMenu, type MenuItem } from '../../ui/ContextMenu'
 import { pressOrDrag } from '../../ui/press-or-drag'
@@ -167,6 +169,16 @@ export function TabBar({ workspace, node }: { workspace: Workspace; node: TabsNo
             </div>
           )
         })}
+        <Tip label="New tab" placement="bottom">
+          <button
+            className="tabs__new"
+            aria-label="New tab"
+            onMouseDown={(ev) => ev.preventDefault()}
+            onClick={() => workspace.openView('new-tab', {}, { reuse: false, inTabs: node.id })}
+          >
+            <Icon name="plus" size={15} />
+          </button>
+        </Tip>
       </div>
       {hovered !== null && metaHeld && <PathTip anchor={hovered.anchor} label={hovered.label} />}
       {overflowing && (
@@ -196,6 +208,7 @@ export function TabBar({ workspace, node }: { workspace: Workspace; node: TabsNo
           )}
         </div>
       )}
+      {workspace.topRightTabs()?.id === node.id && <ChatsToggle />}
       {node.children.length > 1 && (
         <Tip label="Close other tabs" hint="Keeps the one you are in and pinned tabs" placement="bottom">
           <button
@@ -302,5 +315,24 @@ function TabList({
         {results.length === 0 && <li className="tabs__list-empty">No tab matches</li>}
       </ul>
     </div>
+  )
+}
+
+/** The Chats panel's button, at the right end of the top-right tab bar. */
+function ChatsToggle(): React.ReactElement | null {
+  const open = useChatsOpen()
+  // Open, the panel has its own close button: one button per job.
+  if (open) return null
+  return (
+    <Tip label="Chats" hint={commands.label('chats:toggle') ?? undefined} placement="bottom">
+      <button
+        className="tabs__clear tabs__chats"
+        aria-label="Open chats"
+        onMouseDown={(ev) => ev.preventDefault()}
+        onClick={toggleChats}
+      >
+        <Icon name="messages-square" size={15} />
+      </button>
+    </Tip>
   )
 }

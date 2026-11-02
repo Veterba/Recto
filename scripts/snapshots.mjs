@@ -172,7 +172,8 @@ async function launch(userData) {
     args: [...ISOLATE, ROOT, `--user-data-dir=${userData}`],
     // The vault is a throwaway copy: open it as it is (see dev-guard).
     // Bots answer from a fixed stand-in, so a bot chat needs no Ollama and reads the same every run.
-    env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1', RECTO_BOTS_MOCK: '1' },
+    // No CLI is looked for on this Mac: the providers read the same every run, and nothing is asked of them.
+    env: { ...process.env, RECTO_ALLOW_REAL_VAULT: '1', RECTO_BOTS_MOCK: '1', RECTO_CLI_DIRS: '/nonexistent' },
   })
   // Out of the way: the window never takes the screen from whoever is working.
   await app.evaluate(({ app }) => app.hide())
@@ -432,13 +433,21 @@ async function screens(page, dir, vault) {
   await key(page, 'Mod+W')
   await page.waitForFunction(() => document.querySelectorAll('[data-tabs-id]').length === 1)
 
-  // The AI section: Recto, the main chat - first with nothing said yet.
+  // Canvas: a section that says it is coming.
   await key(page, 'Mod+2')
-  await page.waitForSelector('.bot-chat .chat__welcome')
-  await page.waitForSelector('.bot-chat .composer__capsule')
-  await shoot(page, dir, '21b-chat-empty')
+  await page.waitForSelector('.stub__badge')
+  await shoot(page, dir, '21c-canvas')
   await key(page, 'Mod+1')
   await page.waitForSelector('[role=treeitem]')
+
+  // The Chats panel on the right: Recto, the main chat - first with nothing said yet.
+  await key(page, 'Mod+Shift+C')
+  await page.waitForSelector('.chats .bot-chat .chat__welcome')
+  await page.waitForSelector('.chats .bot-chat .composer__capsule')
+  await shoot(page, dir, '21b-chat-empty')
+  await page.evaluate(() => document.activeElement?.blur())
+  await key(page, 'Mod+Shift+C')
+  await page.waitForSelector('.chats', { state: 'detached' })
 
   // Then with one earlier topic, written the way the chat writes them: grouped
   // messages, and an answer with its steps and sources. It arrives only now -
@@ -476,7 +485,7 @@ async function screens(page, dir, vault) {
   const earlier = new Date(NOW.getTime() - 30 * 60_000)
   fs.utimesSync(aside, earlier, earlier)
   fs.renameSync(aside, path.join(folder, '2026-09-20 09-30 — Soil mix.md'))
-  await key(page, 'Mod+2')
+  await key(page, 'Mod+Shift+C')
   await page.waitForFunction(() => document.querySelector('.bot-row__time')?.textContent === '09:30')
   await page.waitForSelector('.bot-chat .msg--bot')
   await shoot(page, dir, '22-ai-sidebar')
@@ -536,9 +545,32 @@ async function screens(page, dir, vault) {
   await page.locator('.bot-chat .chat__thread').click({ position: { x: 5, y: 5 } })
   await page.waitForSelector('.bot-history', { state: 'detached' })
 
-  // Back to Data: the smoke test after the screens edits a note from the tree.
+  // The panel closes; the smoke test after the screens edits a note from the tree.
   // The composer keeps its keys to itself, so it lets go of the focus first.
   await page.evaluate(() => document.activeElement?.blur())
+  await key(page, 'Mod+Shift+C')
+  await page.waitForSelector('.chats', { state: 'detached' })
+
+  // The floating bot, and Quick ask about the note on screen (answered by the stand-in, on this Mac).
+  await key(page, 'Mod+Shift+B')
+  await page.waitForSelector('.floating-bot.is-settled')
+  await page.locator('.floating-bot').click()
+  await page.waitForSelector('.quick-ask__input')
+  await page.waitForTimeout(250)
+  await shoot(page, dir, '27a-quick-ask-empty')
+  await page.locator('.quick-ask__input').fill('What is this note for?')
+  await page.waitForSelector('.quick-ask__send:not([disabled])')
+  await page.locator('.quick-ask__input').press('Enter')
+  await page.waitForSelector('.quick-ask__a .bot-md')
+  await shoot(page, dir, '27-quick-ask')
+  await page.getByRole('button', { name: /Close Quick ask/ }).click()
+  // The tab bar's +: a new tab to open a note in, or make one.
+  await page.locator('.tabs__new').first().click()
+  await page.waitForSelector('.new-tab__input')
+  await shoot(page, dir, '27b-new-tab')
+  await page.locator('.tab.is-active .tab__close').click()
+  await key(page, 'Mod+Shift+B')
+  await page.waitForSelector('.floating-bot', { state: 'detached' })
   await key(page, 'Mod+1')
   await page.waitForSelector('[role=treeitem]')
 }

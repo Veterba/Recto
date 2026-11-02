@@ -9,6 +9,10 @@
  * Recto's own Electron as Node, or on Claude Desktop's Node from a .mcpb.
  *
  *   recto-mcp --data <Recto's user-data folder> [--client <id>] [--self-test]
+ *             [--session <id> --tools <name,name,…>]
+ *
+ * `--session` and `--tools` are for Recto's own providers: a CLI that Recto
+ * starts gets a session (what it may see and change) and only its tools.
  */
 
 import fs from 'node:fs'
@@ -29,6 +33,8 @@ function arg(name: string): string | null {
 
 const data = arg('--data')
 const client = arg('--client') ?? 'unknown'
+const session = arg('--session') ?? undefined
+const only = arg('--tools')?.split(',') ?? null
 
 /** One request over a fresh connection: Recto may have restarted since the last one. */
 type Request = BridgeRequest extends infer R ? (R extends { id: number } ? Omit<R, 'id'> : never) : never
@@ -68,7 +74,7 @@ function ask(request: Request, timeoutMs = 55_000): Promise<BridgeResponse | nul
 }
 
 async function call(tool: string, args: unknown): Promise<ToolOutcome> {
-  const response = await ask({ method: 'call', tool, args, client })
+  const response = await ask({ method: 'call', tool, args, client, ...(session === undefined ? {} : { session }) })
   if (response === null) return { ok: false, error: CLOSED_MESSAGE }
   if ('error' in response)
     return {
@@ -84,6 +90,7 @@ const asText = (outcome: ToolOutcome): string => (outcome.ok ? renderBlocks(outc
 function server(): McpServer {
   const mcp = new McpServer({ name: 'recto', version: VERSION }, { instructions: SERVER_INSTRUCTIONS })
   for (const def of VAULT_TOOLS) {
+    if (only !== null && !only.includes(def.name)) continue
     mcp.registerTool(
       def.name,
       {

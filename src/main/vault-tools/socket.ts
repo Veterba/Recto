@@ -70,7 +70,12 @@ function serve(socket: net.Socket, token: string): void {
       }
       if (request.method === 'ping') reply({ id: request.id, pong: { vault: currentVault()?.name ?? null, version: app.getVersion() } })
       else
-        void callTool(request.tool, request.args, typeof request.client === 'string' ? request.client.slice(0, 40) : 'unknown').then(
+        void callTool(
+          request.tool,
+          request.args,
+          typeof request.client === 'string' ? request.client.slice(0, 40) : 'unknown',
+          typeof request.session === 'string' ? request.session : undefined,
+        ).then(
           (outcome) => reply({ id: request.id, outcome }),
         )
     }

@@ -5,6 +5,7 @@ import { CHATS_FOLDER } from '@shared/recto-paths'
 import { IPC } from '@shared/ipc'
 import { SettingRow } from '../../../ui/SettingRow'
 import { SettingGroup } from '../../../ui/SettingGroup'
+import { OpenAiKeyRow } from './ProvidersSettings'
 import { Icon } from '../../../ui/Icon'
 import { UTILITY_MODEL } from '@shared/ai'
 
@@ -49,7 +50,8 @@ export function AiSettings(_: SettingsDeps): React.ReactElement {
   }
 
   return (
-    <SettingGroup title="Anthropic">
+    <SettingGroup title="Advanced · API keys">
+      <OpenAiKeyRow />
       <SettingRow
         label="Anthropic API key"
         hint={

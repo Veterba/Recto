@@ -124,7 +124,7 @@ const SECTIONS: readonly Section[] = [
     id: 'ai',
     label: 'AI',
     group: 'Connections',
-    description: 'What AI clients may do with this vault, and your Anthropic API key.',
+    description: 'Where answers come from, and what AI clients may do with this vault.',
     render: (deps) => (
       <>
         <AiAccessSettings {...deps} />

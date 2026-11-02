@@ -6,9 +6,11 @@ import { registerMarkdownView, renderNoteEditor } from '../../features/editor'
 import { registerUnresolvedView } from '../../features/links'
 import { registerGraphView } from '../../features/graph'
 import { BoardNote, registerBoardView, useIsBoard } from '../../features/boards'
-import { registerBotView } from '../../features/bots'
 import { registerOverviewView } from '../../features/home'
 import type { Appearance } from '../appearance'
+import type { FileNode } from '@shared/vault'
+import type { SectionId } from '../sections'
+import { registerNewTabView } from '../components/NewTabView'
 
 /**
  * Register the views that need callbacks into the shell, once, on the first
@@ -25,6 +27,10 @@ export function useRegisterViews(refs: {
   linkCandidates: React.RefObject<LinkCandidate[]>
   appearance: React.RefObject<Appearance>
   update: React.RefObject<(patch: Partial<Appearance>) => void>
+  /** For the new-tab page: the notes, and making one by name. */
+  roots: React.RefObject<readonly FileNode[]>
+  section: React.RefObject<SectionId>
+  createNamed: React.RefObject<(parent: string, name: string) => Promise<string | null>>
 }): void {
   // Registered here rather than at module scope because the markdown view needs
   // a callback into the shell to follow a wikilink.
@@ -59,8 +65,11 @@ export function useRegisterViews(refs: {
     openFolder: (name) => refs.openFolder.current(name),
     exists: (p) => refs.noteExists.current(p),
   })
-  registerBotView(
-    (p, heading) => refs.openFile.current(p, heading ?? null),
-    () => refs.linkCandidates.current,
-  )
+  registerNewTabView({
+    section: () => refs.section.current,
+    roots: () => refs.roots.current,
+    openFile: (p) => refs.openFile.current(p),
+    openBoard: (p) => refs.openBoard.current(p),
+    createNamed: (parent, name) => refs.createNamed.current(parent, name),
+  })
 }

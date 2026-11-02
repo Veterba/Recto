@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { AiMessage } from '../../shared/ai'
+import { currentAiModel, type AiMessage } from '../../shared/ai'
 
 /**
  * How the app talks to a model.
@@ -69,7 +69,7 @@ export class DirectProvider implements AiProvider {
     try {
       const stream = this.client.messages.stream(
         {
-          model: request.model,
+          model: currentAiModel(request.model),
           max_tokens: request.maxTokens,
           system: request.system,
           messages: request.messages.map((message) => ({
@@ -99,7 +99,7 @@ export class DirectProvider implements AiProvider {
   async test(model: string): Promise<{ ok: true } | { ok: false; error: string }> {
     try {
       await this.client.messages.create({
-        model,
+        model: currentAiModel(model),
         max_tokens: 1,
         messages: [{ role: 'user', content: 'hi' }],
       })

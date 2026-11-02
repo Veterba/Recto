@@ -4,14 +4,13 @@ import type { Bot, BotSource, PullProgress } from '@shared/bots'
 import { createdStamp, fallbackTitle } from '@shared/chat-topics'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { api } from '../../../app/api'
-import { registerView } from '../../../app/view-registry'
 import { ConfirmDialog } from '../../../ui/ConfirmDialog'
 import { ContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { RectoBot, type BotState } from '../../recto-bot'
 import { ChatTopics, UNTITLED } from '../chat-topics-model'
-import { onNewTopicRequest, onTopicRequest } from '../new-topic'
+import { onTopicRequest } from '../new-topic'
 import { reloadBots, useBotStatus, useBots } from '../hooks/use-bots'
 import { markRead } from '../unread'
 import { botThreadFolder, isActive } from '@shared/bots'
@@ -23,6 +22,8 @@ import { Composer, type NoteCandidate } from './Composer'
 import { HistoryPanel } from './HistoryPanel'
 import { TopicBlock, TopicDivider, type MessageActions, type Pending } from './Messages'
 import { ModelMenu, modelLabel } from './ModelMenu'
+import { ProblemLine } from './ProblemLine'
+import type { ProviderProblem } from '@shared/providers'
 
 /**
  * A bot's conversation, in chat topics, read like a messenger - with a
@@ -54,7 +55,15 @@ function useTopics(model: ChatTopics): number {
   )
 }
 
-function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; notes: () => readonly NoteCandidate[] }): React.ReactElement {
+type ConversationProps = {
+  bot: Bot
+  onOpen: OpenFile
+  notes: () => readonly NoteCandidate[]
+  /** More for the ⋯ menu, from whoever hosts the chat (the Chats panel). */
+  menuExtra?: MenuItem[]
+}
+
+function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps): React.ReactElement {
   const model = useMemo(() => new ChatTopics(bot, bot.id === MAIN_BOT ? [bot.name, 'Claude'] : [bot.name]), [bot.id, bot.name])
   useTopics(model)
   const [draft, setDraft] = useState('')
@@ -65,7 +74,8 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const [undo, setUndo] = useState<{ title: string; run: () => Promise<void> } | null>(null)
-  const [keyPresent, setKeyPresent] = useState(false)
+  /** Why the last answer failed, when a cloud provider said what to do about it. */
+  const [problem, setProblem] = useState<ProviderProblem | null>(null)
   const [defaultModel, setDefaultModel] = useState('')
   const [pull, setPull] = useState<(PullProgress & { error?: string }) | null>(null)
   const { status, recheck } = useBotStatus(bot.model, true)
@@ -79,11 +89,9 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
 
   useEffect(() => {
     void model.refresh()
-    void api.invoke(IPC.aiKeyStatus).then((s) => setKeyPresent(s.present))
     void api.invoke(IPC.botsSettings).then((s) => setDefaultModel(s.defaultModel))
   }, [model])
 
-  useEffect(() => onNewTopicRequest(bot.id, () => model.startNew()), [bot.id, model])
   useEffect(() => onTopicRequest(bot.id, (path) => void model.select(path)), [bot.id, model])
 
   // Seen or not, and which topic: main decides from this whether a finished answer
@@ -167,6 +175,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
       if (!isActive(job)) void nameTopic(job.topic)
     })
     if (job.state === 'error' && job.error !== null) setError(job.error)
+    setProblem(job.state === 'error' ? (job.problem ?? null) : null)
     // Only when the stage changes; the job object changes with every token.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage])
@@ -184,6 +193,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
     const text = draft.trim()
     if (text === '' || !ready) return
     setError(null)
+    setProblem(null)
     setDraft('')
     const result = await api.invoke(IPC.botsSend, { botId: bot.id, topic: model.current, text, at: createdStamp(new Date()) })
     if (!result.ok) {
@@ -297,6 +307,8 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   const visible = model.visible()
   const currentTitle = model.currentTopic()?.meta.title
   const menuItems: MenuItem[] = [
+    ...menuExtra,
+    ...(menuExtra.length > 0 ? [{ kind: 'separator' as const }] : []),
     {
       kind: 'item',
       label: 'Clear all',
@@ -343,8 +355,14 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
           </>
         )}
       </p>
+    ) : problem !== null && pending === null ? (
+      <ProblemLine problem={problem} onDismiss={() => setProblem(null)} />
     ) : status !== null && !ready ? (
-      <BotStatusLine status={status} onRecheck={recheck} compact />
+      status.state === 'provider' ? (
+        <ProblemLine problem={status.problem} onDismiss={recheck} />
+      ) : (
+        <BotStatusLine status={status} onRecheck={recheck} compact />
+      )
     ) : null
 
   return (
@@ -379,13 +397,14 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
         </div>
         <div className="bot-chat__actions">
           <Tip label="New topic" hint={commands.label('vault:new-note') ?? undefined}>
-            <button className="bot-chat__action" onClick={newTopic}>
+            <button className="bot-chat__action" aria-label="New topic" onClick={newTopic}>
               <Icon name="plus" size={14} />
               <span>New topic</span>
             </button>
           </Tip>
           <button
             className={`bot-chat__action${history ? ' is-on' : ''}`}
+            aria-label="History"
             aria-pressed={history}
             data-history-toggle=""
             onClick={() => setHistory((on) => !on)}
@@ -491,7 +510,7 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
         modelMenu={(close) => (
           <ModelMenu
             current={current}
-            keyPresent={keyPresent}
+            cloud={bot.id === MAIN_BOT}
             pulling={pull !== null && pull.error === undefined ? pull.name : null}
             onPick={(name) => {
               close()
@@ -549,33 +568,17 @@ function Conversation({ bot, onOpen, notes }: { bot: Bot; onOpen: OpenFile; note
   )
 }
 
-/** The view: one bot's conversation. Recto's is the main chat; the old `chat` view opens it too. */
-export function registerBotView(openFile: OpenFile, notes: () => readonly NoteCandidate[]): () => void {
-  const render = ({ state }: { state: Record<string, unknown> }): React.ReactElement => (
-    <BotHost botId={typeof state['bot'] === 'string' ? state['bot'] : MAIN_BOT} openFile={openFile} notes={notes} />
-  )
-  const offBot = registerView({ type: 'bot', title: 'Recto', icon: 'message-square', getTitle: (state) => botTitle(state), render })
-  // Layouts saved before Recto became the main chat have `chat` tabs; they open Recto.
-  const offChat = registerView({ type: 'chat', title: 'Recto', icon: 'message-square', getTitle: () => 'Recto', render })
-  return () => {
-    offBot()
-    offChat()
-  }
-}
-
-const botTitle = (state: Record<string, unknown>): string => {
-  const id = state['bot']
-  return typeof id === 'string' && id !== MAIN_BOT ? id : 'Recto'
-}
-
-function BotHost({
+/** One bot's conversation, as the Chats panel shows it. */
+export function BotHost({
   botId,
   openFile,
   notes,
+  menuExtra,
 }: {
   botId: string
   openFile: OpenFile
   notes: () => readonly NoteCandidate[]
+  menuExtra?: MenuItem[]
 }): React.ReactElement {
   const bots = useBots()
   const bot = bots?.find((b) => b.id === botId)
@@ -587,5 +590,5 @@ function BotHost({
       </div>
     )
   }
-  return <Conversation key={bot.id} bot={bot} onOpen={openFile} notes={notes} />
+  return <Conversation key={bot.id} bot={bot} onOpen={openFile} notes={notes} {...(menuExtra === undefined ? {} : { menuExtra })} />
 }

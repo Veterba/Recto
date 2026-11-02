@@ -16,7 +16,7 @@ import { isActive, type BotJob, type JobState } from '../../shared/bots'
 export type RunControls = {
   signal: AbortSignal
   /** The job changed (steps, status, text): pushed to whoever watches. */
-  update: (patch: Partial<Pick<BotJob, 'state' | 'steps' | 'lang' | 'text' | 'sources' | 'question'>>) => void
+  update: (patch: Partial<Pick<BotJob, 'state' | 'steps' | 'lang' | 'text' | 'sources' | 'question' | 'problem'>>) => void
 }
 
 export type Runner = (job: BotJob, controls: RunControls) => Promise<void>

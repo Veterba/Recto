@@ -405,6 +405,15 @@ export class Workspace extends Events<WorkspaceEvents> {
   }
 
   /** Every tabs group in the tree. */
+  /** The tabs group at the top right of the workspace: its bar holds the buttons for the whole window (the Chats panel's). */
+  topRightTabs(node: WorkspaceNode = this.root): TabsNode | null {
+    if (node.kind === 'tabs') return node
+    if (node.kind !== 'split') return null
+    // Vertical splits sit side by side (the last is rightmost); horizontal ones stack (the first is on top).
+    const child = node.direction === 'vertical' ? node.children.at(-1) : node.children[0]
+    return child === undefined ? null : this.topRightTabs(child)
+  }
+
   allTabs(node: WorkspaceNode = this.root): TabsNode[] {
     if (node.kind === 'tabs') return [node]
     if (node.kind === 'leaf') return []

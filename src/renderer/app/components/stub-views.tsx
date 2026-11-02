@@ -23,6 +23,12 @@ const STUBS: Stub[] = [
     blurb: 'Stat tiles over the append-only events table: notes created, tasks done, streaks, time in app.',
   },
   {
+    type: 'canvas',
+    title: 'Canvas',
+    milestone: 'Coming soon',
+    blurb: 'Notes, cards and images laid out freely on a board you can zoom.',
+  },
+  {
     type: 'profile',
     title: 'Profile',
     milestone: 'milestone 7',

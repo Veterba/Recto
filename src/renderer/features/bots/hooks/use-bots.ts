@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DEFAULT_BOT_MODEL, type Bot, type BotModelStatus } from '@shared/bots'
 import { IPC, IPC_EVENT } from '@shared/ipc'
+import { modelLabel } from '@shared/providers'
 import { api } from '../../../app/api'
 
 /**
@@ -121,5 +122,7 @@ export function describeStatus(status: BotModelStatus): { label: string; fix: st
         fix: `Download ${status.model} once${status.model === DEFAULT_BOT_MODEL ? ' (about 6 GB)' : ''}, in a terminal:`,
         command: `ollama pull ${status.model}`,
       }
+    case 'provider':
+      return { label: modelLabel(status.model), fix: status.problem.message, command: null }
   }
 }

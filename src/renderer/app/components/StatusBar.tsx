@@ -19,11 +19,23 @@ type Props = {
   vaultName: string
   graphOpen: boolean
   onToggleGraph: () => void
+  /** The floating bot (Quick ask) in a corner of the window. */
+  floatingBot: boolean
+  onToggleFloatingBot: () => void
   onOpenDaily: () => void
   onOpenPalette: () => void
 }
 
-export function StatusBar({ workspace, vaultName, graphOpen, onToggleGraph, onOpenDaily, onOpenPalette }: Props): React.ReactElement {
+export function StatusBar({
+  workspace,
+  vaultName,
+  graphOpen,
+  onToggleGraph,
+  floatingBot,
+  onToggleFloatingBot,
+  onOpenDaily,
+  onOpenPalette,
+}: Props): React.ReactElement {
   const leaf = workspace?.activeLeaf ?? null
   const openCount = workspace?.leaves().length ?? 0
 
@@ -56,6 +68,16 @@ export function StatusBar({ workspace, vaultName, graphOpen, onToggleGraph, onOp
           aria-pressed={graphOpen}
         >
           <Icon name="git-fork" size={13} />
+        </button>
+      </Tip>
+      <Tip label={floatingBot ? 'Hide the bot' : 'Show the bot'} hint={commands.label('bot:toggle-floating') ?? 'Quick ask about the open note'} placement="top">
+        <button
+          className={`status__btn${floatingBot ? ' is-on' : ''}`}
+          onClick={onToggleFloatingBot}
+          aria-label="Toggle the floating bot"
+          aria-pressed={floatingBot}
+        >
+          <Icon name="bot" size={13} />
         </button>
       </Tip>
       <Tip label="Command palette" hint="Every command in the app" placement="top">

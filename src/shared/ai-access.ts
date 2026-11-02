@@ -17,6 +17,8 @@ export type AiAccessSettings = {
   writeMode: WriteMode
   /** Folders and notes (vault paths) no tool ever returns, counts, links into or writes. */
   excluded: string[]
+  /** Cloud providers may answer in this vault (Settings → AI → Providers); off until turned on. */
+  cloud: boolean
 }
 
 export const AI_ACCESS_STATE = 'ai-access'
@@ -24,7 +26,7 @@ export const AI_PROPOSALS_STATE = 'ai-proposals'
 /** In `.recto/`: one JSON line per tool call. */
 export const AI_ACTIVITY_FILE = 'ai-activity.jsonl'
 
-export const DEFAULT_AI_ACCESS: AiAccessSettings = { guide: null, formatting: LEAVE_ALL, writeMode: 'propose', excluded: [] }
+export const DEFAULT_AI_ACCESS: AiAccessSettings = { guide: null, formatting: LEAVE_ALL, writeMode: 'propose', excluded: [], cloud: false }
 
 export function coerceAiAccess(value: unknown): AiAccessSettings {
   const raw = value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -34,6 +36,7 @@ export function coerceAiAccess(value: unknown): AiAccessSettings {
     formatting: coerceProfile(raw['formatting']),
     writeMode: mode === 'read' || mode === 'write' ? mode : 'propose',
     excluded: Array.isArray(raw['excluded']) ? raw['excluded'].filter((e): e is string => typeof e === 'string' && e.trim() !== '') : [],
+    cloud: raw['cloud'] === true,
   }
 }
 

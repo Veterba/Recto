@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import type { SectionId } from '../sections'
 import type { WorkspaceApi } from './use-workspace'
 import { focusEditorOnOpen } from '../../features/editor'
-import { MAIN_BOT, requestNewTopic } from '../../features/bots'
+import { openChats } from '../../features/chats'
 import type { Bot } from '@shared/bots'
 import { boardOfCard, isBoardPath } from '../../features/boards'
 import { metaHeld } from '../../ui/meta-key'
@@ -14,9 +14,9 @@ import type { HistoryEntry } from '../workspace'
  * back. A chat, the graph or Settings are not: a link clicked there opens a
  * tab of its own.
  */
-const NAVIGABLE = new Set(['markdown', 'board', 'overview'])
+const NAVIGABLE = new Set(['markdown', 'board', 'overview', 'new-tab'])
 
-/** Where things open: notes in Data, chats in AI, boards and cards in Tasks. */
+/** Where things open: notes in Data, chats in the Chats panel, boards and cards in Tasks. */
 export function useShellNavigation(
   sections: WorkspaceApi['sections'],
   activeSection: SectionId,
@@ -24,23 +24,11 @@ export function useShellNavigation(
 ): {
   /** `via` is a step to keep between where the tab was and the note: the overview it was opened from. */
   openFile: (path: string, heading?: string | null, via?: HistoryEntry) => void
-  newChat: () => Promise<void>
   /** A board note in the Tasks workspace, with a card open beside it when given. */
   openBoard: (path: string, card?: string) => void
   openBoardCard: (path: string) => void
   openBot: (bot: Bot) => Promise<void>
 } {
-  /**
-   * "New" in the AI section, and ⌘N there: a new topic with Recto, the main
-   * chat - opened first if it is not on screen. Nothing is written until the
-   * first message.
-   */
-  const newChat = useCallback(async () => {
-    setActiveSection('ai')
-    sections?.ai.openView('bot', { bot: MAIN_BOT })
-    requestNewTopic(MAIN_BOT)
-  }, [sections, setActiveSection])
-
   /**
    * Show something in the tab you are in, keeping what it showed as a step
    * back - unless ⌘ is held (a new tab), the tab is pinned, or it shows
@@ -108,14 +96,8 @@ export function useShellNavigation(
     [sections, activeSection, showHere],
   )
 
-  /** A bot opens on its conversation, where its current topic is. */
-  const openBot = useCallback(
-    async (bot: Bot) => {
-      setActiveSection('ai')
-      sections?.ai.openView('bot', { bot: bot.id })
-    },
-    [sections, setActiveSection],
-  )
+  /** A bot opens on its conversation, where its current topic is, in the Chats panel. */
+  const openBot = useCallback(async (bot: Bot) => openChats(bot.id), [])
 
-  return { openFile, newChat, openBoard, openBoardCard, openBot }
+  return { openFile, openBoard, openBoardCard, openBot }
 }

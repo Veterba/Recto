@@ -2,16 +2,19 @@
  * The three workspaces.
  *
  * Switching section swaps the *entire* workspace - its own tabs, its own splits,
- * its own sidebar list - not just the sidebar panel. Data, AI and Tasks are
+ * its own sidebar list - not just the sidebar panel. Data, Canvas and Tasks are
  * three separate places to be, which is why they are a segmented control at the
- * top of the sidebar rather than an icon rail.
+ * top of the sidebar rather than an icon rail. Canvas is a placeholder for now.
+ *
+ * Chats are not a section any more: they live in the Chats panel on the right,
+ * beside whatever you are working on (features/chats).
  *
  * Home and Graph are deliberately NOT sections. They are extensions: Home opens
  * as a tab anywhere, Graph docks to the right of whichever workspace you are in
  * (or takes a full tab when you want it big). Making either a section would add
  * a fourth and fifth place to be, for things you glance at.
  */
-export type SectionId = 'data' | 'ai' | 'tasks'
+export type SectionId = 'data' | 'canvas' | 'tasks'
 
 type Section = {
   id: SectionId
@@ -25,6 +28,7 @@ type Section = {
   /**
    * Label on the sidebar's "new" button. Kept short: it sits beside a second
    * button, and "New note" truncates to "New n..." at the default width.
+   * Empty: the section has no "new".
    */
   newLabel: string
 }
@@ -39,14 +43,12 @@ export const SECTIONS: readonly Section[] = [
     newLabel: 'Note',
   },
   {
-    id: 'ai',
-    label: 'AI',
-    icon: 'sparkles',
-    viewType: 'bot',
-    // The box filters the bots; a topic is found in History.
-    searchPlaceholder: 'Search bots…',
-    // A new topic with Recto, the main chat.
-    newLabel: 'Topic',
+    id: 'canvas',
+    label: 'Canvas',
+    icon: 'scan',
+    viewType: 'canvas',
+    searchPlaceholder: 'Search canvases…',
+    newLabel: '',
   },
   {
     id: 'tasks',

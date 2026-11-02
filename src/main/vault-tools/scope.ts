@@ -37,13 +37,17 @@ export type Scope = {
 
 export const isNote = (p: string): boolean => p.toLowerCase().endsWith('.md')
 
-export function buildScope(client: string): Scope {
+/** What a session (sessions.ts) narrows the vault to: only these notes are there at all. */
+export type ScopeLimit = { notes: ReadonlySet<string> | null }
+
+export function buildScope(client: string, limit: ScopeLimit = { notes: null }): Scope {
   const vault = currentVault()
   if (vault === null) throw new ToolError('No vault is open in Recto. Open one, then try again.')
   const settings = coerceAiAccess(readState(AI_ACCESS_STATE))
   const templates = coerceTemplateSettings(readState('templates'))
   const allNotes = vaultFs.vaultFiles().filter(isNote)
-  const hidden = (p: string): boolean => !isNote(p) || isChatPath(p) || isExcludedPath(p, settings.excluded)
+  const hidden = (p: string): boolean =>
+    !isNote(p) || isChatPath(p) || isExcludedPath(p, settings.excluded) || (limit.notes !== null && !limit.notes.has(p))
   const notes = allNotes.filter((p) => !hidden(p))
   const byName = pathsByName(allNotes)
   const all = new Set(allNotes)

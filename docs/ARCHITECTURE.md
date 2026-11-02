@@ -182,7 +182,7 @@ src/renderer/
 test/            the same folders as src/
 ```
 
-**Tabs and their history.** Each section (Data, AI, Tasks) is a `Workspace` (`app/workspace.ts`):
+**Tabs and their history.** Each section (Data, Canvas, Tasks) is a `Workspace` (`app/workspace.ts`):
 splits of tab groups of leaves, each leaf `{type, state}`, saved to `.recto/workspace.json`. A leaf
 also keeps its own `history` - steps back and forward, each `{type, state, at}` where `at` is where
 in a note you were (top line and caret) - up to 100, saved with it. Opening a note, board or card goes
@@ -209,7 +209,8 @@ board records an opened card as a step (`step`); the shell does the travelling
 | `templates` | template picker, daily notes | (uses `palette`) |
 | `archive` | archived notes | `archive` |
 | `links` | unresolved links | `unresolved` |
-| `bots` | the AI section: Recto (the main chat) and the specialist bots in the sidebar, a bot's conversation in chat topics with History, Settings → Bots | `bot-list`, `bot-row`, `bot-chat`, `chat-topic`, `bot-history`, `bot-undo`, `bot-sources`, `bot-status` |
+| `bots` | Recto (the main chat) and the specialist bots, a bot's conversation in chat topics with History, Settings → Bots; shown in the Chats panel (`chats`) | `bot-list`, `bot-row`, `bot-chat`, `chat-topic`, `bot-history`, `bot-undo`, `bot-sources`, `bot-status` |
+| `chats` | the Chats panel (bot list, then the picked bot's chat), the floating bot and the Quick ask bubble; `chats-store.ts` holds which bot the panel shows and opens it from anywhere; the panel's width and the bot's place are saved with the appearance; the Quick ask thread lives in its window only. Settings → AI → Providers is `settings/components/ProvidersSettings.tsx` | `chats`, `quick-ask`, `floating-bot` |
 | `recto-bot` | the bot character: presets (look + personality), the shared frame loop; its design page is dev-only (`/dev/recto-bot`) | `recto-bot`, `bot-design` (dev only) |
 
 Features import each other only through `index.ts`. The app shell imports features; features import
@@ -275,6 +276,94 @@ main: vault-tools/socket.ts  (first line must carry the token)
 | `<vault>/.recto/backup/ai/<time>/` | files as they were before a direct write |
 | `<userData>/backup/clients/<time>/` | a client's config file as it was before Recto edited it |
 | `<userData>/bin/recto-mcp`, `recto.sock`, `mcp-token` | launcher, socket, token |
+
+## AI providers inside Recto
+
+Recto's chat and Quick ask can be answered by a provider other than the local model. Providers are
+one of two kinds, and either way the vault is reached only through Recto's tool layer
+(`vault-tools/`, see above), so the same rules, exclusions and Suggested edits apply.
+
+```
+renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (saves the thread)
+                                     ▼
+                         main/providers/index.ts  picks the provider, opens a tool session
+              ┌──────────────────────┼───────────────────────────┐
+   model providers (HTTP)       CLI agents                     local (Ollama)
+   openai.ts · anthropic.ts     cli.ts: codex exec / claude -p   panel: the bots pipeline
+   chatgpt-auth.ts + Responses  with only `recto-mcp --session`  Quick ask: ollama.ts loop
+   Recto runs the tool loop     the CLI runs its own loop
+              └────────── tool calls ▶ vault-tools/index.ts (session-scoped) ◀──┘
+```
+
+- **Two kinds.** A *model provider* (OpenAI, Anthropic, ChatGPT plan) only returns text and tool
+  requests; Recto runs the loop, calls `callTool` itself and sends the full history every turn
+  (`store: false` on the Responses API). A *CLI agent* (Codex CLI, Claude Code) runs its own agent
+  loop, so Recto locks it down: Codex gets `exec --json`, a read-only sandbox, its shell and other
+  built-in tools disabled, `--ignore-user-config`, `--ephemeral` and an empty temp working
+  directory; Claude Code gets `-p` with `--tools ""`, `--allowedTools mcp__recto`,
+  `--strict-mcp-config`, `--permission-mode dontAsk` and `--no-session-persistence`. Their only tool
+  server is `recto-mcp --session <id> --tools …`. CLI runs are stateless: each question carries the
+  transcript. Codex answers arrive whole (steps stream live); Claude Code streams.
+- **Sessions** (`vault-tools/sessions.ts`). Each provider run opens a session: which tools are
+  allowed, which notes are visible and which are writable. `scope.ts` applies it on top of the
+  vault scope on every call, and `--session` rides on each socket request from `src/mcp/index.ts`.
+  Trust is therefore in Recto, not in each provider's own sandbox. In-app chats always *suggest*
+  (Suggested edits), even in Write directly mode. Quick ask's session makes only the open note
+  writable. The session's tool calls become the answer's steps card, and the notes they returned its
+  sources.
+- **Detection** (`providers/detect.ts`). A Mac app does not inherit the shell PATH, so the CLI is
+  looked for through the login shell's PATH (asked once), the app PATH, Homebrew, npm, bun, volta,
+  pnpm, `~/.local/bin`, `~/.claude/local`, nvm Node bins and inside ChatGPT.app (which ships the
+  Codex CLI). Pre-flight is `codex login status` / `claude auth status`; nothing that spends usage.
+- **Credentials.** Recto stores none for the CLIs; they keep their own logins. ChatGPT sign-in
+  (`chatgpt-auth.ts`) is OAuth with PKCE in the browser, a callback on 127.0.0.1, dynamic client
+  registration and an ID token verified against OpenAI's keys; the ChatGPT tokens and the OpenAI key are
+  encrypted with Electron `safeStorage` (login keychain) in `providers/store.ts`, the Anthropic key as
+  before in `main/secrets.ts`; ChatGPT tokens are refreshed one request at a time and revoked on
+  sign-out. None of them reaches the renderer.
+- **The cloud gate.** `cloud` in `<vault>/.recto/ai-access.json` is off until turned on in
+  Settings → AI → Providers; `providers/index.ts` refuses a non-local provider while it is off. Background jobs
+  (note cards, tasks, topic titles) always run on the local model, topic titles even for cloud chats,
+  and only Recto's chat and Quick ask can use cloud; the other bots stay local. Each answer stores
+  the model string with a provider prefix (`codex`, `chatgpt:<slug>`); a provider switch is a
+  "Switched to …" line in the chat.
+- **Exclusions.** Excluded folders hold for every provider: the tool layer hides them; when a cloud
+  provider is the target, earlier answers whose sources sit in excluded folders are withheld from the
+  history it receives; and the local pipeline now merges them into its own bot exclude list
+  (`bots/answers.ts`).
+- **Limits and usage** (`providers/limits.ts`, kept in `<userData>/provider-usage.json`). Codex's
+  plan windows come from its app server's `account/rateLimits/read` - started, asked, stopped, no
+  model call; Claude Code's from the `rate_limit_event` in its stream, so they appear after its first
+  answer and are kept. ChatGPT plan and API keys report no remaining quota. Every run's token count
+  (the providers' usage fields) is added per provider per day; the picker's maker pages and
+  Settings show the limits and "Recto used … today · … this week". The picker groups the cloud ways
+  in by maker (`Vendor` in `shared/providers.ts`): Anthropic (Claude Code, API key) and OpenAI
+  (Codex, ChatGPT plan, API key).
+- **Failures** become `ProblemLine` states (`renderer/features/bots/components/ProblemLine.tsx`): CLI
+  missing (Install link), not signed in, sign-in expired, plan limit (Manage usage), not eligible,
+  provider down, cloud off (Turn on). Cancel aborts HTTP, and sends CLIs SIGINT, then kill.
+- **Chats panel, floating bot, Quick ask** (`renderer/features/chats/`). `ChatsPanel` is a right-hand
+  panel (⌘⇧C, a toggle in the top-right `TabBar` that hides while the panel is open), with sections AI and People (People disabled for now), the bot
+  list and then the picked bot's chat; `VaultShell` makes it and the graph take turns on the right.
+  `FloatingBot` (⌘⇧B, or its status-bar button) is the bot itself, with no plate, draggable, and snaps to the nearest edge. `QuickAsk` (⌘J) is a bubble
+  anchored to the bot's saved place (`bubbleAt`: above it in the lower half, below in the upper, lined up with its outer side, a tail
+  pointing at it), not a `FloatingWindow`. The bot stands only along the note area's left, right and bottom edges, under the tab bar and the arrows' row and above Linked mentions (`botArea`, kept current by a `ResizeObserver` on those bars); on a board it is held in the bottom-right corner. While it is dragged, `bot-motion.ts` (a small store) carries its position to the bubble, so a drag redraws only those two. Quick ask is about the open note: each question calls `get_note_context` (budgeted) for the note and its links,
+  an "About: <note>" line marks a change of note, and the thread lives in memory only; "Save as chat"
+  writes it as a normal chat in `Recto/Chats`. `shared/quick-ask.ts` holds its shared types and
+  `providers/quick-ask.ts` its prompt and session. ⌘⇧H hides every floating window and the bot. Chats
+  stopped being a workspace section (`app/sections.ts` is now Data, Canvas, Tasks).
+
+| where | what |
+|---|---|
+| `src/shared/providers.ts`, `quick-ask.ts` | provider ids, status and problem types, Quick ask types |
+| `src/main/providers/` | `detect`, `cli`, `chatgpt-auth`, `openai`, `anthropic`, `ollama`, `run`, `prompts`, `quick-ask`, `limits`, `store`, `ipc`, `index` |
+| `src/main/vault-tools/sessions.ts` | tool sessions (allowed tools, visible and writable notes) |
+| `src/mcp/index.ts` | `--session` and `--tools` for a provider's CLI |
+| `src/main/bots/answers.ts` | `runCloudJob`, `saveThread`, excluded folders for the local pipeline |
+| `src/renderer/features/chats/` | `ChatsPanel`, `FloatingBot`, `QuickAsk`, `chats-store` |
+| `src/renderer/features/settings/components/ProvidersSettings.tsx` | provider setup and the cloud switch |
+| `<userData>/provider-chatgpt.bin`, `provider-openai.bin` (safeStorage) | ChatGPT sign-in and the OpenAI key, encrypted; the Anthropic key stays in `secrets.bin` |
+| `<vault>/.recto/ai-access.json` | `cloud` flag, with the rest of AI access |
 
 ## Recto's folder
 

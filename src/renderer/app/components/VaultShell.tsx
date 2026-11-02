@@ -18,7 +18,7 @@ import { setPaneDropHandler } from '../pane-drag'
 import { setRevealInTreeHandler } from '../reveal-in-tree'
 import type { DropZone } from '../pane-drop'
 import { registerStubViews } from './stub-views'
-import { useAppearance, type Theme } from '../appearance'
+import { useAppearance, type BotPlace, type Theme } from '../appearance'
 import { commands } from '../commands'
 import { getSection, type SectionId } from '../sections'
 import { setVaultFiles, setVaultPath } from '../vault-url'
@@ -40,7 +40,9 @@ import { QuickSwitcher, SearchPanel } from '../../features/search'
 import { SettingsPanel, SidebarThemePicker, type SettingsTab } from '../../features/settings'
 import { TemplatePicker, usePeriodicNotesAutoCreate, useTemplateActions, useTemplateSettings } from '../../features/templates'
 import { TidyDialog, useTidy } from '../../features/tidy'
-import { BotList, MAIN_BOT, onOpenTopic, reloadBots, requestTopic, useBots, useBotsEnabled } from '../../features/bots'
+import { onOpenTopic, reloadBots, requestTopic, useBots } from '../../features/bots'
+import { ChatsPanel, FloatingBot, QuickAsk, setChatsOpener, setChatsPanel } from '../../features/chats'
+import { setSettingsHandler } from '../settings-request'
 import {
   BoardDeleteHost,
   BoardList,
@@ -71,6 +73,9 @@ registerStubViews()
 registerArchiveView()
 
 const THEME_CYCLE: readonly Theme[] = ['system', 'light', 'dark']
+
+/** Where the bot stands on a board: the bottom-right corner, clear of the lanes. */
+const BOARD_BOT_PLACE: BotPlace = { edge: 'right', at: 1 }
 
 export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React.ReactElement {
   const {
@@ -145,15 +150,6 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   // Obsidian does, so the editor needs every file's path - not just notes.
   useEffect(() => setVaultFiles(allFilePaths(tree.roots)), [tree.roots])
 
-  /** Which bot the AI workspace is showing, if it is showing one. */
-  const activeBot = useMemo(() => {
-    const leaf = sections?.ai.activeLeaf
-    // A `chat` tab from a layout saved before Recto became the main chat is Recto's.
-    if (leaf?.type === 'chat') return MAIN_BOT
-    const id = leaf?.type === 'bot' ? (leaf.state['bot'] ?? MAIN_BOT) : undefined
-    return typeof id === 'string' ? id : null
-  }, [sections, revision])
-
   // Bot definitions are per vault, and edited by hand outside the watched notes.
   useEffect(() => reloadBots(), [vault.path])
 
@@ -187,12 +183,11 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const updateRef = useRef(update)
   updateRef.current = update
 
-  const { openFile, newChat, openBoard, openBoardCard, openBot } = useShellNavigation(sections, activeSection, setActiveSection)
+  const { openFile, openBoard, openBoardCard, openBot } = useShellNavigation(sections, activeSection, setActiveSection)
   useTabHistory(sections, activeSection)
 
   // A notification about a finished answer was clicked: open that bot's chat at that topic.
   const bots = useBots()
-  const botsOn = useBotsEnabled()
   const openBotRef = useRef(openBot)
   openBotRef.current = openBot
   useEffect(
@@ -386,6 +381,11 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   // Set further down, once what they point at exists; read only when an overview tab is used.
   const openFolderRef = useRef<(name: string) => void>(() => {})
   const noteExistsRef = useRef<(path: string) => boolean>(() => false)
+  const rootsRef = useRef<readonly FileNode[]>(tree.roots)
+  rootsRef.current = tree.roots
+  const sectionRef = useRef(activeSection)
+  sectionRef.current = activeSection
+  const createNamedRef = useRef<(parent: string, name: string) => Promise<string | null>>(async () => null)
   useRegisterViews({
     openFile: openFileRef,
     openFolder: openFolderRef,
@@ -395,6 +395,9 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     linkCandidates: linkCandidatesRef,
     appearance: appearanceRef,
     update: updateRef,
+    roots: rootsRef,
+    section: sectionRef,
+    createNamed: createNamedRef,
   })
 
   const openPeriodicSettings = useCallback(() => openSettings('periodic'), [openSettings])
@@ -479,7 +482,6 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     setExpanded,
     openFile,
     activeSection,
-    newChat,
     boards,
     activeBoard,
     openBoardCard,
@@ -487,6 +489,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     viewType: section.viewType,
     askFileName: setNewFileIn,
   })
+  createNamedRef.current = createNamed
 
   const openExtension = useCallback(
     (type: string) => {
@@ -518,6 +521,99 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     const at = THEME_CYCLE.indexOf(appearance.theme)
     update({ theme: THEME_CYCLE[(at + 1) % THEME_CYCLE.length] ?? 'system' })
   }, [appearance.theme, update])
+
+  // --- the Chats panel, the floating bot, Quick ask ------------------------
+
+  useEffect(() => {
+    setSettingsHandler(openSettings)
+    return () => setSettingsHandler(null)
+  }, [openSettings])
+
+  /**
+   * The Chats panel and the graph share the right side, one at a time:
+   * opening the panel puts a graph that was open away, and closing the panel
+   * brings it back; opening the graph closes the panel.
+   */
+  const graphByChats = useRef(false)
+  const setChats = useCallback(
+    (open: boolean) => {
+      if (open === appearance.chatsOpen) return
+      if (open && graphWindow.open) {
+        graphByChats.current = true
+        setGraphWindow({ open: false })
+      } else if (!open && graphByChats.current) {
+        graphByChats.current = false
+        setGraphWindow({ open: true })
+      }
+      update({ chatsOpen: open })
+    },
+    [appearance.chatsOpen, graphWindow.open, setGraphWindow, update],
+  )
+  const chatsOpenRef = useRef(appearance.chatsOpen)
+  chatsOpenRef.current = appearance.chatsOpen
+  useEffect(() => {
+    if (graphWindow.open && chatsOpenRef.current) {
+      graphByChats.current = false
+      update({ chatsOpen: false })
+    }
+  }, [graphWindow.open, update])
+  useEffect(() => {
+    setChatsPanel({ open: appearance.chatsOpen, toggle: () => setChats(!appearance.chatsOpen) })
+    setChatsOpener(() => setChats(true))
+  }, [appearance.chatsOpen, setChats])
+
+  const [quickAskOpen, setQuickAskOpen] = useState(false)
+  /** Every floating window and the bot out of sight, without closing them (⌘⇧H again brings them back). */
+  const [floatsHidden, setFloatsHidden] = useState(false)
+  const toggleFloatingBot = useCallback(() => {
+    if (appearance.floatingBot) setQuickAskOpen(false)
+    update({ floatingBot: !appearance.floatingBot })
+  }, [appearance.floatingBot, update])
+  // On a board the lanes fill the page: the bot keeps to its bottom-right corner there and is not moved.
+  const botPlace: BotPlace = activeSection === 'tasks' ? BOARD_BOT_PLACE : appearance.botPlace
+  const activeNote = activePath !== null && activePath.toLowerCase().endsWith('.md') ? activePath : null
+
+  useEffect(
+    () =>
+      commands.registerAll([
+        {
+          id: 'chats:toggle',
+          name: 'Toggle chats',
+          section: 'AI',
+          icon: 'messages-square',
+          hotkey: 'Mod+Shift+C',
+          run: () => setChats(!chatsOpenRef.current),
+        },
+        {
+          id: 'bot:toggle-floating',
+          name: 'Show or hide the floating bot',
+          section: 'AI',
+          icon: 'bot',
+          hotkey: 'Mod+Shift+B',
+          run: toggleFloatingBot,
+        },
+        {
+          id: 'quick-ask:open',
+          name: 'Quick ask about this note',
+          section: 'AI',
+          icon: 'sparkles',
+          hotkey: 'Mod+J',
+          run: () => {
+            setFloatsHidden(false)
+            setQuickAskOpen((open) => !open)
+          },
+        },
+        {
+          id: 'windows:hide-all',
+          name: 'Hide or show floating windows',
+          section: 'Window',
+          icon: 'minimize',
+          hotkey: 'Mod+Shift+H',
+          run: () => setFloatsHidden((hidden) => !hidden),
+        },
+      ]),
+    [setChats, toggleFloatingBot],
+  )
 
   useAppCommands({
     active,
@@ -620,7 +716,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         <Breadcrumb path={activePath} fallback={vault.name} />
       </div>
 
-      <div className="shell__main">
+      <div className={`shell__main${floatsHidden ? ' is-floats-hidden' : ''}`}>
         {appearance.sidebarOpen ? (
           <Sidebar
             vaultName={vault.name}
@@ -655,15 +751,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
               />
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} vaultPath={vault.path} onRenamed={followRename} />
-            ) : botsOn === false ? (
-              <p className="bots-off">
-                Bots are off ·{' '}
-                <button className="bots-off__link" onClick={() => openSettings('bots')}>
-                  Turn on in Settings
-                </button>
-              </p>
             ) : (
-              <BotList tree={tree.roots} activeBot={activeBot} query={query} onOpen={(bot) => void openBot(bot)} />
+              <p className="sidebar__soon">Canvas is coming soon.</p>
             )}
           </Sidebar>
         ) : (
@@ -687,7 +776,40 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
             onOpenInEditor={(path) => openFile(path)}
             onOpenLink={openLinkInEditor}
           />
+          {quickAskOpen && (
+            <QuickAsk
+              note={activeNote}
+              place={botPlace}
+              pointing={appearance.floatingBot}
+              area={contentRef}
+              openFile={(path) => openFile(path)}
+              onClose={() => setQuickAskOpen(false)}
+            />
+          )}
+          {appearance.floatingBot && (
+            <FloatingBot
+              place={botPlace}
+              onPlace={activeSection === 'tasks' ? undefined : (place) => update({ botPlace: place })}
+              onClick={() => setQuickAskOpen((open) => !open)}
+              state={quickAskOpen ? 'listening' : 'idle'}
+              active={quickAskOpen}
+            />
+          )}
         </main>
+
+        {appearance.chatsOpen && (
+          <ChatsPanel
+            width={appearance.chatsWidth}
+            onResize={(chatsWidth) => update({ chatsWidth })}
+            tree={tree.roots}
+            openFile={(path, heading) => openFile(path, heading ?? null)}
+            notes={() => linkCandidatesRef.current}
+            onOpenSettings={() => openSettings('bots')}
+            floatingBot={appearance.floatingBot}
+            onToggleFloatingBot={toggleFloatingBot}
+            onClose={() => setChats(false)}
+          />
+        )}
 
         <ShellWindows
           graphWindow={graphWindow}
@@ -704,6 +826,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         vaultName={vault.name}
         graphOpen={graphWindow.open}
         onToggleGraph={() => setGraphWindow({ open: !graphWindow.open })}
+        floatingBot={appearance.floatingBot}
+        onToggleFloatingBot={toggleFloatingBot}
         onOpenDaily={() => void openTodayNote()}
         onOpenPalette={openPalette}
       />

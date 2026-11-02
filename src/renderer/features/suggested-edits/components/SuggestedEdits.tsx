@@ -106,6 +106,12 @@ function ProposalCard({ proposal, onDone }: { proposal: Proposal; onDone: () => 
   )
 }
 
+/** Open the review dialog from anywhere in the app: Quick ask's "Review" after an edit was suggested. */
+const openers = new Set<() => void>()
+export function openSuggestedEdits(): void {
+  for (const open of openers) open()
+}
+
 export function SuggestedEditsNotice(): React.ReactElement | null {
   const [pending, setPending] = useState<Proposal[]>([])
   const [open, setOpen] = useState(false)
@@ -117,13 +123,16 @@ export function SuggestedEditsNotice(): React.ReactElement | null {
   useEffect(() => {
     refresh()
     const offChanged = api.on(IPC_EVENT.aiProposalsChanged, refresh)
-    const offOpen = api.on(IPC_EVENT.aiProposalsOpen, () => {
+    const show = (): void => {
       refresh()
       setOpen(true)
-    })
+    }
+    const offOpen = api.on(IPC_EVENT.aiProposalsOpen, show)
+    openers.add(show)
     return () => {
       offChanged()
       offOpen()
+      openers.delete(show)
     }
   }, [refresh])
 

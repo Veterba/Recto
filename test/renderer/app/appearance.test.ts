@@ -18,3 +18,11 @@ describe('the heading font', () => {
     expect(coerce({ headingFont: 'mono' }).headingFont).toBe('mono')
   })
 })
+
+describe('the floating bot’s place', () => {
+  it('keeps the left, right and bottom edges; one left on the top edge goes to the bottom', () => {
+    expect(coerce({ botPlace: { edge: 'left', at: 0.3 } }).botPlace).toEqual({ edge: 'left', at: 0.3 })
+    expect(coerce({ botPlace: { edge: 'top', at: 0.4 } }).botPlace).toEqual({ edge: 'bottom', at: 0.4 })
+    expect(coerce({ botPlace: { edge: 'middle', at: 2 } }).botPlace.at).toBe(1)
+  })
+})

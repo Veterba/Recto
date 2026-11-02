@@ -22,7 +22,10 @@ export function socketPath(userData: string): string {
   return path.join(os.tmpdir(), `recto-${createHash('sha1').update(userData).digest('hex').slice(0, 12)}.sock`)
 }
 
-export type BridgeRequest = { id: number; method: 'call'; tool: string; args: unknown; client: string } | { id: number; method: 'ping' }
+/** `session`: a run of one of Recto's own providers, which started this program with `--session` (main/vault-tools/sessions.ts). */
+export type BridgeRequest =
+  | { id: number; method: 'call'; tool: string; args: unknown; client: string; session?: string }
+  | { id: number; method: 'ping' }
 
 export type BridgeResponse =
   { id: number; outcome: ToolOutcome } | { id: number; pong: { vault: string | null; version: string } } | { id: 0; error: 'bad-token' }

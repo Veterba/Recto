@@ -1,0 +1,436 @@
+/* ---------- the Chats panel, on the right ---------- */
+
+.chats {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-primary);
+  /* A soft shade cast on the note's side of the seam: it shows where the panel
+     meets the grey bars, the tab bar above and Linked mentions below. */
+  box-shadow: -6px 0 12px -8px rgb(0 0 0 / 0.16);
+}
+.chats__resize {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+}
+.chats__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  height: 44px;
+  padding: 0 var(--size-2) 0 var(--size-3);
+  border-bottom: 1px solid var(--border);
+}
+.chats__gap {
+  flex: 1;
+}
+.chats__sections {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-s);
+  background: var(--bg-secondary);
+}
+.chats__section {
+  all: unset;
+  padding: 3px 12px;
+  border-radius: calc(var(--radius-s) - 2px);
+  font-size: var(--font-size-11);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.chats__section.is-active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+.chats__section:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.chats__list {
+  flex: none;
+  max-height: 30%;
+  overflow-y: auto;
+  padding: var(--size-1) var(--size-2);
+  border-bottom: 1px solid var(--border);
+}
+.chats__chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.chats__off {
+  padding: var(--size-4);
+}
+
+/* A chat in the panel: the same chat, sized for a column. */
+.chats .chat {
+  --chat-column: 100%;
+}
+.chats .bot-chat__head {
+  padding: var(--size-2) var(--size-3);
+  gap: var(--size-2);
+}
+.chats .bot-face--head {
+  display: none;
+}
+.chats .bot-chat__action span {
+  display: none;
+}
+.chats .composer {
+  padding: 24px var(--size-3) var(--size-3);
+}
+/* A column is too narrow for one row: the text on top, under it +, the model and Send. */
+.chats .composer__capsule {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'input input input'
+    'plus model send';
+  align-items: center;
+  gap: 2px 4px;
+  padding: 8px;
+  border-radius: 18px;
+}
+.chats .composer__input {
+  grid-area: input;
+  padding: 4px 8px 6px;
+}
+.chats .composer__plus {
+  grid-area: plus;
+}
+.chats .composer__chip {
+  grid-area: model;
+  justify-self: start;
+  /* Padding included: the chip stays inside its column, never under Send, and
+     the model's name is what gives way. */
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  height: 32px;
+  overflow: hidden;
+}
+.chats .composer__chip svg,
+.chats .composer__chip .composer__where {
+  flex: none;
+}
+.chats .composer__chip b,
+.chats .composer__chip span:not(.composer__where) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chats .composer__send {
+  grid-area: send;
+}
+.chats .composer__plus,
+.chats .composer__send {
+  width: 32px;
+  height: 32px;
+}
+
+/* Where an answer comes from, beside the model in the composer. */
+.composer__where {
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 99px;
+  font-size: var(--font-size-11);
+  line-height: 16px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.composer__where.is-cloud {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.composer__problem {
+  min-width: 0;
+}
+
+/* The Canvas section's sidebar, until there is a Canvas. */
+.sidebar__soon {
+  margin: var(--size-4) var(--size-3);
+  font-size: var(--font-size-13);
+  color: var(--text-muted);
+}
+
+/* ---------- the floating bot ---------- */
+
+.floating-bot {
+  position: absolute;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  cursor: grab;
+  -webkit-app-region: no-drag;
+  /* The bot is the button: no plate under it, a shadow so it floats over the page. */
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.18)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.12));
+}
+/* Only the glide from where it was let go to its edge; everything else moves it at once. */
+.floating-bot.is-dropped {
+  transition:
+    left 220ms var(--ease),
+    top 220ms var(--ease);
+}
+.floating-bot.is-fixed {
+  cursor: pointer;
+}
+.floating-bot.is-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+.floating-bot:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+/* ⌘⇧H: every floating window and the bot out of sight, still open. */
+.shell__main.is-floats-hidden .float,
+.shell__main.is-floats-hidden .note-window,
+.shell__main.is-floats-hidden .floating-bot,
+.shell__main.is-floats-hidden .quick-ask {
+  display: none;
+}
+
+/* ---------- Quick ask: a bubble out of the bot ---------- */
+
+.quick-ask {
+  --tail: 14px;
+  position: absolute;
+  z-index: 46;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--font-size-13-5);
+  animation: quick-ask-in 160ms var(--ease);
+}
+.quick-ask.is-above.is-right {
+  transform-origin: bottom right;
+}
+.quick-ask.is-above.is-left {
+  transform-origin: bottom left;
+}
+.quick-ask.is-below.is-right {
+  transform-origin: top right;
+}
+.quick-ask.is-below.is-left {
+  transform-origin: top left;
+}
+/* After a drop it glides with the bot, at the bot's pace. */
+.quick-ask.is-gliding {
+  transition:
+    left 220ms var(--ease),
+    right 220ms var(--ease),
+    top 220ms var(--ease),
+    bottom 220ms var(--ease);
+}
+@keyframes quick-ask-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* The tail, over the middle of the bot: a turned square, its two inner sides hidden under the bubble. */
+.quick-ask__tail {
+  position: absolute;
+  width: var(--tail);
+  height: var(--tail);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+.quick-ask.is-above .quick-ask__tail {
+  bottom: calc(var(--tail) / -2);
+  border-top-color: transparent;
+  border-left-color: transparent;
+}
+.quick-ask.is-below .quick-ask__tail {
+  top: calc(var(--tail) / -2);
+  border-bottom-color: transparent;
+  border-right-color: transparent;
+}
+.quick-ask.is-right .quick-ask__tail {
+  right: calc(24px - var(--tail) / 2);
+}
+.quick-ask.is-left .quick-ask__tail {
+  left: calc(24px - var(--tail) / 2);
+}
+
+.quick-ask__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: -4px -4px 2px 0;
+}
+.quick-ask__head.is-floating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
+}
+.quick-ask__head.is-floating ~ .quick-ask__input {
+  padding-right: 32px;
+}
+.quick-ask__gap {
+  flex: 1;
+}
+
+.quick-ask__log {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.55;
+}
+.quick-ask__thinking {
+  margin: 0;
+  color: var(--text-muted);
+}
+.quick-ask__turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+}
+.quick-ask__about {
+  align-self: center;
+  margin: var(--size-1) 0 0;
+  font-size: var(--font-size-11);
+  color: var(--text-muted);
+}
+.quick-ask__q {
+  align-self: flex-end;
+  max-width: 85%;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  white-space: pre-wrap;
+}
+.quick-ask__a {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+}
+.quick-ask__review {
+  all: unset;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-12);
+  color: var(--accent);
+  cursor: pointer;
+}
+.quick-ask__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--font-size-12);
+}
+
+.quick-ask__input {
+  all: unset;
+  flex: none;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  field-sizing: content;
+  min-height: 1.6em;
+  max-height: 8em;
+  padding: 6px 2px 10px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: var(--font-size-15);
+  border-bottom: 1px solid var(--border);
+}
+.quick-ask__input::placeholder {
+  color: var(--text-muted);
+}
+.quick-ask__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+}
+/* The note each question carries: what the mock-up's paper clip would be. */
+.quick-ask__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  /* The note's name gives way first; the model stays whole. */
+  flex: 0 1 auto;
+  min-width: 44px;
+  max-width: 160px;
+  padding: 0 8px 0 2px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border);
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
+.quick-ask__note svg {
+  flex: none;
+}
+.quick-ask__note span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-ask__bar .composer__chip {
+  flex: none;
+  white-space: nowrap;
+  height: 30px;
+  padding: 0 8px;
+  font-size: var(--font-size-12);
+}
+.quick-ask__send {
+  all: unset;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--on-ink);
+  cursor: pointer;
+}
+.quick-ask__send:disabled {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  cursor: default;
+}
+.quick-ask .glass-menu {
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 4px);
+}
+.quick-ask .composer__status {
+  margin: 8px 0 0;
+}

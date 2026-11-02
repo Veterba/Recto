@@ -36,6 +36,8 @@ import { botsEnabled, writeBotsEnabled } from './enabled'
 import os from 'node:os'
 import { execFile } from 'node:child_process'
 import { readKey } from '../secrets'
+import { isCloudModel } from '../../shared/providers'
+import { readiness } from '../providers'
 
 /**
  * Bots, on the main side: who they are, whether their model can run, and
@@ -47,6 +49,9 @@ const local: BotModelProvider & LocalModels = botsMock()
   ? new MockProvider()
   : new OllamaProvider(() => keepAliveFor(settings().unloadAfterMinutes))
 const api: BotModelProvider = botsMock() ? new MockProvider() : new AnthropicProvider(readKey)
+
+/** Ollama on this Mac (or the snapshot run's stand-in): Quick ask on a local model. */
+export const localProvider = (): BotModelProvider => local
 
 /** The model's provider: an Anthropic model when it is one of the API models, otherwise Ollama on this Mac. */
 export const providerFor = (model: string): BotModelProvider => (isApiModel(model) ? api : local)
@@ -146,6 +151,10 @@ export async function status(model?: string, warmUp = false): Promise<BotModelSt
   const chosen = model ?? settings().defaultModel
   // Off: not a single request to Ollama, not even to ask.
   if (!botsEnabled()) return { state: 'not-running', model: chosen }
+  if (isCloudModel(chosen)) {
+    const problem = await readiness(chosen)
+    return problem === null ? { state: 'ready', model: chosen } : { state: 'provider', model: chosen, problem }
+  }
   const result = await providerFor(chosen).status(chosen)
   if (warmUp && result.state === 'ready') providerFor(chosen).warm(result.model)
   return result
@@ -246,7 +255,7 @@ export { prepare, type ContextNote, type Prepared, type ToolCall } from './prepa
 export { cardsStatus }
 
 /** Answers run in main, queued one at a time (bots/answers.ts, bots/jobs.ts). */
-initAnswers({ bots: list, modelOf, providerFor, settings: () => settings(), beforeRun: yieldToAnswer })
+initAnswers({ bots: list, modelOf, providerFor, status: (model) => status(model), settings: () => settings(), beforeRun: yieldToAnswer })
 export { stopAnswers }
 
 /**
@@ -287,7 +296,9 @@ const TITLE_SYSTEM = [
 export async function title(request: { botId: string; messages: AiMessage[] }): Promise<string | null> {
   if (!botsEnabled()) return null
   const bot = list().find((b) => b.id === request.botId)
-  const model = modelOf(bot)
+  // Titles are named on this Mac, whoever answered: no cloud call Recto makes on its own.
+  const model = isCloudModel(modelOf(bot)) ? settings().defaultModel : modelOf(bot)
+  if (isCloudModel(model)) return null
   const provider = providerFor(model)
   if ((await provider.status(model)).state !== 'ready') return null
   const conversation = request.messages

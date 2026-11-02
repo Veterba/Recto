@@ -8,7 +8,9 @@
 
 import type { AiDelta, AiDone, AiError, AiMessage } from './ai'
 import type { ArchiveState } from './archive'
-import type { Bot, BotJob, BotMemoryStatus, BotModelStatus, BotSettings, ModelChoice, NoteCardsStatus, PullProgress } from './bots'
+import type { Bot, BotJob, BotMemoryStatus, BotMessage, BotModelStatus, BotSettings, ModelChoice, NoteCardsStatus, PullProgress } from './bots'
+import type { ProviderStatus } from './providers'
+import type { QuickAskEvent } from './quick-ask'
 import type {
   BacklinkResult,
   BoardCardInfo,
@@ -177,6 +179,15 @@ export const IPC = {
   aiClientDisconnect: 'ai-clients:disconnect',
   aiClientInstallExtension: 'ai-clients:install-extension',
   aiClientTest: 'ai-clients:test',
+  providers: 'providers:list',
+  providersSetOpenAiKey: 'providers:set-openai-key',
+  providersChatGptSignIn: 'providers:chatgpt-sign-in',
+  providersChatGptCancel: 'providers:chatgpt-cancel',
+  providersChatGptSignOut: 'providers:chatgpt-sign-out',
+  providersOpenUrl: 'providers:open-url',
+  quickAskSend: 'quick-ask:send',
+  quickAskCancel: 'quick-ask:cancel',
+  botsSaveThread: 'bots:save-thread',
 } as const
 
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
@@ -196,6 +207,7 @@ export const IPC_EVENT = {
   botsCardsStatus: 'bots:cards-status',
   botsEnabledChanged: 'bots:enabled-changed',
   aiProposalsChanged: 'ai-proposals:changed',
+  quickAskEvent: 'quick-ask:event',
   aiProposalsOpen: 'ai-proposals:open',
 } as const
 
@@ -251,6 +263,8 @@ export type IpcEvents = Exhaustive<
     [IPC_EVENT.botsEnabledChanged]: (on: boolean) => void
     /** An AI client proposed a change, or one was applied or discarded. */
     [IPC_EVENT.aiProposalsChanged]: () => void
+    /** Quick ask's answer as it streams, its steps, its end (main/providers/quick-ask.ts). */
+    [IPC_EVENT.quickAskEvent]: (event: QuickAskEvent) => void
     /** A suggested-edit notification was clicked: show Suggested edits. */
     [IPC_EVENT.aiProposalsOpen]: () => void
   }
@@ -490,6 +504,22 @@ export type IpcApi = Exhaustive<
     /** Download a model the user picked and confirmed; progress arrives on `bots:pull-progress`. */
     [IPC.botsPull]: (name: string) => { ok: boolean; error?: string }
     [IPC.botsPullCancel]: () => { ok: boolean }
+    /** Every provider: ready or why not, where it was found, its models. Asks nothing that costs. */
+    [IPC.providers]: () => ProviderStatus[]
+    /** The OpenAI key (null forgets it); kept in main, never sent back. */
+    [IPC.providersSetOpenAiKey]: (key: string | null) => { ok: boolean; error?: string }
+    /** Sign in with ChatGPT in the browser; resolves when it is done, cancelled or failed. */
+    [IPC.providersChatGptSignIn]: () => { ok: true; email: string | null; plan: boolean } | { ok: false; error: string }
+    [IPC.providersChatGptCancel]: () => { ok: boolean }
+    /** Signed out: the refresh token revoked at OpenAI when it can be (`revoked` says). */
+    [IPC.providersChatGptSignOut]: () => { ok: boolean; revoked: boolean }
+    /** A provider's own page (install, manage usage): only the links providers give. */
+    [IPC.providersOpenUrl]: (url: string) => { ok: boolean }
+    /** A Quick ask question about the open note; the answer arrives on `quick-ask:event`. */
+    [IPC.quickAskSend]: (request: { thread: string; note: string; model: string; history: AiMessage[]; question: string }) => { ok: boolean }
+    [IPC.quickAskCancel]: (thread: string) => { ok: boolean }
+    /** A Quick ask thread kept as a normal chat with Recto: its topic file. */
+    [IPC.botsSaveThread]: (request: { botId: string; messages: BotMessage[] }) => { ok: true; topic: string } | { ok: false; error: string }
   }
 >
 

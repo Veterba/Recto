@@ -16,11 +16,12 @@ import { Icon } from '../../../ui/Icon'
 import { SettingGroup } from '../../../ui/SettingGroup'
 import { SettingRow } from '../../../ui/SettingRow'
 import type { SettingsDeps } from '../settings-deps'
+import { ProvidersGroup } from './ProvidersSettings'
 
 /**
- * Settings → AI: what AI clients may do with this vault through Recto, in the
- * order the spec asks for - AI guide, Formatting, Write mode, Excluded
- * folders, Connect a client, Activity. Every change is saved at once to
+ * Settings → AI: where answers come from (Providers), then what AI clients
+ * may do with this vault through Recto - AI guide, Formatting, Write mode,
+ * Excluded folders, Connect a client, Activity. Every change is saved at once to
  * `.recto/ai-access.json`, which every tool call reads fresh.
  */
 
@@ -57,6 +58,7 @@ export function AiAccessSettings({ notes, folders }: SettingsDeps): React.ReactE
 
   return (
     <>
+      <ProvidersGroup settings={settings} save={save} />
       <GuideGroup settings={settings} save={save} notes={notes} />
       <FormattingGroup settings={settings} save={save} />
       <SettingGroup title="Write mode">

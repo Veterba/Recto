@@ -84,7 +84,15 @@ export type Appearance = {
    * window. Null until it is first moved or resized: then it opens centred.
    */
   settingsPanel: { x: number; y: number; width: number; height: number } | null
+  /** The Chats panel on the right: open, and how wide. */
+  chatsOpen: boolean
+  chatsWidth: number
+  /** The floating bot in a corner of the window (Quick ask), and where it was left: an edge, and how far along it (0-1). */
+  floatingBot: boolean
+  botPlace: BotPlace
 }
+
+export type BotPlace = { edge: 'left' | 'right' | 'bottom'; at: number }
 
 /**
  * Bounds for the hover-preview delay, in seconds.
@@ -115,7 +123,15 @@ const DEFAULT_APPEARANCE: Appearance = {
   sidebarTheme: NO_THEME,
   translucent: true,
   settingsPanel: null,
+  chatsOpen: false,
+  chatsWidth: 420,
+  floatingBot: false,
+  botPlace: { edge: 'right', at: 0.9 },
 }
+
+/** Narrow enough to keep beside a note, wide enough that the longest model ("Claude Code · sonnet · cloud") fits its composer. */
+export const CHATS_MIN_WIDTH = 400
+export const CHATS_MAX_WIDTH = 720
 
 /**
  * Apply to the document.
@@ -308,9 +324,25 @@ export function coerce(value: unknown): Appearance {
         : DEFAULT_APPEARANCE.previewDelay,
     translucent: typeof v.translucent === 'boolean' ? v.translucent : DEFAULT_APPEARANCE.translucent,
     settingsPanel: coerceRect(v.settingsPanel),
+    chatsOpen: v.chatsOpen === true,
+    chatsWidth:
+      typeof v.chatsWidth === 'number' && Number.isFinite(v.chatsWidth)
+        ? Math.min(CHATS_MAX_WIDTH, Math.max(CHATS_MIN_WIDTH, v.chatsWidth))
+        : DEFAULT_APPEARANCE.chatsWidth,
+    floatingBot: v.floatingBot === true,
+    botPlace: coerceBotPlace(v.botPlace),
     editorFont:
       v.editorFont === 'mono' || v.editorFont === 'sans' || v.editorFont === 'serif' ? v.editorFont : DEFAULT_APPEARANCE.editorFont,
   }
+}
+
+function coerceBotPlace(value: unknown): BotPlace {
+  const v = (typeof value === 'object' && value !== null ? value : {}) as Partial<BotPlace>
+  // The top edge was allowed once: a bot left there goes to the bottom.
+  const raw: unknown = v.edge
+  const edge = raw === 'left' || raw === 'right' || raw === 'bottom' ? raw : raw === 'top' ? 'bottom' : DEFAULT_APPEARANCE.botPlace.edge
+  const at = typeof v.at === 'number' && Number.isFinite(v.at) ? Math.min(1, Math.max(0, v.at)) : DEFAULT_APPEARANCE.botPlace.at
+  return { edge, at }
 }
 
 function coerceRect(value: unknown): Appearance['settingsPanel'] {

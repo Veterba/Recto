@@ -12,7 +12,6 @@ export function useShellCreate({
   setExpanded,
   openFile,
   activeSection,
-  newChat,
   boards,
   activeBoard,
   openBoardCard,
@@ -24,7 +23,6 @@ export function useShellCreate({
   setExpanded: React.Dispatch<React.SetStateAction<Set<string>>>
   openFile: (path: string) => void
   activeSection: SectionId
-  newChat: () => Promise<void>
   boards: ReturnType<typeof useBoards>
   activeBoard: string | null
   openBoardCard: (path: string) => void
@@ -81,10 +79,6 @@ export function useShellCreate({
       void createIn('file')
       return
     }
-    if (activeSection === 'ai') {
-      void newChat()
-      return
-    }
     if (activeSection === 'tasks') {
       // It used to open another copy of the board, which is not what a button
       // labelled "Task" promises. Now it makes a card on the board you are
@@ -98,7 +92,7 @@ export function useShellCreate({
       return
     }
     active?.openView(viewType, { draft: Date.now() }, { reuse: false })
-  }, [activeSection, createIn, active, viewType, boards, activeBoard, openBoardCard, newChat])
+  }, [activeSection, createIn, active, viewType, boards, activeBoard, openBoardCard])
 
   return { createAt, createIn, createNamed, onNew }
 }

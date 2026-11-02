@@ -186,12 +186,14 @@ export function Sidebar({
           bare icons at two different sizes, which read as three separate bars
           crammed together. */}
       <footer className="sidebar__footer">
-        <Tip label={`New ${section.newLabel.toLowerCase()}`}>
-          <button className="footer-btn" onClick={onNew}>
-            <Icon name="plus" size={15} />
-            <span>{section.newLabel}</span>
-          </button>
-        </Tip>
+        {section.newLabel !== '' && (
+          <Tip label={`New ${section.newLabel.toLowerCase()}`}>
+            <button className="footer-btn" onClick={onNew}>
+              <Icon name="plus" size={15} />
+              <span>{section.newLabel}</span>
+            </button>
+          </Tip>
+        )}
         {onNewFolder !== undefined && (
           <Tip label="New folder">
             <button className="footer-btn" onClick={onNewFolder}>

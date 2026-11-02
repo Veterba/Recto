@@ -15,6 +15,8 @@ export type GlassMenuEntry =
       sub?: string
       /** Left of the label: a check on the current choice, or a glyph. */
       mark?: string
+      /** Before the label: a maker's mark. */
+      icon?: React.ReactNode
       /** At the right: a size, a shortcut, or an action ("Download · 8 GB"). */
       right?: string
       rightAction?: boolean
@@ -22,6 +24,8 @@ export type GlassMenuEntry =
       run: () => void
     }
   | { kind: 'head'; label: string }
+  /** A muted line under a heading: a plan's limits, what something needs. */
+  | { kind: 'note'; text: string; tone?: 'warn' }
   | { kind: 'sep' }
 
 type Props = {
@@ -81,6 +85,12 @@ export function GlassMenu({ entries, className, label, onClose, footer }: Props)
             </div>
           )
         if (entry.kind === 'sep') return <div key={i} className="glass-menu__sep" role="separator" />
+        if (entry.kind === 'note')
+          return (
+            <div key={i} className={`glass-menu__note${entry.tone === 'warn' ? ' is-warn' : ''}`}>
+              {entry.text}
+            </div>
+          )
         return (
           <button
             key={entry.key}
@@ -91,6 +101,7 @@ export function GlassMenu({ entries, className, label, onClose, footer }: Props)
             onClick={entry.run}
           >
             <span className="glass-menu__mark">{entry.mark ?? ''}</span>
+            {entry.icon}
             <span className="glass-menu__label">
               <b>{entry.label}</b>
               {entry.sub !== undefined && <span>{entry.sub}</span>}
