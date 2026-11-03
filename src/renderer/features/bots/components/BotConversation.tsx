@@ -12,7 +12,6 @@ import { RectoBot, type BotState } from '../../recto-bot'
 import { ChatTopics, UNTITLED } from '../chat-topics-model'
 import { onTopicRequest } from '../new-topic'
 import { reloadBots, useBotStatus, useBots } from '../hooks/use-bots'
-import { markRead } from '../unread'
 import { botThreadFolder, isActive } from '@shared/bots'
 import { jobForTopic, ordinal, topicJobs, useJobs } from '../jobs-store'
 import { statusPhrases } from '@shared/bot-status'
@@ -108,7 +107,6 @@ function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps)
     if (element === null) return
     const observer = new IntersectionObserver((entries) => {
       seen.current = entries.some((e) => e.isIntersecting)
-      if (seen.current) markRead(bot.id)
       viewing.current()
     })
     observer.observe(element)

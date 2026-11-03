@@ -19,8 +19,7 @@ const CLICK_SLOP = 4
 
 type Props = {
   place: BotPlace
-  /** Where it was dropped. Without it, the bot stays where it is (on a board). */
-  onPlace?: ((place: BotPlace) => void) | undefined
+  onPlace: (place: BotPlace) => void
   onClick: () => void
   state: BotState
   /** Quick ask is open: the face shows it is listening. */
@@ -29,9 +28,6 @@ type Props = {
 
 /** The bars that bound where the bot may stand. */
 const BARS = '.tabs__bar, .md__bar, .backlinks'
-
-/** How often those bars are looked for: they come and go with the view on screen. */
-const RECHECK_MS = 400
 
 /**
  * Where the bot may stand: the note's own area - under the tab bar and the
@@ -62,8 +58,8 @@ export function botArea(parent: HTMLElement): BotArea {
 /**
  * `botArea`, kept current, at once: the workspace and the bars that bound it
  * are watched for size, so a Linked mentions bar opening or closing moves the
- * bot in the same frame. Bars that come and go with the view on screen are
- * looked for again every RECHECK_MS.
+ * bot in the same frame; and the view itself is watched, so a bar that comes
+ * or goes with another tab is seen in the next frame, not after a delay.
  */
 export function useBotArea(parentOf: () => HTMLElement | null): BotArea {
   const [area, setArea] = useState<BotArea>({ top: 0, width: 0, height: 0, below: 0 })
@@ -74,25 +70,37 @@ export function useBotArea(parentOf: () => HTMLElement | null): BotArea {
     if (parent === null) return
     const measure = (): void => {
       const next = botArea(parent)
-      setArea((prev) => (prev.top === next.top && prev.width === next.width && prev.height === next.height && prev.below === next.below ? prev : next))
+      setArea((prev) =>
+        prev.top === next.top && prev.width === next.width && prev.height === next.height && prev.below === next.below ? prev : next,
+      )
     }
-    const observer = new ResizeObserver(measure)
+    const resized = new ResizeObserver(measure)
     let watched: Element[] = []
     const watch = (): void => {
       const bars = [...parent.querySelectorAll(BARS)]
       if (bars.length !== watched.length || bars.some((bar, i) => bar !== watched[i])) {
-        observer.disconnect()
-        observer.observe(parent)
-        for (const bar of bars) observer.observe(bar)
+        resized.disconnect()
+        resized.observe(parent)
+        for (const bar of bars) resized.observe(bar)
         watched = bars
       }
       measure()
     }
+    // Views come and go as elements: looked at once a frame, however many changed in it.
+    let frame = 0
+    const changed = new MutationObserver(() => {
+      if (frame === 0)
+        frame = requestAnimationFrame(() => {
+          frame = 0
+          watch()
+        })
+    })
+    changed.observe(parent, { childList: true, subtree: true })
     watch()
-    const timer = setInterval(watch, RECHECK_MS)
     return () => {
-      observer.disconnect()
-      clearInterval(timer)
+      resized.disconnect()
+      changed.disconnect()
+      cancelAnimationFrame(frame)
     }
   }, [])
   return area
@@ -165,8 +173,6 @@ export function FloatingBot({ place, onPlace, onClick, state, active }: Props): 
         const dy = move.clientY - from.y
         if (!moved && Math.hypot(dx, dy) < CLICK_SLOP) return
         moved = true
-        // Held in place: a drag is not a click, and it goes nowhere.
-        if (onPlace === undefined) return
         last = {
           x: Math.min(area.width - BOT_SIZE, Math.max(0, origin.x + dx)),
           y: Math.min(area.top + area.height - BOT_SIZE, Math.max(area.top, origin.y + dy)),
@@ -177,10 +183,10 @@ export function FloatingBot({ place, onPlace, onClick, state, active }: Props): 
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
         setDrag(null)
-        if (moved && onPlace !== undefined) {
+        if (moved) {
           setDropped(true)
           onPlace(snap(last, area))
-        } else if (!moved) onClick()
+        } else onClick()
       }
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
@@ -191,7 +197,7 @@ export function FloatingBot({ place, onPlace, onClick, state, active }: Props): 
   return (
     <div
       ref={ref}
-      className={`floating-bot${settled ? ' is-settled' : ''}${drag !== null ? ' is-dragging' : ''}${dropped ? ' is-dropped' : ''}${active ? ' is-active' : ''}${onPlace === undefined ? ' is-fixed' : ''}`}
+      className={`floating-bot${settled ? ' is-settled' : ''}${drag !== null ? ' is-dragging' : ''}${dropped ? ' is-dropped' : ''}${active ? ' is-active' : ''}`}
       style={{ left: at.x, top: at.y, width: BOT_SIZE, height: BOT_SIZE, visibility: measured ? 'visible' : 'hidden' }}
       role="button"
       aria-label="Quick ask"

@@ -288,11 +288,6 @@ function NoteCardPanel({ board, card, editCard, move, onRename, onOpenNote, onCl
           <Icon name="file-text" size={13} />
           Open as note
         </button>
-
-        <section className="card-panel__section card-panel__later" aria-label="Comments">
-          <h3 className="card-panel__sub">Comments — later</h3>
-          <p>Comments and co-authors come with shared vaults.</p>
-        </section>
       </div>
     </aside>
   )

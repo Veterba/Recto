@@ -62,13 +62,6 @@
   opacity: 0.45;
   cursor: default;
 }
-.chats__list {
-  flex: none;
-  max-height: 30%;
-  overflow-y: auto;
-  padding: var(--size-1) var(--size-2);
-  border-bottom: 1px solid var(--border);
-}
 .chats__chat {
   flex: 1;
   min-height: 0;
@@ -159,7 +152,10 @@
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .composer__problem {
+  /* A problem is a sentence: it wraps, unlike the status line's short pieces. */
+  flex: 1 1 12em;
   min-width: 0;
+  white-space: normal;
 }
 
 /* The Canvas section's sidebar, until there is a Canvas. */
@@ -187,9 +183,6 @@
   transition:
     left 220ms var(--ease),
     top 220ms var(--ease);
-}
-.floating-bot.is-fixed {
-  cursor: pointer;
 }
 .floating-bot.is-dragging {
   cursor: grabbing;

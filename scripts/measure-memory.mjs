@@ -98,8 +98,8 @@ try {
   await sleep(20_000)
   rows.push(await sample(app, 'open 20 s, no chat'))
 
-  await page.keyboard.press('Meta+2')
-  await page.locator('.bot-row').first().click()
+  // Recto's chat, in the Chats panel.
+  await page.keyboard.press('Meta+Shift+C')
   await page.waitForSelector('.bot-chat .composer__input')
   await sleep(15_000)
   rows.push(await sample(app, 'bot chat open 15 s'))

@@ -106,7 +106,8 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
     await page.locator('.tabs__chats').click()
     await page.waitForSelector('.chats .bot-chat .composer__input')
     expect(await page.locator('.tabs__chats').count()).toBe(0)
-    expect(await page.locator('.chats .bot-row').count()).toBeGreaterThan(0)
+    // Recto's chat right under the header: no list of bots above it.
+    expect(await page.locator('.chats__head + .chats__chat').count()).toBe(1)
     expect(await page.locator('.chats__section:disabled').textContent()).toBe('People')
     await closeChats()
     await page.waitForSelector('.chats', { state: 'detached' })
@@ -270,22 +271,15 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
     await page.waitForSelector('[role=treeitem]')
   })
 
-  it('on a board the bot keeps to the bottom-right corner and cannot be moved', async () => {
+  it('on a board the floating bot is not shown; back in Data it is where it was', async () => {
+    const before = (await page.locator('.floating-bot').boundingBox())!
     await page.getByRole('tab', { name: 'Tasks' }).click()
     await page.waitForSelector('.board')
-    await page.waitForSelector('.floating-bot.is-fixed')
-    const area = (await page.locator('.shell__content').boundingBox())!
-    const before = (await page.locator('.floating-bot').boundingBox())!
-    expect(area.x + area.width - (before.x + before.width)).toBeLessThan(30)
-    expect(area.y + area.height - (before.y + before.height)).toBeLessThan(30)
-    await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2)
-    await page.mouse.down()
-    await page.mouse.move(area.x + 200, area.y + 300, { steps: 8 })
-    await page.mouse.up()
-    expect(await page.locator('.floating-bot').boundingBox()).toEqual(before)
-    // Back in Data, it is where it was left there.
+    expect(await page.locator('.floating-bot').count()).toBe(0)
     await page.keyboard.press('Meta+1')
-    await page.waitForSelector('.floating-bot:not(.is-fixed)')
+    await page.waitForSelector('.floating-bot')
+    await page.waitForTimeout(300)
+    expect(await page.locator('.floating-bot').boundingBox()).toEqual(before)
   })
 
   it('the bot stands only along the note’s left, right and bottom edges: never on the bars above or Linked mentions below', async () => {
@@ -349,6 +343,61 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
       expect(clear).toBeGreaterThanOrEqual(0)
       expect(clear).toBeLessThan(30)
     }
+  })
+
+  it('on a page without Linked mentions the bot goes down to the bottom, and back above the bar on a note - in the next frame', async () => {
+    await open('Handbook')
+    if ((await page.locator('.backlinks:not(.is-collapsed)').count()) > 0) await page.locator('.backlinks__head').click()
+    // On the bottom edge, where the bar makes a difference.
+    const face = (await page.locator('.floating-bot').boundingBox())!
+    const content = (await page.locator('.shell__content').boundingBox())!
+    await page.mouse.move(face.x + face.width / 2, face.y + face.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(content.x + content.width / 2, (await page.locator('.backlinks').boundingBox())!.y - 30, { steps: 8 })
+    await page.mouse.up()
+    await page.waitForFunction(() => document.querySelector('.floating-bot')?.getAttribute('data-edge') === 'bottom')
+    await page.waitForTimeout(400)
+    const gap = async (): Promise<number> =>
+      page.evaluate(async () => {
+        for (let f = 0; f < 2; f++) await new Promise(requestAnimationFrame)
+        const bot = document.querySelector('.floating-bot')!.getBoundingClientRect()
+        const area = document.querySelector('.shell__content')!.getBoundingClientRect()
+        return area.bottom - bot.bottom
+      })
+    const onNote = await gap()
+    await page.locator('.tabs__new').first().click()
+    const onNewTab = await gap()
+    expect(onNewTab).toBeLessThan(onNote)
+    expect(onNewTab).toBeLessThan(30)
+    await page.locator('.tab.is-active .tab__close').click()
+    // Back on the note: the bar loads with it, and the bot is above it in the frame after.
+    await page.waitForSelector('.backlinks')
+    expect(await gap()).toBe(onNote)
+  })
+
+  it('the AI guide is picked by typing its name, from notes only', async () => {
+    await page.keyboard.press('Meta+,')
+    await page.waitForSelector('.settings-panel')
+    await page.locator('.settings-panel .settings__tab', { hasText: 'AI' }).click()
+    await page.locator('.note-picker__button').click()
+    // The list is drawn over the settings card, not clipped by it: its first row is what is under the pointer there.
+    const shown = await page.evaluate(() => {
+      const row = document.querySelector('.note-picker__row')!.getBoundingClientRect()
+      return document.elementFromPoint(row.x + row.width / 2, row.y + row.height / 2)?.closest('.note-picker__row') !== null
+    })
+    expect(shown).toBe(true)
+    // Recto's own files - the chats saved by the tests above - are not offered.
+    expect(topics().length).toBeGreaterThan(0)
+    const folders = await page.locator('.note-picker__folder').allTextContents()
+    expect(folders.some((f) => f.startsWith('Recto'))).toBe(false)
+    await page.locator('.note-picker__input').fill('Handb')
+    await page.keyboard.press('Enter')
+    await expect.poll(() => page.locator('.note-picker__button').textContent()).toContain('Handbook')
+    await expect
+      .poll(() => (JSON.parse(fs.readFileSync(path.join(vault, '.recto/ai-access.json'), 'utf8')) as { guide?: string }).guide)
+      .toBe('Handbook.md')
+    await page.locator('.settings-panel').getByRole('button', { name: 'Close settings' }).click()
+    await page.waitForSelector('.settings-panel', { state: 'detached' })
   })
 
   it('the picker groups the cloud by maker; Codex’s page shows its plan’s limits, read for free', async () => {

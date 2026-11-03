@@ -18,7 +18,7 @@ import { setPaneDropHandler } from '../pane-drag'
 import { setRevealInTreeHandler } from '../reveal-in-tree'
 import type { DropZone } from '../pane-drop'
 import { registerStubViews } from './stub-views'
-import { useAppearance, type BotPlace, type Theme } from '../appearance'
+import { useAppearance, type Theme } from '../appearance'
 import { commands } from '../commands'
 import { getSection, type SectionId } from '../sections'
 import { setVaultFiles, setVaultPath } from '../vault-url'
@@ -73,9 +73,6 @@ registerStubViews()
 registerArchiveView()
 
 const THEME_CYCLE: readonly Theme[] = ['system', 'light', 'dark']
-
-/** Where the bot stands on a board: the bottom-right corner, clear of the lanes. */
-const BOARD_BOT_PLACE: BotPlace = { edge: 'right', at: 1 }
 
 export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React.ReactElement {
   const {
@@ -569,8 +566,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     if (appearance.floatingBot) setQuickAskOpen(false)
     update({ floatingBot: !appearance.floatingBot })
   }, [appearance.floatingBot, update])
-  // On a board the lanes fill the page: the bot keeps to its bottom-right corner there and is not moved.
-  const botPlace: BotPlace = activeSection === 'tasks' ? BOARD_BOT_PLACE : appearance.botPlace
+  // On a board the lanes and the card panel fill the page, with no corner to spare: the bot is not shown there (⌘J still asks).
+  const botShown = appearance.floatingBot && activeSection !== 'tasks'
   const activeNote = activePath !== null && activePath.toLowerCase().endsWith('.md') ? activePath : null
 
   useEffect(
@@ -779,17 +776,17 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
           {quickAskOpen && (
             <QuickAsk
               note={activeNote}
-              place={botPlace}
-              pointing={appearance.floatingBot}
+              place={appearance.botPlace}
+              pointing={botShown}
               area={contentRef}
               openFile={(path) => openFile(path)}
               onClose={() => setQuickAskOpen(false)}
             />
           )}
-          {appearance.floatingBot && (
+          {botShown && (
             <FloatingBot
-              place={botPlace}
-              onPlace={activeSection === 'tasks' ? undefined : (place) => update({ botPlace: place })}
+              place={appearance.botPlace}
+              onPlace={(botPlace) => update({ botPlace })}
               onClick={() => setQuickAskOpen((open) => !open)}
               state={quickAskOpen ? 'listening' : 'idle'}
               active={quickAskOpen}
@@ -801,7 +798,6 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
           <ChatsPanel
             width={appearance.chatsWidth}
             onResize={(chatsWidth) => update({ chatsWidth })}
-            tree={tree.roots}
             openFile={(path, heading) => openFile(path, heading ?? null)}
             notes={() => linkCandidatesRef.current}
             onOpenSettings={() => openSettings('bots')}

@@ -650,9 +650,13 @@
 /* One muted line just above the capsule. */
 .composer__status {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: 4px 7px;
   min-height: 22px;
+  /* Each piece - the words, the command, "Check again" - stays whole; when the
+     line is too short, a whole piece moves to the next line instead. */
+  white-space: nowrap;
   margin: 0;
   padding: 0 14px 7px;
   font-size: var(--font-size-12-5);
@@ -673,7 +677,7 @@
 }
 .composer__command {
   all: unset;
-  padding: 0 5px;
+  padding: 1px 6px;
   border-radius: 4px;
   background: var(--chip);
   font-family: var(--font-mono);
@@ -869,25 +873,6 @@
   background: color-mix(in srgb, var(--glass-primary-bg) 86%, var(--glass-primary-fg));
 }
 
-/* The sidebar's dot on a bot that answered out of sight. */
-.bot-row__bottom {
-  display: flex;
-  align-items: center;
-  gap: var(--size-2);
-  min-width: 0;
-}
-.bot-row__bottom .bot-row__preview {
-  flex: 1;
-  min-width: 0;
-}
-.bot-row__unread {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ink);
-}
-
 /* Under an answer that stopped before its end: one muted line, with Retry on the latest. */
 .msg-interrupted {
   display: flex;
@@ -896,8 +881,4 @@
   margin: 2px 0 0;
   font-size: var(--font-size-12-5);
   color: var(--text-muted);
-}
-.bot-row__preview.is-working {
-  color: var(--text-muted);
-  font-style: italic;
 }

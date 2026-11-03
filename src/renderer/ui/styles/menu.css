@@ -40,6 +40,8 @@
   all: unset;
   box-sizing: border-box;
   display: flex;
+  /* One line per item: the menu grows to its longest label instead. */
+  white-space: nowrap;
   align-items: center;
   gap: var(--size-2);
   width: 100%;

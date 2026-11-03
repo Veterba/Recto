@@ -3,7 +3,6 @@
 import './styles/bots.css'
 import './styles/chat.css'
 
-export * from './components/BotList'
 export { BotHost, MAIN_BOT } from './components/BotConversation'
 export { ModelMenu, ModelChip, modelLabel } from './components/ModelMenu'
 export { ProblemLine } from './components/ProblemLine'

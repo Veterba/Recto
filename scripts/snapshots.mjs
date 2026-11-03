@@ -486,7 +486,6 @@ async function screens(page, dir, vault) {
   fs.utimesSync(aside, earlier, earlier)
   fs.renameSync(aside, path.join(folder, '2026-09-20 09-30 — Soil mix.md'))
   await key(page, 'Mod+Shift+C')
-  await page.waitForFunction(() => document.querySelector('.bot-row__time')?.textContent === '09:30')
   await page.waitForSelector('.bot-chat .msg--bot')
   await shoot(page, dir, '22-ai-sidebar')
 
@@ -496,7 +495,6 @@ async function screens(page, dir, vault) {
   await page.keyboard.press('Enter')
   await page.waitForFunction(() => document.querySelectorAll('.bot-chat .msg--bot').length === 3)
   await page.waitForSelector('.bot-chat .msg-group--bot:last-of-type .msg-sources')
-  await page.waitForFunction(() => document.querySelector('.bot-row__time')?.textContent === '10:00')
   await page.mouse.move(0, 0)
   await shoot(page, dir, '23-bot-chat')
 

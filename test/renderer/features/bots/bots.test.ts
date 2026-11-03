@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { previewOf, shortTime } from '../../../../src/renderer/features/bots/threads'
 import { fromFileName, topicPaths } from '../../../../src/renderer/features/bots/chat-topics-model'
 import { appendTurns, parseTopic, topicFile } from '../../../../src/shared/chat-topics'
 import { describeStatus } from '../../../../src/renderer/features/bots/hooks/use-bots'
@@ -35,12 +34,6 @@ describe('chat topics', () => {
     const comment = /<!-- recto:meta (.*) -->/.exec(file)![1]!
     expect(comment).not.toContain('--')
     expect(file).not.toContain('[[')
-  })
-
-  it('previews the last thing said on one line', () => {
-    expect(previewOf(messages)).toBe('Compost, loam and grit.')
-    expect(previewOf([{ role: 'user', content: '# Big **question**\nsecond line' }])).toBe('You: Big question second line')
-    expect(previewOf([])).toBe('')
   })
 
   it('finds a bot’s topics, newest first, and reads a title from a file name', () => {
@@ -95,12 +88,6 @@ describe('chat topics', () => {
     expect(fromFileName('2026-09-20 10-00 — Soil mix (2).md')).toEqual({ created: '2026-09-20T10:00', title: 'Soil mix' })
   })
 
-  it('says when, briefly', () => {
-    const now = new Date('2026-09-20T15:00:00').getTime()
-    expect(shortTime(new Date('2026-09-20T10:00:00').getTime(), now)).toBe('10:00')
-    expect(shortTime(new Date('2026-09-17T10:00:00').getTime(), now)).toBe('Thu')
-    expect(shortTime(new Date('2026-08-02T10:00:00').getTime(), now)).toBe('2 Aug')
-  })
 })
 
 describe('model status', () => {

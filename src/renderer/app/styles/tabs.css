@@ -218,6 +218,11 @@
 .tabs.is-focused .tab.is-active .tab__mark {
   opacity: 1;
 }
+/* No focus ring on a tab: clipped by the strip it showed as two blue lines at
+   its sides, after any key press. The active tab and its mark say where you are. */
+.tab:focus-visible {
+  outline: none;
+}
 /*
  * Close the other tabs.
  *

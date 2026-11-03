@@ -49,6 +49,8 @@
 .board__filter,
 .board__tool {
   box-sizing: border-box;
+  flex: none;
+  white-space: nowrap;
   height: 28px;
   display: inline-flex;
   align-items: center;
@@ -1249,13 +1251,6 @@ button.board-cal__bar:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-.card-panel__later {
-  opacity: 0.45;
-}
-.card-panel__later p {
-  margin: 0;
-  color: var(--text-muted);
 }
 
 /* In the panel's narrow box the [[ list starts at the box's left edge, not at

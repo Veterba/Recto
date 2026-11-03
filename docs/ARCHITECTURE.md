@@ -209,8 +209,8 @@ board records an opened card as a step (`step`); the shell does the travelling
 | `templates` | template picker, daily notes | (uses `palette`) |
 | `archive` | archived notes | `archive` |
 | `links` | unresolved links | `unresolved` |
-| `bots` | Recto (the main chat) and the specialist bots, a bot's conversation in chat topics with History, Settings → Bots; shown in the Chats panel (`chats`) | `bot-list`, `bot-row`, `bot-chat`, `chat-topic`, `bot-history`, `bot-undo`, `bot-sources`, `bot-status` |
-| `chats` | the Chats panel (bot list, then the picked bot's chat), the floating bot and the Quick ask bubble; `chats-store.ts` holds which bot the panel shows and opens it from anywhere; the panel's width and the bot's place are saved with the appearance; the Quick ask thread lives in its window only. Settings → AI → Providers is `settings/components/ProvidersSettings.tsx` | `chats`, `quick-ask`, `floating-bot` |
+| `bots` | Recto (the main chat) and the specialist bots, a bot's conversation in chat topics with History, Settings → Bots; shown in the Chats panel (`chats`) | `bot-chat`, `chat-topic`, `bot-history`, `bot-undo`, `bot-sources`, `bot-status` |
+| `chats` | the Chats panel (the shown bot's chat; any other bots are in its ⋯ menu), the floating bot and the Quick ask bubble; `chats-store.ts` holds which bot the panel shows and opens it from anywhere; the panel's width and the bot's place are saved with the appearance; the Quick ask thread lives in its window only. Settings → AI → Providers is `settings/components/ProvidersSettings.tsx` | `chats`, `quick-ask`, `floating-bot` |
 | `recto-bot` | the bot character: presets (look + personality), the shared frame loop; its design page is dev-only (`/dev/recto-bot`) | `recto-bot`, `bot-design` (dev only) |
 
 Features import each other only through `index.ts`. The app shell imports features; features import
@@ -347,7 +347,7 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   list and then the picked bot's chat; `VaultShell` makes it and the graph take turns on the right.
   `FloatingBot` (⌘⇧B, or its status-bar button) is the bot itself, with no plate, draggable, and snaps to the nearest edge. `QuickAsk` (⌘J) is a bubble
   anchored to the bot's saved place (`bubbleAt`: above it in the lower half, below in the upper, lined up with its outer side, a tail
-  pointing at it), not a `FloatingWindow`. The bot stands only along the note area's left, right and bottom edges, under the tab bar and the arrows' row and above Linked mentions (`botArea`, kept current by a `ResizeObserver` on those bars); on a board it is held in the bottom-right corner. While it is dragged, `bot-motion.ts` (a small store) carries its position to the bubble, so a drag redraws only those two. Quick ask is about the open note: each question calls `get_note_context` (budgeted) for the note and its links,
+  pointing at it), not a `FloatingWindow`. The bot stands only along the note area's left, right and bottom edges, under the tab bar and the arrows' row and above Linked mentions (`botArea`, kept current by a `ResizeObserver` on those bars and a `MutationObserver` on the view, so a bar that comes with another tab is seen in the next frame); on a board it is not shown. While it is dragged, `bot-motion.ts` (a small store) carries its position to the bubble, so a drag redraws only those two. Quick ask is about the open note: each question calls `get_note_context` (budgeted) for the note and its links,
   an "About: <note>" line marks a change of note, and the thread lives in memory only; "Save as chat"
   writes it as a normal chat in `Recto/Chats`. `shared/quick-ask.ts` holds its shared types and
   `providers/quick-ask.ts` its prompt and session. ⌘⇧H hides every floating window and the bot. Chats

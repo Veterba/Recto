@@ -1,11 +1,10 @@
 import { useCallback } from 'react'
 import { CHATS_MAX_WIDTH, CHATS_MIN_WIDTH } from '../../../app/appearance'
-import type { FileNode } from '@shared/vault'
 import { commands } from '../../../app/commands'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import type { MenuItem } from '../../../ui/ContextMenu'
-import { BotHost, BotList, useBotsEnabled } from '../../bots'
+import { BotHost, MAIN_BOT, useBots, useBotsEnabled } from '../../bots'
 import type { NoteCandidate } from '../../bots/components/Composer'
 import { openChats, useShownChat } from '../chats-store'
 
@@ -28,7 +27,6 @@ const SECTIONS: readonly Section[] = [
 type Props = {
   width: number
   onResize: (width: number) => void
-  tree: readonly FileNode[]
   openFile: (path: string, heading?: string | null) => void
   notes: () => readonly NoteCandidate[]
   onOpenSettings: () => void
@@ -41,6 +39,7 @@ type Props = {
 export function ChatsPanel(props: Props): React.ReactElement {
   const shown = useShownChat()
   const botsOn = useBotsEnabled()
+  const bots = useBots()
 
   const startDrag = useCallback(
     (ev: React.PointerEvent) => {
@@ -64,7 +63,13 @@ export function ChatsPanel(props: Props): React.ReactElement {
     [props],
   )
 
+  // The other bots, one menu away instead of a list over the chat: it is Recto's chat nearly always.
+  const others = (bots ?? []).filter((bot) => bot.id !== shown)
   const menuExtra: MenuItem[] = [
+    ...others.map(
+      (bot): MenuItem => ({ kind: 'item', label: bot.id === MAIN_BOT ? `Back to ${bot.name}` : `Chat with ${bot.name}`, icon: 'bot', run: () => openChats(bot.id) }),
+    ),
+    ...(others.length > 0 ? [{ kind: 'separator' as const }] : []),
     {
       kind: 'item',
       label: props.floatingBot ? 'Hide the floating bot' : 'Show the floating bot',
@@ -109,9 +114,6 @@ export function ChatsPanel(props: Props): React.ReactElement {
         </p>
       ) : (
         <>
-          <div className="chats__list">
-            <BotList tree={props.tree} activeBot={shown} query="" onOpen={(bot) => openChats(bot.id)} />
-          </div>
           <div className="chats__chat">
             <BotHost key={shown} botId={shown} openFile={props.openFile} notes={props.notes} menuExtra={menuExtra} />
           </div>

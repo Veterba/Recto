@@ -2,7 +2,6 @@ import { useSyncExternalStore } from 'react'
 import { isActive, type BotJob } from '@shared/bots'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { api } from '../../app/api'
-import { markUnread } from './unread'
 
 /**
  * The answers main is working on (bots/jobs.ts), as the renderer sees them:
@@ -33,7 +32,6 @@ function start(): void {
   if (started) return
   started = true
   api.on(IPC_EVENT.botsJob, put)
-  api.on(IPC_EVENT.botsUnread, (event) => markUnread(event.botId))
   api.on(IPC_EVENT.botsOpenTopic, (event) => {
     for (const listener of openListeners) listener(event)
   })
@@ -66,18 +64,6 @@ export function jobForTopic(topic: string | null): BotJob | null {
 /** Every job of a topic main still has: the running one, waiting ones, the last ended. */
 export function topicJobs(topic: string | null): BotJob[] {
   return topic === null ? [] : [...byId.values()].filter((j) => j.topic === topic)
-}
-
-/** The bot's job that runs now, if any, else one of its waiting ones. */
-export function botJob(botId: string): BotJob | null {
-  const mine = [...byId.values()].filter((j) => j.botId === botId && isActive(j))
-  return mine.find((j) => j.state !== 'queued') ?? mine[0] ?? null
-}
-
-/** The bot's newest ended job, to re-read what it wrote: main writes topic files as its own writes, unannounced. */
-export function lastEnded(botId: string): string | null {
-  const ended = [...byId.values()].filter((j) => j.botId === botId && !isActive(j))
-  return ended.at(-1)?.id ?? null
 }
 
 /** A notification about an answer was clicked. */

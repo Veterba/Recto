@@ -4,6 +4,21 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.55.1 — 2026-11-03
+### Changed
+- The Chats panel opens straight on Recto's chat: the list of bots above it is gone, and other bots, when there are any, are in the chat's ⋯ menu.
+- The AI guide (Settings → AI) is picked by typing a note's name, from your notes only, instead of a menu of every file in the vault.
+- The floating bot is not shown on boards, where the lanes and the card panel leave no corner free; ⌘J still opens Quick ask there.
+
+### Fixed
+- The floating bot moves at once when you switch between a note and a page without Linked mentions, such as a new tab, instead of a moment later.
+- "Ollama not running · ollama serve · Check again" stays on one tidy line instead of breaking mid-word.
+- Two blue lines no longer appear at the sides of the active tab after a key press.
+- "Show the floating bot" in the chat's menu and "Show board" over a board's Markdown stay on one line.
+
+### Removed
+- The "Comments — later" placeholder in a card's panel.
+
 ## v0.55.0 — 2026-11-02
 ### Added
 - Recto's chat and Quick ask can answer with another provider than the model on your Mac, picked in the composer's model menu: Ollama on this Mac (the default), Codex CLI, ChatGPT plan (Preview), Claude Code (Experimental), or an OpenAI or Anthropic API key. The menu groups the cloud by maker - Anthropic, OpenAI - each with its own page of ways in and models. Settings → AI → Providers shows each one's state and signs in; the keys are under "Advanced · API keys".

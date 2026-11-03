@@ -39,10 +39,9 @@ describe.skipIf(!RUN)('answers survive leaving the chat; the queue', () => {
       )
     }, 0)
   const openRecto = async (): Promise<void> => {
-    // Chats live in the panel on the right (⌘⇧C), Recto's open under the list. It stays open
+    // Chats live in the panel on the right (⌘⇧C), Recto's chat in it. It stays open
     // across a reload, so it is only opened when it is not.
     if ((await page.locator('.chats').count()) === 0) await page.keyboard.press('Meta+Shift+C')
-    await page.locator('.chats .bot-row').first().click()
     await page.waitForSelector('.bot-chat .composer__input')
   }
   const type = async (question: string): Promise<void> => {
@@ -82,9 +81,8 @@ describe.skipIf(!RUN)('answers survive leaving the chat; the queue', () => {
   it('send, switch to the Data tab, come back: the answer is still coming, then complete', async () => {
     await type('How do I mix soil?')
     await page.waitForSelector('.bot-chat .is-pending')
-    // The sidebar row says what it is doing, from the job's steps; the header and the face say it too.
-    await page.waitForFunction(() => /…$/.test(document.querySelector('.bot-row__preview .bot-doing')?.getAttribute('data-text') ?? ''))
-    expect(await page.locator('.bot-chat__specialty .bot-doing').count()).toBe(1)
+    // The header says what it is doing, from the job's steps; the face says it too.
+    await page.waitForFunction(() => /…$/.test(document.querySelector('.bot-chat__specialty .bot-doing')?.getAttribute('data-text') ?? ''))
     await page.keyboard.press('Meta+1')
     await sleep(600)
     await openRecto()

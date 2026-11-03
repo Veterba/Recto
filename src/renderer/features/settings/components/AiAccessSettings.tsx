@@ -16,6 +16,7 @@ import { Icon } from '../../../ui/Icon'
 import { SettingGroup } from '../../../ui/SettingGroup'
 import { SettingRow } from '../../../ui/SettingRow'
 import type { SettingsDeps } from '../settings-deps'
+import { NotePicker } from './NotePicker'
 import { ProvidersGroup } from './ProvidersSettings'
 
 /**
@@ -89,7 +90,6 @@ type GroupProps = { settings: AiAccessSettings; save: (next: AiAccessSettings) =
 function GuideGroup({ settings, save, notes }: GroupProps & { notes: readonly string[] }): React.ReactElement {
   const [draft, setDraft] = useState<{ name: string; text: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const markdown = notes.filter((n) => n.toLowerCase().endsWith('.md'))
   return (
     <SettingGroup title="AI guide">
       <SettingRow
@@ -98,22 +98,7 @@ function GuideGroup({ settings, save, notes }: GroupProps & { notes: readonly st
         more="Any note works - write your own (a system.md, say) and choose it here. Draft an AI guide starts one from how the vault is set up, for you to edit before it is saved."
       >
         <div className="setting__buttons">
-          <select
-            className="setting__select"
-            aria-label="AI guide note"
-            value={settings.guide ?? ''}
-            onChange={(e) => save({ ...settings, guide: e.target.value === '' ? null : e.target.value })}
-          >
-            <option value="">None</option>
-            {settings.guide !== null && !markdown.includes(settings.guide) && (
-              <option value={settings.guide}>{settings.guide} (missing)</option>
-            )}
-            {markdown.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
+          <NotePicker notes={notes} value={settings.guide} label="AI guide note" onChange={(guide) => save({ ...settings, guide })} />
           <button
             className="btn btn--ghost btn--sm"
             onClick={() => void api.invoke(IPC.aiAccessDraftGuide).then((text) => setDraft({ name: 'AI guide', text }))}
