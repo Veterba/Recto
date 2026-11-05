@@ -119,6 +119,16 @@ import {
   Square,
   SquareKanban,
   X,
+  MousePointer2,
+  Hand,
+  StickyNote,
+  Shapes,
+  Frame,
+  Paperclip,
+  MoveUpRight,
+  PaintBucket,
+  Play,
+  SquareDashed,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -252,6 +262,16 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   'spell-check': SpellCheck,
   'user-round': UserRound,
   waypoints: Waypoints,
+  'mouse-pointer-2': MousePointer2,
+  hand: Hand,
+  'sticky-note': StickyNote,
+  shapes: Shapes,
+  frame: Frame,
+  paperclip: Paperclip,
+  'move-up-right': MoveUpRight,
+  'paint-bucket': PaintBucket,
+  play: Play,
+  'square-dashed': SquareDashed,
 }
 
 type Props = {

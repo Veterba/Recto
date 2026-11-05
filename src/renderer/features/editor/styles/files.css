@@ -52,11 +52,6 @@
   padding: 0;
   align-items: stretch;
 }
-.file-view__pdf {
-  flex: 1;
-  border: 0;
-  background: var(--bg-secondary);
-}
 
 /* A file Recto cannot show is not an error: the card's icon stays neutral. */
 .file-card .note-error__icon {

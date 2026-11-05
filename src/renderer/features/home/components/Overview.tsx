@@ -111,7 +111,8 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
   const again = rediscover(index, data.opened, data.openedSince, today, now)
   const since = index.oldest
   const counted = countedLine([data.editsSince, data.writtenSince, data.activeSince], today)
-  const attention = index.orphans.length + index.broken.length + late.length > 0
+  const missing = index.missingOnCanvases ?? []
+  const attention = index.orphans.length + index.broken.length + late.length + missing.length > 0
   const lists = [index.folders.length > 0, index.hubs.length > 0].filter(Boolean).length
 
   return (
@@ -128,6 +129,7 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
         <Total value={compact(index.words)} label="Words" />
         <Total value={compact(index.links)} label="Links" />
         <Total value={compact(index.tags)} label="Tags" />
+        {(index.canvases ?? 0) > 0 && <Total value={compact(index.canvases)} label="Canvases" />}
       </div>
 
       <section className="overview__section" aria-label="This week">
@@ -179,6 +181,15 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
                 title="Broken links"
                 detail="[[Links]] to notes that don’t exist"
                 onClick={() => actions.go({ kind: 'broken' })}
+              />
+            )}
+            {missing.length > 0 && (
+              <Attention
+                count={missing.length}
+                title="Missing notes on canvases"
+                detail={`Gone from the vault, still placed on ${new Set(missing.map((m) => m.canvas)).size === 1 ? 'a canvas' : `${new Set(missing.map((m) => m.canvas)).size} canvases`}`}
+                warn
+                onClick={() => actions.openNote(missing[0]!.canvas)}
               />
             )}
             {late.length > 0 && (

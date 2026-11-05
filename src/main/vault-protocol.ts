@@ -1,4 +1,6 @@
 import { net, protocol } from 'electron'
+import { createReadStream, promises as fsp } from 'node:fs'
+import { Readable } from 'node:stream'
 import { pathToFileURL } from 'node:url'
 import { resolveInVault } from './paths'
 import { currentVault } from './vault'
@@ -17,6 +19,51 @@ import { currentVault } from './vault'
  */
 
 const SCHEME = 'recto-file'
+
+/** The types a video or audio player needs to be told; anything else is left to the file fetch. */
+const MEDIA_TYPES: Readonly<Record<string, string>> = {
+  mp4: 'video/mp4',
+  m4v: 'video/x-m4v',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  flac: 'audio/flac',
+}
+
+/**
+ * A part of a file, for a `Range: bytes=a-b` request. Video needs it: a
+ * player reads the file's index first, and a movie from QuickTime or a screen
+ * recording keeps that at the end - without parts, the player cannot reach it
+ * and the video does not play. Null when the range is not one this answers.
+ */
+async function partOf(absolute: string, range: string): Promise<Response | null> {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim())
+  if (m === null) return null
+  const size = (await fsp.stat(absolute)).size
+  let start = m[1] === '' ? NaN : Number(m[1])
+  let end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1)
+  // "bytes=-500": the last 500.
+  if (Number.isNaN(start)) {
+    start = Math.max(0, size - Number(m[2]))
+    end = size - 1
+  }
+  if (start > end || start >= size) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } })
+  const ext = absolute.slice(absolute.lastIndexOf('.') + 1).toLowerCase()
+  const body = Readable.toWeb(createReadStream(absolute, { start, end })) as ReadableStream
+  return new Response(body, {
+    status: 206,
+    headers: {
+      'Content-Type': MEDIA_TYPES[ext] ?? 'application/octet-stream',
+      'Content-Length': String(end - start + 1),
+      'Content-Range': `bytes ${start}-${end}/${size}`,
+      'Accept-Ranges': 'bytes',
+    },
+  })
+}
 
 /** Must run before `app.whenReady()`, or the scheme has no privileges. */
 export function registerVaultScheme(): void {
@@ -52,6 +99,11 @@ export function handleVaultScheme(): void {
       return new Response('forbidden', { status: 403 })
     }
 
+    const range = request.headers.get('Range')
+    if (range !== null) {
+      const part = await partOf(absolute, range).catch(() => null)
+      if (part !== null) return part
+    }
     return net.fetch(pathToFileURL(absolute).toString())
   })
 }

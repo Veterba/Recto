@@ -58,9 +58,10 @@ signature disagree.
 |---|---|
 | `app:` | startup state, platform, vibrancy and theme source, full screen, clipboard text |
 | `vault:` | pick, open, close, switch, recent vaults; `vault:changed` pushes watcher batches |
-| `fs:` | tree, read, write, create, rename, move, trash, reveal, import images / dropped bytes |
+| `fs:` | tree, read, read text, read bytes (a PDF), write, create, rename, move, trash, reveal, open with the system's app, import images / files (an open dialog; each file copied into attachments, paths returned) / dropped bytes |
 | `state:` | read and write one `.recto/<feature>.json` |
-| `index:` | search, backlinks, stats, vault usage, link resolution, unresolved, graph, boards, context |
+| `index:` | search, backlinks, canvases a file is on, stats, vault usage, link resolution, unresolved, graph, boards, context |
+| canvas | `IPC.canvasLinkPreview` (a link node's preview), `IPC.canvasProposeLink` ("Make it a link": queues a Suggested edit) and `IPC.playerOpen` (plays a YouTube video or vault video in the mini-player window) |
 | `links:` | undo the link rewrite of a rename |
 | `history:` | a note's stored versions, and restoring one |
 | `archive:` | archive, list, restore, purge, retention |
@@ -201,6 +202,7 @@ board records an opened card as a step (`step`); the shell does the travelling
 | `search` | full-text search, quick switcher | `search-result` (inside the shared `palette`) |
 | `graph` | the link graph and its settings panel | `graph`, `gset`, `gwheel`, `glegend` |
 | `boards` | kanban boards as notes in the Obsidian Kanban format (`shared/kanban.ts`: parse, and line-level edits that never touch a line they do not mean to): full-height glass columns, a card panel that edits a card note's frontmatter one key at a time (`shared/card-fields.ts`), and a widget strip (`widgets/registry.ts`). `hooks/use-board-cards.ts` reads the board note and the cards' notes; every change is shown first and written second, every board write re-reads the file and makes the same change to what is there now (found by the card's own lines), edits to one card's note go one at a time, and a failed write is undone with a notice. A board note opens as a board in a note tab too (`BoardNote`, through the editor's `NoteHosts`), with its Markdown a click away; a link to a board or a card opens it in the tab you are in, or in Tasks when that tab is not one to move on from (`use-shell-navigation.ts`); a card opened on a board is a step in the tab's history. The card panel edits the note's body with the editor's `NoteBodyEditor` (frontmatter stays the panel's fields', `withBody`). `boards-store.ts` lists boards and where each card stands (from the index), publishes the link icons (`app/link-kinds.ts`) and holds `isTaskPath`, the one rule that keeps Recto/ (boards, cards, chats) out of the Data tree unless Settings → Vault → "Show the Recto folder" is on (`recto-folder-setting.ts`, kept per vault in `.recto/recto-folder.json`). Where the files live is `shared/recto-paths.ts` and nothing else; rename, delete and filing of cards are `main/boards.ts` (see Recto's folder, below). The one-time move from `boards.json` is `shared/board-migration.ts` (plan) and `main/board-migration.ts` (backup, write) | `board`, `board-col`, `board-card`, `board-pri`, `board-cal`, `board-seg`, `board-done`, `board-due`, `board-pris`, `board-widget`, `card-panel`, `new-card`, `boards` |
+| `canvas` | JSON Canvas files (`.canvas`) drawn on a plane you pan and zoom, and the Canvas section's list (`components/CanvasList.tsx`). `use-canvas.ts` reads, changes and writes one file; `canvas-flow.ts` maps it to the drawing library; `canvas-change.ts`, `canvas-edit.ts`, `canvas-menus.ts`, `canvas-guides.ts` are the pure parts (undo, selection edits, right-click menus, snapping); `canvas-state.ts` holds folds; `note-body.ts` writes a note edited on a canvas; `shapes.ts`, `arrow-geometry.ts` (pure maths), `canvas-arrows.ts` and `canvas-style.ts` are the shapes, arrows and looks; `components/CanvasNodes.tsx` and `CanvasBoardNodes.tsx` (cards) draw each kind of node, `CanvasEdge.tsx` an arrow, and `CanvasToolbar.tsx` and `StyleBar.tsx` are the two bars. See Canvas, below | `canvas` |
 | `topics` | topics settings and the run notice | `topics` |
 | `tidy` | filing loose notes | `tidy` |
 | `home` | the overlay on ⌃⌘H: one WebGL scene (`scene.ts`) behind two panes that slide - the welcome, whose text the shader draws (`hero-text.ts`, `scene-text.ts`), and the vault overview, a pane that scrolls as a whole: the vault's name drawn by the shader (moved by a scroll uniform), then a solid card (`components/Overview.tsx`). Main gathers the raw material (`main/overview.ts`: one `overview` query on the index, the `.recto/stats/` files, the userData usage file); every figure is a pure sum in `shared/overview.ts` worked out against the renderer's clock. Where it was left (pane, page, scroll) is `overviewPlace` in `app-state.json`. Edits, active time and last opened are reported from `app/usage.ts` | `home`, `overview` |
@@ -365,6 +367,216 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
 | `<userData>/provider-chatgpt.bin`, `provider-openai.bin` (safeStorage) | ChatGPT sign-in and the OpenAI key, encrypted; the Anthropic key stays in `secrets.bin` |
 | `<vault>/.recto/ai-access.json` | `cloud` flag, with the rest of AI access |
 
+## Canvas
+
+A canvas is a `.canvas` file in the vault: JSON Canvas 1.0, the format Obsidian uses, so the same file
+opens in both. Like a note, the file is the truth; the index only remembers which files each canvas puts
+on it.
+
+```
+CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-fs.ts ──▶ foo.canvas
+ (xyflow)     queued writes                                                  │
+    ▲                                                          watcher ◀─────┘
+    │ vault:changed → note bus → read again               note-changed ▼
+    └────────────────────────────────────────────── indexer: canvases, canvas_nodes, canvas_edges
+```
+
+- **The file stays pure JSON Canvas** (`shared/canvas.ts`). A node or edge is kept as the object it was
+  read as: keys Recto doesn't know, node types it doesn't draw (a plugin's) and top-level keys such as
+  `metadata` are carried through and written back where they were. `patchNode` / `patchEdge` set or
+  remove only the keys they are given; positions and sizes are rounded to whole numbers. The file is
+  written the way Obsidian writes it (tabs, one node or edge per line), so a node left alone keeps its
+  line and a change is a one-line diff. A file in another layout is rewritten into this one by its first
+  change from Recto. An empty file is an empty canvas; one that doesn't parse, or has a node without
+  `id`, `type`, `x`, `y`, `width` and `height`, is refused with a message rather than drawn wrongly.
+- **The view** (`features/canvas/`) is `@xyflow/react` 12 (MIT). `canvas-flow.ts` makes its nodes and
+  edges from the file on every change, with the file's node in `data`, so what is drawn is the node as
+  read. Groups are drawn under everything else; among the rest the file's order is the order on screen
+  (bring to front and send to back reorder the list). A group holds the nodes wholly inside its frame,
+  by where they are (`childrenOf`), as Obsidian decides it, and carries them when dragged. An edge with no
+  sides in the file picks the two that face each other (`autoSides`). Edges to a node that isn't there
+  stay in the file and aren't drawn. There is no grid and no background; a dragged node snaps only to the
+  edges and centres of other nodes (`canvas-guides.ts`, 6 screen pixels, off while ⌘ is held), and
+  positions are whole numbers. The trackpad pans one to one (`panOnScroll`), a pinch or ⌘-scroll zooms,
+  and nothing is animated. Over anything that scrolls (a note's text, a PDF, a board
+  and its lanes) the wheel scrolls only that, even at its end; over anything else it pans (`scrollOrPan` in
+  `CanvasNodes.tsx` toggles xyflow's `nowheel` class on each wheel turn, by whether the element can scroll).
+- **Speed.** Every node type is `memo`ised and reads only its own node, so a drag redraws one node.
+  Text is rendered Markdown; the note editor (`NoteBodyEditor`) is put in only for the node being
+  edited. `onlyRenderVisibleElements` leaves off-screen nodes out of the DOM. Below a zoom of 0.45
+  (`usePlain`, a boolean, so cards redraw only when it flips) a card keeps its look and shows its text as
+  plain lines (`PlainText`: Markdown marks taken off, at most 1200 characters) instead of rendered
+  Markdown. A note's text is read once per vault revision and kept (`noteTexts` in `CanvasNodes.tsx`,
+  cleared when the note bus revision changes), so a note panned out of view and back isn't read again. The 500-node
+  test (`test/e2e/canvas-perf.test.ts`) holds opening under a second and panning above 30 fps.
+- **Node kinds.** `text`: Markdown, edited in place; with a shape (below), the figure behind its text.
+  `file`: by `fileKind` — a card is drawn and changed through `useBoardCards` (the board's own hook, so
+  Mark done writes the board exactly as dragging does); any other note, a board note too, is read with
+  `fs:read` (again on each note bus revision) and edited with `note-body.ts`, which waits 600 ms, re-reads
+  the note and writes the new body under the frontmatter as it is on disk. A board is thus shown as its
+  Markdown; Obsidian `%%` comments (its settings block) are cut from what is shown. A note node's header
+  has "Open beside the canvas": `VaultShell`'s `openBeside` opens the note in another tab group of the
+  workspace, or splits the canvas's leaf when there is none. Images and audio load by `vaultFileUrl`
+  (the vault file scheme); a video file shows its first frame (a muted `<video>` with `preload="metadata"`
+  at `#t=0.1`) under a ▶ button. Pictures and videos are
+  resized with their proportions kept, are put down in their own (read from the file, a second at most),
+  and may carry a `caption`, a top-level key of the node. A file of `fileKind` `code` (.txt, .csv, .json,
+  code) is `TextFileNode`: its first 4000 characters through `fs:read-text`; a double-click makes it the
+  node being edited (`actions.editing`) and puts the app's `CodeView` in the node, which saves as you
+  type and takes outside changes, until Escape or a click elsewhere. A PDF is `PdfNode`, see PDFs below.
+  Any other format is a card with its name, Open (`IPC.fsOpenWithApp`, main: `shell.openPath` on a path
+  checked to be in the vault) and Reveal in Finder. `link`: the URL with a preview; a YouTube URL
+  (`youTubeId`) is `YouTubeNode`: the fetched picture and title with a ▶ button. Nothing plays inside the
+  canvas and the renderer's CSP has no `frame-src` for YouTube (see Video, below). `group`: a frame and a label. Anything else is `unknown`: a box saying what it is,
+  kept. A text node whose shape is `point` is `PointNode`, an arrow's free end (below).
+- **Growing.** While a text or note node is edited, `useGrow` watches its content with a
+  `ResizeObserver` and, when the text runs past the bottom, raises the drawn height (up to 640) through
+  `actions.grow`. Nothing is written then: `stopEditing` in `CanvasView.tsx` writes the final height and
+  the text in one change, so it is one Undo step. A shape doesn't grow. Clicking another node ends the
+  editing.
+- **Tools.** `CanvasToolbar.tsx`: `Tool` is Select, Hand, Arrow, Text, Frame or `shape:<name>`; Note and
+  Board open a picker (find, or "Create “…”" for a note, made beside the canvas under the card name rules);
+  Image, video or file calls `IPC.fsImportFiles` (main: a dialog, then `vaultFs.importFile` into
+  attachments, as for images) and puts the paths down through `addFiles`. A placing tool does its one
+  placement in `onPaneClick` (or the arrow's drag) and then sets Select. Keys V H A T F R pick tools (the one shape Recto makes is the square),
+  N and B open the pickers.
+- **Boards on a canvas.** `BoardPreview` in `CanvasBoardNodes.tsx`, through the board's own
+  `useBoardCards`: lanes in a CSS grid that wraps by the node's width, the first cards of each as chips,
+  a circle that moves a card to the done lane (or back) with the board's `move`. The name bar switches
+  the node to `NoteNode` (the board's Markdown, `%%` comments hidden), kept per canvas as `raw` in
+  `.recto/canvas.json` beside the folds (`canvas-state.ts`). A task opened from a canvas
+  (`CanvasView`'s `open`) is shown by `CanvasCardPanel.tsx`: the board's `CardPanel` on the right.
+- **Media.** Pictures and videos have no frame; `actions.fitMedia` corrects a node whose shape is not its
+  picture's when it loads (one change). The vault protocol (`main/vault-protocol.ts`) answers `Range`
+  requests with 206 parts, so a player can read a movie's index at its end.
+- **Video.** Nothing plays inside the canvas. A YouTube node (`YouTubeNode`) and a video file node
+  (`AttachmentBody`) are a still with a ▶ button; ▶ calls `actions.play(PlayerItem)` → `IPC.playerOpen`
+  (`PlayerItem` in `shared/ipc.ts`: `{kind: 'youtube', id, title}` or `{kind: 'file', path, title, ratio?}`).
+  `main/player.ts` keeps one `BrowserWindow`, reused, always on top (floating level, on all workspaces),
+  bottom right of the primary display, 480 px wide, movable and resizable, with its aspect ratio set to the
+  video's (16:9 when unknown). It is sandboxed with no preload, and a link out of it goes to the browser.
+  YouTube is the `youtube-nocookie.com/embed/<id>` page loaded as the window's own page, with a referrer
+  (`https://recto.app/`) because the embed refuses to play without one; the id must be 11 characters of
+  `[\w-]`. A vault video is a small `data:` page holding one `<video>` whose `src` is the `recto-file://`
+  URL, after `resolveInVault` has checked the path. The YouTube picture and title come from the link
+  preview (above), so the canvas still loads nothing from YouTube and the renderer's CSP has no `frame-src`.
+  A video node is dragged like any node; only the ▶ button and title are `nodrag`.
+- **PDFs.** `features/pdf/PdfView.tsx` (its styles in `pdf.css`) has two modes: `preview` on a canvas (pages and
+  highlights, no text layer; a double-click calls `openReader`, which shows it in `PdfPanel.tsx`: a panel
+  docked in `VaultShell` beside the AI panel, its PDF in a small store (`showPdf`), its width in localStorage) and `reader` in a tab (`FileView` in the editor
+  shows every PDF with it): text layer, highlighting, zoom steps and a bottom bar. It uses `pdfjs-dist` 6.5 (Apache-2.0), its worker loaded by URL. The bytes
+  come through `IPC.fsReadBytes` (`vaultFs.readBytes`), not a fetch, since the page can't read vault files
+  across origins; a document is opened once per path and shared by every node that shows it. Every page's
+  shape is read first so the scroll is the whole document's from the start; each page is then drawn to a
+  canvas (twice its screen size) only when it comes within 400 px of the view (`IntersectionObserver`), and
+  in the reader pdf.js's `TextLayer` is laid invisibly over it so text can be selected. A selection shows a Highlight
+  button; `rectsOn` turns the selection's client rects into fractions of the page, which
+  `pdf-highlights.ts` (`useHighlights`) stores as `{id, page, rects, text}` in `.recto/pdf-highlights.json`
+  by the PDF's path, so the PDF is never changed and a highlight is right at any size. A click on a
+  highlight (not a selection) in the reader removes it. The node opens at its `#page=N` and shows the page in view over
+  the page count. `moveCanvasState` (`main/canvas.ts`) moves these keys with the file on rename or move, as
+  it does a canvas's folds.
+- **Shapes and looks.** `shapes.ts`: a shape is `styleAttributes.shape` on a text node (`styleOf` and
+  `withStyle` in `shared/canvas.ts` read and write that object, leaving other keys in it and removing it
+  when empty). The tool bar makes only squares (`rectangle`); the other shapes in `shapes.ts` are drawn
+  for files the Advanced Canvas plugin made (its names: `circle`, `diamond`, `pill`, `parallelogram`),
+  with their text outside them, under or over (`labelAt`). `figureOf` returns the SVG path drawn behind
+  the text (`Figure` in `CanvasNodes.tsx`). `canvas-style.ts` lists the options the style bar
+  (`StyleBar.tsx`, floating over the selection, hidden while dragging or typing) can set, as `styleAttributes`
+  keys: `border`, `textAlign` and `path` are Advanced Canvas's, `fill`, `fontSize`, `width` and `labelAt` Recto's;
+  the default of each is the key left out, so a canvas never styled has none. Arrowheads are the spec's own
+  `fromEnd` and `toEnd` (`setHead`), colour the spec's `color` (a preset, or any hex).
+- **Arrows.** JSON Canvas has only sides, so the tldraw way is kept in `styleAttributes`: `fromAnchor` and
+  `toAnchor` (`"x,y"`, fractions of the node, the pin inside it) and `bend` (how far the middle is pushed
+  sideways, in canvas units). `arrow-geometry.ts` (pure, tested without a pointer) cuts a line or an arc
+  through the bent middle where it leaves and enters each node. `CanvasEdge.tsx` draws that when the edge
+  has a pin or a bend, and xyflow's bezier between the sides otherwise, so an edge Obsidian made keeps
+  its curve. A selected arrow has three handles (start, middle, end); an end is dropped on a node, pinned
+  where it is dropped (near the middle, at the centre), or in empty space. `canvas-arrows.ts` makes the
+  changes: `connect`, `setEnd`, `setBend`, and `dropLoosePoints`. A free end is a 2 × 2 text node with
+  `styleAttributes.shape: "point"` (`isPointNode`), unselectable and drawn as nothing; it is removed
+  when no arrow uses it, and when its arrow or the end is removed. `fromSide` and `toSide` are still
+  written, the sides that face each other, so Obsidian draws the arrow too (between those sides).
+- **Writes** (`use-canvas.ts`). Every change is a function of the canvas it is made to
+  (`CanvasChange`). It is shown at once, then written, one at a time through a queue; a write reads the
+  file again first and, if it is no longer what the view last read or wrote (Obsidian, sync), makes the
+  same change to what is there now instead of writing the screen's copy over it — the way board writes
+  work. A write that fails is undone on screen with a notice. While a write is pending, a re-read leaves
+  the screen alone. Self-writes are marked before they happen (the watcher doesn't echo them); the view
+  calls `noteIndexChanged()` so backlinks and the graph catch up.
+- **Undo** is also a change. `canvas-change.ts` `inverse(before, after)` compares nodes and edges by id and
+  builds the change that puts back only those items (removed ones at their old place, added ones taken
+  out), so an edit made since to anything else stays. The stacks hold 200 steps and live with the open
+  view. Drags and resizes are written when they end, as one step.
+- **Recto-only state** stays out of the file. `.recto/canvas.json` (by canvas path): which groups and
+  notes are folded (`canvas-state.ts`; folding is only drawn, the file keeps every size).
+  `.recto/canvas-links.json` (by URL): link previews, fetched once by main (`main/canvas.ts`: 6 s timeout,
+  the page read up to 512 KB, pictures up to 200 KB) and stored as data URLs, so drawing a canvas loads
+  nothing from the web and the renderer's CSP, which blocks remote images, never matters. A page that
+  can't be fetched stores nothing and is asked again next time. `.recto/canvas-notes.json`: the folder
+  last chosen for "Make it a note". `.recto/pdf-highlights.json` (by PDF path): see PDFs above. A renamed
+  or moved canvas or PDF takes its folds and highlights with it (`moveCanvasState`, called from `relocate`).
+- **Make it a note** (`MakeNoteBar`, a glass card with the name and a searchable folder list) makes the note
+  with the card machinery (`createCardNote`, the same name rules and vault-wide unique names) and then
+  changes the node in place to `type: "file"`.
+- **Drawing.** `drawing.ts` (pure): strokes as points with pressure, drawn with perfect-freehand (MIT);
+  `tidy` pulls a nearly straight stroke part-way to a line and a nearly closed round one part-way to an
+  ellipse, and only smooths the rest; `toSvg`/`fromSvg` write a drawing as an SVG whose `<metadata
+  id="recto-drawing">` keeps the strokes. `drawing-store.ts` holds each drawing's strokes and writes them back.
+  In `CanvasView`, the Draw tool (sticky) and the eraser capture the pointer like the Arrow tool; a stroke goes
+  to the drawing being drawn on (`drawTarget`, or one it touches) or starts a new SVG in `<canvas> drawings/`
+  (`fs:create` with numbering) placed as a file node; `SvgNode` draws a Recto drawing from its strokes in the
+  text colour, any other SVG as a picture. Text (T) is a text node with `border: invisible, fill: none`.
+- **Zoomed out.** Below 45% (`usePlain`): text as plain lines; a PDF preview its first page only (`far`); a
+  board its lanes and counts (`far`).
+- **Where canvases live.** `CANVAS_FOLDER` (`Recto/Canvas`) in `shared/recto-paths.ts`, beside the boards and
+  chats folders - every path is built from those constants. "New canvas" makes one there; the list offers to move
+  canvases found elsewhere (`isStrayCanvas`) through `fs:move`, so links and Recto's data about them follow, and
+  never moves one unasked (`vaultFs.move` makes the folder if it is not there). A note made from a canvas goes
+  `noteFolderBeside` it: its folder, or the vault's top when the canvas is in Recto/. Pasting or dropping a web
+  address makes a link node (`addLink` in `CanvasView.tsx`), 16:9 for YouTube.
+- **The list.** `CanvasList.tsx` has a right-click menu (Open, Rename, copy paths, `fs:reveal`, Move to
+  archive with a confirm, through `archive:add`) and an × that asks the same; after a create, rename or
+  archive it calls `onChanged` so the tree is read again and the list is right at once.
+- **Make it a link.** `IPC.canvasProposeLink` (`main/canvas.ts`) adds `[[shortest name]]` at the end of the
+  first note and hands it to the Suggested edits queue (`vault-tools/proposals.ts` `queue`) as a draft
+  from `recto-canvas`. It is the person's own action, so it doesn't consult the AI write mode or excluded
+  folders; it uses only the queue and the diff, and nothing is written before Apply. A note that already
+  links there gets a notice and no proposal.
+- **Index.** Migration 15 adds `canvases` (path, mtime, size), `canvas_nodes` (canvas, node, target,
+  subpath: one row per file node) and `canvas_edges` (canvas, from_target, to_target, label: edges between
+  two different files). `workers/indexer/canvases.ts` fills them on each change and on every reconcile
+  (the walk now includes `.canvas`; the watcher too); a canvas that can't be parsed keeps no node rows.
+  Like every table here it is a cache and is rebuilt from the files.
+- **What reads the tables.**
+  - *Backlinks:* `index:canvases-of` gives a note's canvases; `Backlinks.tsx` lists them first as
+    "On canvas <name>".
+  - *Rename and move:* `relocate` in `ipc.ts` asks the indexer for `canvas-referrers` before the move
+    (a folder counts everything under it), then `rewriteCanvasesTo` (`vault-fs.ts`) changes only those
+    file nodes' paths through `renameInCanvas`. The changed canvases join the link rewrite's list, so the
+    one Undo restores both. A canvas that is itself being moved isn't one of its own referrers; one that
+    can't be parsed is left alone.
+  - *Graph:* each canvas is a node (`canvas: true`, drawn as a diamond, switch `showCanvases`), tied to
+    the notes on it by edges marked `member`, and the edges drawn between two notes become edges marked
+    `canvas`; both are dashed like a board's cards.
+  - *Overview:* `canvases` counts them; `missingOnCanvases` lists file nodes that name a `.md` the index
+    doesn't have, for "Needs attention". A missing note is also drawn as a placeholder on the canvas
+    (its read fails), and the node stays until removed.
+- **Opening.** `fileKind` calls `.canvas` a canvas. `use-shell-navigation.ts` opens one as a `canvas` view
+  in the tab you are in, else in the Canvas section, so it is a step in the tab's history like a note.
+
+| where | what |
+|---|---|
+| `src/shared/canvas.ts` | parse, write, patch, rename in a canvas; ids; the spec's defaults |
+| `src/renderer/features/canvas/` | the view, its hooks, its bars and its pure edit, shape and arrow code (above) |
+| `src/main/canvas.ts` | "Make it a link", link previews, folds and PDF highlights moved with their file |
+| `src/main/player.ts` | the mini-player window (`IPC.playerOpen`) |
+| `src/renderer/features/pdf/PdfView.tsx`, `pdf-highlights.ts`, `pdf.css` | the PDF preview (canvas) and reader (tab), and their highlights |
+| `src/workers/indexer/canvases.ts` | the three tables and their queries |
+| `src/main/vault-fs.ts` `rewriteCanvasesTo` | the rename rewrite |
+| `<vault>/**/*.canvas` | the canvases (the user's) |
+| `<vault>/.recto/canvas.json`, `canvas-links.json`, `canvas-notes.json` | folds, link previews, last note folder |
+
 ## Recto's folder
 
 Boards, cards and chats live under `Recto/` (`shared/recto-paths.ts` is the one place that knows
@@ -416,7 +628,7 @@ In the vault:
 | path | format | owner |
 |---|---|---|
 | `**/*.md` | markdown with optional YAML-ish frontmatter; unrecognised frontmatter is kept byte for byte | the user |
-| `attachments/` | images pasted or dropped into notes | editor |
+| `attachments/` | images pasted or dropped into notes; files put on a canvas from Finder, the clipboard or the tool bar's dialog | editor, canvas |
 | `templates/`, `Daily/` (configurable) | ordinary notes | templates |
 | `Recto/` | what Recto's features make, as ordinary notes (layout in `shared/recto-paths.ts`): `README.md`; `Boards/<Board>/<Board>.md`, a board in the Obsidian Kanban format (`kanban-plugin: board`, a `## heading` per lane - `Doing (3)` for a WIP limit, `**Complete**` under the done lane - a `- [ ]` item per card, `[[Card]]` for a card that is a note, plain text otherwise, and a `%% kanban:settings` JSON block at the end whose `recto` key holds lane colours and dates, widgets and sort; `new-note-folder` there is where its new cards go) with its cards beside it; `Unsorted/`, cards on no board; `Chats/` (below). A card note has only its own fields - `priority`, `start`, `due`, `tags`, `completed` (set on entering the done lane, removed on leaving it) - and its text; where it sits is the board's | boards |
 | `.recto/boards-migration.json`, `.recto/backup/<date>/` | the one-time move from `boards.json` to board notes: what it made and changed (or `none` when there was nothing to move; once it exists, only a `boards.json` coming back runs it again), and a copy of every file it changed (boards.json included) from before (`main/board-migration.ts`) | `main/board-migration.ts` |
@@ -425,9 +637,10 @@ In the vault:
 | `.recto/chats-migration.json`, `.recto/backups/chats-<date>/` | the one-time move of the old main chats and first bot threads into Recto's topics: what moved, and a copy of `chats/` from before (`main/bots/migration.ts`; that folder is then moved into `Recto/Chats/` by the layout migration) | `main/bots` |
 | `.recto/bots/<id>/` | a bot: `bot.json` (name, specialty, look, personality, model, excluded folders), `SYSTEM.md` and `EXAMPLES.md` (one example answer per kind); Recto is written once into a vault with no `bots` folder, and an unedited SYSTEM.md or EXAMPLES.md is brought up to date | `main/bots` |
 | `.recto/evals/<run id>/` | an eval run's `config.json` and `results.jsonl`, and `graded.jsonl` beside them; the run's report is a note in the evals folder | `scripts/evals` |
-| `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive` | `main/state.ts` |
+| `**/*.canvas` | JSON Canvas (the format Obsidian uses): nodes and edges, one per line, tab-indented; keys and node types Recto doesn't know are kept | the user |
+| `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive`, `canvas` (folds), `canvas-links` (link previews), `canvas-notes` (last folder for "Make it a note") | `main/state.ts` |
 | `.recto/stats/edits.json`, `.recto/stats/words.json` | the vault overview's history: per day, the notes you edited (editor saves, card edits and moves you made; backfilled once from version history) and the words you wrote (`written`: per day and note, the words your saves brought in and kept, as `{ word: count }` - a save's deletions take back that day's words first, `shared/overview.ts applyWords`; read in once from version history); and the vault's total words, first and last count, with the counting rule (`rule`; a day counted under an older rule starts again). Every write reads, merges and replaces the file whole; an iCloud conflict copy (`edits 2.json`) is merged in and removed on the next read | `main/overview.ts` |
-| `.recto/index.db` | SQLite (WAL): the index, tasks, version snapshots, usage events, topic vectors, the bots' piece vectors, note cards and tasks read from plain text | indexer, embedder |
+| `.recto/index.db` | SQLite (WAL): the index, tasks, version snapshots, usage events, topic vectors, the bots' piece vectors, note cards and tasks read from plain text, the files each canvas puts on it (`canvases`, `canvas_nodes`, `canvas_edges`) | indexer, embedder |
 | `.recto/archive/` | archived files until retention runs out | `main/archive.ts` |
 | `.recto/.gitignore` | keeps `index.db`, `.trash/` and `archive/` out of git | written once |
 

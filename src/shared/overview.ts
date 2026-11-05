@@ -37,6 +37,10 @@ export type OverviewIndex = {
   written: { path: string; name: string; date: Day }[]
   /** Notes with at least one link, most linked first: the pool "not opened for a while" picks from. */
   linked: { path: string; name: string; links: number }[]
+  /** How many canvases the vault has. */
+  canvases: number
+  /** Note nodes on a canvas whose note is gone: placeholders until removed. */
+  missingOnCanvases: { canvas: string; target: string }[]
 }
 
 /** One day of `.recto/stats/words.json`: the vault's total words, first and last seen that day. */

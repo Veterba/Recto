@@ -26,6 +26,8 @@ import { chooseVaultFolder, closeVault, currentVault, forgetRecentVault, openVau
 import { clearKey, keyStatus, writeKey } from './secrets'
 import { markSelfWrite, startWatching, stopWatching } from './watcher'
 import { registerAiAccessIpc } from './vault-tools/ipc'
+import { moveCanvasState, registerCanvasIpc, registerLinkPreviews } from './canvas'
+import { registerPlayer } from './player'
 import { registerProvidersIpc } from './providers/ipc'
 
 /** Typed handler registration - the channel name and its signature stay in sync. */
@@ -198,6 +200,9 @@ export function registerIpc(): void {
 
   registerAiAccessIpc(handle)
   registerProvidersIpc(handle)
+  registerCanvasIpc(handle)
+  registerLinkPreviews(handle)
+  registerPlayer(handle)
   handle(IPC.fsTree, () => vaultFs.listTree())
   handle(IPC.fsOutsideLinks, () => vaultFs.takeOutsideLinks())
   handle(IPC.fsRead, (p) => vaultFs.readFile(p))
@@ -238,6 +243,15 @@ export function registerIpc(): void {
       // the result rather than silently pretending it worked.
     }
 
+    // And the canvases that have it on them (or anything in it, for a folder).
+    let canvases: string[] = []
+    try {
+      const response = await send({ kind: 'canvas-referrers', path: from }, 15_000)
+      if (response.kind === 'canvases-result') canvases = response.canvases
+    } catch {
+      // As above: no index, no rewrite.
+    }
+
     const moved = await apply()
     if (!moved.ok) return moved
 
@@ -253,10 +267,14 @@ export function registerIpc(): void {
      */
     void send({ kind: 'note-renamed', from, to: moved.path }, 15_000).catch(() => undefined)
     moveAuthorship(from, moved.path)
+    moveCanvasState(from, moved.path)
     overview.moved(from, moved.path)
     void topicCommands.moved(from, moved.path).catch((err: unknown) => console.error('[topics]', err))
 
-    const rewrite = await vaultFs.rewriteLinksTo(sources, from, moved.path)
+    const links = await vaultFs.rewriteLinksTo(sources, from, moved.path)
+    // A canvas moved itself is not one of its own referrers.
+    const onCanvases = await vaultFs.rewriteCanvasesTo(canvases.filter((c) => c !== from), from, moved.path)
+    const rewrite = { changed: [...links.changed, ...onCanvases], links: links.links + onCanvases.length }
     let undoId: string | undefined
     if (rewrite.changed.length > 0) {
       undoId = `undo-${Date.now().toString(36)}`
@@ -308,6 +326,8 @@ export function registerIpc(): void {
       if (moved.ok) current = moved.path
     }
     const back = await vaultFs.rename(current, entry.to.slice(entry.to.lastIndexOf('/') + 1))
+    // A canvas's folded nodes go back with it.
+    if (back.ok) moveCanvasState(entry.from, entry.to)
     const { restored } = await vaultFs.restoreContents(entry.entries)
     return { ok: back.ok, restored }
   })
@@ -353,11 +373,36 @@ export function registerIpc(): void {
     return { ok: true }
   })
   handle(IPC.fsReveal, (p) => vaultFs.reveal(p))
+  handle(IPC.fsOpenWithApp, (p) => vaultFs.openWithApp(p))
+  handle(IPC.fsReadBytes, (p) => vaultFs.readBytes(p))
   handle(IPC.fsImportImages, async () => {
     const picked = await dialog.showOpenDialog({
       title: 'Add images',
       properties: ['openFile', 'multiSelections'],
       filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'heic'] }],
+    })
+    if (picked.canceled) return { ok: true as const, paths: [] }
+
+    const paths: string[] = []
+    for (const source of picked.filePaths) {
+      const copied = await vaultFs.importFile(source, ATTACHMENTS)
+      if (!copied.ok) return copied
+      paths.push(copied.path)
+    }
+    return { ok: true as const, paths }
+  })
+
+  handle(IPC.fsImportFiles, async () => {
+    const picked = await dialog.showOpenDialog({
+      title: 'Add files',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        {
+          name: 'Images, video, audio and PDF',
+          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'heic', 'mp4', 'mov', 'webm', 'm4v', 'mp3', 'm4a', 'wav', 'ogg', 'flac', 'pdf'],
+        },
+        { name: 'All files', extensions: ['*'] },
+      ],
     })
     if (picked.canceled) return { ok: true as const, paths: [] }
 
@@ -431,6 +476,10 @@ export function registerIpc(): void {
   handle(IPC.indexSearch, async (query, limit) => {
     const response = await send({ kind: 'search', query, ...(limit === undefined ? {} : { limit }) }, 15_000)
     return response.kind === 'search-result' ? response.hits : []
+  })
+  handle(IPC.indexCanvasesOf, async (p) => {
+    const response = await send({ kind: 'canvases-of', path: p }, 15_000)
+    return response.kind === 'canvases-result' ? response.canvases : []
   })
   handle(IPC.indexBacklinks, async (p) => {
     const response = await send({ kind: 'backlinks', path: p }, 15_000)

@@ -20,6 +20,8 @@ export function useGraphSettings(): {
   setShowOrphans: (on: boolean) => void
   showBoards: boolean
   setShowBoards: (on: boolean) => void
+  showCanvases: boolean
+  setShowCanvases: (on: boolean) => void
   showTasks: boolean
   setShowTasks: (on: boolean) => void
   showChats: boolean
@@ -37,6 +39,7 @@ export function useGraphSettings(): {
   const [showLabels, setShowLabels] = useState(true)
   const [showOrphans, setShowOrphans] = useState(true)
   const [showBoards, setShowBoards] = useState(true)
+  const [showCanvases, setShowCanvases] = useState(true)
   const [showTasks, setShowTasks] = useState(false)
   const [showChats, setShowChats] = useState(true)
   const [look, setLook] = useState<GraphLook>(DEFAULT_LOOK)
@@ -55,6 +58,7 @@ export function useGraphSettings(): {
       setShowLabels(saved.showLabels)
       setShowOrphans(saved.showOrphans)
       setShowBoards(saved.showBoards)
+      setShowCanvases(saved.showCanvases)
       setShowTasks(saved.showTasks)
       setShowChats(saved.showChats)
       setLook(saved.look)
@@ -73,6 +77,7 @@ export function useGraphSettings(): {
         showLabels,
         showOrphans,
         showBoards,
+        showCanvases,
         showTasks,
         showChats,
         look,
@@ -82,7 +87,7 @@ export function useGraphSettings(): {
       })
     }, SETTINGS_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [tunables, showLabels, showOrphans, showBoards, showTasks, showChats, look, layout, linkRange, localOnly])
+  }, [tunables, showLabels, showOrphans, showBoards, showCanvases, showTasks, showChats, look, layout, linkRange, localOnly])
 
   return {
     tunables,
@@ -93,6 +98,8 @@ export function useGraphSettings(): {
     setShowOrphans,
     showBoards,
     setShowBoards,
+    showCanvases,
+    setShowCanvases,
     showTasks,
     setShowTasks,
     showChats,

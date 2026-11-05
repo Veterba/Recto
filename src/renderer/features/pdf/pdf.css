@@ -1,0 +1,206 @@
+/* ---------- a PDF (features/pdf): every page, scrolled - a preview on a canvas, the reader in a tab ---------- */
+
+.pdf-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pdf-view__scroll {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+.pdf-view__page {
+  position: relative;
+  margin-bottom: 6px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+.pdf-view__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pdf-view__mark {
+  position: absolute;
+  z-index: 2;
+  background: rgb(255 214 0 / 0.38);
+  mix-blend-mode: multiply;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.pdf-view__add {
+  all: unset;
+  position: absolute;
+  z-index: 5;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--canvas-card);
+  box-shadow: var(--canvas-card-rim), var(--canvas-card-shadow);
+  font-size: var(--font-size-12-5);
+  cursor: pointer;
+}
+.pdf-view__add:hover {
+  color: var(--accent);
+}
+.pdf-view__count {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-size: var(--font-size-12);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.pdf-view__error {
+  padding: 12px;
+}
+
+/* pdf.js's text layer (from its viewer's CSS): its text, invisible, laid exactly over the drawn page, to select. */
+.pdf-view .textLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.pdf-view .textLayer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+.pdf-view .textLayer > :not(.markedContent),
+.pdf-view .textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.pdf-view .textLayer .markedContent {
+  display: contents;
+}
+.pdf-view .textLayer ::selection {
+  background: rgb(0 100 255 / 0.25);
+}
+.pdf-view .textLayer br::selection {
+  background: transparent;
+}
+
+/* The reader, in a tab: pages centred, zoomable past the width, a bar of its own at the bottom. */
+.pdf-view.is-reader {
+  height: 100%;
+}
+.pdf-view.is-reader .pdf-view__scroll {
+  overflow: auto;
+  padding: 12px;
+}
+.pdf-view.is-reader .pdf-view__page {
+  margin: 0 auto 12px;
+}
+.pdf-bar {
+  position: absolute;
+  white-space: nowrap;
+  left: 50%;
+  bottom: 16px;
+  z-index: 6;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 12px;
+  font-size: var(--font-size-13);
+}
+.pdf-bar__button {
+  all: unset;
+  min-width: 30px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 8px;
+  text-align: center;
+  line-height: 28px;
+  cursor: pointer;
+}
+.pdf-bar__button:hover {
+  background: var(--bg-hover);
+}
+.pdf-bar__zoom {
+  font-variant-numeric: tabular-nums;
+}
+.pdf-bar__gap {
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--border);
+}
+.pdf-bar__count {
+  white-space: nowrap;
+  padding: 0 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* The PDF panel: docked on the window's right as the AI panel is - its seam, its shade, its resize edge. */
+.pdf-panel {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-primary);
+  box-shadow: -6px 0 12px -8px rgb(0 0 0 / 0.16);
+}
+.pdf-panel__resize {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+}
+.pdf-panel__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  height: 44px;
+  padding: 0 var(--size-2) 0 var(--size-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
+}
+.pdf-panel__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.pdf-panel .pdf-view {
+  flex: 1;
+  min-height: 0;
+}

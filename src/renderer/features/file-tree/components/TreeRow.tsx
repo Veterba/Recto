@@ -121,7 +121,7 @@ export function TreeRow({
  * not read as a note - the tree is the one place you see every kind side by side.
  */
 const ICON_BY_EXTENSION: Readonly<Record<string, string>> = {
-  ...Object.fromEntries(['json', 'jsonl', 'ndjson', 'yaml', 'yml', 'toml', 'ini', 'canvas'].map((e) => [e, 'file-braces'])),
+  ...Object.fromEntries(['json', 'jsonl', 'ndjson', 'yaml', 'yml', 'toml', 'ini'].map((e) => [e, 'file-braces'])),
   ...Object.fromEntries(['csv', 'tsv'].map((e) => [e, 'file-spreadsheet'])),
   ...Object.fromEntries(['sh', 'bash', 'zsh', 'fish'].map((e) => [e, 'file-terminal'])),
   ...Object.fromEntries(['txt', 'text', 'log'].map((e) => [e, 'scroll-text'])),
@@ -134,6 +134,7 @@ function iconFor(node: FileNode): string {
   if (node.kind === 'folder') return 'folder'
   const kind = fileKind(node.name)
   if (kind === 'note') return 'file-text'
+  if (kind === 'canvas') return 'scan'
   if (kind === 'image') return 'image'
   if (kind === 'pdf') return 'file-scan'
   return ICON_BY_EXTENSION[extensionOf(node.name)] ?? (kind === 'code' ? 'file-code' : 'file')

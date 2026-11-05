@@ -1,0 +1,1444 @@
+/* ---------- a canvas: nodes and edges on a plane (features/canvas) ---------- */
+
+/*
+ * JSON Canvas leaves its six preset colours to the app: these are Recto's,
+ * one set per theme. A hex colour on a node is used as it is.
+ */
+:root {
+  --canvas-1: #e5636b;
+  --canvas-2: #e8954b;
+  --canvas-3: #dcc14f;
+  --canvas-4: #5cc185;
+  --canvas-5: #4fb7cf;
+  --canvas-6: #a786e0;
+  --canvas-edge: color-mix(in srgb, var(--text-muted) 80%, transparent);
+  /* The plane, and a card on it: the material of the app's floating panels (find, menus) without
+     their blur - a rim, a lit top edge and a soft shadow, so a card stands off the plane. */
+  --canvas-ground: #141414;
+  --canvas-card: #232323;
+  --canvas-card-rim: inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 0 0 1px rgb(0 0 0 / 0.5);
+  --canvas-card-lit: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --canvas-card-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 22px -8px rgb(0 0 0 / 0.6);
+  /* A task on a board's lane: a step lighter than the lane, its rim soft - no dark ring, which on a lane reads as an outline. */
+  --canvas-chip: #333333;
+  --canvas-chip-rim: inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.25);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --canvas-ground: #f5f5f4;
+    --canvas-card: #ffffff;
+    --canvas-card-rim: 0 0 0 1px rgb(0 0 0 / 0.08);
+    --canvas-card-lit: inset 0 1px 0 rgb(255 255 255 / 1);
+    --canvas-card-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 6px 18px -6px rgb(0 0 0 / 0.14);
+    --canvas-chip: #ffffff;
+    --canvas-chip-rim: 0 0 0 1px rgb(0 0 0 / 0.07), 0 1px 2px rgb(0 0 0 / 0.05);
+    --canvas-1: #d23b45;
+    --canvas-2: #d9772a;
+    --canvas-3: #b9971a;
+    --canvas-4: #2f9a5c;
+    --canvas-5: #1f8fab;
+    --canvas-6: #7d58c7;
+  }
+}
+:root[data-theme='light'] {
+  --canvas-ground: #f5f5f4;
+  --canvas-card: #ffffff;
+  --canvas-card-rim: 0 0 0 1px rgb(0 0 0 / 0.08);
+  --canvas-card-lit: inset 0 1px 0 rgb(255 255 255 / 1);
+  --canvas-card-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 6px 18px -6px rgb(0 0 0 / 0.14);
+  --canvas-chip: #ffffff;
+  --canvas-chip-rim: 0 0 0 1px rgb(0 0 0 / 0.07), 0 1px 2px rgb(0 0 0 / 0.05);
+  --canvas-1: #d23b45;
+  --canvas-2: #d9772a;
+  --canvas-3: #b9971a;
+  --canvas-4: #2f9a5c;
+  --canvas-5: #1f8fab;
+  --canvas-6: #7d58c7;
+}
+
+.canvas-view,
+.canvas-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+}
+.canvas-view__bar {
+  gap: var(--size-2);
+}
+.canvas-view__name {
+  font-size: var(--font-size-13);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.canvas-view__gap {
+  flex: 1;
+}
+.canvas-view__plane {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--canvas-ground);
+}
+.canvas-view__error,
+.canvas-view__notice {
+  margin: var(--size-3) var(--size-4);
+  font-size: var(--font-size-13);
+  color: var(--text-secondary);
+}
+.canvas-view__notice {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+}
+.canvas-view .react-flow {
+  --xy-background-color: transparent;
+  --xy-selection-background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  --xy-selection-border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* The page with no canvas in it. */
+.canvas-empty__body {
+  margin: auto;
+  max-width: 360px;
+  text-align: center;
+}
+.canvas-empty__title {
+  margin: 0 0 var(--size-2);
+  font-size: var(--font-size-15);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.canvas-empty__text {
+  margin: 0 0 var(--size-4);
+  font-size: var(--font-size-13);
+  color: var(--text-muted);
+}
+
+/* ---------- nodes ---------- */
+
+.canvas-node {
+  --node-color: var(--border-strong, var(--border));
+  /* A card's side margin: 8% of its width, between 24 and 64 px. */
+  --card-inset: clamp(24px, 8cqi, 64px);
+  container-type: inline-size;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--canvas-card);
+  box-shadow: var(--canvas-card-lit), var(--canvas-card-rim), var(--canvas-card-shadow);
+  overflow: hidden;
+  font-size: var(--font-size-13-5);
+  color: var(--text-primary);
+}
+/* A coloured card: tinted, its rim in its colour. */
+.canvas-node[style] {
+  border-color: color-mix(in srgb, var(--node-color) 55%, transparent);
+  background: color-mix(in srgb, var(--node-color) 8%, var(--canvas-card));
+}
+.canvas-node.is-selected {
+  border-color: var(--accent);
+  box-shadow:
+    var(--canvas-card-lit),
+    0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent),
+    var(--canvas-card-shadow);
+}
+.canvas-node__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* Room round the text, as a page has: the sides grow with the card, so a wide card's text sits in the
+     middle of it, not pressed to its left. The name above lines up with it (--card-inset). */
+  padding: 16px var(--card-inset) 18px;
+  line-height: 1.55;
+}
+.canvas-node__body .bot-md > :first-child {
+  margin-top: 0;
+}
+/* A shape: the figure is the node's outline, its text centred inside. */
+.canvas-node--shape,
+.canvas-node--shape[style],
+.canvas-node--shape.is-selected {
+  position: relative;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.canvas-shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.canvas-shape__outline {
+  fill: color-mix(in srgb, var(--node-color) 10%, var(--bg-primary));
+  stroke: color-mix(in srgb, var(--node-color) 80%, var(--border));
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+}
+.canvas-node--shape.is-selected .canvas-shape__outline {
+  stroke: var(--accent);
+}
+.canvas-shape__mark {
+  fill: none;
+  stroke: color-mix(in srgb, var(--node-color) 80%, var(--border));
+  stroke-width: 1.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.canvas-node--shape .canvas-node__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+}
+
+/* The editor typed into is the node itself: no box of its own, no scroller of its own. */
+.canvas-node__body .note-body {
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.canvas-node__body .note-body .cm-scroller {
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+}
+.canvas-node__body .note-body .cm-content {
+  padding: 0;
+}
+.canvas-node__body .note-body.is-empty::before {
+  top: 0;
+  left: 8px;
+}
+.canvas-node__empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-12-5);
+}
+
+/* A note on the canvas: its name over its text. A gone note keeps its place, marked. */
+.canvas-note__title {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px 8px var(--card-inset);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-size-12-5);
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.canvas-note__title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvas-node--note.is-missing {
+  border: 1.5px dashed var(--border);
+  box-shadow: none;
+  background: transparent;
+}
+.canvas-node--note.is-missing .canvas-note__title {
+  color: var(--warning);
+}
+
+/* Files: an image fills its box at its own shape; the rest show their player or name. */
+.canvas-node--file.is-image {
+  background: transparent;
+}
+.canvas-file__image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.canvas-file__media {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.canvas-file__audio {
+  margin: auto 10px;
+}
+.canvas-file__other.is-missing {
+  color: var(--warning);
+}
+.canvas-file__other {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  font-size: var(--font-size-12-5);
+  color: var(--text-secondary);
+  text-align: center;
+  word-break: break-word;
+}
+
+/* A link: where it goes, opened in the browser. */
+.canvas-link {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.canvas-link__host {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.canvas-link__icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+.canvas-node--link.has-image .canvas-link {
+  justify-content: flex-start;
+  padding-top: 0;
+}
+.canvas-link__image {
+  width: calc(100% + 28px);
+  margin: 0 -14px 8px;
+  height: 45%;
+  object-fit: cover;
+}
+.canvas-link__title {
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.canvas-link__text {
+  font-size: var(--font-size-12-5);
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.canvas-link__url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-12);
+  color: var(--text-muted);
+}
+
+/* A group: a tinted frame with its label above its top-left corner. */
+.canvas-node--group {
+  overflow: visible;
+  border: 1.5px solid color-mix(in srgb, var(--node-color) 70%, var(--border));
+  box-shadow: none;
+  background: color-mix(in srgb, var(--node-color) 6%, transparent);
+}
+.canvas-node--group:not([style]) {
+  background: color-mix(in srgb, var(--text-primary) 3%, transparent);
+}
+.canvas-group__label {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--node-color) 18%, var(--bg-primary));
+  font-size: var(--font-size-13);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.canvas-node--unknown {
+  border: 1px dashed var(--border);
+  box-shadow: none;
+  padding: 10px 14px;
+}
+
+/* Handles on each side, shown on hover: drag one out to connect. */
+.canvas-handle.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--bg-primary);
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--anim-fast) var(--ease);
+}
+.react-flow__node:hover .canvas-handle,
+.react-flow__node.selected .canvas-handle {
+  opacity: 1;
+}
+/* Resizing: the borders and corners are grabbed well outside the thin line and small square you see. */
+.canvas-resize__line.react-flow__resize-control.line {
+  border-color: transparent;
+}
+.canvas-resize__line.react-flow__resize-control.line.left,
+.canvas-resize__line.react-flow__resize-control.line.right {
+  width: 12px;
+}
+.canvas-resize__line.react-flow__resize-control.line.top,
+.canvas-resize__line.react-flow__resize-control.line.bottom {
+  height: 12px;
+}
+.canvas-resize__handle.react-flow__resize-control.handle {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--accent);
+  border-radius: 2px;
+  background: var(--bg-primary);
+}
+.canvas-resize__handle.react-flow__resize-control.handle::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+/* ---------- edges ---------- */
+
+.canvas-edge.react-flow__edge-path {
+  stroke-width: 2px;
+}
+.react-flow__edge.selected .canvas-edge.react-flow__edge-path {
+  stroke-width: 3px;
+}
+.canvas-edge__label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  /* Readable at the zoom notes are: the size of a card's own text, on the cards' material. */
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: var(--canvas-card);
+  box-shadow:
+    var(--canvas-card-rim),
+    0 1px 3px rgb(0 0 0 / 0.08);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-primary);
+  pointer-events: all;
+  white-space: nowrap;
+}
+
+/* The sidebar list. */
+.canvas-list__folder {
+  margin-left: auto;
+  padding-left: var(--size-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-11);
+  color: var(--text-muted);
+}
+
+/* Typing a label: the edge's, a group's. */
+.canvas-edge__input,
+.canvas-group__input {
+  all: unset;
+  min-width: 80px;
+  font: inherit;
+  color: var(--text-primary);
+}
+.canvas-group__input {
+  padding: 2px 8px;
+  outline: 1.5px solid var(--accent);
+}
+
+/* Lines a dragged node snaps to. */
+.canvas-guides {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.canvas-guides line {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+/* ⌘F: the find bar over the canvas, top right. */
+.canvas-search {
+  position: absolute;
+  z-index: 6;
+  top: var(--size-2);
+  right: var(--size-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-md);
+  color: var(--text-muted);
+}
+.canvas-search__input {
+  all: unset;
+  width: 200px;
+  font-size: var(--font-size-13);
+  color: var(--text-primary);
+}
+.canvas-search__count {
+  min-width: 36px;
+  font-size: var(--font-size-12);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* A question asked over the canvas: a note's name, say. */
+.canvas-bar {
+  position: absolute;
+  z-index: 7;
+  top: var(--size-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 340px;
+  max-width: calc(100% - 2 * var(--size-4));
+  padding: 14px;
+  border-radius: var(--radius-l);
+  font-size: var(--font-size-13);
+}
+.canvas-bar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.canvas-bar__label {
+  font-weight: 600;
+}
+.canvas-bar__close {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.canvas-bar__close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.canvas-bar__input {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+.canvas-bar__input:focus {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+}
+.canvas-bar__folder {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: var(--radius-s);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.canvas-bar__folder:hover,
+.canvas-bar__folder[aria-expanded='true'] {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.canvas-bar__folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvas-bar__folder > :last-child {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.canvas-bar__hint {
+  color: var(--text-muted);
+  font-size: var(--font-size-12);
+  white-space: nowrap;
+}
+.canvas-bar__folders {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.canvas-bar__list {
+  margin: 0;
+  padding: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  list-style: none;
+}
+.canvas-bar__option {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvas-bar__option:hover {
+  background: var(--bg-hover);
+}
+.canvas-bar__option.is-chosen {
+  color: var(--accent);
+}
+.canvas-bar__note {
+  margin: 0;
+  color: var(--text-secondary);
+}
+.canvas-bar__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--font-size-12);
+}
+.canvas-bar__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--size-2);
+}
+
+.canvas-edge__link {
+  color: var(--accent);
+}
+
+/* A task card on a canvas: as on its board. Done is greyed. */
+.canvas-card__top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.canvas-card__title {
+  margin: 0;
+  font-weight: 600;
+}
+.canvas-card__text {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12-5);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.canvas-node--card.is-done .canvas-card__title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+/* Folding: a group shut to a bar with its label, a note to its name and first lines. */
+.canvas-fold {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: var(--font-size-11);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.canvas-fold:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.canvas-node--group > .canvas-fold {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+}
+.canvas-node--group.is-folded > .canvas-fold {
+  position: static;
+  margin: auto auto auto 10px;
+}
+.canvas-note__title .canvas-fold {
+  margin-left: auto;
+  opacity: 0;
+}
+.react-flow__node:hover .canvas-note__title .canvas-fold,
+.canvas-node--note.is-folded .canvas-note__title .canvas-fold {
+  opacity: 1;
+}
+.canvas-node--note.is-folded .canvas-node__body {
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 60%, transparent);
+}
+
+/* A PDF's page, under it. */
+
+/* An edge's label reads over the nodes it runs between, never under them. */
+.canvas-view .react-flow__edgelabel-renderer {
+  z-index: 200000;
+}
+
+/* ---------- the tool bar at the bottom ---------- */
+
+.canvas-tools {
+  position: absolute;
+  z-index: 8;
+  bottom: var(--size-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.canvas-tools > * {
+  pointer-events: auto;
+}
+.canvas-tools__bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 14px;
+}
+.canvas-tools__gap {
+  width: 1px;
+  height: 20px;
+  margin: 0 5px;
+  background: var(--border);
+}
+.canvas-tools__tool {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.canvas-tools__tool:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.canvas-tools__tool.is-active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.canvas-tools__shape {
+  fill: none;
+  stroke: currentColor;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.canvas-tools__picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 340px;
+  padding: 10px;
+  border-radius: var(--radius-l);
+  font-size: var(--font-size-13);
+}
+.canvas-tools__picker .canvas-bar__list {
+  max-height: 260px;
+}
+.canvas-bar__option.is-cursor {
+  background: var(--bg-hover);
+}
+
+/* What the pointer says the next click does. */
+.canvas-view__plane.is-hand .react-flow__pane {
+  cursor: grab;
+}
+.canvas-view__plane.is-hand .react-flow__pane:active {
+  cursor: grabbing;
+}
+.canvas-view__plane.is-placing .react-flow__pane {
+  cursor: crosshair;
+}
+
+/* An arrow's free end: there, but not seen. */
+.canvas-point {
+  width: 100%;
+  height: 100%;
+}
+.canvas-point .canvas-handle {
+  visibility: hidden;
+}
+
+/* An arrow being drawn with the Arrow tool. */
+.canvas-drawing line {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: none;
+}
+
+/* A selected arrow's handles: its ends, on their pins, and its middle, to bend it. */
+.canvas-edge__handle {
+  position: absolute;
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  background: var(--bg-primary);
+  pointer-events: all;
+  cursor: grab;
+}
+.canvas-edge__handle:hover {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.canvas-edge__handle:active {
+  cursor: grabbing;
+}
+/* From an end's pin to where the arrow leaves the node. */
+.canvas-edge__pin {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text-muted) 70%, transparent);
+  stroke-width: 1.25;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+/* In the label layer, whose origin is the canvas's: drawn in canvas units, nothing clipped. */
+.canvas-edge__pins {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* ---------- looks the style bar sets (canvas-style.ts) ---------- */
+
+.canvas-node[data-fill='none'] {
+  background: transparent;
+}
+.canvas-node[data-fill='solid'] {
+  background: color-mix(in srgb, var(--node-color) 38%, var(--bg-primary));
+}
+.canvas-node--shape[data-fill='none'] .canvas-shape__outline {
+  fill: transparent;
+}
+.canvas-node--shape[data-fill='solid'] .canvas-shape__outline {
+  fill: color-mix(in srgb, var(--node-color) 45%, var(--bg-primary));
+}
+.canvas-node[data-border='dashed']:not(.canvas-node--shape),
+.canvas-node[data-border='dotted']:not(.canvas-node--shape) {
+  border: 1.5px dashed color-mix(in srgb, var(--node-color) 70%, var(--text-muted));
+  box-shadow: var(--canvas-card-shadow);
+}
+.canvas-node[data-border='dotted']:not(.canvas-node--shape) {
+  border-style: dotted;
+}
+.canvas-node[data-border='invisible']:not(.is-selected):not(.canvas-node--shape) {
+  border-color: transparent;
+  box-shadow: none;
+}
+.canvas-node--shape[data-border='dashed'] .canvas-shape__outline {
+  stroke-dasharray: 8 5;
+}
+.canvas-node--shape[data-border='dotted'] .canvas-shape__outline {
+  stroke-dasharray: 1.5 4;
+  stroke-linecap: round;
+}
+.canvas-node--shape[data-border='invisible']:not(.is-selected) .canvas-shape__outline {
+  stroke: transparent;
+}
+.canvas-node[data-textalign='center'] .canvas-node__body {
+  text-align: center;
+}
+.canvas-node[data-textalign='right'] .canvas-node__body {
+  text-align: right;
+}
+.canvas-node[data-fontsize='s'] .canvas-node__body {
+  font-size: var(--font-size-12);
+}
+.canvas-node[data-fontsize='l'] .canvas-node__body {
+  font-size: 18px;
+}
+.canvas-node[data-fontsize='xl'] .canvas-node__body {
+  font-size: 26px;
+  line-height: 1.3;
+}
+
+/* ---------- the style bar over the selection ---------- */
+
+.canvas-style {
+  position: absolute;
+  z-index: 8;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 4px;
+  border-radius: 12px;
+}
+.canvas-style__group {
+  position: relative;
+}
+.canvas-style__gap {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border);
+}
+.canvas-style__button {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.canvas-style__button:hover,
+.canvas-style__button.is-open {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.canvas-style__button.is-on {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.canvas-style__dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 18%, transparent);
+}
+.canvas-style__dot.is-none {
+  background: linear-gradient(135deg, transparent 45%, var(--danger) 45% 55%, transparent 55%), var(--bg-primary);
+}
+.canvas-style__pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  /* A row, not a list: short, so it fits over or under the bar. */
+  flex-direction: row;
+  white-space: nowrap;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 10px;
+  font-size: var(--font-size-13);
+}
+.canvas-style__colors {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+.canvas-style__option {
+  all: unset;
+  padding: 5px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.canvas-style__option:hover {
+  background: var(--bg-hover);
+}
+.canvas-style__option.is-current {
+  color: var(--accent);
+}
+.canvas-style__custom {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.canvas-style__custom:hover {
+  background: var(--bg-hover);
+}
+.canvas-style__custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+/* "Open beside the canvas" first, then fold: one pushed right, the other next to it. */
+.canvas-note__title .canvas-note__beside + .canvas-fold {
+  margin-left: 2px;
+}
+
+/* A picture or a video: the node is the picture, the same shape, its corners rounded - no frame round it.
+   Its caption is under it, outside the node, as in Heptabase. */
+.canvas-node--file.is-image,
+.canvas-node--file.is-video {
+  overflow: visible;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.canvas-node--file.is-image .canvas-file__image,
+.canvas-node--file .canvas-file__media {
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  object-fit: cover;
+  background: transparent;
+  box-shadow: var(--canvas-card-rim), var(--canvas-card-shadow);
+}
+.canvas-node--file.is-image.is-selected .canvas-file__image,
+.canvas-node--file.is-video.is-selected .canvas-file__media {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--canvas-card-shadow);
+}
+/* The video's own controls without their dark band. */
+.canvas-file__media::-webkit-media-controls-panel {
+  background-image: none;
+}
+.canvas-caption {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12-5);
+}
+.canvas-caption.is-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.canvas-caption__input {
+  all: unset;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--canvas-card);
+  box-shadow: 0 0 0 1px var(--accent);
+  text-align: center;
+  font-size: var(--font-size-12-5);
+  color: var(--text-primary);
+}
+
+/* A YouTube link: its picture and a play button; played, the player. */
+.canvas-node--video {
+  background: #000;
+}
+.canvas-video__cover {
+  position: relative;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  background: #111 center / cover no-repeat;
+}
+/* A video file: its first frame, still, under the play button. */
+.canvas-node--file.is-video .canvas-video__cover {
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--canvas-card-rim), var(--canvas-card-shadow);
+}
+.canvas-video__cover > .canvas-file__media {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.canvas-node--file.is-video.is-selected .canvas-video__cover {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--canvas-card-shadow);
+}
+.canvas-video__play {
+  all: unset;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  cursor: pointer;
+}
+.canvas-video__play:hover {
+  background: rgb(0 0 0 / 0.8);
+}
+.canvas-video__title {
+  all: unset;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 8px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.7));
+  color: #fff;
+  font-size: var(--font-size-12-5);
+  cursor: pointer;
+}
+
+/* A task opened from the canvas: its card on the right, over the canvas, as beside a board's lanes. */
+.canvas-card-panel {
+  position: absolute;
+  z-index: 9;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  pointer-events: none;
+}
+.canvas-card-panel > .card-panel {
+  pointer-events: auto;
+}
+.canvas-card {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.canvas-style.is-above .canvas-style__pop {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+/* A board on the canvas: a preview of its lanes - side by side while the node is wide, under one
+   another when narrow - each a soft panel, its cards small cards on it. */
+.canvas-board-view {
+  padding: 10px;
+}
+.canvas-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: start;
+  gap: 10px;
+}
+.canvas-board__lane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: 420px;
+  padding: 8px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  --lane: var(--text-muted);
+}
+.canvas-board__lane[data-color='blue'] {
+  --lane: rgb(from var(--highlight-blue) r g b / 1);
+}
+.canvas-board__lane[data-color='green'] {
+  --lane: rgb(from var(--highlight-green) r g b / 1);
+}
+.canvas-board__lane[data-color='yellow'] {
+  --lane: rgb(from var(--highlight-yellow) r g b / 1);
+}
+.canvas-board__lane[data-color='orange'] {
+  --lane: rgb(from var(--highlight-orange) r g b / 1);
+}
+.canvas-board__lane[data-color='red'] {
+  --lane: rgb(from var(--highlight-red) r g b / 1);
+}
+.canvas-board__lane[data-color='purple'] {
+  --lane: rgb(from var(--highlight-purple) r g b / 1);
+}
+.canvas-board__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 8px;
+  font-size: var(--font-size-12-5);
+  font-weight: 600;
+}
+.canvas-board__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lane);
+  flex-shrink: 0;
+}
+.canvas-board__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvas-board__count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.canvas-board__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.canvas-board__card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 9px;
+  border-radius: 9px;
+  background: var(--canvas-chip);
+  box-shadow: var(--canvas-chip-rim);
+}
+.canvas-board__check {
+  all: unset;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text-muted) 70%, transparent);
+  color: var(--bg-primary);
+  cursor: pointer;
+}
+.canvas-board__check:hover {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.canvas-board__lane.is-done .canvas-board__check {
+  background: var(--text-muted);
+  box-shadow: none;
+}
+.canvas-board__open {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+}
+.canvas-board__open:disabled {
+  cursor: default;
+}
+.canvas-board__title {
+  font-size: var(--font-size-12-5);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.canvas-board__lane.is-done .canvas-board__title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.canvas-board__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-11, 11px);
+}
+.canvas-board__more,
+.canvas-board__empty {
+  padding: 2px 4px;
+  color: var(--text-muted);
+  font-size: var(--font-size-12);
+}
+
+/* A shape's text, but the square's: outside it - under it, or over it - as plain text, no box round it. */
+.canvas-node--shape:not(.is-rectangle) .canvas-node__body {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -60px;
+  right: -60px;
+  height: auto;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  text-align: center;
+  justify-content: flex-start;
+}
+.canvas-node--shape:not(.is-rectangle)[data-labelat='top'] .canvas-node__body {
+  top: auto;
+  bottom: calc(100% + 6px);
+  justify-content: flex-end;
+}
+.canvas-node--shape:not(.is-rectangle) .canvas-node__body .note-body {
+  min-height: 0;
+}
+.canvas-node--shape .canvas-node__body .note-body.is-empty::before {
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+/* A chip's date sits beside its priority, not pushed to the edge as on the board's wider cards. */
+.canvas-board__meta .board-card__when {
+  margin-left: 0;
+}
+
+/* Zoomed out: a card's text as plain lines, in its place - the same card, cheaper to draw. */
+.canvas-node__plain {
+  margin: 0;
+  white-space: pre-line;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* A text file on the canvas: its first lines, in the code font; typed into, the code editor fills the node. */
+.canvas-code__preview {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--font-size-12);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.canvas-code {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.canvas-code > .code-view {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.canvas-file__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* A lane's +, and the task being named under its head. */
+.canvas-board__add {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.canvas-board__add:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.canvas-board__add + .canvas-board__count {
+  margin-left: 4px;
+}
+.canvas-board__new {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: var(--canvas-chip);
+  box-shadow: 0 0 0 1px var(--accent);
+  font-size: var(--font-size-12-5);
+}
+.canvas-board__said {
+  margin: 0 0 6px;
+  padding: 0 4px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+}
+
+.canvas-board__said p {
+  margin: 0 0 6px;
+}
+.canvas-board__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ---------- drawing ---------- */
+
+/* The stroke being drawn, over everything, in the canvas's own units. */
+.canvas-ink {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--text-primary);
+}
+.canvas-ink__eraser {
+  fill: none;
+  stroke: color-mix(in srgb, var(--danger) 30%, transparent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* A drawing: its strokes, nothing round them - a faint outline only when it is selected. */
+.canvas-node--drawing,
+.canvas-node--drawing[style] {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.canvas-node--drawing.is-selected {
+  border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: none;
+}
+.canvas-drawing__ink {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--text-primary);
+}

@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { fileKind } from '@shared/file-kind'
 import type { SectionId } from '../sections'
 import type { WorkspaceApi } from './use-workspace'
 import { focusEditorOnOpen } from '../../features/editor'
@@ -14,7 +15,7 @@ import type { HistoryEntry } from '../workspace'
  * back. A chat, the graph or Settings are not: a link clicked there opens a
  * tab of its own.
  */
-const NAVIGABLE = new Set(['markdown', 'board', 'overview', 'new-tab'])
+const NAVIGABLE = new Set(['markdown', 'board', 'overview', 'new-tab', 'canvas'])
 
 /** Where things open: notes in Data, chats in the Chats panel, boards and cards in Tasks. */
 export function useShellNavigation(
@@ -67,6 +68,13 @@ export function useShellNavigation(
         if (showHere(activeSection, 'board', state, via)) return
         setActiveSection('tasks')
         sections?.tasks.openView('board', state)
+        return
+      }
+      // A canvas opens as a canvas: in the tab you are in, else in Canvas.
+      if (fileKind(path) === 'canvas') {
+        if (showHere(activeSection, 'canvas', { path }, via)) return
+        setActiveSection('canvas')
+        sections?.canvas.openView('canvas', { path })
         return
       }
       // You opened it to read or write in it, so the keyboard goes there too.

@@ -8,6 +8,7 @@ type Props = {
   orphans: Toggle
   localOnly: Toggle
   boards: Toggle
+  canvases: Toggle
   tasks: Toggle
   chats: Toggle
   hasActive: boolean
@@ -25,6 +26,7 @@ export function GraphBar({
   orphans,
   localOnly,
   boards,
+  canvases,
   tasks,
   chats,
   hasActive,
@@ -75,6 +77,16 @@ export function GraphBar({
           aria-label="Boards"
         >
           <Icon name="square-kanban" size={13} />
+        </button>
+      </Tip>
+      <Tip label="Canvases" hint="Canvases, as diamonds, tied to the notes on them" placement="top">
+        <button
+          className={`graph__btn${canvases.on ? ' is-on' : ''}`}
+          onClick={() => canvases.set(!canvases.on)}
+          aria-pressed={canvases.on}
+          aria-label="Canvases"
+        >
+          <Icon name="scan" size={13} />
         </button>
       </Tip>
       <Tip label="Tasks" hint="Cards as dots in their status colour, tied to their board" placement="top">

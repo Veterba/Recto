@@ -1,3 +1,4 @@
+import { CANVAS_FOLDER } from '@shared/recto-paths'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ATTACHMENTS_FOLDER, type FileNode, type VaultInfo } from '@shared/vault'
 import { IPC } from '@shared/ipc'
@@ -42,6 +43,8 @@ import { TemplatePicker, usePeriodicNotesAutoCreate, useTemplateActions, useTemp
 import { TidyDialog, useTidy } from '../../features/tidy'
 import { onOpenTopic, reloadBots, requestTopic, useBots } from '../../features/bots'
 import { ChatsPanel, FloatingBot, QuickAsk, setChatsOpener, setChatsPanel } from '../../features/chats'
+import { PdfPanel, useShownPdf } from '../../features/pdf/PdfPanel'
+import { CanvasList } from '../../features/canvas'
 import { setSettingsHandler } from '../settings-request'
 import {
   BoardDeleteHost,
@@ -89,6 +92,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     revision,
   } = useWorkspace()
   const { appearance, ready, update } = useAppearance()
+  /** A PDF read in its panel on the right, beside the AI panel. */
+  const shownPdf = useShownPdf()
   const boards = useBoards()
   const { tree, refresh } = useVault(true)
   /** Read by the tab pruning without running it again on every window change. */
@@ -156,6 +161,13 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     const path = leaf?.type === 'board' ? leaf.state['path'] : undefined
     return typeof path === 'string' ? path : null
   }, [sections, revision])
+
+  /** Which canvas the Canvas workspace is showing. */
+  const activeCanvas = useMemo(() => {
+    const path = sections?.canvas.activeLeaf?.state['path']
+    return typeof path === 'string' ? path : null
+  }, [sections, revision])
+  const [addingCanvas, setAddingCanvas] = useState(false)
 
   // Navigation that comes without a press or a key the preview card already
   // heard (a command run, a link followed, a view restored): it puts the card
@@ -382,7 +394,22 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   rootsRef.current = tree.roots
   const sectionRef = useRef(activeSection)
   sectionRef.current = activeSection
+  const newCanvasRef = useRef<() => void>(() => {})
+  newCanvasRef.current = () => setAddingCanvas(true)
   const createNamedRef = useRef<(parent: string, name: string) => Promise<string | null>>(async () => null)
+  /** A note beside the canvas in `leafId`: in the pane next to it, made by splitting when there is none - as Heptabase opens a card. */
+  const openBesideRef = useRef<(leafId: string, path: string) => void>(() => {})
+  openBesideRef.current = (leafId, path) => {
+    if (active === null) return
+    const here = active.tabsContaining(leafId)
+    const other = active.allTabs().find((t) => t.id !== here?.id)
+    if (other !== undefined) {
+      active.openView('markdown', { path }, { inTabs: other.id })
+      return
+    }
+    const copy = active.splitLeaf(leafId, 'vertical')
+    if (copy !== null) active.navigate(copy.id, { type: 'markdown', state: { path } })
+  }
   useRegisterViews({
     openFile: openFileRef,
     openFolder: openFolderRef,
@@ -394,7 +421,9 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     update: updateRef,
     roots: rootsRef,
     section: sectionRef,
+    newCanvas: newCanvasRef,
     createNamed: createNamedRef,
+    openBeside: openBesideRef,
   })
 
   const openPeriodicSettings = useCallback(() => openSettings('periodic'), [openSettings])
@@ -749,7 +778,18 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
             ) : activeSection === 'tasks' ? (
               <BoardList activeBoard={activeBoard} query={query} onOpen={openBoard} vaultPath={vault.path} onRenamed={followRename} />
             ) : (
-              <p className="sidebar__soon">Canvas is coming soon.</p>
+              <CanvasList
+                roots={tree.roots}
+                active={activeCanvas}
+                query={query}
+                folder={CANVAS_FOLDER}
+                onOpen={openFile}
+                adding={addingCanvas}
+                setAdding={setAddingCanvas}
+                vaultPath={vault.path}
+                onRenamed={followRename}
+                onChanged={() => void refresh()}
+              />
             )}
           </Sidebar>
         ) : (
@@ -793,6 +833,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
             />
           )}
         </main>
+
+        {shownPdf !== null && <PdfPanel path={shownPdf} />}
 
         {appearance.chatsOpen && (
           <ChatsPanel

@@ -3,18 +3,18 @@
  * an image or PDF to preview, or something else.
  *
  * Only `.md` is a note - the one kind the index, the bots, backlinks and
- * topics see. Everything else is a file. A name this list does not know
+ * topics see. A `.canvas` is a canvas. Everything else is a file. A name this list does not know
  * is not given up on: the code editor asks main whether its bytes are text,
  * and shows the binary card only if they are not.
  */
 
-export type FileKind = 'note' | 'code' | 'image' | 'pdf' | 'other'
+export type FileKind = 'note' | 'canvas' | 'code' | 'image' | 'pdf' | 'other'
 
 const IMAGE = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'bmp', 'ico'])
 
 const CODE = new Set([
   ...['json', 'jsonl', 'ndjson', 'csv', 'tsv', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'env', 'properties'],
-  ...['txt', 'text', 'log', 'markdown', 'mdx', 'rst', 'org', 'adoc', 'tex', 'bib', 'canvas', 'diff', 'patch'],
+  ...['txt', 'text', 'log', 'markdown', 'mdx', 'rst', 'org', 'adoc', 'tex', 'bib', 'diff', 'patch'],
   ...['js', 'mjs', 'cjs', 'jsx', 'ts', 'mts', 'cts', 'tsx', 'vue', 'svelte', 'css', 'scss', 'sass', 'less', 'html', 'htm', 'xml'],
   ...['py', 'rb', 'go', 'rs', 'java', 'kt', 'swift', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'php', 'lua', 'r', 'pl', 'dart', 'scala'],
   ...['sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'sql', 'graphql', 'gql', 'proto', 'dockerfile', 'makefile', 'cmake', 'gradle'],
@@ -30,6 +30,8 @@ export function extensionOf(path: string): string {
 export function fileKind(path: string): FileKind {
   const ext = extensionOf(path)
   if (ext === 'md') return 'note'
+  // JSON Canvas: drawn as a canvas, though it is JSON underneath.
+  if (ext === 'canvas') return 'canvas'
   if (IMAGE.has(ext)) return 'image'
   if (ext === 'pdf') return 'pdf'
   // No extension: README, Makefile, LICENSE - text, as a rule.

@@ -1,3 +1,4 @@
+import { PdfView } from '../../pdf/PdfView'
 import { useState } from 'react'
 import { fileKind } from '@shared/file-kind'
 import { IPC } from '@shared/ipc'
@@ -51,8 +52,8 @@ export function BinaryCard({
  *
  * Clicking a screenshot in the sidebar used to open its bytes in the markdown
  * editor - unreadable at best, and one such PNG crashed the editor outright.
- * Images are shown as images and PDFs in Chromium's own viewer; one that fails
- * to load falls back to the card.
+ * Images are shown as images and PDFs in Recto's reader (features/pdf); one
+ * that fails to load falls back to the card.
  */
 export function FileView({
   path,
@@ -81,7 +82,8 @@ export function FileView({
         {kind === 'image' ? (
           <img src={vaultFileUrl(path)} alt={nameOf(path)} onError={() => setFailed(true)} />
         ) : (
-          <iframe className="file-view__pdf" src={vaultFileUrl(path)} title={nameOf(path)} />
+          // Recto's reader, not Chromium's viewer: its text can be highlighted, and the highlights are the canvas's too.
+          <PdfView path={path} mode="reader" />
         )}
       </div>
     </div>

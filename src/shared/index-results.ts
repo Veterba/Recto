@@ -18,9 +18,11 @@ export type GraphNodeInfo = {
   lane?: string | null
   /** A card's first board note, where a click opens it. */
   cardBoard?: string
+  /** A canvas: drawn as a diamond. */
+  canvas?: boolean
 }
-/** `auto`: the pair is linked only through the topics property. `member`: a board and one of its cards. */
-export type GraphEdgeInfo = { source: string; target: string; auto: boolean; member?: boolean }
+/** `auto`: the pair is linked only through the topics property. `member`: a board and one of its cards, or a canvas and a note on it. `canvas`: two notes joined by an edge on a canvas. */
+export type GraphEdgeInfo = { source: string; target: string; auto: boolean; member?: boolean; canvas?: boolean }
 export type GraphInfo = { nodes: GraphNodeInfo[]; edges: GraphEdgeInfo[] }
 
 /**

@@ -26,6 +26,7 @@ describe('graph settings', () => {
       showLabels: false,
       showOrphans: false,
       showBoards: false,
+      showCanvases: false,
       showTasks: true,
       showChats: true,
       look: { ...DEFAULT_LOOK, dots: { ...DEFAULT_LOOK.dots, colors: ['#22d3ee', '#f0abfc'] } },
@@ -40,6 +41,7 @@ describe('graph settings', () => {
     // A busy board's cards would bury the notes around it.
     expect(parseSettings({}).showBoards).toBe(true)
     expect(parseSettings({ showBoards: false }).showBoards).toBe(false)
+    expect(parseSettings({}).showCanvases).toBe(true)
     expect(parseSettings({}).showTasks).toBe(false)
     expect(parseSettings({ showTasks: true }).showTasks).toBe(true)
     expect(parseSettings({ showTasks: 'yes' }).showTasks).toBe(false)
@@ -85,6 +87,7 @@ describe('graph settings', () => {
       'localOnly',
       'look',
       'showBoards',
+      'showCanvases',
       'showChats',
       'showLabels',
       'showOrphans',

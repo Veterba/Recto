@@ -10,6 +10,7 @@ import { leavesVault, resolveInVault } from './paths'
 import { currentVault } from './vault'
 import { notTextMessage, notTextReason } from './text-file'
 import { isHidden, nameOf, nameProblem, nameTaken, sortNodes } from '../shared/vault'
+import { parseCanvas, renameInCanvas, serializeCanvas } from '../shared/canvas'
 
 /**
  * All vault file access. Every path arriving from the renderer goes through
@@ -90,6 +91,15 @@ export function listTree(): FileNode[] {
   const tree = walk(root)
   outsideLinks = { root, paths: outside }
   return tree
+}
+
+/** A vault file's bytes as they are, for a reader that decodes them itself (a PDF). */
+export async function readBytes(relative: string): Promise<{ ok: true; data: Uint8Array } | { ok: false; error: string }> {
+  try {
+    return { ok: true, data: new Uint8Array(await fsp.readFile(resolveInVault(requireVault(), relative))) }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 export async function readFile(relative: string): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
@@ -378,6 +388,8 @@ export async function move(relative: string, newParent: string): Promise<{ ok: t
     }
     // The name does not change, so only the folder it goes into can have it.
     if (fs.existsSync(to)) return { ok: false, error: takenMessage(toRelative(root, to)) }
+    // Into a folder Recto keeps (Recto/Canvas) that is not there yet: made first.
+    await fsp.mkdir(path.dirname(to), { recursive: true })
     await fsp.rename(from, to)
     return { ok: true, path: toRelative(root, to) }
   } catch (err) {
@@ -432,6 +444,31 @@ export async function rewriteLinksTo(
 }
 
 /**
+ * Canvases that put a moved file (or folder) on them, made to point at its new
+ * path: only their file nodes' paths change, every other byte stays. Returns
+ * what changed, for the same undo as link rewrites.
+ */
+export async function rewriteCanvasesTo(canvases: readonly string[], oldPath: string, newPath: string): Promise<RewrittenFile[]> {
+  const changed: RewrittenFile[] = []
+  for (const canvas of canvases) {
+    const read = await readFile(canvas)
+    if (!read.ok) continue
+    let next: string
+    try {
+      const doc = renameInCanvas(parseCanvas(read.content), oldPath, newPath)
+      if (doc === null) continue
+      next = serializeCanvas(doc)
+    } catch {
+      // A canvas that cannot be read is left as it is.
+      continue
+    }
+    if (next === read.content || !(await writeFile(canvas, next)).ok) continue
+    changed.push({ path: canvas, before: read.content, after: next })
+  }
+  return changed
+}
+
+/**
  * Put back the contents captured by `rewriteLinksTo`.
  *
  * Only into files still exactly as the rewrite left them: a note edited since
@@ -468,6 +505,16 @@ export async function trash(relative: string): Promise<{ ok: boolean; error?: st
     return { ok: true }
   } catch (err) {
     return { ok: false, error: message(err) }
+  }
+}
+
+/** A vault file opened in the app the system has for it (a .docx in Word, a .zip in Archive Utility). */
+export async function openWithApp(relative: string): Promise<{ ok: boolean }> {
+  try {
+    const error = await shell.openPath(resolveInVault(requireVault(), relative))
+    return { ok: error === '' }
+  } catch {
+    return { ok: false }
   }
 }
 

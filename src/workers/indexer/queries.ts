@@ -18,6 +18,7 @@ import type {
 import { linkStage, type CardStage } from '../../shared/kanban'
 import type { OverviewIndex } from '../../shared/overview'
 import { requireDb } from './db'
+import { missingOnCanvases } from './canvases'
 import { CHATS_FOLDER, RECTO_FOLDER, RECTO_README, RECTO_README_FALLBACK } from '../../shared/recto-paths'
 import { pathsByName, resolveLink } from '../../shared/parse'
 import { cardDescription, checklist } from '../../shared/card-fields'
@@ -206,6 +207,25 @@ export function graph(autoProperty: string | null): GraphData {
       topic: true,
     })),
   ]
+
+  // Canvases: each a node, tied to the notes on it; and the edges a canvas draws between two notes.
+  const present = new Set(nodes.map((n) => n.path))
+  const onCanvas = handleDb.prepare("SELECT DISTINCT canvas, target FROM canvas_nodes WHERE lower(target) LIKE '%.md'").all() as { canvas: string; target: string }[]
+  const canvasDegree = new Map<string, number>()
+  for (const row of onCanvas) {
+    if (!present.has(row.target)) continue
+    edges.push({ source: row.canvas, target: row.target, auto: false, member: true })
+    canvasDegree.set(row.canvas, (canvasDegree.get(row.canvas) ?? 0) + 1)
+  }
+  for (const row of handleDb.prepare('SELECT path FROM canvases').all() as { path: string }[])
+    nodes.push({ path: row.path, name: row.path.slice(row.path.lastIndexOf('/') + 1).replace(/\.canvas$/i, ''), title: null, degree: canvasDegree.get(row.path) ?? 0, topic: false, canvas: true })
+  const drawn = new Set<string>()
+  for (const row of handleDb.prepare('SELECT from_target, to_target FROM canvas_edges').all() as { from_target: string; to_target: string }[]) {
+    const key = [row.from_target, row.to_target].sort().join('\u0000')
+    if (drawn.has(key) || !present.has(row.from_target) || !present.has(row.to_target)) continue
+    drawn.add(key)
+    edges.push({ source: row.from_target, target: row.to_target, auto: false, canvas: true })
+  }
 
   return { nodes, edges }
 }
@@ -415,6 +435,8 @@ export function overview(days: readonly string[]): OverviewIndex {
     dueCards,
     written,
     linked,
+    canvases: one('SELECT COUNT(*) AS n FROM canvases'),
+    missingOnCanvases: missingOnCanvases(),
   }
 }
 

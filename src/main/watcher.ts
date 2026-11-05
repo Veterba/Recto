@@ -80,7 +80,8 @@ function flush(): void {
   // Feed the same batch to the index. Only markdown matters to it, and only
   // content changes - a directory event carries no note to parse.
   const changes = batch
-    .filter((change) => 'path' in change && change.path.toLowerCase().endsWith('.md'))
+    // Canvases too: the index keeps which notes each one has on it.
+    .filter((change) => 'path' in change && /\.(md|canvas)$/i.test(change.path))
     .map((change) => ({
       type: change.type === 'unlink' ? ('removed' as const) : ('upserted' as const),
       path: 'path' in change ? change.path : '',
@@ -96,7 +97,7 @@ function flush(): void {
 
 /** Feed one note to the index without telling the renderer anything changed. */
 function indexNote(relative: string): void {
-  if (!relative.toLowerCase().endsWith('.md')) return
+  if (!/\.(md|canvas)$/i.test(relative)) return
   void send({ kind: 'note-changed', changes: [{ type: 'upserted', path: relative }] }, 30_000).catch(() => undefined)
 }
 

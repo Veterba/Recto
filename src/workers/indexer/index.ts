@@ -9,6 +9,7 @@ import { isKanban, parseKanban, stageOf } from '../../shared/kanban'
 import type { CatalogNote, IndexRequest, IndexResponse, PeriodNote, StoredCard, TaskRowData } from '../../shared/indexer-protocol'
 import { isHidden } from '../../shared/vault'
 import { vaultRoot, requireDb, open, closeDb } from './db'
+import { canvasesOf, canvasReferrers, removeCanvas, writeCanvas } from './canvases'
 import { search, backlinks, resolveOne, unresolved, graph, cards, boards, cardPlaces, context, overview, vaultMeta } from './queries'
 
 /**
@@ -37,7 +38,9 @@ export function notePath(relative: string): string {
   return absolute
 }
 
-/** Every markdown file in the vault, with its stat. */
+const isCanvas = (name: string): boolean => name.toLowerCase().endsWith('.canvas')
+
+/** Every markdown file in the vault - and every canvas - with its stat. */
 async function walk(dir: string, out: { path: string; mtime: number; size: number }[] = []): Promise<typeof out> {
   let entries: fs.Dirent[]
   try {
@@ -49,7 +52,7 @@ async function walk(dir: string, out: { path: string; mtime: number; size: numbe
     if (isHidden(entry.name)) continue
     const absolute = path.join(dir, entry.name)
     if (entry.isDirectory()) await walk(absolute, out)
-    else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+    else if (entry.isFile() && (entry.name.toLowerCase().endsWith('.md') || isCanvas(entry.name))) {
       try {
         const stat = await fsp.stat(absolute)
         out.push({
@@ -432,7 +435,9 @@ export function resolveAllLinks(): number {
 /** Full reconcile: index what changed, drop what is gone. Exported for the tests. */
 export async function reindex(force: boolean): Promise<{ indexed: number; removed: number; total: number }> {
   const handle = requireDb()
-  const onDisk = await walk(vaultRoot)
+  const found = await walk(vaultRoot)
+  await reconcileCanvases(found.filter((f) => isCanvas(f.path)), force)
+  const onDisk = found.filter((f) => !isCanvas(f.path))
   const known = new Map(
     (handle.prepare('SELECT path, mtime, size FROM notes').all() as { path: string; mtime: number; size: number }[]).map((r) => [
       r.path,
@@ -489,6 +494,19 @@ export async function reindex(force: boolean): Promise<{ indexed: number; remove
   return { indexed, removed: gone.length, total: onDisk.length }
 }
 
+/** Canvases read again when changed since last time, rows dropped for the ones that are gone. */
+async function reconcileCanvases(onDisk: { path: string; mtime: number; size: number }[], force: boolean): Promise<void> {
+  const db = requireDb()
+  const known = new Map((db.prepare('SELECT path, mtime, size FROM canvases').all() as { path: string; mtime: number; size: number }[]).map((r) => [r.path, r]))
+  const stale = onDisk.filter((f) => force || known.get(f.path)?.mtime !== f.mtime || known.get(f.path)?.size !== f.size)
+  const read = await Promise.all(stale.map(async (f) => ({ f, content: await fsp.readFile(notePath(f.path), 'utf8').catch(() => null) })))
+  const present = new Set(onDisk.map((f) => f.path))
+  db.transaction(() => {
+    for (const { f, content } of read) if (content !== null) writeCanvas(f.path, content, f.mtime, f.size)
+    for (const p of known.keys()) if (!present.has(p)) removeCanvas(p)
+  })()
+}
+
 function handle(request: IndexRequest): IndexResponse {
   switch (request.kind) {
     case 'open': {
@@ -503,6 +521,10 @@ function handle(request: IndexRequest): IndexResponse {
       return { kind: 'search-result', hits: search(request.query, request.limit ?? 50) }
     case 'backlinks':
       return { kind: 'backlinks-result', links: backlinks(request.path) }
+    case 'canvases-of':
+      return { kind: 'canvases-result', canvases: canvasesOf(request.path) }
+    case 'canvas-referrers':
+      return { kind: 'canvases-result', canvases: canvasReferrers(request.path) }
     case 'resolve-link':
       return { kind: 'resolve-link-result', path: resolveOne(request.target) }
     case 'resolve-links': {
@@ -644,6 +666,19 @@ process.parentPort?.on('message', (event) => {
     if (request.kind === 'note-changed') {
       const handleDb = requireDb()
       for (const change of request.changes) {
+        if (isCanvas(change.path)) {
+          if (change.type === 'removed') handleDb.transaction(() => removeCanvas(change.path))()
+          else
+            try {
+              const absolute = notePath(change.path)
+              const stat = fs.statSync(absolute)
+              const content = fs.readFileSync(absolute, 'utf8')
+              handleDb.transaction(() => writeCanvas(change.path, content, stat.mtimeMs, stat.size))()
+            } catch {
+              // Gone again before it was read; the next reconcile catches it.
+            }
+          continue
+        }
         if (change.type === 'removed') {
           handleDb.transaction(() => removeNote(change.path))()
           continue

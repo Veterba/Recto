@@ -23,7 +23,8 @@ import { TreeRow } from './TreeRow'
  * also set by a board card (its note's path) and by selected text, and taking
  * that for a tree drag moved a card's note out of its board's folder.
  */
-const TREE_DRAG = 'application/x-recto-tree-path'
+/** What a row carries when dragged: its path. A canvas takes it as a node. */
+export const TREE_DRAG = 'application/x-recto-tree-path'
 
 /**
  * The file explorer.

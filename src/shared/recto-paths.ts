@@ -9,9 +9,11 @@ import { parentOf } from './vault'
  *   Recto/Boards/<Board>/<Card>.md  cards whose home is that board
  *   Recto/Unsorted/<Card>.md        cards on no board
  *   Recto/Chats/<bot>/...           chat topics
+ *   Recto/Canvas/<Canvas>.canvas    canvases (JSON Canvas; Obsidian opens them)
  *
- * They are ordinary Markdown notes: indexed, searchable, linkable by name and
- * synced like any other. The Data tree hides `Recto/` with one rule. Machine
+ * They are ordinary files: notes indexed, searchable, linkable by name and
+ * synced like any other, canvases read by the index and listed in the Canvas
+ * section. The Data tree hides `Recto/` with one rule. Machine
  * data stays in `.recto/`.
  */
 
@@ -19,11 +21,12 @@ export const RECTO_FOLDER = 'Recto'
 export const BOARDS_FOLDER = `${RECTO_FOLDER}/Boards`
 export const UNSORTED_FOLDER = `${RECTO_FOLDER}/Unsorted`
 export const CHATS_FOLDER = `${RECTO_FOLDER}/Chats`
+export const CANVAS_FOLDER = `${RECTO_FOLDER}/Canvas`
 export const RECTO_README = `${RECTO_FOLDER}/README.md`
 /** The README's name when a note called README exists elsewhere already: names are unique vault-wide. */
 export const RECTO_README_FALLBACK = `${RECTO_FOLDER}/Recto README.md`
 export const RECTO_README_TEXT =
-  "This folder is managed by Recto (boards and their tasks). Notes here are normal Markdown; don't rename the folder.\n"
+  "This folder is managed by Recto (boards and their tasks, canvases, chats). Notes here are normal Markdown and canvases JSON Canvas; don't rename the folder.\n"
 
 /** Where boards, cards and chats lived before v0.53.1; read only by the migration. */
 export const LEGACY_TASKS_FOLDER = 'tasks'
@@ -38,6 +41,18 @@ export const inRecto = (path: string): boolean => within(path, RECTO_FOLDER)
 /** The note that says what the folder is: Recto's, not one of yours, so the graph and the overview leave it out. */
 export const isRectoReadme = (path: string): boolean => path === RECTO_README || path === RECTO_README_FALLBACK
 export const isChatPath = (path: string): boolean => within(path, CHATS_FOLDER)
+/** A canvas outside Recto/Canvas: one made before canvases lived there, or put elsewhere by hand. */
+export const isStrayCanvas = (path: string): boolean => path.toLowerCase().endsWith('.canvas') && !within(path, CANVAS_FOLDER)
+
+/**
+ * Where a note made from a canvas goes unless another folder was chosen:
+ * beside the canvas when that is one of your folders, the vault's top when the
+ * canvas is in Recto's own - your notes are never put in Recto/.
+ */
+export function noteFolderBeside(canvasPath: string): string {
+  const folder = parentOf(canvasPath)
+  return inRecto(folder) ? '' : folder
+}
 
 /** What moving tasks/ and chats/ into Recto/ did (main/layout-migration.ts), kept in `.recto/layout-migration.json`. */
 export type LayoutMigrationResult =

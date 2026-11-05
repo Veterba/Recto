@@ -14,6 +14,8 @@ export type GraphNodeView = {
   topic?: boolean
   /** A board note: a larger rounded square. */
   board?: boolean
+  /** A canvas: a diamond. */
+  canvas?: boolean
   /** A card: a small dot in the colour of where it stands. */
   stage?: 'open' | 'doing' | 'done' | 'mixed'
 }

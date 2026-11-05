@@ -433,9 +433,9 @@ async function screens(page, dir, vault) {
   await key(page, 'Mod+W')
   await page.waitForFunction(() => document.querySelectorAll('[data-tabs-id]').length === 1)
 
-  // Canvas: a section that says it is coming.
+  // Canvas: the section with no canvas yet - its list and its empty page.
   await key(page, 'Mod+2')
-  await page.waitForSelector('.stub__badge')
+  await page.waitForSelector('.canvas-empty__title')
   await shoot(page, dir, '21c-canvas')
   await key(page, 'Mod+1')
   await page.waitForSelector('[role=treeitem]')
@@ -838,6 +838,94 @@ async function fileShots(dir, theme) {
 }
 
 /**
+ * A canvas, in its own run so no other screen changes: the fixture canvas
+ * (a coloured group, text, a note, a link, a plugin's node, labelled and
+ * coloured edges) with a card from the Launch board and a second note on it;
+ * then its right-click menu, ⌘F, and the group folded.
+ */
+async function canvasShots(dir, theme) {
+  const { base, vault, userData } = prepareVault(theme, `${theme}-canvas`)
+  const plan = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/canvas/garden.canvas'), 'utf8'))
+  plan.nodes = plan.nodes.filter((n) => n.id !== '5e4d3c2b1a090807')
+  plan.nodes.push({ id: 'a0b0c0d0e0f00011', type: 'file', file: 'Garden/Tomatoes.md', x: -440, y: -60, width: 260, height: 180, color: '1' })
+  plan.nodes.push({ id: 'a0b0c0d0e0f00022', type: 'file', file: 'Recto/Boards/Launch/Record the demo.md', x: 560, y: 0, width: 240, height: 150 })
+  // A board, as its preview: lanes side by side.
+  plan.nodes.push({ id: 'a0b0c0d0e0f00055', type: 'file', file: 'Recto/Boards/Launch/Launch.md', x: 880, y: -300, width: 560, height: 260 })
+  plan.edges.push({ id: 'b0b0b0b0b0b00033', fromNode: 'a0b0c0d0e0f00011', fromSide: 'right', toNode: '0f9e8d7c6b5a4932', toSide: 'left', label: 'needs', color: '5' })
+  // Shapes, and arrows drawn the tldraw way: pinned at the centres, one bent, one ending in the open.
+  plan.nodes.push({ id: 'c0c0c0c0c0c00001', type: 'text', text: 'Seed', x: 560, y: 260, width: 160, height: 110, styleAttributes: { shape: 'rectangle' } })
+  plan.nodes.push({ id: 'c0c0c0c0c0c00002', type: 'text', text: 'Harvest', x: 880, y: 300, width: 150, height: 150, color: '4', styleAttributes: { shape: 'circle' } })
+  plan.nodes.push({ id: 'c0c0c0c0c0c00003', type: 'text', text: '', x: 1159, y: 199, width: 2, height: 2, styleAttributes: { shape: 'point' } })
+  plan.edges.push({ id: 'd0d0d0d0d0d00001', fromNode: 'c0c0c0c0c0c00001', fromSide: 'right', toNode: 'c0c0c0c0c0c00002', toSide: 'left', label: 'grows into', styleAttributes: { fromAnchor: '0.5,0.5', toAnchor: '0.5,0.5', bend: '-60' } })
+  plan.edges.push({ id: 'd0d0d0d0d0d00002', fromNode: 'c0c0c0c0c0c00002', fromSide: 'top', toNode: 'c0c0c0c0c0c00003', toSide: 'left', styleAttributes: { fromAnchor: '0.5,0.5', toAnchor: '0.5,0.5' } })
+  const line = (o) => `\t\t${JSON.stringify(o)}`
+  fs.mkdirSync(path.join(vault, 'Recto', 'Canvas'), { recursive: true })
+  fs.writeFileSync(
+    path.join(vault, 'Recto', 'Canvas', 'Garden plan.canvas'),
+    `{\n\t"nodes":[\n${plan.nodes.map(line).join(',\n')}\n\t],\n\t"edges":[\n${plan.edges.map(line).join(',\n')}\n\t],\n\t"metadata":${JSON.stringify(plan.metadata)}\n}`,
+  )
+  const { app, page } = await launch(userData)
+  try {
+    await key(page, 'Mod+2')
+    await page.locator('.canvas-list .boards__name', { hasText: 'Garden plan' }).click()
+    await page.waitForSelector('.canvas-node--card')
+    await page.mouse.move(0, 0)
+    await shoot(page, dir, '33-canvas', 1200)
+
+    await page.locator('.react-flow__node[data-id="0f9e8d7c6b5a4932"]').click({ button: 'right' })
+    await page.waitForSelector('.menu')
+    await shoot(page, dir, '33b-canvas-menu')
+    await page.keyboard.press('Escape')
+
+    await page.locator('.canvas-view').focus()
+    await key(page, 'Mod+f')
+    await page.keyboard.type('compost')
+    await page.waitForSelector('.canvas-search__count')
+    await shoot(page, dir, '33c-canvas-search', 900)
+    await page.keyboard.press('Escape')
+
+    await page.locator('.react-flow__node[data-id="8132d4d894c80022"] .canvas-fold').first().click()
+    await page.waitForSelector('.canvas-node--group.is-folded')
+    await page.mouse.move(0, 0)
+    await shoot(page, dir, '33d-canvas-folded')
+    await page.locator('.react-flow__node[data-id="8132d4d894c80022"] .canvas-fold').first().click()
+
+    // Search zoomed in on its match: back to the whole canvas, where the arrows are.
+    await page.locator('.board__tool', { hasText: 'Zoom to fit' }).click()
+    await page.waitForSelector('.react-flow__edge[data-id="d0d0d0d0d0d00001"]')
+    await page.locator('.react-flow__edge[data-id="d0d0d0d0d0d00001"]').dispatchEvent('click')
+    await page.waitForSelector('.canvas-edge__handle--bend')
+    await page.mouse.move(0, 0)
+    await shoot(page, dir, '33e-canvas-arrows')
+
+    // The style bar over a selected shape, its colours open. The arrow let go first: its end's handle is on the shape.
+    await page.locator('.canvas-view').focus()
+    await page.keyboard.press('Escape')
+    await page.locator('.react-flow__node[data-id="c0c0c0c0c0c00002"]').click()
+    await page.locator('.canvas-style [aria-label="Colour"]').click()
+    await page.waitForSelector('.canvas-style__colors')
+    await shoot(page, dir, '33i-canvas-style-bar')
+    await page.keyboard.press('Escape')
+
+
+    await page.locator('.react-flow__node[data-id="a1b2c3d4e5f60718"]').click({ button: 'right' })
+    await page.locator('.menu__item', { hasText: 'Make it a note' }).click()
+    await page.waitForSelector('.canvas-bar')
+    await shoot(page, dir, '33g-canvas-make-note')
+    await page.locator('.canvas-bar__close').click()
+
+    await page.locator('.canvas-list .boards__name', { hasText: 'Garden plan' }).click({ button: 'right' })
+    await page.waitForSelector('.menu')
+    await shoot(page, dir, '33h-canvas-list-menu')
+    await page.keyboard.press('Escape')
+    console.log('  33-canvas')
+  } finally {
+    await app.close()
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
+/**
  * Block 8, in its own run: the Periodic notes tab with Weekly, Monthly and
  * Yearly switched on and its preview tree, a note with the formatting toolbar
  * hidden, and the status bar's focus and writing-tools buttons.
@@ -1218,6 +1306,7 @@ for (const theme of ['light', 'dark']) {
     await botStills(renderer.origin, dir, theme)
     await tableShots(dir, theme)
     await fileShots(dir, theme)
+    await canvasShots(dir, theme)
     await tableEditShots(dir, theme)
     await periodicShots(dir, theme)
     await highlightShots(dir, theme)

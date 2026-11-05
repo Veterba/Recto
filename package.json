@@ -1,6 +1,6 @@
 {
   "name": "recto",
-  "version": "0.55.1",
+  "version": "0.56.0",
   "description": "Local-first, markdown-on-disk knowledge app",
   "license": "MIT",
   "private": true,
@@ -71,6 +71,7 @@
     "@lezer/markdown": "^1.7.2",
     "@modelcontextprotocol/server": "^2.4.0",
     "@replit/codemirror-vim": "^6.4.0",
+    "@xyflow/react": "^12.12.1",
     "az": "^0.2.3",
     "better-sqlite3": "^13.0.3",
     "chokidar": "^5.0.0",
@@ -81,6 +82,8 @@
     "katex": "^0.16.47",
     "lucide-react": "^1.45.0",
     "onnxruntime-node": "1.30.0",
+    "pdfjs-dist": "^6.5.438",
+    "perfect-freehand": "^1.2.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^4.6.7"

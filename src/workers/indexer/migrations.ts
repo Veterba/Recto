@@ -346,6 +346,33 @@ export const MIGRATIONS: readonly Migration[] = [
       UPDATE notes SET mtime = -1 WHERE path IN (SELECT path FROM properties WHERE key = 'kanban-plugin');
     `,
   },
+  {
+    version: 15,
+    name: 'canvases',
+    sql: `
+      -- JSON Canvas files: what each puts on it, and the edges between its files.
+      CREATE TABLE canvases (
+        path  TEXT PRIMARY KEY,
+        mtime REAL NOT NULL,
+        size  INTEGER NOT NULL
+      );
+      CREATE TABLE canvas_nodes (
+        canvas  TEXT NOT NULL,
+        node    TEXT NOT NULL,
+        target  TEXT NOT NULL,
+        subpath TEXT
+      );
+      CREATE INDEX idx_canvas_nodes_canvas ON canvas_nodes(canvas);
+      CREATE INDEX idx_canvas_nodes_target ON canvas_nodes(target);
+      CREATE TABLE canvas_edges (
+        canvas      TEXT NOT NULL,
+        from_target TEXT NOT NULL,
+        to_target   TEXT NOT NULL,
+        label       TEXT
+      );
+      CREATE INDEX idx_canvas_edges_canvas ON canvas_edges(canvas);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

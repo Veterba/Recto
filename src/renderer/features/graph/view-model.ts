@@ -27,6 +27,8 @@ type GraphFilters = {
   /** Cards: notes a board lists. */
   showTasks: boolean
   showChats: boolean
+  /** Canvases, and the lines to the notes on them. */
+  showCanvases: boolean
   linkRange: LinkRange
   localOnly: boolean
   activePath: string | null
@@ -45,7 +47,7 @@ export type GraphViewModel = {
 /** Nodes actually shown, after the filters. */
 export function visibleGraph(
   graph: GraphInfo | null,
-  { showOrphans, showBoards, showTasks, showChats, linkRange, localOnly, activePath }: GraphFilters,
+  { showOrphans, showBoards, showTasks, showChats, showCanvases, linkRange, localOnly, activePath }: GraphFilters,
 ): GraphViewModel {
   if (graph === null) {
     return {
@@ -69,6 +71,7 @@ export function visibleGraph(
   const visible = graph.nodes.filter(
     (node) =>
       (showBoards || node.board !== true) &&
+      (showCanvases || node.canvas !== true) &&
       (showTasks || node.stage === undefined) &&
       (showChats || !node.path.startsWith(`${CHAT_FOLDER}/`)) &&
       !isRectoReadme(node.path),
@@ -105,6 +108,7 @@ export function visibleGraph(
     label: node.name,
     topic: node.topic,
     ...(node.board === true ? { board: true } : {}),
+    ...(node.canvas === true ? { canvas: true } : {}),
     ...(node.stage === undefined ? {} : { stage: node.stage }),
     degree: node.degree,
     group: groupIndex.get(folderOf(node.path)) ?? 0,
@@ -116,7 +120,8 @@ export function visibleGraph(
     const a = indexOf.get(edge.source)
     const b = indexOf.get(edge.target)
     if (a === undefined || b === undefined) continue
-    if (edge.auto || edge.member === true) auto.push(edges.length)
+    // Topic links, a board's cards, a canvas's notes, and edges drawn on a canvas: thin and dashed, not links you wrote.
+    if (edge.auto || edge.member === true || edge.canvas === true) auto.push(edges.length)
     edges.push([a, b])
   }
   // Counted before the link filter, so the histogram shows what there is to choose from.

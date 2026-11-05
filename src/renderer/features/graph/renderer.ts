@@ -262,13 +262,16 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
   const hollowBatches = new Map<string, number[]>()
   /** Boards: rounded squares. */
   const squareBatches = new Map<string, number[]>()
+  /** Canvases: diamonds. */
+  const diamondBatches = new Map<string, number[]>()
   for (let i = 0; i < nodes.length; i++) {
     if (i === active || i === hovered) continue
     const [sx, sy] = worldToScreen(camera, positions[i * 2] ?? 0, positions[i * 2 + 1] ?? 0, width, height)
     const r = nodeSize(i)
     if (sx < -r || sy < -r || sx > width + r || sy > height + r) continue
     const colour = nodeColours[i] ?? surface.node
-    const target = nodes[i]?.board === true ? squareBatches : nodes[i]?.topic === true ? hollowBatches : batches
+    const target =
+      nodes[i]?.board === true ? squareBatches : nodes[i]?.canvas === true ? diamondBatches : nodes[i]?.topic === true ? hollowBatches : batches
     let batch = target.get(colour)
     if (batch === undefined) {
       batch = []
@@ -278,13 +281,22 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
   }
 
   const ring = look.node.shape === 'ring'
-  const paint = (colour: string, coords: number[], alpha: number, hollow = false, square = false): void => {
+  const paint = (colour: string, coords: number[], alpha: number, hollow = false, square = false, diamond = false): void => {
     context.globalAlpha = alpha
     context.beginPath()
     for (let i = 0; i < coords.length; i += 3) {
       const x = coords[i]!
       const y = coords[i + 1]!
       const r = coords[i + 2]!
+      if (diamond) {
+        // A diamond: a square on its corner, as wide as the circle it replaces.
+        context.moveTo(x, y - r)
+        context.lineTo(x + r, y)
+        context.lineTo(x, y + r)
+        context.lineTo(x - r, y)
+        context.closePath()
+        continue
+      }
       if (square) {
         // A rounded square of the same area's feel: a little smaller than the circle it replaces.
         const half = r * 0.8
@@ -307,6 +319,7 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
   for (const [colour, coords] of batches) paint(colour, coords, look.node.opacity)
   for (const [colour, coords] of hollowBatches) paint(colour, coords, look.node.opacity, true)
   for (const [colour, coords] of squareBatches) paint(colour, coords, look.node.opacity, false, true)
+  for (const [colour, coords] of diamondBatches) paint(colour, coords, look.node.opacity, false, false, true)
 
   // Hovered and open notes last, on top of everything.
   const single = (i: number, isActive: boolean): void => {
@@ -314,7 +327,7 @@ export function draw(context: CanvasRenderingContext2D, state: RenderState, pale
     const r = nodeSize(i)
     if (sx < -r * 2 || sy < -r * 2 || sx > width + r * 2 || sy > height + r * 2) return
     const colour = isActive ? palette.nodeActive : (nodeColours[i] ?? surface.node)
-    paint(colour, [sx, sy, isActive ? r * 1.6 : r * 1.25], 1, nodes[i]?.topic === true, nodes[i]?.board === true)
+    paint(colour, [sx, sy, isActive ? r * 1.6 : r * 1.25], 1, nodes[i]?.topic === true, nodes[i]?.board === true, nodes[i]?.canvas === true)
     // A ring around the open note, so it reads even against a dense cluster - square around a board.
     if (isActive) {
       context.globalAlpha = 0.35

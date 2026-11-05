@@ -159,6 +159,9 @@
   grid-template-columns: repeat(4, 1fr);
   gap: var(--size-3);
 }
+.overview__totals:has(> :nth-child(5)) {
+  grid-template-columns: repeat(5, 1fr);
+}
 .overview__total b {
   display: block;
   font-size: 30px;
@@ -319,7 +322,8 @@ button.overview__cell:focus-visible {
   gap: var(--size-6);
 }
 @media (max-width: 640px) {
-  .overview__totals {
+  .overview__totals,
+  .overview__totals:has(> :nth-child(5)) {
     grid-template-columns: repeat(2, 1fr);
   }
   .overview__two,

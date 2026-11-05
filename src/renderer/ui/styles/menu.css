@@ -90,3 +90,29 @@
   font-size: var(--font-size-11);
   font-variant-numeric: tabular-nums;
 }
+
+/* A row of colours (canvas nodes and edges): round chips, the current one ringed, "none" struck through. */
+.menu__swatches {
+  display: flex;
+  gap: 6px;
+  padding: 6px var(--size-2);
+}
+.menu__swatch {
+  all: unset;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 15%, transparent);
+  cursor: pointer;
+}
+.menu__swatch.is-none {
+  background: linear-gradient(135deg, transparent 45%, var(--danger) 45% 55%, transparent 55%), var(--bg-primary);
+}
+.menu__swatch.is-current {
+  box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 3.5px var(--accent);
+}
+.menu__swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

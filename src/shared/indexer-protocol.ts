@@ -35,12 +35,14 @@ export type GraphNode = {
   lane?: string | null
   /** A card's first board note, where a click opens it. */
   cardBoard?: string
+  /** A canvas: drawn as a diamond. */
+  canvas?: boolean
 }
 /**
  * `auto`: every link between the pair is in the topics property.
  * `member`: the pair is a board and a card on it, linked only by that card line.
  */
-export type GraphEdge = { source: string; target: string; auto: boolean; member?: boolean }
+export type GraphEdge = { source: string; target: string; auto: boolean; member?: boolean; canvas?: boolean }
 export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[] }
 
 export type Backlink = {
@@ -165,6 +167,10 @@ export type IndexRequest =
   | { kind: 'note-changed'; changes: NoteChange[] }
   | { kind: 'search'; query: string; limit?: number }
   | { kind: 'backlinks'; path: string }
+  /** The canvases this file is on. */
+  | { kind: 'canvases-of'; path: string }
+  /** The canvases with this file, or anything in this folder, on them: what a rename rewrites. */
+  | { kind: 'canvas-referrers'; path: string }
   | { kind: 'resolve-link'; target: string }
   | { kind: 'resolve-links'; targets: string[] }
   | { kind: 'unresolved' }
@@ -212,6 +218,7 @@ export type IndexResponse =
   | { kind: 'note-changed-done' }
   | { kind: 'search-result'; hits: SearchHit[] }
   | { kind: 'backlinks-result'; links: Backlink[] }
+  | { kind: 'canvases-result'; canvases: string[] }
   | { kind: 'resolve-link-result'; path: string | null }
   | { kind: 'resolve-links-result'; resolved: Record<string, string | null> }
   | { kind: 'unresolved-result'; entries: { target: string; sources: string[] }[] }

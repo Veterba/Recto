@@ -31,6 +31,7 @@ import type { BoardMigrationResult } from './board-migration'
 import type { LayoutMigrationResult } from './recto-paths'
 import type { ActivityEntry, AiAccessSettings, ClientId, ClientPlan, ClientStatus, Proposal } from './ai-access'
 import type { Finding, FormattingProfile } from './formatting'
+import type { LinkPreview } from './canvas'
 
 /**
  * How sharp the backdrop stays, sharpest first.
@@ -54,6 +55,11 @@ export const VIBRANCY_MATERIALS = ['fullscreen-ui', 'sidebar', 'window'] as cons
 export type VibrancyMaterial = (typeof VIBRANCY_MATERIALS)[number]
 
 /** Invoke channels: renderer -> main, request/response. */
+/** What the mini-player plays: a YouTube video by its id, or a video in the vault by its path; `ratio` is width / height. */
+export type PlayerItem =
+  | { kind: 'youtube'; id: string; title: string; ratio?: number }
+  | { kind: 'file'; path: string; title: string; ratio?: number }
+
 export const IPC = {
   appStartupState: 'app:startup-state',
   appPlatform: 'app:platform',
@@ -88,10 +94,14 @@ export const IPC = {
   boardsDelete: 'boards:delete',
   boardsUndoDelete: 'boards:undo-delete',
   fsReveal: 'fs:reveal',
+  fsOpenWithApp: 'fs:open-with-app',
+  fsReadBytes: 'fs:read-bytes',
   fsImportImages: 'fs:import-images',
+  fsImportFiles: 'fs:import-files',
   fsImportData: 'fs:import-data',
   indexSearch: 'index:search',
   indexBacklinks: 'index:backlinks',
+  indexCanvasesOf: 'index:canvases-of',
   indexStats: 'index:stats',
   indexReindex: 'index:reindex',
   indexResolveLink: 'index:resolve-link',
@@ -170,6 +180,9 @@ export const IPC = {
   aiAccessDraftGuide: 'ai-access:draft-guide',
   aiAccessSaveGuide: 'ai-access:save-guide',
   aiAccessActivity: 'ai-access:activity',
+  canvasProposeLink: 'canvas:propose-link',
+  canvasLinkPreview: 'canvas:link-preview',
+  playerOpen: 'player:open',
   aiProposals: 'ai-proposals:list',
   aiProposalApply: 'ai-proposals:apply',
   aiProposalDiscard: 'ai-proposals:discard',
@@ -326,6 +339,10 @@ export type IpcApi = Exhaustive<
     [IPC.fsTrash]: (path: string) => { ok: boolean; error?: string }
     [IPC.fsMove]: (path: string, newParent: string) => RenameOutcome | { ok: false; error: string }
     [IPC.fsReveal]: (path: string) => { ok: boolean }
+    /** A vault file opened in the system's app for it. */
+    [IPC.fsOpenWithApp]: (path: string) => { ok: boolean }
+    /** A vault file's bytes, undecoded (a PDF for its reader). */
+    [IPC.fsReadBytes]: (path: string) => { ok: true; data: Uint8Array } | { ok: false; error: string }
     /** The file that already has this file name (`Plan.md`) anywhere in the vault, read from disk; null when it is free. */
     [IPC.fsNameTaken]: (fileName: string) => string | null
     /** The shortest `[[link]]` target that names this note and no other (shared/parse.ts `shortestLink`). */
@@ -340,6 +357,8 @@ export type IpcApi = Exhaustive<
     [IPC.boardsUndoDelete]: (undoId: string) => { ok: boolean; error?: string }
     /** Pick image files and copy them into the vault. Empty when cancelled. */
     [IPC.fsImportImages]: () => { ok: true; paths: string[] } | { ok: false; error: string }
+    /** Files chosen in a dialog (media first), copied into the attachments folder by path. */
+    [IPC.fsImportFiles]: () => { ok: true; paths: string[] } | { ok: false; error: string }
     /**
      * Write dropped or pasted bytes into the vault's attachments folder.
      *
@@ -350,6 +369,8 @@ export type IpcApi = Exhaustive<
     [IPC.fsImportData]: (name: string, data: Uint8Array) => { ok: true; path: string } | { ok: false; error: string }
     [IPC.indexSearch]: (query: string, limit?: number) => SearchResult[]
     [IPC.indexBacklinks]: (path: string) => BacklinkResult[]
+    /** The canvases a note (or any file) is on, for its Linked mentions. */
+    [IPC.indexCanvasesOf]: (path: string) => string[]
     [IPC.indexStats]: () => IndexStats
     [IPC.indexReindex]: () => { ok: boolean }
     [IPC.indexResolveLink]: (target: string) => string | null
@@ -483,6 +504,12 @@ export type IpcApi = Exhaustive<
     /** A new note at the top of the vault, set as the AI guide. */
     [IPC.aiAccessSaveGuide]: (name: string, text: string) => { ok: true; path: string } | { ok: false; error: string }
     [IPC.aiAccessActivity]: () => ActivityEntry[]
+    /** An edge between two notes made a [[link]] in the first: queued as a Suggested edit, never written directly. */
+    [IPC.canvasProposeLink]: (from: string, to: string) => { ok: true; proposal: string | null } | { ok: false; error: string }
+    /** A link node's card: the page's title, description, image and icon, fetched once and kept; null offline or when the page will not say. */
+    [IPC.canvasLinkPreview]: (url: string) => LinkPreview | null
+    /** A video played in the mini-player window: a YouTube video, or one from the vault. */
+    [IPC.playerOpen]: (item: PlayerItem) => { ok: true } | { ok: false; error: string }
     [IPC.aiProposals]: () => Proposal[]
     [IPC.aiProposalApply]: (id: string) => { ok: boolean; error?: string; stale?: boolean }
     [IPC.aiProposalDiscard]: (id: string) => { ok: boolean }

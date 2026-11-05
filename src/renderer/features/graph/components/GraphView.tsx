@@ -79,6 +79,8 @@ function GraphView({ activePath, onOpenNote, onOpenCard, editable = false }: Pro
     setShowOrphans,
     showBoards,
     setShowBoards,
+    showCanvases,
+    setShowCanvases,
     showTasks,
     setShowTasks,
     showChats,
@@ -101,8 +103,8 @@ function GraphView({ activePath, onOpenNote, onOpenCard, editable = false }: Pro
   // simulation was torn down and reheated for a graph that had not changed.
   const centre = localOnly ? activePath : null
   const view = useMemo(
-    () => visibleGraph(graph, { showOrphans, showBoards, showTasks, showChats, linkRange, localOnly, activePath: centre }),
-    [graph, showOrphans, showBoards, showTasks, showChats, linkRange, localOnly, centre],
+    () => visibleGraph(graph, { showOrphans, showBoards, showTasks, showChats, showCanvases, linkRange, localOnly, activePath: centre }),
+    [graph, showOrphans, showBoards, showTasks, showChats, showCanvases, linkRange, localOnly, centre],
   )
 
   // --- worker lifecycle ---------------------------------------------------
@@ -240,6 +242,7 @@ function GraphView({ activePath, onOpenNote, onOpenCard, editable = false }: Pro
         orphans={{ on: showOrphans, set: setShowOrphans }}
         localOnly={{ on: localOnly, set: setLocalOnly }}
         boards={{ on: showBoards, set: setShowBoards }}
+        canvases={{ on: showCanvases, set: setShowCanvases }}
         tasks={{ on: showTasks, set: setShowTasks }}
         chats={{ on: showChats, set: setShowChats }}
         hasActive={hasActive}

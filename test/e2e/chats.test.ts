@@ -89,11 +89,10 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
     removeDir(base)
   }, 30_000)
 
-  it('Canvas is a section that says it is coming', async () => {
+  it('Canvas is a section with its list of canvases and an empty page', async () => {
     await page.getByRole('tab', { name: 'Canvas' }).click()
-    await page.waitForSelector('.stub__title')
-    expect(await page.locator('.stub__badge').textContent()).toBe('Coming soon')
-    expect(await page.locator('.sidebar__soon').textContent()).toMatch(/coming soon/i)
+    await page.waitForSelector('.canvas-empty__title')
+    expect(await page.locator('.canvas-list .sidebar__empty').textContent()).toMatch(/No canvases yet/)
     expect(await page.getByRole('tab', { name: 'AI' }).count()).toBe(0)
     await page.keyboard.press('Meta+1')
     await page.waitForSelector('[role=treeitem]')

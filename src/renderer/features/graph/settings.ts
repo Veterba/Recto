@@ -24,6 +24,8 @@ type GraphSettings = {
   showOrphans: boolean
   /** Board notes, drawn as rounded squares. On by default: a board is a note you made. */
   showBoards: boolean
+  /** Canvases, drawn as diamonds and tied to the notes on them. On by default. */
+  showCanvases: boolean
   /**
    * Cards - the notes a board lists - as small dots in the colour of where
    * they stand, tied to their board by a dashed line. Off by default: a busy
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: GraphSettings = {
   showLabels: true,
   showOrphans: true,
   showBoards: true,
+  showCanvases: true,
   showTasks: false,
   showChats: false,
   look: DEFAULT_LOOK,
@@ -109,6 +112,7 @@ export function parseSettings(raw: unknown): GraphSettings {
     showLabels: typeof record['showLabels'] === 'boolean' ? record['showLabels'] : true,
     showOrphans: typeof record['showOrphans'] === 'boolean' ? record['showOrphans'] : true,
     showBoards: typeof record['showBoards'] === 'boolean' ? record['showBoards'] : true,
+    showCanvases: typeof record['showCanvases'] === 'boolean' ? record['showCanvases'] : true,
     showTasks: typeof record['showTasks'] === 'boolean' ? record['showTasks'] : false,
     showChats: typeof record['showChats'] === 'boolean' ? record['showChats'] : false,
     look: coerceLook(record['look']),

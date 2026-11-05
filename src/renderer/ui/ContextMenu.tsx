@@ -18,6 +18,8 @@ import { Icon } from './Icon'
 export type MenuItem =
   | { kind: 'separator' }
   | { kind: 'heading'; label: string }
+  /** A row of colours to pick one from; `null` is "none". Each is a CSS colour, with its name for the tooltip. */
+  | { kind: 'swatches'; colors: { value: string | null; css: string; name: string }[]; current: string | null; pick: (value: string | null) => void }
   | {
       kind: 'item'
       label: string
@@ -132,6 +134,27 @@ export function ContextMenu({ items, at, onClose }: Props): React.ReactElement {
     >
       {items.map((item, index) => {
         if (item.kind === 'separator') return <hr className="menu__sep" key={`sep-${index}`} />
+        if (item.kind === 'swatches') {
+          return (
+            <div className="menu__swatches" key={`swatches-${index}`} role="group" aria-label="Colour">
+              {item.colors.map((c) => (
+                <button
+                  key={c.name}
+                  className={`menu__swatch${c.value === item.current ? ' is-current' : ''}${c.value === null ? ' is-none' : ''}`}
+                  role="menuitemradio"
+                  aria-checked={c.value === item.current}
+                  aria-label={c.name}
+                  title={c.name}
+                  style={{ '--swatch': c.css } as React.CSSProperties}
+                  onClick={() => {
+                    onClose()
+                    item.pick(c.value)
+                  }}
+                />
+              ))}
+            </div>
+          )
+        }
         if (item.kind === 'heading') {
           return (
             <p className="menu__heading" key={`head-${index}`}>

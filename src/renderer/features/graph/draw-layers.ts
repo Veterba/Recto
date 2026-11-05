@@ -251,7 +251,7 @@ export function drawVeil({
   nodes: readonly GraphNodeView[]
   /** A node's radius on screen, boards and cards included. */
   nodeSize: (i: number) => number
-  paint: (colour: string, coords: number[], alpha: number, hollow?: boolean, square?: boolean) => void
+  paint: (colour: string, coords: number[], alpha: number, hollow?: boolean, square?: boolean, diamond?: boolean) => void
   palette: Palette
   positions: Float32Array<ArrayBufferLike>
   surface: { dark: boolean; edge: string; node: string; orphan: string; label: string }
@@ -298,8 +298,9 @@ export function drawVeil({
         [lit[k + 1]!, lit[k + 2]!, lit[k + 3]!],
         focusFade,
         nodes[i]?.topic === true,
-        // A board stays a square under the highlight, not a dot laid on it.
+        // A board stays a square under the highlight, not a dot laid on it; a canvas a diamond.
         nodes[i]?.board === true,
+        nodes[i]?.canvas === true,
       )
     }
     /*

@@ -11,6 +11,8 @@ import type { Appearance } from '../appearance'
 import type { FileNode } from '@shared/vault'
 import type { SectionId } from '../sections'
 import { registerNewTabView } from '../components/NewTabView'
+import { registerCanvasView } from '../../features/canvas'
+import { allFolderPaths } from '../../features/file-tree'
 
 /**
  * Register the views that need callbacks into the shell, once, on the first
@@ -30,7 +32,11 @@ export function useRegisterViews(refs: {
   /** For the new-tab page: the notes, and making one by name. */
   roots: React.RefObject<readonly FileNode[]>
   section: React.RefObject<SectionId>
+  /** "New canvas" on the Canvas page: name one in the sidebar. */
+  newCanvas: React.RefObject<() => void>
   createNamed: React.RefObject<(parent: string, name: string) => Promise<string | null>>
+  /** A canvas's note opened in the pane beside it. */
+  openBeside: React.RefObject<(leafId: string, path: string) => void>
 }): void {
   // Registered here rather than at module scope because the markdown view needs
   // a callback into the shell to follow a wikilink.
@@ -64,6 +70,18 @@ export function useRegisterViews(refs: {
     openFile: (p) => refs.openFile.current(p),
     openFolder: (name) => refs.openFolder.current(name),
     exists: (p) => refs.noteExists.current(p),
+  })
+  registerCanvasView({
+    openFile: (p) => refs.openFile.current(p),
+    openLink: (target) => {
+      void api.invoke(IPC.indexResolveLink, target).then((resolved) => {
+        if (resolved !== null) refs.openFile.current(resolved)
+      })
+    },
+    newCanvas: () => refs.newCanvas.current(),
+    folders: () => allFolderPaths(refs.roots.current).filter((f) => f !== 'Recto' && !f.startsWith('Recto/')),
+    roots: () => refs.roots.current,
+    openBeside: (leafId, path) => refs.openBeside.current(leafId, path),
   })
   registerNewTabView({
     section: () => refs.section.current,

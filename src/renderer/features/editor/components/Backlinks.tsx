@@ -42,10 +42,13 @@ type Props = {
 
 export function Backlinks({ path, revision, onOpen }: Props): React.ReactElement | null {
   const [links, setLinks] = useState<BacklinkResult[] | null>(null)
+  /** The canvases this note is on: each an "On canvas …" entry. */
+  const [canvases, setCanvases] = useState<string[]>([])
   const [collapsed, setCollapsed] = useState(readCollapsed)
 
   const load = useCallback(() => {
     void api.invoke(IPC.indexBacklinks, path).then(setLinks)
+    void api.invoke(IPC.indexCanvasesOf, path).then(setCanvases)
   }, [path])
 
   useEffect(load, [load, revision])
@@ -63,15 +66,25 @@ export function Backlinks({ path, revision, onOpen }: Props): React.ReactElement
       <button className="backlinks__head" onClick={toggle} aria-expanded={!collapsed}>
         <span className={`backlinks__chevron${collapsed ? '' : ' is-open'}`}>{'›'}</span>
         <span className="backlinks__title">Linked mentions</span>
-        <span className="backlinks__count">{links.length}</span>
+        <span className="backlinks__count">{links.length + canvases.length}</span>
       </button>
 
       {!collapsed && (
         <div className="backlinks__body">
-          {links.length === 0 ? (
+          {links.length === 0 && canvases.length === 0 ? (
             <p className="backlinks__empty">Nothing links here yet.</p>
           ) : (
             <ul className="backlinks__list">
+              {canvases.map((canvas) => (
+                <li key={`canvas:${canvas}`}>
+                  <button className="backlink" onClick={() => onOpen(canvas)}>
+                    <span className="backlink__name">
+                      <Icon name="scan" size={12} /> On canvas {canvas.slice(canvas.lastIndexOf('/') + 1).replace(/\.canvas$/i, '')}
+                    </span>
+                    <Icon name="arrow-right" size={13} className="backlink__go" />
+                  </button>
+                </li>
+              ))}
               {links.map((link, i) => (
                 <li key={`${link.path}:${link.line}:${i}`}>
                   <button className="backlink" onClick={() => onOpen(link.path)}>
