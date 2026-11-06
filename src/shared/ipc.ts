@@ -7,6 +7,7 @@
  */
 
 import type { LinkSettings } from './obsidian-links'
+import type { CanvasOpState } from './canvas-ops'
 import type { AiDelta, AiDone, AiError, AiMessage } from './ai'
 import type { ArchiveState } from './archive'
 import type { Bot, BotJob, BotMemoryStatus, BotMessage, BotModelStatus, BotSettings, ModelChoice, NoteCardsStatus, PullProgress } from './bots'
@@ -189,6 +190,7 @@ export const IPC = {
   aiProposals: 'ai-proposals:list',
   aiProposalApply: 'ai-proposals:apply',
   aiProposalDiscard: 'ai-proposals:discard',
+  aiProposalCanvas: 'ai-proposals:canvas',
   aiClients: 'ai-clients:list',
   aiClientPlan: 'ai-clients:plan',
   aiClientConnect: 'ai-clients:connect',
@@ -524,6 +526,8 @@ export type IpcApi = Exhaustive<
     [IPC.aiProposals]: () => Proposal[]
     [IPC.aiProposalApply]: (id: string) => { ok: boolean; error?: string; stale?: boolean }
     [IPC.aiProposalDiscard]: (id: string) => { ok: boolean }
+    /** A canvas proposal's edits, as accepted (written by the open canvas) or rejected there. */
+    [IPC.aiProposalCanvas]: (id: string, states: CanvasOpState[], refs: Record<string, string>) => { ok: boolean }
     [IPC.aiClients]: () => ClientStatus[]
     [IPC.aiClientPlan]: (id: ClientId, action: 'connect' | 'disconnect') => ClientPlan
     [IPC.aiClientConnect]: (id: ClientId) => { ok: boolean; error?: string }

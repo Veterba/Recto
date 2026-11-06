@@ -13,7 +13,7 @@ import { NoteBodyEditor } from '../../editor'
 import { CodeView } from '../../editor/components/CodeView'
 import { PdfView } from '../../pdf/PdfView'
 import { useDrawing } from '../drawing-store'
-import { strokePath } from '../drawing'
+import { HIGHLIGHT_OPACITY, strokePath } from '../drawing'
 import type { FlowNode } from '../canvas-flow'
 import { useCanvasActions } from '../canvas-actions'
 import { boardOfCard, isBoardPath, useBoards, useCardPlaces } from '../../boards'
@@ -406,20 +406,30 @@ function SvgNode(props: NodeProps<FlowNode>): React.ReactElement {
 function DrawingNode({ props, drawn }: { props: NodeProps<FlowNode>; drawn: ReturnType<typeof useDrawing> }): React.ReactElement {
   const actions = useCanvasActions()
   const node = props.data.node
-  const paths = useMemo(() => (drawn ?? null)?.strokes.map((s) => ({ d: strokePath(s), color: s.color })) ?? [], [drawn])
+  // Highlighters first, under the ink, as the file has them.
+  const paths = useMemo(() => {
+    const strokes = (drawn ?? null)?.strokes ?? []
+    return [...strokes.filter((s) => s.kind === 'highlighter'), ...strokes.filter((s) => s.kind !== 'highlighter')].map((s) => ({
+      d: strokePath(s),
+      color: s.color,
+      opacity: s.kind === 'highlighter' ? HIGHLIGHT_OPACITY : 1,
+    }))
+  }, [drawn])
   return (
     <Frame props={props} className="canvas-node--drawing">
       <svg
         className="canvas-drawing__ink"
         viewBox={drawn == null ? undefined : `0 0 ${drawn.width} ${drawn.height}`}
         preserveAspectRatio="none"
+        // Its strokes are in the editor while it is open: drawn there, not twice.
+        style={actions.editingDrawing === node.id ? { visibility: 'hidden' } : undefined}
         onDoubleClick={(ev) => {
           ev.stopPropagation()
-          actions.drawOn(node.id)
+          actions.editDrawing(node.id)
         }}
       >
         {paths.map((p, i) => (
-          <path key={i} d={p.d} fill={p.color ?? 'currentColor'} />
+          <path key={i} d={p.d} fill={p.color ?? 'currentColor'} fillOpacity={p.opacity} />
         ))}
       </svg>
     </Frame>

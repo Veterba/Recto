@@ -156,6 +156,69 @@ export const VAULT_TOOLS: readonly ToolDef[] = [
     }),
     true,
   ),
+  tool('canvas_list', 'List canvases', 'The canvases in the vault (Obsidian’s JSON Canvas files).', z.object({})),
+  tool(
+    'canvas_read',
+    'Read a canvas',
+    'A canvas’s nodes - cards (text), notes, files, web links, groups and what they hold - and the arrows between them. Each node has a short id (n1, n2…) for the canvas_propose tools; read again after the canvas changes.',
+    z.object({ canvas: z.string().min(1).describe('Its path, or its name.') }),
+  ),
+  tool(
+    'canvas_propose_nodes',
+    'Propose cards on a canvas',
+    'New nodes on a canvas - each one of: text (a card), note, file or url - and arrows to and between them. Say which node each goes near (its id); Recto places them, never over what is there. Shown on the canvas to accept or reject one by one.',
+    z.object({
+      canvas: z.string().min(1),
+      nodes: z
+        .array(
+          z.object({
+            text: z.string().optional(),
+            note: z.string().optional().describe('A note’s name or path.'),
+            file: z.string().optional().describe('A file’s path or name with its extension.'),
+            url: z.string().optional(),
+            near: z.string().optional().describe('The id of the node it goes near (n3); left out, in free space.'),
+            color: z.string().optional().describe('"1"-"6" (red, orange, yellow, green, cyan, purple) or a hex colour.'),
+          }),
+        )
+        .max(24),
+      edges: z
+        .array(z.object({ from: z.string().describe('A node id, or "new:N" for the Nth new node.'), to: z.string(), label: z.string().optional() }))
+        .optional(),
+    }),
+    true,
+  ),
+  tool(
+    'canvas_propose_edges',
+    'Propose arrows on a canvas',
+    'Arrows between nodes already on a canvas, by their ids, with labels if any.',
+    z.object({ canvas: z.string().min(1), edges: z.array(z.object({ from: z.string(), to: z.string(), label: z.string().optional() })).min(1).max(40) }),
+    true,
+  ),
+  tool(
+    'canvas_propose_group',
+    'Propose groups on a canvas',
+    'Labelled groups of nodes already on a canvas: say which nodes go together; Recto draws the frames, gathering a group’s nodes first when others are in the way.',
+    z.object({ canvas: z.string().min(1), groups: z.array(z.object({ label: z.string().min(1), nodes: z.array(z.string()).min(1) })).min(1).max(12) }),
+    true,
+  ),
+  tool(
+    'canvas_propose_layout',
+    'Propose moves on a canvas',
+    'Move nodes beside other nodes (node, near): Recto finds a clear place.',
+    z.object({ canvas: z.string().min(1), moves: z.array(z.object({ node: z.string(), near: z.string() })).min(1).max(40) }),
+    true,
+  ),
+  tool(
+    'canvas_propose_new',
+    'Propose a new canvas',
+    'A new canvas in Recto/Canvas with these nodes (text, note, file or url) and arrows ("new:N" names the Nth node).',
+    z.object({
+      name: z.string().min(1),
+      nodes: z.array(z.object({ text: z.string().optional(), note: z.string().optional(), file: z.string().optional(), url: z.string().optional(), color: z.string().optional() })).min(1).max(24),
+      edges: z.array(z.object({ from: z.string(), to: z.string(), label: z.string().optional() })).optional(),
+    }),
+    true,
+  ),
   tool(
     'propose_link',
     'Propose a link',
@@ -213,7 +276,11 @@ export const SERVER_INSTRUCTIONS = [
 ].join('\n')
 
 /** One piece of a tool result: structured data, or note text, which is always marked as such. */
-export type ResultBlock = { kind: 'data'; data: unknown } | { kind: 'note'; path: string; part?: string; text: string }
+/** A tool's answer, in parts: data, a note's text, or a picture (base64) for a model that can see. */
+export type ResultBlock =
+  | { kind: 'data'; data: unknown }
+  | { kind: 'note'; path: string; part?: string; text: string }
+  | { kind: 'image'; path: string; mime: string; data: string }
 
 export type ToolOutcome = { ok: true; blocks: ResultBlock[] } | { ok: false; error: string }
 
@@ -222,13 +289,20 @@ const escapeNote = (text: string): string => text.replace(/<\/note>/gi, '<\\/not
 const attr = (value: string): string => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
 /** A result as the text blocks a client shows the model. */
+/** The blocks as text; a picture as a line saying it goes with the answer (as an image, to a model that can see). */
 export function renderBlocks(blocks: readonly ResultBlock[]): string[] {
   return blocks.map((b) =>
     b.kind === 'data'
       ? JSON.stringify(b.data, null, 1)
-      : `<note path="${attr(b.path)}"${b.part === undefined ? '' : ` part="${attr(b.part)}"`}>\n${escapeNote(b.text)}\n</note>`,
+      : b.kind === 'image'
+        ? `(The picture ${b.path} goes with this answer as an image.)`
+        : `<note path="${attr(b.path)}"${b.part === undefined ? '' : ` part="${attr(b.part)}"`}>\n${escapeNote(b.text)}\n</note>`,
   )
 }
+
+/** The pictures in a tool's answer. */
+export const imagesOf = (blocks: readonly ResultBlock[]): { mime: string; data: string }[] =>
+  blocks.flatMap((b) => (b.kind === 'image' ? [{ mime: b.mime, data: b.data }] : []))
 
 export type PromptDef = {
   name: string

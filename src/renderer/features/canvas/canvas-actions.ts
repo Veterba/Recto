@@ -30,6 +30,9 @@ export type CanvasActions = {
   openFile: (path: string) => void
   /** Draw on a drawing again: the Draw tool, its strokes added to this one. */
   drawOn: (id: string) => void
+  /** The drawing being edited stroke by stroke (DrawingEditor), if any: its node draws nothing meanwhile. */
+  editingDrawing: string | null
+  editDrawing: (id: string) => void
   /** A PDF read in the PDF panel, docked on the window's right as the AI panel is. */
   openReader: (path: string) => void
   /** A note opened in the pane beside the canvas, the canvas staying in view. */
@@ -76,6 +79,8 @@ export const CanvasActionsContext = createContext<CanvasActions>({
   openBeside: noop,
   openReader: noop,
   drawOn: noop,
+  editingDrawing: null,
+  editDrawing: noop,
   openUrl: noop,
   play: noop,
   setCaption: noop,

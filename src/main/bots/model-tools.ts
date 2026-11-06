@@ -14,6 +14,7 @@ import { groupedTasksTool, notesTool, type Embed, type ToolOptions } from './too
 import { searchVectors } from './vectors'
 import { isExcludedPath } from '../../shared/ai-access'
 import { readAnyFile } from '../vault-tools/files'
+import { renderBlocks } from '../../shared/vault-tools'
 import { buildScope, ToolError } from '../vault-tools/scope'
 
 /**
@@ -115,7 +116,8 @@ export async function runTool(name: string, args: Record<string, unknown>, c: To
         if (isExcludedPath(file, c.bot.exclude ?? [])) throw new ToolError(`No file “${str(args['file'])}” in this vault.`)
         const pages = str(args['pages'])
         const blocks = await readAnyFile(scope, { file, ...(pages === '' ? {} : { pages }) })
-        const text = blocks.map((b) => (b.kind === 'data' ? JSON.stringify(b.data, null, 1) : b.text)).join('\n\n')
+        // The local chat's model reads text only: a picture is said, not sent.
+        const text = renderBlocks(blocks).join('\n\n')
         return { text: text.length > c.budget ? `${text.slice(0, c.budget)}…` : text, notes: [path.basename(file)] }
       } catch (err) {
         return { text: err instanceof ToolError ? err.message : 'That file could not be read.', notes: [] }

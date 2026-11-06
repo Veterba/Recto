@@ -21,7 +21,7 @@ import path from 'node:path'
 import { McpServer } from '@modelcontextprotocol/server'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import * as z from 'zod'
-import { renderBlocks, SERVER_INSTRUCTIONS, VAULT_PROMPTS, VAULT_TOOLS, type ToolOutcome } from '../shared/vault-tools'
+import { imagesOf, renderBlocks, SERVER_INSTRUCTIONS, VAULT_PROMPTS, VAULT_TOOLS, type ToolOutcome } from '../shared/vault-tools'
 import { CLOSED_MESSAGE, socketPath, TOKEN_FILE, type BridgeRequest, type BridgeResponse } from './bridge'
 
 const VERSION = '1'
@@ -103,8 +103,14 @@ function server(): McpServer {
       },
       async (args: unknown) => {
         const outcome = await call(def.name, args)
+        // Text for every block, and a picture as an image the client's model can look at.
         return outcome.ok
-          ? { content: renderBlocks(outcome.blocks).map((text) => ({ type: 'text' as const, text })) }
+          ? {
+              content: [
+                ...renderBlocks(outcome.blocks).map((text) => ({ type: 'text' as const, text })),
+                ...imagesOf(outcome.blocks).map((i) => ({ type: 'image' as const, data: i.data, mimeType: i.mime })),
+              ],
+            }
           : { content: [{ type: 'text' as const, text: outcome.error }], isError: true }
       },
     )

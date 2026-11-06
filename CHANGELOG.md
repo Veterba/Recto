@@ -4,6 +4,21 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.59.0 — 2026-11-06
+### Added
+- AI on the canvas, as suggestions you see in place: an AI's changes to a canvas - new cards, notes, files and links, arrows, groups, moves - appear as translucent ghosts with ✓ and ✕ each, and Accept all / Reject all at the top. Nothing is written until accepted; an accepted change goes in as an edit ⌘Z undoes, onto the canvas as it is then (a change whose node you deleted since is skipped). Suggested edits lists a canvas's changes as one line, with "Open to review".
+- Canvas tools for AI apps and Recto's chats: canvas_list, canvas_read (nodes by short ids, n1, n2…), canvas_propose_nodes, canvas_propose_edges, canvas_propose_group, canvas_propose_layout and canvas_propose_new. The AI says what goes together; Recto works out where, never over what is there (a group whose frame would take in other nodes gathers its own first).
+- Quick ask on a canvas can now suggest changes to it, shown as ghosts.
+- Canvas commands, from a node's or a selection's right-click menu: Group these, Brainstorm around this, Map this note and Arrange as moodboard ask Quick ask, their changes coming back as ghosts; Turn into a board makes a group a board (its cards and notes in order) and puts it beside the group; Show board as canvas lays a board out as a new canvas, a group per lane.
+- The AI sees pictures: read_file sends a picture itself (made smaller when large) to a provider that can see - Claude and OpenAI through their APIs, Claude Code and Codex through Recto's AI tools. Recto's local model gets its name and size, as before.
+- A pen panel over the tool bar while Draw is on: pen or highlighter, four sizes and six colours (or any colour) each, kept for next time. A highlighter is flat, wide and see-through, and sits under what it marks - in the SVG too, so Obsidian shows it the same.
+- Draw and hold: draw a line, an arrow, a triangle, a rectangle or an ellipse and hold the pen still for a moment - it snaps to the clean shape. Let go at once and the stroke stays as drawn.
+- Double-click a drawing to edit its strokes: click one or drag round several, then move them, resize them from a corner (⇧ keeps proportions), recolour or delete them; ⌘Z and ⇧⌘Z within the edit; "Draw here" adds strokes to it; Esc finishes.
+- An eraser panel while Erase is on: Cut (the default) takes out only what the eraser passes over, leaving the rest of the stroke as pieces; Whole strokes takes every stroke it touches.
+
+### Changed
+- Strokes feel like a pen: every point the system reports is kept (fast strokes keep their shape), a pen with pressure draws with it, a mouse or trackpad gets tldraw's simulated pressure, and strokes are never tidied behind the hand.
+
 ## v0.58.0 — 2026-11-06
 ### Added
 - The AI reads every file in the vault it may see, not only notes: a new read_file tool for Quick ask, the chats (cloud and local) and AI tools (MCP) reads a PDF's text page by page, text and code files in parts, canvases (cards, notes, files, groups, arrows) and a picture's name and pixel size. A file in a folder AI may not see is "no file"; a name several files share is asked about; what it cannot read yet (.xlsx, .docx) is said.

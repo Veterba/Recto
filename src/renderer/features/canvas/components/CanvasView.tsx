@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { GhostLayer, useCanvasProposals } from './GhostLayer'
+import { acceptOps, rejectOps } from '@shared/canvas-ops'
+import type { Proposal } from '@shared/ai-access'
+import { DrawingEditor } from './DrawingEditor'
 import { setCanvasSelection } from '../../../app/canvas-selection'
 import {
   applyEdgeChanges,
@@ -15,7 +19,10 @@ import {
   type NodeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { newCanvasId, patchEdge, patchNode, type CanvasNode } from '@shared/canvas'
+import { newCanvasId, patchEdge, patchNode, serializeCanvas, type CanvasDoc, type CanvasNode } from '@shared/canvas'
+import { groupFrame, placeNear } from '@shared/canvas-layout'
+import { insertItem, parseKanban } from '@shared/kanban'
+import { askQuickly } from '../../../app/quick-ask-request'
 import { IPC } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { vaultFileUrl } from '../../../app/vault-url'
@@ -28,7 +35,7 @@ import { snapToOthers, type Guide } from '../canvas-guides'
 import { connect, dropLoosePoints, nodeAt, rectOf, setBend, setEnd } from '../canvas-arrows'
 import { anchorAt, CENTRE, type Point } from '../arrow-geometry'
 import type { EndTarget } from '../canvas-arrows'
-import { edgeMenu, nodeMenu, paneMenu, type MenuCommands } from '../canvas-menus'
+import { edgeMenu, nodeMenu, paneMenu, type CanvasAsk, type MenuCommands } from '../canvas-menus'
 import type { CanvasChange } from '../canvas-change'
 import { useCanvas } from '../use-canvas'
 import { useCollapsed, useRawBoards } from '../canvas-state'
@@ -45,16 +52,18 @@ import { StyleBar } from './StyleBar'
 import { youTubeId } from '@shared/youtube'
 import { CanvasCardPanel } from './CanvasCardPanel'
 import { showPdf } from '../../pdf/PdfPanel'
-import { erase, PEN_SIZE, strokePath, tidy, type Pt, type Stroke } from '../drawing'
+import { cut, erase, HIGHLIGHT_OPACITY, strokePath, type Pt, type Stroke } from '../drawing'
+import { pen, strokeStyle } from '../pen'
+import { recognise, type InkShape } from '../ink-shapes'
 import { drawingOf, saveDrawing, type Drawn } from '../drawing-store'
 import type { Shape } from '../shapes'
 import type { FileNode } from '@shared/vault'
-import { noteFolderBeside } from '@shared/recto-paths'
+import { CANVAS_FOLDER, noteFolderBeside } from '@shared/recto-paths'
 import { noteEntries } from '../../file-tree'
 import { boardOfCard, isBoardPath, useBoards } from '../../boards'
-import { createCardNote } from '../../boards/create-card'
+import { createBoard, createCardNote } from '../../boards/create-card'
 import { openSuggestedEdits } from '../../suggested-edits'
-import { useNoteBus } from '../../../app/note-bus'
+import { noteIndexChanged, useNoteBus } from '../../../app/note-bus'
 
 /**
  * One canvas in a tab: its nodes and edges on a plane you pan and zoom.
@@ -83,7 +92,10 @@ const NEW_NODE = { width: 260, height: 120 }
 const NEW_GROUP = { width: 480, height: 320 }
 /** How near, in canvas units, the eraser must pass a stroke to take it away. */
 const ERASER_REACH = 8
-/** How far from the drawing being drawn a stroke still joins it, in canvas units; further away it starts a new drawing. */
+/** Draw and hold: how long the pen is kept still before the stroke snaps into a shape, and how far it may tremble meanwhile (screen pixels). */
+const HOLD_MS = 500
+const HOLD_SLOP = 3
+/** How far from a double-clicked drawing a stroke still goes into it, in canvas units; further away it is a drawing of its own. */
 const DRAW_REACH = 48
 /** Plain text's first size: a line, growing as it is typed. */
 const NEW_PLAIN = { width: 260, height: 44 }
@@ -196,9 +208,11 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
     [open, path],
   )
   /** The stroke being drawn with the Draw tool (canvas units), or the eraser's path, for the live preview. */
-  const [ink, setInk] = useState<{ points: Pt[]; erasing: boolean } | null>(null)
+  const [ink, setInk] = useState<{ points: Pt[]; erasing: boolean; style: ReturnType<typeof strokeStyle>; shape?: InkShape } | null>(null)
   /** The drawing strokes go into while the Draw tool is on: the one double-clicked, or the one just started. */
   const drawTarget = useRef<string | null>(null)
+  /** The drawing open in the stroke editor: its node, and its strokes in canvas units when it was opened. */
+  const [editingDrawing, setEditingDrawing] = useState<{ id: string; strokes: Stroke[] } | null>(null)
   /** Nodes being dragged: the style bar steps out of the way. */
   const [moving, setMoving] = useState(false)
   const boards = useBoards()
@@ -275,6 +289,27 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
   }, [doc, flow])
 
   const run = useCallback((change: CanvasChange) => void edit(change), [edit])
+
+  // An AI's suggested changes to this canvas, as ghosts until accepted.
+  const proposals = useCanvasProposals(path)
+  const acceptGhosts = useCallback(
+    (p: Proposal, indexes: number[] | null) => {
+      const c = p.canvas
+      if (c === undefined || docRef.current === null) return
+      const which = indexes ?? c.states.flatMap((s, i) => (s === 'pending' ? [i] : []))
+      const done = acceptOps(docRef.current, c, which)
+      // One edit, undone with ⌘Z like any other; applied to the canvas as it is when it is written.
+      void edit((d) => (d === docRef.current ? done.doc : acceptOps(d, c, which).doc))
+      void api.invoke(IPC.aiProposalCanvas, p.id, done.states, done.refs)
+    },
+    [edit],
+  )
+  const rejectGhosts = useCallback((p: Proposal, indexes: number[] | null) => {
+    const c = p.canvas
+    if (c === undefined) return
+    const which = indexes ?? c.states.flatMap((s, i) => (s === 'pending' ? [i] : []))
+    void api.invoke(IPC.aiProposalCanvas, p.id, rejectOps(c, which), c.refs)
+  }, [])
 
   const stopEditing = useCallback(() => {
     const typed = draft.current
@@ -534,8 +569,9 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
    * over, however soon after the last stroke.
    */
   const keepStroke = useCallback(
-    async (points: Pt[]) => {
-      const stroke: Stroke = { points: tidy(points), color: null, size: PEN_SIZE }
+    async (points: Pt[], shape?: InkShape) => {
+      // As drawn, in the pen's kind, colour and size - never tidied behind the hand; a shape only when held into one.
+      const stroke: Stroke = { points, ...strokeStyle(pen()), ...(shape === undefined ? {} : { shape }) }
       const xs = stroke.points.map((p) => p[0])
       const ys = stroke.points.map((p) => p[1])
       const box = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }
@@ -566,16 +602,50 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
       await edit((d) => {
         id = id === '' ? newCanvasId(d) : id
         const b = saved.box
-        return {
-          ...d,
-          nodes: [...d.nodes, { id, type: 'file', file: made.path, x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) }],
-        }
+        const node = { id, type: 'file', file: made.path, x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) }
+        // A highlighter goes under what it marks: just below the first node it overlaps (groups are drawn
+        // under everything anyway); a pen stroke on top.
+        const under =
+          stroke.kind === 'highlighter'
+            ? d.nodes.findIndex((n) => n.type !== 'group' && n.x < b.x + b.width && n.x + n.width > b.x && n.y < b.y + b.height && n.y + n.height > b.y)
+            : -1
+        return { ...d, nodes: under === -1 ? [...d.nodes, node] : [...d.nodes.slice(0, under), node, ...d.nodes.slice(under)] }
       })
     },
     [edit, path, run],
   )
 
   /** The eraser let go: every stroke it passed over, gone from the drawings it passed over. */
+  /** Double-click on a drawing: its strokes, in canvas units, into the stroke editor. */
+  const openDrawingEditor = useCallback(async (id: string) => {
+    const n = docRef.current?.nodes.find((x) => x.id === id)
+    if (n?.file === undefined) return
+    const drawn = await drawingOf(n.file)
+    if (drawn === null) return
+    setTool('select')
+    // The strokes are what is selected now, in the editor - not the drawing as a node (its style bar would sit over the editor's).
+    setSelected(new Set())
+    setEditingDrawing({ id, strokes: strokesOn(drawn, n) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `strokesOn` reads only its arguments
+  }, [])
+
+  /** A change in the stroke editor: written to the drawing's SVG, the node fitted to it - or gone, with no strokes left. */
+  const saveEditedDrawing = useCallback(
+    async (strokes: Stroke[]) => {
+      const id = editingDrawing?.id
+      const n = docRef.current?.nodes.find((x) => x.id === id)
+      if (id === undefined || n?.file === undefined) return
+      if (strokes.length === 0) {
+        run((d) => ({ ...d, nodes: d.nodes.filter((x) => x.id !== id), edges: d.edges.filter((e) => e.fromNode !== id && e.toNode !== id) }))
+        return
+      }
+      const saved = await saveDrawing(n.file, strokes)
+      if (!saved.ok) return setSaid(saved.error)
+      run((d) => ({ ...d, nodes: d.nodes.map((x) => (x.id === id ? patchNode(x, saved.box) : x)) }))
+    },
+    [editingDrawing, run],
+  )
+
   const keepErasing = useCallback(
     async (trail: Pt[]) => {
       const xs = trail.map((p) => p[0])
@@ -587,8 +657,9 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
         const drawn = await drawingOf(n.file!)
         if (drawn === null) continue
         const before = strokesOn(drawn, n)
-        const after = erase(before, trail, reach)
-        if (after.length === before.length) continue
+        // Cutting, it takes out only what it passed over; else every stroke it touched, whole.
+        const after = pen().eraser === 'cut' ? cut(before, trail, reach) : erase(before, trail, reach)
+        if (after.length === before.length && after.every((s, i) => s === before[i])) continue
         // Every stroke gone: the drawing goes from the canvas (its file stays, as a note's does).
         if (after.length === 0) {
           run((d) => ({ ...d, nodes: d.nodes.filter((x) => x.id !== n.id), edges: d.edges.filter((e) => e.fromNode !== n.id && e.toNode !== n.id) }))
@@ -616,20 +687,45 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
         return [p.x, p.y, e.pointerType === 'pen' && e.pressure > 0 ? e.pressure : 0.5]
       }
       const points: Pt[] = [at(ev)]
-      setInk({ points, erasing })
+      const style = strokeStyle(pen())
+      setInk({ points, erasing, style })
+      // Draw and hold: the pen kept still a moment at the end of a stroke snaps it into the shape it was drawn as.
+      let snapped: { shape: InkShape; points: Pt[] } | null = null
+      let held: ReturnType<typeof setTimeout> | undefined
+      let still = { x: ev.clientX, y: ev.clientY }
+      const hold = (): void => {
+        clearTimeout(held)
+        if (erasing) return
+        held = setTimeout(() => {
+          snapped = recognise(points)
+          if (snapped !== null) setInk({ points: snapped.points, erasing, style: { ...style }, shape: snapped.shape })
+        }, HOLD_MS)
+      }
+      hold()
       const move = (e: PointerEvent): void => {
-        points.push(at(e))
-        setInk({ points: [...points], erasing })
+        // A small tremble is still holding; a real move goes on drawing, and lets go of a snapped shape.
+        if (Math.hypot(e.clientX - still.x, e.clientY - still.y) < HOLD_SLOP) return
+        still = { x: e.clientX, y: e.clientY }
+        snapped = null
+        // Every point the system saw since the last event, not only the last: a fast stroke keeps its shape.
+        for (const sample of e.getCoalescedEvents?.() ?? [e]) points.push(at(sample))
+        setInk({ points: [...points], erasing, style })
+        hold()
       }
       const up = (): void => {
+        clearTimeout(held)
         window.removeEventListener('pointermove', move, true)
         window.removeEventListener('pointerup', up, true)
+        window.removeEventListener('pointercancel', up, true)
         setInk(null)
         if (erasing) void keepErasing(points)
+        else if (snapped !== null) void keepStroke(snapped.points, snapped.shape)
         else if (points.length > 1) void keepStroke(points)
       }
       window.addEventListener('pointermove', move, true)
       window.addEventListener('pointerup', up, true)
+      // A pen lifted out of range, or the system taking the pointer: the stroke ends where it got to.
+      window.addEventListener('pointercancel', up, true)
     },
     [tool, flow, keepStroke, keepErasing],
   )
@@ -702,8 +798,97 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
     })
   }, [selected, edit, select])
 
+  /** An AI command on what is selected: a question for Quick ask, naming the nodes as the canvas tools do. */
+  const ask = useCallback(
+    (command: CanvasAsk) => {
+      if (doc === null) return
+      const idOf = (id: string): string => `n${doc.nodes.findIndex((n) => n.id === id) + 1}`
+      const picked = doc.nodes.filter((n) => selected.has(n.id) && n.type !== 'group').map((n) => n.id)
+      const list = picked.map(idOf).join(', ')
+      const first = picked[0] === undefined ? '' : idOf(picked[0])
+      const questions: Record<CanvasAsk, string> = {
+        group: `Group the selected nodes (${list}) by what they are about: propose labelled groups with canvas_propose_group, each selected node in one group.`,
+        brainstorm: `Brainstorm around ${first}: propose 3 to 7 short new cards near it with canvas_propose_nodes, each with an arrow from ${first} to it.`,
+        map: `Map the note ${first}: put the notes it links to and the notes that link to it on this canvas near it (canvas_propose_nodes, as notes, with arrows from ${first}); get_note_context finds them. Then group them by topic with canvas_propose_group.`,
+        moodboard: `Arrange the selected files (${list}) as a moodboard: group them by theme with canvas_propose_group, going by their names, captions and what read_file says about them.`,
+      }
+      askQuickly(questions[command]!)
+    },
+    [doc, selected],
+  )
+
+  /** A group made a board: its cards and notes, top to bottom, as the first lane's cards; the board put beside the group. */
+  const toBoard = useCallback(
+    async (groupId: string) => {
+      const g = doc?.nodes.find((n) => n.id === groupId)
+      if (doc === null || g === undefined) return
+      const made = await createBoard(typeof g.label === 'string' && g.label.trim() !== '' ? g.label.trim() : 'Board')
+      if (!made.ok) return setSaid('exists' in made ? `There is a board of that name already: ${made.exists}.` : made.error)
+      const read = await api.invoke(IPC.fsRead, made.path)
+      if (!read.ok) return setSaid(read.error)
+      let text = read.content
+      const held = childrenOf(doc, g)
+        .filter((n) => n.type !== 'group')
+        .sort((a, b) => a.y - b.y || a.x - b.x)
+      for (const [i, n] of held.entries()) {
+        const card =
+          n.type === 'file' && typeof n.file === 'string'
+            ? await api.invoke(IPC.linksFormat, n.file, made.path, { markdown: false })
+            : n.type === 'link'
+              ? String(n.url ?? '')
+              : (n.text ?? '').trim()
+        if (card !== '') text = insertItem(text, 0, i, card)
+      }
+      await api.invoke(IPC.fsWrite, made.path, text)
+      noteIndexChanged()
+      const spot = placeNear(g, { width: 520, height: 420 }, doc.nodes.filter((n) => n.type !== 'group'))
+      void edit((d) => ({ ...d, nodes: [...d.nodes, { id: newCanvasId(d), type: 'file', file: made.path, ...spot }] }))
+    },
+    [doc, edit],
+  )
+
+  /** A board laid out as a new canvas: a group per lane, its cards inside - notes as notes, the rest as cards. */
+  const boardToCanvas = useCallback(
+    async (boardPath: string) => {
+      const read = await api.invoke(IPC.fsRead, boardPath)
+      if (!read.ok) return setSaid(read.error)
+      const lanes = parseKanban(read.content).lanes
+      const links = lanes.flatMap((l) => l.items.flatMap((item) => (item.link === null ? [] : [item.link])))
+      const found = links.length === 0 ? {} : await api.invoke(IPC.indexResolveLinks, links, boardPath)
+      let next: CanvasDoc = { nodes: [], edges: [], rest: {}, order: ['nodes', 'edges'] }
+      const W = 300
+      lanes.forEach((lane, li) => {
+        const x = li * (W + 80)
+        let y = 0
+        const cards: CanvasNode[] = []
+        for (const item of lane.items) {
+          const file = item.link === null ? null : (found[item.link] ?? null)
+          const node: CanvasNode =
+            file !== null
+              ? { id: newCanvasId(next), type: 'file', file, x, y, width: W, height: 160 }
+              : { id: newCanvasId(next), type: 'text', text: item.text, x, y, width: W, height: 90 }
+          cards.push(node)
+          next = { ...next, nodes: [...next.nodes, node] }
+          y += node.height + 30
+        }
+        const frame = groupFrame(cards.length > 0 ? cards : [{ x, y: 0, width: W, height: 90 }])!
+        next = { ...next, nodes: [{ id: newCanvasId(next), type: 'group', label: lane.title, ...frame }, ...next.nodes] }
+      })
+      const name = `${boardPath.slice(boardPath.lastIndexOf('/') + 1).replace(/\.md$/i, '')} board`
+      const made = await api.invoke(IPC.fsCreate, CANVAS_FOLDER, `${name}.canvas`, 'file', 'number')
+      if (!made.ok) return setSaid(made.error)
+      await api.invoke(IPC.fsWrite, made.path, serializeCanvas(next))
+      open(made.path)
+    },
+    [open],
+  )
+
   const commands: MenuCommands = useMemo(
     () => ({
+      ask,
+      toBoard: (id) => void toBoard(id),
+      boardToCanvas: (p) => void boardToCanvas(p),
+      isBoard: isBoardPath,
       edit: run,
       copy,
       paste: (at) => void paste(at),
@@ -732,7 +917,7 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
         })
       },
     }),
-    [run, copy, paste, duplicate, remove, group, zoomTo, selected, flow, addNode, shell, doc, toggleFold, collapsed, open],
+    [run, copy, paste, duplicate, remove, group, zoomTo, selected, flow, addNode, shell, doc, toggleFold, collapsed, open, ask, toBoard, boardToCanvas],
   )
 
   const actions: CanvasActions = useMemo(
@@ -773,6 +958,8 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
         drawTarget.current = id
         setTool('draw')
       },
+      editingDrawing: editingDrawing?.id ?? null,
+      editDrawing: (id) => void openDrawingEditor(id),
       openUrl: (url) => void api.invoke(IPC.shellOpenExternal, url),
       play: (item) =>
         void api
@@ -809,7 +996,7 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
       setEdgeEnd: (id, which, end) => run((d) => setEnd(d, id, which, end)),
       setEdgeBend: (id, bend) => run((d) => setBend(d, id, bend)),
     }),
-    [editing, editingEdge, stopEditing, run, shell, path, linked, toggleFold, leafId, open, openLink, rawBoards, toggleRaw],
+    [editing, editingEdge, stopEditing, run, shell, path, editingDrawing, openDrawingEditor, linked, toggleFold, leafId, open, openLink, rawBoards, toggleRaw],
   )
 
   const onNodesChange = useCallback(
@@ -1212,13 +1399,34 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
           opening={picking}
           setOpening={setPicking}
         />
+        {doc !== null && <GhostLayer proposals={proposals} doc={doc} transform={transform} onAccept={acceptGhosts} onReject={rejectGhosts} />}
+        {editingDrawing !== null && (
+          <DrawingEditor
+            key={editingDrawing.id}
+            strokes={editingDrawing.strokes}
+            transform={transform}
+            toFlow={(x, y) => flow.screenToFlowPosition({ x, y })}
+            onChange={(strokes) => void saveEditedDrawing(strokes)}
+            onDrawHere={() => {
+              const id = editingDrawing.id
+              setEditingDrawing(null)
+              drawTarget.current = id
+              setTool('draw')
+            }}
+            onClose={() => setEditingDrawing(null)}
+          />
+        )}
         {ink !== null && (
           <svg className="canvas-ink" aria-hidden="true">
             <g transform={`translate(${transform[0]} ${transform[1]}) scale(${transform[2]})`}>
               {ink.erasing ? (
-                <polyline className="canvas-ink__eraser" points={ink.points.map((p) => `${p[0]},${p[1]}`).join(' ')} strokeWidth={ERASER_REACH * 2} />
+                <polyline className="canvas-ink__eraser" points={ink.points.map((p) => `${p[0]},${p[1]}`).join(' ')} strokeWidth={(ERASER_REACH * 2) / transform[2]} />
               ) : (
-                <path d={strokePath({ points: ink.points, color: null, size: PEN_SIZE })} fill="currentColor" />
+                <path
+                  d={strokePath({ points: ink.points, ...ink.style, ...(ink.shape === undefined ? {} : { shape: ink.shape }) }, ink.shape !== undefined)}
+                  fill={ink.style.color ?? 'currentColor'}
+                  fillOpacity={ink.style.kind === 'highlighter' ? HIGHLIGHT_OPACITY : 1}
+                />
               )}
             </g>
           </svg>

@@ -4,6 +4,10 @@ import path from 'node:path'
 import { _electron, type ElectronApplication, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { makePdf } from '../fixtures/make-pdf'
+
+/** A drawing's strokes as kept in its SVG: kind, colour and size. */
+const fromSvgStrokes = (svg: string): { kind?: string; color: string | null; size: number }[] =>
+  (JSON.parse(svg.match(/<metadata id="recto-drawing">([\s\S]*?)<\/metadata>/)![1]!) as { kind?: string; color: string | null; size: number }[]).map(({ kind, color, size }) => ({ ...(kind === undefined ? {} : { kind }), color, size }))
 import { quitApp, removeDir } from './helpers/app'
 
 /**
@@ -735,7 +739,7 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await expect.poll(() => page.locator('.canvas-node--video [aria-label="Play the video"]').count()).toBeGreaterThan(0)
   })
 
-  it('the pen draws a drawing, kept as an SVG Obsidian can show; each stroke is a drawing of its own, however soon after the last; a double-clicked drawing takes strokes; the eraser takes strokes away', async () => {
+  it('the pen draws a drawing, kept as an SVG Obsidian can show; each stroke is a drawing of its own; a drawing double-clicked opens to edit its strokes and to draw more in it; the eraser cuts, or takes whole strokes; pen panel; draw and hold', async () => {
     await openPlan()
     await page.locator('.canvas-view .board__tool', { hasText: 'Zoom to fit' }).first().click()
     const pane = (await page.locator('.react-flow__pane').first().boundingBox())!
@@ -764,16 +768,89 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await expect.poll(() => read(second).includes('recto-drawing'), { timeout: 5000 }).toBe(true)
     expect(strokes(second)).toBe(1)
     await page.keyboard.press('Escape')
-    // Double-clicked, a drawing takes the strokes drawn on it.
-    await page.locator('.react-flow__node', { has: page.locator(`.canvas-node--drawing`) }).first().dblclick()
+    // Double-clicked, a drawing opens to edit; "Draw here" and it takes the strokes drawn on it.
+    await page.locator('.react-flow__node', { has: page.locator(`.canvas-node--drawing`) }).first().locator('svg').dblclick()
+    await page.locator('.drawing-editor__bar').getByRole('button', { name: 'Draw here' }).click()
     await stroke({ x: pane.x + 45, y: pane.y + 50 }, { x: pane.x + 130, y: pane.y + 55 })
     await expect.poll(() => (read(svgPath).includes('recto-drawing') ? strokes(svgPath) : 0), { timeout: 5000 }).toBe(2)
     // The eraser, dragged across both its strokes, takes them away: the drawing leaves the canvas (its file stays); the other is untouched.
     await page.locator('.canvas-view').first().focus()
     await page.keyboard.press('e')
+    await page.locator('.canvas-pen').getByRole('button', { name: 'Whole strokes' }).click()
     await stroke({ x: pane.x + 90, y: pane.y + 40 }, { x: pane.x + 90, y: pane.y + 65 })
     await expect.poll(() => read(PLAN).includes(`"file":"${svgPath}"`), { timeout: 5000 }).toBe(false)
     expect(read(PLAN)).toContain(`"file":"${second}"`)
+    // Cutting (the eraser's own way): a line erased across its middle is two lines.
+    await page.locator('.canvas-view').first().focus()
+    await page.keyboard.press('p')
+    await stroke({ x: pane.x + 40, y: pane.y + 260 }, { x: pane.x + 340, y: pane.y + 260 })
+    const cutPath = 'Recto/Canvas/Garden plan drawings/Drawing 3.svg'
+    await expect.poll(() => (fs.existsSync(path.join(vault, cutPath)) ? read(cutPath) : ''), { timeout: 5000 }).toContain('recto-drawing')
+    await page.locator('.canvas-view').first().focus()
+    await page.keyboard.press('e')
+    await page.locator('.canvas-pen').getByRole('button', { name: 'Cut' }).click()
+    await stroke({ x: pane.x + 190, y: pane.y + 230 }, { x: pane.x + 190, y: pane.y + 290 })
+    await expect.poll(() => strokes(cutPath), { timeout: 5000 }).toBe(2)
+    // Double-clicked, a drawing opens in the stroke editor: a stroke clicked is selected, recoloured, deleted, ⌘Z brings it back, dragged it moves.
+    await page.locator('.canvas-view').first().focus()
+    await page.keyboard.press('Escape')
+    await page.mouse.dblclick(pane.x + 80, pane.y + 260)
+    await page.waitForSelector('.drawing-editor')
+    await page.mouse.click(pane.x + 80, pane.y + 260)
+    await page.locator('.drawing-editor__bar').getByRole('button', { name: '#1971c2' }).click()
+    await expect.poll(() => read(cutPath), { timeout: 5000 }).toContain('fill="#1971c2"')
+    const colours = (): (string | null)[] => (JSON.parse(read(cutPath).match(/<metadata id="recto-drawing">([\s\S]*?)<\/metadata>/)![1]!) as { color: string | null }[]).map((x) => x.color)
+    expect(colours().sort()).toEqual(['#1971c2', null].sort())
+    await page.keyboard.press('Backspace')
+    await expect.poll(() => strokes(cutPath), { timeout: 5000 }).toBe(1)
+    await page.keyboard.press('Meta+z')
+    await expect.poll(() => strokes(cutPath), { timeout: 5000 }).toBe(2)
+    const xs = (): number => Math.min(...(JSON.parse(read(cutPath).match(/<metadata id="recto-drawing">([\s\S]*?)<\/metadata>/)![1]!) as { points: number[][] }[]).flatMap((x) => x.points.map((q) => q[0]!)))
+    const before = read(cutPath)
+    await page.mouse.click(pane.x + 80, pane.y + 260)
+    await page.mouse.move(pane.x + 80, pane.y + 260)
+    await page.mouse.down()
+    await page.mouse.move(pane.x + 80, pane.y + 340, { steps: 8 })
+    await page.mouse.up()
+    await expect.poll(() => read(cutPath) !== before, { timeout: 5000 }).toBe(true)
+    expect(xs()).toBeGreaterThanOrEqual(0)
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('.drawing-editor', { state: 'detached' })
+    await page.keyboard.press('Escape')
+    // The pen panel, over the tool bar while Draw is on: a highlighter in green, under any ink, see-through.
+    await page.locator('.canvas-view').first().focus()
+    await page.keyboard.press('p')
+    await page.locator('.canvas-pen').getByRole('button', { name: 'Highlighter' }).click()
+    await page.locator('.canvas-pen').getByRole('button', { name: '#82c91e' }).click()
+    await page.locator('.canvas-pen').getByRole('button', { name: 'Large', exact: true }).click()
+    await stroke({ x: pane.x + 200, y: pane.y + 150 }, { x: pane.x + 320, y: pane.y + 150 })
+    const third = 'Recto/Canvas/Garden plan drawings/Drawing 4.svg'
+    await expect.poll(() => (fs.existsSync(path.join(vault, third)) ? read(third) : ''), { timeout: 5000 }).toContain('fill="#82c91e" fill-opacity="0.35"')
+    expect(fromSvgStrokes(read(third))).toEqual([{ kind: 'highlighter', color: '#82c91e', size: 24 }])
+    // Kept for the next time: Draw again, and the highlighter is still chosen.
+    await page.locator('.canvas-view').first().focus()
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('p')
+    expect(await page.locator('.canvas-pen').getByRole('button', { name: 'Highlighter' }).getAttribute('aria-pressed')).toBe('true')
+    await page.locator('.canvas-pen').getByRole('button', { name: 'Pen', exact: true }).click()
+    // Draw and hold: a box drawn and held still for a moment is saved as a rectangle; let go at once, it stays as drawn.
+    const box = async (x: number, y: number, holdMs: number): Promise<void> => {
+      await page.mouse.move(x, y)
+      await page.mouse.down()
+      for (const [dx, dy] of [[160, 4], [164, 100], [2, 98], [0, 3]] as const) await page.mouse.move(x + dx, y + dy, { steps: 14 })
+      await page.waitForTimeout(holdMs)
+      await page.mouse.up()
+    }
+    const shapes = (file: string): unknown[] =>
+      (JSON.parse(read(file).match(/<metadata id="recto-drawing">([\s\S]*?)<\/metadata>/)![1]!) as { shape?: string }[]).map((s) => s.shape)
+    await box(pane.x + 420, pane.y + 60, 700)
+    const fourth = 'Recto/Canvas/Garden plan drawings/Drawing 5.svg'
+    await expect.poll(() => (fs.existsSync(path.join(vault, fourth)) ? read(fourth) : ''), { timeout: 5000 }).toContain('recto-drawing')
+    expect(shapes(fourth)).toEqual(['rectangle'])
+    await box(pane.x + 420, pane.y + 220, 0)
+    const fifth = 'Recto/Canvas/Garden plan drawings/Drawing 6.svg'
+    await expect.poll(() => (fs.existsSync(path.join(vault, fifth)) ? read(fifth) : ''), { timeout: 5000 }).toContain('recto-drawing')
+    expect(shapes(fifth)).toEqual([undefined])
     await page.keyboard.press('Escape')
   })
 
@@ -821,5 +898,45 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await expect.poll(() => read(PLAN)).toContain('"file":"Basil.md"')
     expect(read('Garden/Basil.md')).toBe(garden)
     expect(basilNodes()).toBe(before + 1)
+  })
+
+  it('a group turned into a board: its cards in order, the board put beside it; a board shown as a canvas: a group per lane', async () => {
+    const shop = 'Recto/Canvas/Shop.canvas'
+    fs.writeFileSync(
+      path.join(vault, shop),
+      JSON.stringify({
+        nodes: [
+          { id: 'f0f0f0f0f0f0f001', type: 'group', label: 'Shopping', x: -40, y: -60, width: 400, height: 420 },
+          { id: 'f0f0f0f0f0f0f002', type: 'text', text: 'Buy compost', x: 0, y: 0, width: 300, height: 80 },
+          { id: 'f0f0f0f0f0f0f003', type: 'file', file: 'Garden/Basil.md', x: 0, y: 120, width: 300, height: 200 },
+        ],
+        edges: [],
+      }),
+    )
+    await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Canvas' }).click()
+    await page.locator('.canvas-list .boards__name', { hasText: 'Shop' }).first().click()
+    await page.waitForSelector('.react-flow__node[data-id="f0f0f0f0f0f0f001"]')
+    await page.waitForTimeout(400)
+    await page.locator('.canvas-view').first().locator('.react-flow__node[data-id="f0f0f0f0f0f0f001"] .canvas-group__label, .react-flow__node[data-id="f0f0f0f0f0f0f001"]').first().click({ button: 'right', position: { x: 20, y: 10 } })
+    await page.locator('.menu__item', { hasText: 'Turn into a board' }).click()
+    const board = 'Recto/Boards/Shopping/Shopping.md'
+    // A link as Obsidian writes it from the board: with its path, as another Basil is in the vault.
+    await expect.poll(() => (fs.existsSync(path.join(vault, board)) ? read(board) : ''), { timeout: 8000 }).toContain('[[Garden/Basil]]')
+    const lines = read(board).split('\n').filter((l) => l.startsWith('- [ ]'))
+    expect(lines.slice(0, 2)).toEqual(['- [ ] Buy compost', '- [ ] [[Garden/Basil]]'])
+    await expect.poll(() => read(shop), { timeout: 5000 }).toContain(`"file":"${board}"`)
+
+    // The board on the canvas, shown as a canvas of its own.
+    const boardNode = (JSON.parse(read(shop)) as { nodes: { id: string; file?: string }[] }).nodes.find((n) => n.file === board)!.id
+    // Once the app knows it is a board, it is drawn as one.
+    await nodeOf(boardNode).locator('.canvas-board').waitFor({ timeout: 10_000 })
+    await nodeOf(boardNode).click({ button: 'right', position: { x: 30, y: 12 } })
+    await page.locator('.menu__item', { hasText: 'Show board as canvas' }).click()
+    const shown = 'Recto/Canvas/Shopping board.canvas'
+    await expect.poll(() => fs.existsSync(path.join(vault, shown)), { timeout: 8000 }).toBe(true)
+    const doc = JSON.parse(read(shown)) as { nodes: { type: string; label?: string; text?: string; file?: string }[] }
+    expect(doc.nodes.filter((n) => n.type === 'group').map((n) => n.label)).toEqual(expect.arrayContaining(['To do']))
+    expect(doc.nodes.some((n) => n.file === 'Garden/Basil.md')).toBe(true)
+    expect(doc.nodes.some((n) => n.text === 'Buy compost')).toBe(true)
   })
 })

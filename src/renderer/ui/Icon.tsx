@@ -129,6 +129,7 @@ import {
   PaintBucket,
   Play,
   SquareDashed,
+  Scissors,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -199,6 +200,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   'calendar-range': CalendarRange,
   keyboard: Keyboard,
   eraser: Eraser,
+  scissors: Scissors,
   info: Info,
   'layout-template': LayoutTemplate,
   code: Code,

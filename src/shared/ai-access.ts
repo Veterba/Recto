@@ -1,3 +1,4 @@
+import type { CanvasProposal } from './canvas-ops'
 /**
  * AI access: what AI clients (Claude Code, Codex, Claude Desktop, Cursor -
  * and later Recto's own providers) may do with the vault, through Recto's
@@ -66,6 +67,12 @@ export type Proposal = {
   files: FileChange[]
   /** Formatting rules applied to the AI's lines. */
   formatted: string[]
+  /**
+   * A change to a canvas, as edits each accepted or rejected on the canvas
+   * (shared/canvas-ops.ts). `files` then holds the canvas with every edit
+   * applied, for the list.
+   */
+  canvas?: CanvasProposal
 }
 
 export type ActivityEntry = {

@@ -41,7 +41,17 @@ export type MenuCommands = {
   folded?: ReadonlySet<string>
   /** "Make it a link" on an edge between two notes. */
   makeLink?: (id: string) => void
+  /** An AI command on what is selected: asked through Quick ask, its changes shown as ghosts. */
+  ask?: (command: CanvasAsk) => void
+  /** A group made a board, its cards and notes as the board's cards. */
+  toBoard?: (groupId: string) => void
+  /** A board laid out as a canvas: its lanes as groups. */
+  boardToCanvas?: (path: string) => void
+  /** Whether a file is a board. */
+  isBoard?: (path: string) => boolean
 }
+
+export type CanvasAsk = 'group' | 'brainstorm' | 'map' | 'moodboard'
 
 const ALIGN: [Align, string, string][] = [
   ['left', 'Align left', 'text-align-start'],
@@ -74,6 +84,24 @@ export function nodeMenu(doc: CanvasDoc, ids: ReadonlySet<string>, run: MenuComm
       icon: shut ? 'chevrons-up-down' : 'chevrons-down-up',
       run: () => run.toggleFold!(one.id),
     })
+  }
+  // AI on the canvas: what it suggests comes back as ghosts to accept or reject.
+  const ai: MenuItem[] = []
+  if (run.ask !== undefined) {
+    const ask = run.ask
+    const content = picked.filter((n) => n.type !== 'group')
+    const isNote = one?.type === 'file' && typeof one.file === 'string' && one.file.toLowerCase().endsWith('.md')
+    if (content.length > 1) ai.push({ kind: 'item', label: 'Group these', icon: 'sparkles', run: () => ask('group') })
+    if (one !== null && one.type !== 'group') ai.push({ kind: 'item', label: 'Brainstorm around this', icon: 'sparkles', run: () => ask('brainstorm') })
+    if (isNote) ai.push({ kind: 'item', label: 'Map this note', icon: 'sparkles', run: () => ask('map') })
+    if (content.length > 1 && content.some((n) => n.type === 'file')) ai.push({ kind: 'item', label: 'Arrange as moodboard', icon: 'sparkles', run: () => ask('moodboard') })
+  }
+  if (one?.type === 'group' && run.toBoard !== undefined) ai.push({ kind: 'item', label: 'Turn into a board', icon: 'square-kanban', run: () => run.toBoard!(one.id) })
+  if (one?.type === 'file' && typeof one.file === 'string' && run.isBoard?.(one.file) === true && run.boardToCanvas !== undefined)
+    ai.push({ kind: 'item', label: 'Show board as canvas', icon: 'scan', run: () => run.boardToCanvas!(one.file!) })
+  if (ai.length > 0) {
+    if (items.length > 0) items.push({ kind: 'separator' })
+    items.push(...ai)
   }
   if (items.length > 0) items.push({ kind: 'separator' })
   items.push({ kind: 'swatches', colors: SWATCHES, current, pick: (color) => run.edit(recolor(ids, color)) })

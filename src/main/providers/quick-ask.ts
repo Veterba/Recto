@@ -20,8 +20,22 @@ import { ProviderError, runCall } from './run'
  */
 
 export const QUICK_TOOLS = ['get_ai_guide', 'read_note', 'read_file', 'get_note_context', 'propose_edit', 'propose_append', 'get_proposal']
-/** On a canvas: read the notes on it, change nothing - changes to a canvas come as proposals of their own (later). */
-export const QUICK_CANVAS_TOOLS = ['get_ai_guide', 'read_note', 'read_file', 'get_note_context']
+/**
+ * On a canvas: read the notes and files on it, and suggest changes to the canvas itself - cards, arrows,
+ * groups, moves - shown on it as ghosts to accept or reject. Notes stay unchanged from here.
+ */
+export const QUICK_CANVAS_TOOLS = [
+  'get_ai_guide',
+  'read_note',
+  'read_file',
+  'get_note_context',
+  'canvas_read',
+  'canvas_propose_nodes',
+  'canvas_propose_edges',
+  'canvas_propose_group',
+  'canvas_propose_layout',
+  'get_proposal',
+]
 
 /** How much of the note and its links goes with each question. */
 const CONTEXT_TOKENS = 3000
@@ -111,8 +125,9 @@ async function askAboutCanvas(
   const session = openSession({
     client: `quick-ask · ${providerInfo(providerOf(request.model)).name}`,
     tools: new Set(QUICK_CANVAS_TOOLS),
-    notes: context.notes,
-    writable: new Set(),
+    // It may read the canvas itself too, and suggest changes to it - only to it.
+    notes: new Set([...context.notes, request.note]),
+    writable: new Set([request.note]),
   })
   try {
     const question = `${context.text}\n\n---\n\n${request.question}`

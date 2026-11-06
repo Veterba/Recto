@@ -7,15 +7,20 @@ import { getStroke } from 'perfect-freehand'
  * (their points) are kept inside the SVG, in a `<metadata>` element, so a
  * drawing is edited as strokes, not as pixels.
  *
- * A stroke is a little tidied when it ends, never forced: one that is nearly
- * straight is pulled toward a straight line, one that nearly closes on itself
- * as a round toward an ellipse, and handwriting is only smoothed - all by a
- * part of the way, so a hand-drawn line still looks hand-drawn.
+ * A stroke is kept as it was drawn - never tidied behind the hand. A pen
+ * with pressure draws with it; a mouse or trackpad draws with a pressure
+ * perfect-freehand makes up from the speed. A highlighter is flat, wide and
+ * see-through, and is drawn under the ink.
  */
 
 /** A point: x, y in canvas units, and the pen's pressure (0.5 when the device gives none). */
 export type Pt = [number, number, number]
-export type Stroke = { points: Pt[]; color: string | null; size: number }
+export type StrokeKind = 'pen' | 'highlighter'
+/**
+ * `kind` left out is a pen (drawings made before there were highlighters);
+ * `shape`: drawn and held into a clean shape (ink-shapes.ts), drawn crisp.
+ */
+export type Stroke = { points: Pt[]; color: string | null; size: number; kind?: StrokeKind; shape?: string }
 export type Box = { x: number; y: number; width: number; height: number }
 
 /** The ink a stroke is written with in the file when it has no colour of its own: what Obsidian shows. */
@@ -24,9 +29,29 @@ export const PEN_SIZE = 4
 /** Room left round the strokes inside the drawing's box, so a thick line's edge is not cut. */
 const MARGIN = 12
 
-/** A stroke's outline, as SVG path data: perfect-freehand's shape for the pen. */
-export function strokePath(stroke: Stroke): string {
-  const outline = getStroke(stroke.points, { size: stroke.size, thinning: 0.5, smoothing: 0.6, streamline: 0.5, simulatePressure: stroke.points.every((p) => p[2] === 0.5) })
+/** How see-through a highlighter is: the words under it stay readable. */
+export const HIGHLIGHT_OPACITY = 0.35
+
+const easeOutSine = (t: number): number => Math.sin((t * Math.PI) / 2)
+
+/**
+ * perfect-freehand's settings for a stroke, as tldraw draws them: a pen with
+ * its own pressure follows it closely; a mouse or a trackpad gets a pressure
+ * made up from its speed; a highlighter is an even, flat band.
+ */
+function freehandOptions(stroke: Stroke, done: boolean): Parameters<typeof getStroke>[1] {
+  // A clean shape: an even line that keeps its corners.
+  if (stroke.shape !== undefined) return { size: stroke.size, thinning: 0, streamline: 0, smoothing: 0.4, simulatePressure: false, last: done }
+  if (stroke.kind === 'highlighter') return { size: stroke.size, thinning: 0, streamline: 0.5, smoothing: 0.5, simulatePressure: false, last: done }
+  const realPressure = stroke.points.some((p) => p[2] !== 0.5)
+  return realPressure
+    ? { size: 1 + stroke.size * 1.2, thinning: 0.62, streamline: 0.62, smoothing: 0.62, simulatePressure: false, easing: easeOutSine, last: done }
+    : { size: stroke.size, thinning: 0.5, streamline: stroke.size > 9 ? 0.74 : 0.64, smoothing: 0.62, simulatePressure: true, easing: easeOutSine, last: done }
+}
+
+/** A stroke's outline, as SVG path data: perfect-freehand's shape for it. `done: false` while it is still being drawn. */
+export function strokePath(stroke: Stroke, done = true): string {
+  const outline = getStroke(stroke.points, freehandOptions(stroke, done))
   if (outline.length === 0) return ''
   const [first, ...rest] = outline
   let d = `M${first![0].toFixed(1)} ${first![1].toFixed(1)}`
@@ -65,7 +90,11 @@ const round = (v: number): number => Math.round(v * 10) / 10
 export function toSvg(strokes: readonly Stroke[], box: Box): string {
   const local = shifted(strokes, -box.x, -box.y)
   const data = JSON.stringify(local.map((s) => ({ ...s, points: s.points.map(([x, y, p]) => [round(x), round(y), round(p)]) })))
-  const paths = local.map((s) => `  <path d="${strokePath(s)}" fill="${s.color ?? FILE_INK}"/>`).join('\n')
+  // Highlighters first, so the ink is drawn over them - in Obsidian too.
+  const ordered = [...local.filter((s) => s.kind === 'highlighter'), ...local.filter((s) => s.kind !== 'highlighter')]
+  const paths = ordered
+    .map((s) => `  <path d="${strokePath(s)}" fill="${s.color ?? FILE_INK}"${s.kind === 'highlighter' ? ` fill-opacity="${HIGHLIGHT_OPACITY}"` : ''}/>`)
+    .join('\n')
   const w = Math.round(box.width)
   const h = Math.round(box.height)
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n  <metadata id="recto-drawing">${escapeXml(data)}</metadata>\n${paths}\n</svg>\n`
@@ -87,63 +116,6 @@ export function fromSvg(svg: string): Stroke[] | null {
 }
 
 export const isDrawingSvg = (svg: string): boolean => svg.includes('<metadata id="recto-drawing">')
-
-/** How much of the way to the ideal shape a stroke is pulled: enough to look drawn well, not drawn by a ruler. */
-const PULL_LINE = 0.6
-const PULL_ROUND = 0.45
-
-const dist = (a: Pt, b: Pt): number => Math.hypot(a[0] - b[0], a[1] - b[1])
-const lengthOf = (pts: readonly Pt[]): number => pts.reduce((sum, p, i) => (i === 0 ? 0 : sum + dist(pts[i - 1]!, p)), 0)
-
-/** A stroke as drawn, a little tidied: see the top of this file. */
-export function tidy(points: readonly Pt[]): Pt[] {
-  if (points.length < 3) return [...points]
-  const length = lengthOf(points)
-  if (length < 8) return [...points]
-  const a = points[0]!
-  const b = points[points.length - 1]!
-
-  // Nearly straight: every point close to the line from the first to the last.
-  const chord = dist(a, b)
-  if (chord > length * 0.92) {
-    const dx = (b[0] - a[0]) / (chord || 1)
-    const dy = (b[1] - a[1]) / (chord || 1)
-    return points.map((p) => {
-      const t = (p[0] - a[0]) * dx + (p[1] - a[1]) * dy
-      const on: Pt = [a[0] + dx * t, a[1] + dy * t, p[2]]
-      return [p[0] + (on[0] - p[0]) * PULL_LINE, p[1] + (on[1] - p[1]) * PULL_LINE, p[2]]
-    })
-  }
-
-  // Nearly closed, and round: every point about as far from the middle as the rest, by its axis.
-  if (chord < length * 0.15) {
-    const xs = points.map((p) => p[0])
-    const ys = points.map((p) => p[1])
-    const cx = (Math.min(...xs) + Math.max(...xs)) / 2
-    const cy = (Math.min(...ys) + Math.max(...ys)) / 2
-    const rx = (Math.max(...xs) - Math.min(...xs)) / 2
-    const ry = (Math.max(...ys) - Math.min(...ys)) / 2
-    if (rx > 4 && ry > 4) {
-      const off = points.map((p) => Math.abs(Math.hypot((p[0] - cx) / rx, (p[1] - cy) / ry) - 1))
-      const mean = off.reduce((s, v) => s + v, 0) / off.length
-      if (mean < 0.12) {
-        return points.map((p) => {
-          const angle = Math.atan2((p[1] - cy) / ry, (p[0] - cx) / rx)
-          const on: Pt = [cx + rx * Math.cos(angle), cy + ry * Math.sin(angle), p[2]]
-          return [p[0] + (on[0] - p[0]) * PULL_ROUND, p[1] + (on[1] - p[1]) * PULL_ROUND, p[2]]
-        })
-      }
-    }
-  }
-
-  // Anything else - handwriting, a scribble: only smoothed, each point a little toward its neighbours.
-  return points.map((p, i) => {
-    if (i === 0 || i === points.length - 1) return p
-    const prev = points[i - 1]!
-    const next = points[i + 1]!
-    return [(prev[0] + p[0] * 2 + next[0]) / 4, (prev[1] + p[1] * 2 + next[1]) / 4, p[2]]
-  })
-}
 
 /** The distance between two segments, ab and cd. */
 function segmentDistance(a: Pt, b: Pt, c: Pt, d: Pt): number {
@@ -178,4 +150,39 @@ export function erase(strokes: readonly Stroke[], trail: readonly Pt[], reach: n
   return strokes.filter(
     (s) => !segmentsOf(s.points).some(([a, b]) => swept.some(([c, d]) => segmentDistance(a, b, c, d) <= reach + s.size / 2)),
   )
+}
+
+/** A stroke's points, with points added between any two further apart than `step`: so a cut falls where the eraser passed. */
+function densified(points: readonly Pt[], step: number): Pt[] {
+  const out: Pt[] = [points[0]!]
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!
+    const b = points[i]!
+    const n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step)
+    for (let k = 1; k <= n; k++) out.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n, a[2] + ((b[2] - a[2]) * k) / n])
+  }
+  return out
+}
+
+/**
+ * The strokes after the eraser was dragged along `trail`, cutting: what it
+ * passed over is taken out of each stroke, and what is left either side
+ * stays as strokes of their own - as a pixel eraser does, but the pieces are
+ * still strokes. A stroke it does not touch is the same stroke.
+ */
+export function cut(strokes: readonly Stroke[], trail: readonly Pt[], reach: number): Stroke[] {
+  const swept = segmentsOf(trail)
+  const touched = (p: Pt, size: number): boolean => swept.some(([c, d]) => segmentDistance(p, p, c, d) <= reach + size / 2)
+  return strokes.flatMap((s) => {
+    if (erase([s], trail, reach).length === 1) return [s]
+    const points = densified(s.points, Math.max(1, Math.min(reach, s.size) / 2))
+    const pieces: Pt[][] = [[]]
+    for (const p of points) {
+      if (touched(p, s.size)) {
+        if (pieces[pieces.length - 1]!.length > 0) pieces.push([])
+      } else pieces[pieces.length - 1]!.push(p)
+    }
+    // A piece too short to see is gone with the rest.
+    return pieces.filter((piece) => piece.length >= 2).map((piece) => ({ ...s, points: piece }))
+  })
 }

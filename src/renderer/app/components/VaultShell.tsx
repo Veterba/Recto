@@ -1,4 +1,6 @@
 import { CANVAS_FOLDER } from '@shared/recto-paths'
+import { useQuickAskRequest } from '../quick-ask-request'
+import { setFileOpener } from '../open-file'
 import { UpdateLinksDialog } from './UpdateLinksDialog'
 import { refreshLinkSettings } from '../link-writer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -377,6 +379,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   // The link handler is created once, so it reads the current openFile via a ref.
   const openFileRef = useRef(openFile)
   openFileRef.current = openFile
+  setFileOpener((path) => openFileRef.current(path))
   const openBoardCardRef = useRef(openBoardCard)
   openBoardCardRef.current = openBoardCard
   const openBoardRef = useRef(openBoard)
@@ -592,6 +595,11 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   }, [appearance.chatsOpen, setChats])
 
   const [quickAskOpen, setQuickAskOpen] = useState(false)
+  // A question asked from elsewhere (a canvas command) opens Quick ask, which sends it.
+  const quickAskRequest = useQuickAskRequest()
+  useEffect(() => {
+    if (quickAskRequest !== null) setQuickAskOpen(true)
+  }, [quickAskRequest])
   /** Every floating window and the bot out of sight, without closing them (⌘⇧H again brings them back). */
   const [floatsHidden, setFloatsHidden] = useState(false)
   const toggleFloatingBot = useCallback(() => {

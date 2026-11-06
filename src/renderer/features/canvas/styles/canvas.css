@@ -916,6 +916,24 @@
 .canvas-style__group {
   position: relative;
 }
+/* Over the tool bar while Draw is on: pen or highlighter, size, colour. */
+.canvas-pen {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border-radius: 12px;
+  pointer-events: auto;
+}
+.canvas-pen__size span {
+  border-radius: 50%;
+  background: currentColor;
+}
+.canvas-pen .menu__swatch {
+  margin: 0 1px;
+}
 .canvas-style__gap {
   width: 1px;
   height: 18px;
@@ -1454,4 +1472,193 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
+}
+
+/* ---------- a drawing's strokes, edited (DrawingEditor) ---------- */
+
+.drawing-editor {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+}
+.drawing-editor__plane {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--text-primary);
+  pointer-events: none;
+}
+.drawing-editor__room,
+.drawing-editor__stroke,
+.drawing-editor__box,
+.drawing-editor__handle {
+  pointer-events: all;
+}
+/* The room round the drawing where a drag still selects: there, but not seen. */
+.drawing-editor__room {
+  fill: transparent;
+  cursor: crosshair;
+}
+.drawing-editor__stroke {
+  cursor: pointer;
+}
+.drawing-editor__stroke.is-selected {
+  stroke: var(--accent);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+  paint-order: stroke;
+}
+.drawing-editor__box {
+  fill: color-mix(in srgb, var(--accent) 6%, transparent);
+  stroke: var(--accent);
+  stroke-dasharray: 4 3;
+  cursor: move;
+}
+.drawing-editor__handle {
+  fill: var(--bg-primary);
+  stroke: var(--accent);
+  cursor: nwse-resize;
+}
+.drawing-editor__marquee {
+  fill: color-mix(in srgb, var(--accent) 10%, transparent);
+  stroke: var(--accent);
+  pointer-events: none;
+}
+.drawing-editor__bar {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* ---------- an AI's suggested changes, as ghosts (GhostLayer) ---------- */
+
+.canvas-ghosts {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+}
+.canvas-ghosts__bar {
+  position: absolute;
+  /* Over every ghost, however big a group's frame. */
+  z-index: 2;
+  top: var(--size-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 12px;
+  font-size: var(--font-size-13);
+  color: var(--text-primary);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.canvas-ghosts__lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.canvas-ghost__line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  opacity: 0.8;
+}
+.canvas-ghost__line.is-move {
+  stroke-dasharray: 2 4;
+}
+.canvas-ghost {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px dashed var(--accent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-primary));
+  overflow: hidden;
+  pointer-events: auto;
+}
+.canvas-ghost.is-group {
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+  overflow: visible;
+  /* A frame: what is inside it stays clickable; only its label and chips take clicks. */
+  pointer-events: none;
+}
+.canvas-ghost.is-group .canvas-ghost__chips {
+  pointer-events: auto;
+}
+.canvas-ghost.is-move {
+  background: transparent;
+  border-style: dotted;
+}
+.canvas-ghost__text {
+  display: block;
+  padding: 10px 12px;
+  font-size: var(--font-size-13);
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--text-primary) 75%, transparent);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.canvas-ghost__label {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: var(--font-size-12);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-primary));
+}
+.canvas-ghost__chips {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 3px;
+}
+.canvas-ghost.is-group .canvas-ghost__chips {
+  top: -26px;
+  right: 0;
+}
+.canvas-ghost__edge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+}
+.canvas-ghost__edge .canvas-ghost__chips {
+  position: static;
+}
+.canvas-ghost__edge-label {
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: var(--font-size-12);
+  color: var(--accent);
+  background: var(--bg-primary);
+}
+.canvas-ghost__chip {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  box-shadow: var(--glass-surface-border);
+  cursor: pointer;
+}
+.canvas-ghost__chip:hover {
+  color: var(--text-primary);
+}
+.canvas-ghost__chip.is-yes {
+  background: var(--accent);
+  color: white;
 }

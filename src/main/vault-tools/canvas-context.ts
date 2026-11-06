@@ -53,33 +53,36 @@ export async function canvasContext(scope: Scope, path: string, selection: reado
   const notes = new Set<string>()
   const names = new Map(doc.nodes.map((n) => [n.id, nameOf(scope, n)]))
   const label = (node: CanvasNode): string => names.get(node.id) ?? 'a node'
+  // The ids the canvas tools take: n1, n2… in the file's order (canvas-tools.ts).
+  const shortId = new Map(doc.nodes.map((n, i) => [n.id, `n${i + 1}`]))
+  const idOf = (node: CanvasNode): string => shortId.get(node.id) ?? ''
   const lines: string[] = []
   const excerpts: string[] = []
   for (const node of nodes) {
     if (node.type === 'text') {
       const text = (node.text ?? '').trim()
       if (text === '') continue
-      lines.push(`- Card: ${text.length > 400 ? `${text.slice(0, 400)}…` : text}`)
+      lines.push(`- ${idOf(node)} · Card: ${text.length > 400 ? `${text.slice(0, 400)}…` : text}`)
     } else if (node.type === 'file' && typeof node.file === 'string') {
       if (node.file.toLowerCase().endsWith('.md')) {
         if (scope.hidden(node.file) || !scope.allNotes.includes(node.file)) {
-          lines.push('- A note AI may not see')
+          lines.push(`- ${idOf(node)} · A note AI may not see`)
           continue
         }
         notes.add(node.file)
-        lines.push(`- Note “${titleOf(node.file)}” (${node.file})`)
+        lines.push(`- ${idOf(node)} · Note “${titleOf(node.file)}” (${node.file})`)
         const text = await readNote(node.file).catch(() => '')
         if (text.trim() !== '') excerpts.push(`### ${titleOf(node.file)}\n${text.length > NOTE_CHARS ? `${text.slice(0, NOTE_CHARS)}…` : text}`)
       } else if (isExcludedPath(node.file, scope.settings.excluded)) {
-        lines.push('- A file AI may not see')
+        lines.push(`- ${idOf(node)} · A file AI may not see`)
       } else {
         notes.add(node.file)
-        lines.push(`- File: ${node.file}`)
+        lines.push(`- ${idOf(node)} · File: ${node.file}`)
       }
     } else if (node.type === 'link' && typeof node.url === 'string') {
-      lines.push(`- Web link: ${node.url}`)
+      lines.push(`- ${idOf(node)} · Web link: ${node.url}`)
     } else if (node.type === 'group') {
-      lines.push(`- ${label(node).replace(/^group/, 'Group')}, holding: ${childrenOf(doc, node).map(label).join(', ') || 'nothing'}`)
+      lines.push(`- ${idOf(node)} · ${label(node).replace(/^group/, 'Group')}, holding: ${childrenOf(doc, node).map(label).join(', ') || 'nothing'}`)
     }
   }
   const shown = new Set(nodes.map((n) => n.id))

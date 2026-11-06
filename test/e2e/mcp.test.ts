@@ -130,7 +130,7 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
 
   it('lists every tool, read tools marked read-only and write tools not', async () => {
     const { tools } = (await client.request('tools/list')).result as { tools: { name: string; annotations?: { readOnlyHint?: boolean } }[] }
-    expect(tools).toHaveLength(20)
+    expect(tools).toHaveLength(27)
     expect(tools.find((t) => t.name === 'read_note')?.annotations?.readOnlyHint).toBe(true)
     expect(tools.find((t) => t.name === 'propose_edit')?.annotations?.readOnlyHint).toBe(false)
   })
@@ -336,7 +336,63 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     const pdf = await client.data<{ kind: string; text: string }>('read_file', { file: 'Treatise.pdf' })
     expect(pdf.kind).toBe('pdf')
     expect(pdf.text).toContain('--- page 2 ---\nOf the passions')
+    // A picture comes back as an image the client's model can look at.
+    fs.writeFileSync(
+      path.join(vault, 'attachments/Dot.png'),
+      Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+    )
+    const picture = await client.call('read_file', { file: 'Dot.png' })
+    expect(picture.content.some((c) => (c as { type: string }).type === 'image')).toBe(true)
     fs.writeFileSync(path.join(vault, 'Kitchen/Recipes.pdf'), makePdf(['secret recipe']))
     expect(allText(await client.call('read_file', { file: 'Kitchen/Recipes.pdf' }))).toMatch(/No file/)
   }, 30_000)
+
+  it('canvas tools: a proposal shows on the canvas as ghosts; an arrow accepted brings its card; Reject all leaves the file as it was', async () => {
+    // Propose (an earlier test left it on Write directly).
+    await page.evaluate(async () => {
+      const api = (window as unknown as WithApi).api
+      const current = (await api.invoke('ai-access:settings')) as Record<string, unknown>
+      return api.invoke('ai-access:set-settings', { ...current, writeMode: 'propose' })
+    })
+    const canvasPath = 'Recto/Canvas/Herbs.canvas'
+    fs.mkdirSync(path.join(vault, 'Recto/Canvas'), { recursive: true })
+    fs.writeFileSync(
+      path.join(vault, canvasPath),
+      JSON.stringify({ nodes: [{ id: 'aaaaaaaaaaaaaaaa', type: 'text', text: 'Herbs', x: 0, y: 0, width: 200, height: 100 }], edges: [] }),
+    )
+    const read = await client.data<{ nodes: { id: string; text?: string }[] }>('canvas_read', { canvas: 'Herbs' })
+    expect(read.nodes).toEqual([{ id: 'n1', type: 'text', text: 'Herbs' }])
+    const proposed = JSON.parse(
+      (await client.call('canvas_propose_nodes', { canvas: 'Herbs', nodes: [{ text: 'Basil', near: 'n1' }], edges: [{ from: 'n1', to: 'new:1', label: 'grows' }] })).content[0]!
+        .text,
+    ) as { outcome: string; proposal_id: string }
+    expect(proposed.outcome).toBe('proposed')
+    const before = fs.readFileSync(path.join(vault, canvasPath), 'utf8')
+
+    await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Canvas' }).click()
+    await page.locator('.canvas-list .boards__name', { hasText: 'Herbs' }).click()
+    await page.waitForSelector('.canvas-ghost')
+    expect(await page.locator('.canvas-ghosts__bar').textContent()).toContain('suggests 2 changes')
+    expect(await page.locator('.canvas-ghost').textContent()).toContain('Basil')
+    // Nothing in the file yet.
+    expect(fs.readFileSync(path.join(vault, canvasPath), 'utf8')).toBe(before)
+    // The arrow accepted: its new card comes with it.
+    await page.locator('.canvas-ghost__edge').getByRole('button', { name: 'Accept' }).click()
+    await expect
+      .poll(() => (JSON.parse(fs.readFileSync(path.join(vault, canvasPath), 'utf8')) as { nodes: unknown[]; edges: unknown[] }).edges.length, { timeout: 5000 })
+      .toBe(1)
+    const after = JSON.parse(fs.readFileSync(path.join(vault, canvasPath), 'utf8')) as { nodes: { text?: string }[]; edges: { label?: string }[] }
+    expect(after.nodes.map((n) => n.text)).toEqual(['Herbs', 'Basil'])
+    expect(after.edges[0]!.label).toBe('grows')
+    await page.waitForSelector('.canvas-ghosts', { state: 'detached' })
+    expect(await client.data('get_proposal', { id: proposed.proposal_id })).toMatchObject({ status: 'applied' })
+
+    // A group, rejected: the file is byte for byte as it was.
+    await client.call('canvas_propose_group', { canvas: 'Herbs', groups: [{ label: 'Garden', nodes: ['n1', 'n2'] }] })
+    await page.waitForSelector('.canvas-ghost.is-group')
+    const kept = fs.readFileSync(path.join(vault, canvasPath), 'utf8')
+    await page.locator('.canvas-ghosts__bar').getByRole('button', { name: 'Reject all' }).click()
+    await page.waitForSelector('.canvas-ghosts', { state: 'detached' })
+    expect(fs.readFileSync(path.join(vault, canvasPath), 'utf8')).toBe(kept)
+  }, 40_000)
 })

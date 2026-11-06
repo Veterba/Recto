@@ -84,6 +84,37 @@ function pictureSize(bytes: Buffer): { width: number; height: number } | null {
   return null
 }
 
+/** Pictures sent to a model: at most this many pixels on the long side - more costs tokens, not sight. */
+const SEND_PIXELS = 1568
+/** And at most this many bytes, as the providers take them. */
+const SEND_BYTES = 3_500_000
+
+const MIME: Readonly<Record<string, string>> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
+
+/**
+ * A picture as a model is sent it: made smaller (as a JPEG) when it is large,
+ * with Electron's image tools; as it is when it is small enough already, or
+ * when those tools are not there (the tests). Null: too large to send.
+ */
+async function forTheModel(bytes: Buffer, p: string): Promise<{ mime: string; data: string } | null> {
+  const mime = MIME[path.posix.extname(p).slice(1).toLowerCase()]
+  try {
+    const { nativeImage } = await import('electron')
+    const image = nativeImage.createFromBuffer(bytes)
+    if (!image.isEmpty()) {
+      const { width, height } = image.getSize()
+      const scale = Math.min(1, SEND_PIXELS / Math.max(width, height))
+      if (scale < 1 || bytes.length > SEND_BYTES || mime === undefined) {
+        const jpeg = image.resize({ width: Math.round(width * scale), height: Math.round(height * scale), quality: 'good' }).toJPEG(82)
+        if (jpeg.length <= SEND_BYTES) return { mime: 'image/jpeg', data: jpeg.toString('base64') }
+      }
+    }
+  } catch {
+    // No Electron image tools here: the picture as it is, if it may go.
+  }
+  return mime !== undefined && bytes.length <= SEND_BYTES ? { mime, data: bytes.toString('base64') } : null
+}
+
 export async function readAnyFile(scope: Scope, a: Args): Promise<ResultBlock[]> {
   const p = scope.needFile(String(a['file']))
   const absolute = resolveInVault(scope.vault, p)
@@ -108,15 +139,20 @@ export async function readAnyFile(scope: Scope, a: Args): Promise<ResultBlock[]>
     })
     return [data({ ...head, text })]
   }
-  if (kind === 'image') {
+  if (kind === 'image' && !p.toLowerCase().endsWith('.svg')) {
     const bytes = await fsp.readFile(absolute)
     const dims = pictureSize(bytes)
+    const seen = await forTheModel(bytes, p)
     return [
       data({
         ...head,
         ...(dims === null ? {} : { pixels: `${dims.width} × ${dims.height}` }),
-        text: 'A picture. What is in it cannot be seen through this tool; its name, size and where it is linked or placed may say what it is.',
+        text:
+          seen === null
+            ? 'A picture too large to send. Its name, size and where it is linked or placed may say what it is.'
+            : 'The picture itself goes with this answer: look at it. (A model that cannot see pictures gets only this text.)',
       }),
+      ...(seen === null ? [] : [{ kind: 'image' as const, path: p, ...seen }]),
     ]
   }
   // Anything else: text if it is text, from `offset` on, as far as the budget goes.

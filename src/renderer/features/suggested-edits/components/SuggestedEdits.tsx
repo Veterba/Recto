@@ -4,6 +4,7 @@ import type { Proposal } from '@shared/ai-access'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { diffLines } from '@shared/line-diff'
 import { api } from '../../../app/api'
+import { openFileFromAnywhere } from '../../../app/open-file'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 
@@ -54,7 +55,7 @@ function Diff({ before, after }: { before: string | null; after: string }): Reac
   return <pre className="edits__diff">{out}</pre>
 }
 
-function ProposalCard({ proposal, onDone }: { proposal: Proposal; onDone: () => void }): React.ReactElement {
+function ProposalCard({ proposal, onDone, onClose }: { proposal: Proposal; onDone: () => void; onClose: () => void }): React.ReactElement {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   return (
@@ -66,15 +67,34 @@ function ProposalCard({ proposal, onDone }: { proposal: Proposal; onDone: () => 
           {proposal.formatted.length > 0 && ` · formatted to your profile`}
         </span>
       </header>
-      {proposal.files.map((f) => (
-        <section key={f.path}>
-          <div className="edits__path">
-            {f.before === null ? 'New: ' : ''}
-            {f.path}
-          </div>
-          <Diff before={f.before} after={f.after} />
+      {proposal.canvas !== undefined ? (
+        // A canvas's changes are reviewed on the canvas, one by one, as ghosts.
+        <section>
+          <div className="edits__path">{proposal.canvas.path}</div>
+          <p className="edits__canvas">
+            {proposal.canvas.states.filter((s) => s === 'pending').length} changes to review on the canvas.{' '}
+            <button
+              className="btn btn--sm"
+              onClick={() => {
+                openFileFromAnywhere(proposal.canvas!.path)
+                onClose()
+              }}
+            >
+              Open to review
+            </button>
+          </p>
         </section>
-      ))}
+      ) : (
+        proposal.files.map((f) => (
+          <section key={f.path}>
+            <div className="edits__path">
+              {f.before === null ? 'New: ' : ''}
+              {f.path}
+            </div>
+            <Diff before={f.before} after={f.after} />
+          </section>
+        ))
+      )}
       {error !== null && <p className="edits__error">{error}</p>}
       <div className="edits__buttons">
         <button
@@ -178,7 +198,7 @@ export function SuggestedEditsNotice(): React.ReactElement | null {
               </header>
               <div className="edits__list">
                 {pending.map((p) => (
-                  <ProposalCard key={p.id} proposal={p} onDone={refresh} />
+                  <ProposalCard key={p.id} proposal={p} onDone={refresh} onClose={() => setOpen(false)} />
                 ))}
               </div>
             </div>

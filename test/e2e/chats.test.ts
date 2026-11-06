@@ -271,7 +271,16 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
   })
 
   it('on a board the floating bot sits on a frosted disc that blurs the cards behind it; back in Data it is plain, where it was', async () => {
-    const before = (await page.locator('.floating-bot').boundingBox())!
+    // Where it stands once the page has settled: a view just switched to may still be laying out its bars.
+    let before = (await page.locator('.floating-bot').boundingBox())!
+    await expect
+      .poll(async () => {
+        const now = (await page.locator('.floating-bot').boundingBox())!
+        const still = now.x === before.x && now.y === before.y
+        before = now
+        return still
+      })
+      .toBe(true)
     expect(await page.locator('.floating-bot.is-frosted').count()).toBe(0)
     await page.getByRole('tab', { name: 'Tasks' }).click()
     await page.waitForSelector('.board')
@@ -483,6 +492,17 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
     sent = JSON.parse(fs.readFileSync(log, 'utf8')) as { prompt: string }
     expect(sent.prompt).toContain('1 selected on the canvas “Ask here”')
     expect(sent.prompt).not.toContain('note “Basil”')
+    await page.locator('.quick-ask').getByRole('button', { name: /Close Quick ask/ }).click()
+
+    // A canvas command: "Group these" on two selected cards asks Quick ask, naming them as the canvas tools do.
+    await page.locator('.react-flow__node[data-id="a1b2c3d4e5f60001"]').click()
+    await page.locator('.react-flow__node[data-id="a1b2c3d4e5f60002"]').click({ modifiers: ['Shift'] })
+    await page.locator('.react-flow__node[data-id="a1b2c3d4e5f60001"]').click({ button: 'right' })
+    await page.locator('.menu__item', { hasText: 'Group these' }).click()
+    await page.waitForFunction(() => document.querySelectorAll('.quick-ask__a .bot-md').length >= 1, undefined, { timeout: 20_000 })
+    sent = JSON.parse(fs.readFileSync(log, 'utf8')) as { prompt: string }
+    expect(sent.prompt).toContain('Group the selected nodes (n1, n2)')
+    expect(sent.prompt).toContain('2 selected on the canvas “Ask here”')
     await page.locator('.quick-ask').getByRole('button', { name: /Close Quick ask/ }).click()
     await page.keyboard.press('Meta+1')
   })

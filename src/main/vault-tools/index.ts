@@ -1,5 +1,6 @@
 import { toolNamed, type ResultBlock, type ToolOutcome } from '../../shared/vault-tools'
 import { readAnyFile } from './files'
+import * as canvas from './canvas-tools'
 import type { ActivityEntry } from '../../shared/ai-access'
 import { logCall, summariseArgs } from './activity'
 import { applyNow, proposal, queue } from './proposals'
@@ -27,6 +28,8 @@ const READERS: Record<string, Run> = {
   search_notes: read.searchNotes,
   read_note: read.readNoteTool,
   read_file: readAnyFile,
+  canvas_list: (s) => canvas.canvasList(s),
+  canvas_read: canvas.canvasRead,
   get_note_context: read.noteContext,
   list_folder: read.listFolder,
   recent_notes: read.recentNotes,
@@ -44,6 +47,11 @@ const READERS: Record<string, Run> = {
 
 const WRITERS: Record<string, (scope: Scope, args: Args) => write.Draft | Promise<write.Draft>> = {
   propose_new_note: write.proposeNewNote,
+  canvas_propose_nodes: canvas.proposeCanvasNodes,
+  canvas_propose_edges: canvas.proposeCanvasEdges,
+  canvas_propose_group: canvas.proposeCanvasGroup,
+  canvas_propose_layout: canvas.proposeCanvasLayout,
+  canvas_propose_new: canvas.proposeCanvasNew,
   propose_edit: write.proposeEdit,
   propose_append: write.proposeAppend,
   propose_link: write.proposeLink,

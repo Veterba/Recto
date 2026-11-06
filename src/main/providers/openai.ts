@@ -76,6 +76,17 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
 
     answer(state, results) {
       for (const r of results) state.input.push({ type: 'function_call_output', call_id: r.id, output: r.output })
+      // A function's output is text: the pictures it returned follow as a message the model looks at.
+      const images = results.flatMap((r) => r.images)
+      if (images.length > 0)
+        state.input.push({
+          type: 'message',
+          role: 'user',
+          content: [
+            { type: 'input_text', text: 'The pictures read_file returned:' },
+            ...images.map((i) => ({ type: 'input_image', image_url: `data:${i.mime};base64,${i.data}` })),
+          ],
+        })
     },
   }
 }

@@ -4,6 +4,7 @@ import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { figureOf, type Shape } from '../shapes'
 import { NameWarning } from '../../../ui/NameWarning'
+import { EraserPanel, PenPanel } from './PenPanel'
 
 /**
  * The bar at the bottom of a canvas: what a click on the plane does next, as
@@ -210,6 +211,8 @@ export function CanvasToolbar({ tool, setTool, notes, boards, onPick, onCreateNo
           onClose={() => setOpening(null)}
         />
       )}
+      {tool === 'draw' && opening === null && <PenPanel />}
+      {tool === 'eraser' && opening === null && <EraserPanel />}
       <div className="canvas-tools__bar glass-surface" role="toolbar" aria-label="Canvas tools">
         <ToolButton label="Select" hint="V" active={tool === 'select'} onClick={() => setTool('select')}>
           <Icon name="mouse-pointer-2" size={17} />

@@ -14,6 +14,7 @@ import { openChats } from '../chats-store'
 import { BOT_SIZE, pointOf, useBotArea, type BotArea } from './FloatingBot'
 import { useBotMotion } from '../bot-motion'
 import { canvasSelection, useCanvasSelection } from '../../../app/canvas-selection'
+import { takeQuickAsk, useQuickAskRequest } from '../../../app/quick-ask-request'
 
 /**
  * Quick ask: short questions about the note open right now, in a bubble
@@ -143,19 +144,35 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
   const ready = status?.state === 'ready' || status?.state === 'loading'
   const selectedHere = useCanvasSelection(isCanvas(note) ? note : null)
 
-  const send = useCallback(() => {
-    const question = draft.trim()
-    if (question === '' || note === null || model === null || live || !ready) return
-    // Earlier turns as said; only the new question carries the note's text (main adds it).
-    const history = turns.filter((t) => t.problem === undefined && t.content !== '').map(({ role, content }) => ({ role, content }))
-    const at = createdStamp(new Date())
-    setTurns((prev) => [...prev, { role: 'user', content: question, note, at }, { role: 'assistant', content: '', note, at, model, live: true }])
-    setDraft('')
-    setSaveError(null)
-    // On a canvas, what is selected there goes with the question (main reads the canvas).
-    const selection = isCanvas(note) ? [...canvasSelection(note)] : []
-    void api.invoke(IPC.quickAskSend, { thread, note, model, history, question, ...(selection.length === 0 ? {} : { selection }) })
-  }, [draft, note, model, live, ready, turns, thread])
+  const sendQuestion = useCallback(
+    (asked: string): boolean => {
+      const question = asked.trim()
+      if (question === '' || note === null || model === null || live || !ready) return false
+      // Earlier turns as said; only the new question carries the note's text (main adds it).
+      const history = turns.filter((t) => t.problem === undefined && t.content !== '').map(({ role, content }) => ({ role, content }))
+      const at = createdStamp(new Date())
+      setTurns((prev) => [
+        ...prev,
+        { role: 'user', content: question, note, at },
+        { role: 'assistant', content: '', note, at, model, live: true },
+      ])
+      setDraft('')
+      setSaveError(null)
+      // On a canvas, what is selected there goes with the question (main reads the canvas).
+      const selection = isCanvas(note) ? [...canvasSelection(note)] : []
+      void api.invoke(IPC.quickAskSend, { thread, note, model, history, question, ...(selection.length === 0 ? {} : { selection }) })
+      return true
+    },
+    [note, model, live, ready, turns, thread],
+  )
+  const send = useCallback(() => void sendQuestion(draft), [sendQuestion, draft])
+
+  // A question asked from elsewhere (a canvas command): sent as if typed, once the model is ready.
+  const requested = useQuickAskRequest()
+  useEffect(() => {
+    if (requested === null || !ready || model === null || live || note === null) return
+    if (sendQuestion(requested.question)) takeQuickAsk()
+  }, [requested, ready, model, live, note, sendQuestion])
 
   const saveAsChat = useCallback(async () => {
     const messages: BotMessage[] = turns
@@ -253,7 +270,9 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
                         }
                       />
                     )}
-                    {turn.live === true && turn.content === '' && (turn.steps ?? []).length === 0 && <p className="quick-ask__thinking">Reading…</p>}
+                    {turn.live === true && turn.content === '' && (turn.steps ?? []).length === 0 && (
+                      <p className="quick-ask__thinking">Reading…</p>
+                    )}
                     {turn.problem !== undefined && <ProblemLine problem={turn.problem} />}
                   </div>
                 )}
@@ -311,11 +330,17 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
         {note !== null && (
           <Tip
             label="What goes with each question"
-            hint={isCanvas(note) ? 'What is selected on this canvas - or all of it - and the notes on it' : 'This note, and the notes it links to or that link to it'}
+            hint={
+              isCanvas(note)
+                ? 'What is selected on this canvas - or all of it - and the notes on it'
+                : 'This note, and the notes it links to or that link to it'
+            }
           >
             <span className="quick-ask__note">
               <Icon name={isCanvas(note) ? 'scan' : 'file-text'} size={13} />
-              <span>{isCanvas(note) && selectedHere.length > 0 ? `${selectedHere.length} selected on ${titleOf(note)}` : titleOf(note)}</span>
+              <span>
+                {isCanvas(note) && selectedHere.length > 0 ? `${selectedHere.length} selected on ${titleOf(note)}` : titleOf(note)}
+              </span>
             </span>
           </Tip>
         )}

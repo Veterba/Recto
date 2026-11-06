@@ -62,8 +62,8 @@ describe('a canvas, as Quick ask is given it', () => {
   it('nothing selected: all of it, and an unseen note only as a place', async () => {
     const context = (await canvasContext(buildScope('test'), CANVAS, [], 3000))!
     expect(context.text).toContain('The whole canvas “Plan”')
-    expect(context.text).toContain('- Group “Herbs”, holding: note “Basil”, card “Water daily”')
-    expect(context.text).toContain('- Card: Water daily\nin summer')
+    expect(context.text).toContain('- n1 · Group “Herbs”, holding: note “Basil”, card “Water daily”')
+    expect(context.text).toContain('- n3 · Card: Water daily\nin summer')
     expect(context.text).toContain('- note “Basil” → card “Water daily” (“needs”)')
     expect(context.text).toContain('- card “Far away card” → a note AI may not see')
     expect(context.text).toContain('Sow in spring')

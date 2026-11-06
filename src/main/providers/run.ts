@@ -2,7 +2,7 @@ import * as z from 'zod'
 import type { AiMessage } from '../../shared/ai'
 import type { BotStep, StepKind } from '../../shared/bots'
 import type { ProviderLimits, ProviderProblem } from '../../shared/providers'
-import { renderBlocks, VAULT_TOOLS } from '../../shared/vault-tools'
+import { imagesOf, renderBlocks, VAULT_TOOLS } from '../../shared/vault-tools'
 import { callTool, type ToolSession } from '../vault-tools'
 import type { SessionCall } from '../vault-tools/sessions'
 
@@ -52,9 +52,17 @@ export function toolSchema(def: (typeof VAULT_TOOLS)[number]): { name: string; d
 
 /** A call made by a model, run through the session; what the model reads back. */
 export async function runCall(session: ToolSession, name: string, args: unknown): Promise<string> {
-  const outcome = await callTool(name, args, session.client, session.id)
-  return outcome.ok ? renderBlocks(outcome.blocks).join('\n\n') : `Error: ${outcome.error}`
+  return (await runCallSeen(session, name, args)).output
 }
+
+/** The same, with the pictures in the answer, for a model that can see them. */
+export async function runCallSeen(session: ToolSession, name: string, args: unknown): Promise<{ output: string; images: ToolImage[] }> {
+  const outcome = await callTool(name, args, session.client, session.id)
+  return outcome.ok ? { output: renderBlocks(outcome.blocks).join('\n\n'), images: imagesOf(outcome.blocks) } : { output: `Error: ${outcome.error}`, images: [] }
+}
+
+/** A picture a tool returned: what the model sees, in base64. */
+export type ToolImage = { mime: string; data: string }
 
 const STEP: Record<string, { action: string; kind?: StepKind; arg?: string }> = {
   get_ai_guide: { action: 'Reading the AI guide' },
@@ -62,6 +70,13 @@ const STEP: Record<string, { action: string; kind?: StepKind; arg?: string }> = 
   search_notes: { action: 'Searching notes', kind: 'search', arg: 'query' },
   read_note: { action: 'Opened', kind: 'open', arg: 'note' },
   read_file: { action: 'Opened', kind: 'open', arg: 'file' },
+  canvas_list: { action: 'Canvases', kind: 'map' },
+  canvas_read: { action: 'Read the canvas', kind: 'read', arg: 'canvas' },
+  canvas_propose_nodes: { action: 'Suggested cards', arg: 'canvas' },
+  canvas_propose_edges: { action: 'Suggested arrows', arg: 'canvas' },
+  canvas_propose_group: { action: 'Suggested groups', arg: 'canvas' },
+  canvas_propose_layout: { action: 'Suggested moves', arg: 'canvas' },
+  canvas_propose_new: { action: 'Suggested a canvas', arg: 'name' },
   get_note_context: { action: 'Read around', kind: 'read', arg: 'note' },
   list_folder: { action: 'Listed', kind: 'map', arg: 'folder' },
   recent_notes: { action: 'Recent notes', kind: 'map' },
@@ -164,7 +179,7 @@ export interface ToolModel<State> {
     signal: AbortSignal,
   ): AsyncIterable<{ type: 'text'; text: string } | { type: 'usage'; tokens: number } | { type: 'call'; id: string; name: string; args: string }>
   /** The calls' outputs, back into the conversation. */
-  answer(state: State, results: { id: string; name: string; args: string; output: string }[]): void
+  answer(state: State, results: { id: string; name: string; args: string; output: string; images: ToolImage[] }[]): void
 }
 
 /** How many model turns one answer may take before it must answer with what it has. */
@@ -188,8 +203,8 @@ export async function* toolLoop<S>(model: ToolModel<S>, request: RunRequest): As
       } catch {
         parsed = null
       }
-      const output = parsed === null ? 'Error: the arguments were not valid JSON.' : await runCall(request.session, call.name, parsed)
-      results.push({ ...call, output })
+      const done = parsed === null ? { output: 'Error: the arguments were not valid JSON.', images: [] } : await runCallSeen(request.session, call.name, parsed)
+      results.push({ ...call, ...done })
     }
     model.answer(state, results)
   }

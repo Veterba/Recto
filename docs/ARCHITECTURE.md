@@ -288,7 +288,7 @@ main: vault-tools/socket.ts  (first line must carry the token)
                                 backup, then write through vault-fs
 ```
 
-- **One catalogue.** `shared/vault-tools.ts` holds the 20 tools (zod schemas, titles, descriptions,
+- **One catalogue.** `shared/vault-tools.ts` holds the 27 tools (zod schemas, titles, descriptions,
   which ones write) and the prompts; the MCP program and main both use it, so the two ends cannot
   disagree. Note text in an answer is always wrapped in `<note path="…">` blocks, so a client can tell
   a note's words from Recto's.
@@ -297,7 +297,19 @@ main: vault-tools/socket.ts  (first line must carry the token)
   (`vault-tools/canvas-context.ts`), a picture's name and pixel size; anything else is said to be
   unreadable. `scope.fileHidden` / `resolveFile` / `needFile` give files the same rules as notes
   (excluded folders, chats, the session's reach; a name several files share is asked about). The
-  local chat bots get it too (`bots/model-tools.ts`), with each bot's own exclusions on top.
+  local chat bots get it too (`bots/model-tools.ts`), with each bot's own exclusions on top. A picture
+  goes as an `image` block (scaled with Electron's `nativeImage` to 1568 px, as JPEG) besides its text:
+  `providers/run.ts` passes it to the model - inside the tool result for Anthropic, as a following
+  `input_image` message for OpenAI's Responses - and `src/mcp/index.ts` as MCP `image` content; Ollama
+  and the local bots get the text only.
+- **Canvas tools** (`vault-tools/canvas-tools.ts`): `canvas_list`, `canvas_read` (nodes by short ids
+  `n1`… in file order, a note AI may not see only as a place) and five `canvas_propose_*`. A change to a
+  canvas is a list of edits (`shared/canvas-ops.ts`: add node with a `ref` other edits may name, add
+  edge, add group, move), placed by `shared/canvas-layout.ts` (beside, around, packed rows, group frames;
+  never over what is there). The proposal carries `canvas: { path, ops, states, refs }`; `files` holds
+  the canvas with every edit, for the list. Apply from Suggested edits, and Write directly, apply the
+  pending edits in main onto the canvas as it is (`acceptOps`; an edit whose node is gone is stale).
+  `canvas_propose_new` is an ordinary new-file proposal.
 - **Why a socket.** The client starts `recto-mcp` as its own process, but only the running app has
   the index, the vault and the settings. The socket (mode 0600, plus a random per-install token compared in constant time) lets that process ask
   main, and when Recto is closed the connect fails and the client is told to open Recto.
@@ -574,14 +586,30 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
   with the card machinery (`createCardNote`, the same name rules, free only in its folder) and then
   changes the node in place to `type: "file"`. A name a note already has offers "Use that note" (the
   existing file is put on the canvas and stays where it is) or "Create a new “X” here".
-- **Drawing.** `drawing.ts` (pure): strokes as points with pressure, drawn with perfect-freehand (MIT);
-  `tidy` pulls a nearly straight stroke part-way to a line and a nearly closed round one part-way to an
-  ellipse, and only smooths the rest; `toSvg`/`fromSvg` write a drawing as an SVG whose `<metadata
-  id="recto-drawing">` keeps the strokes. `drawing-store.ts` holds each drawing's strokes and writes them back.
-  In `CanvasView`, the Draw tool (sticky) and the eraser capture the pointer like the Arrow tool; a stroke goes
-  to the drawing being drawn on (`drawTarget`, or one it touches) or starts a new SVG in `<canvas> drawings/`
-  (`fs:create` with numbering) placed as a file node; `SvgNode` draws a Recto drawing from its strokes in the
-  text colour, any other SVG as a picture. Text (T) is a text node with `border: invisible, fill: none`.
+- **Ghosts** (`components/GhostLayer.tsx`). The open canvas's pending canvas proposals drawn in place
+  over it - frames, then arrows (clipped to the cards' edges), then cards - with ✓/✕ each and Accept all /
+  Reject all. Accepting runs `acceptOps` through the canvas's own `edit` (one undo step, replayed onto the
+  file as it is when written) and reports the edits' states to main (`ai-proposals:canvas`), which settles
+  the proposal once none is pending; rejecting an edit rejects the arrows and groups that need it.
+- **Canvas commands** (`canvas-menus.ts`, `CanvasView.tsx`). Group these, Brainstorm around this, Map
+  this note and Arrange as moodboard are questions for Quick ask (`app/quick-ask-request.ts`) naming the
+  selection by short ids; Quick ask on a canvas has the read and propose canvas tools, the canvas
+  writable (as proposals only). Turn into a board and Show board as canvas are made in the renderer.
+- **Drawing.** `drawing.ts` (pure): strokes as points with pressure, a `kind` (pen or highlighter), a colour,
+  a size and, when snapped, a `shape`; drawn with perfect-freehand (MIT) with tldraw's settings - a pen's own
+  pressure, a mouse's simulated one, a highlighter flat, a shape crisp - and never tidied. `toSvg`/`fromSvg`
+  write a drawing as an SVG whose `<metadata id="recto-drawing">` keeps the strokes; highlighters are written
+  first, see-through, so they sit under the ink in Obsidian too. `erase` takes whole strokes it touches and
+  `cut` only what it passes over (both test line against line); `ink-shapes.ts` (pure) recognises a held
+  stroke as a line, arrow, triangle, rectangle or ellipse (ShortStraw-style corners). `pen.ts` keeps the pen,
+  highlighter and eraser settings (this Mac's storage); `PenPanel.tsx` shows them over the tool bar.
+  `drawing-store.ts` holds each drawing's strokes and writes them back. In `CanvasView`, the Draw tool
+  (sticky) and the eraser capture every coalesced pointer event; each stroke is a new SVG in
+  `<canvas> drawings/` (`fs:create` with numbering) placed as a file node - a highlighter just below the first
+  node it overlaps - unless "Draw here" was chosen for a drawing (`drawTarget`). Double-click opens
+  `DrawingEditor.tsx`, a layer over the canvas that edits a copy of the strokes (select, marquee, move, resize,
+  recolour, delete, its own undo) and saves the SVG as each change ends. `SvgNode` draws a Recto drawing from
+  its strokes, any other SVG as a picture. Text (T) is a text node with `border: invisible, fill: none`.
 - **Zoomed out.** Below 45% (`usePlain`): text as plain lines; a PDF preview its first page only (`far`); a
   board its lanes and counts (`far`).
 - **Where canvases live.** `CANVAS_FOLDER` (`Recto/Canvas`) in `shared/recto-paths.ts`, beside the boards and

@@ -44,7 +44,18 @@ export function messagesModel(model: string, key: string, tools: typeof VAULT_TO
     answer(state, results) {
       state.messages.push({
         role: 'user',
-        content: results.map((r) => ({ type: 'tool_result' as const, tool_use_id: r.id, content: r.output })),
+        // A picture a tool returned goes in its result, where Claude looks at it.
+        content: results.map((r) => ({
+          type: 'tool_result' as const,
+          tool_use_id: r.id,
+          content: [
+            { type: 'text' as const, text: r.output },
+            ...r.images.map((i) => ({
+              type: 'image' as const,
+              source: { type: 'base64' as const, media_type: i.mime as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp', data: i.data },
+            })),
+          ],
+        })),
       })
     },
   }

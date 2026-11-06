@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import type { CanvasOp } from '../../shared/canvas-ops'
 import path from 'node:path'
 import type { FileChange } from '../../shared/ai-access'
 import { setCardField } from '../../shared/card-fields'
@@ -25,7 +26,8 @@ import { readNote, titleOf, ToolError, type Scope } from './scope'
  */
 
 type Args = Record<string, unknown>
-export type Draft = { summary: string; files: FileChange[]; formatted: string[] }
+/** What a write tool proposes; `canvas`: a canvas's edits (shared/canvas-ops.ts), `files` the canvas with all of them. */
+export type Draft = { summary: string; files: FileChange[]; formatted: string[]; canvas?: { path: string; ops: CanvasOp[] } }
 
 const WIKI = /(?<!!)\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|[^\]\n]*)?\]\]/g
 const MD_NOTE = /(?<!!)\[[^\]\n]*\]\(([^()\s]+\.md)(?:#[^)\s]*)?\)/g

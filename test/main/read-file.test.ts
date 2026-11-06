@@ -73,8 +73,12 @@ describe('read_file', () => {
   })
 
   it('a canvas as its cards; a picture as its size', async () => {
-    expect((await read({ file: 'Plan.canvas' }))['text']).toContain('- Card: Sow in March')
+    expect((await read({ file: 'Plan.canvas' }))['text']).toContain('- n1 · Card: Sow in March')
     expect(await read({ file: 'Garden.png' })).toMatchObject({ kind: 'image', pixels: '640 × 480' })
+    // The picture itself goes with it, for a model that can see.
+    const blocks = await readAnyFile(buildScope('test'), { file: 'Garden.png' })
+    expect(blocks[1]).toMatchObject({ kind: 'image', path: 'attachments/Garden.png', mime: 'image/png' })
+    expect(Buffer.from((blocks[1] as { data: string }).data, 'base64').readUInt32BE(16)).toBe(640)
   })
 
   it('a file in an excluded folder is no file; a name two files have is asked about; what cannot be read is said', async () => {
