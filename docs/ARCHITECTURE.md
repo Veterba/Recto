@@ -288,10 +288,16 @@ main: vault-tools/socket.ts  (first line must carry the token)
                                 backup, then write through vault-fs
 ```
 
-- **One catalogue.** `shared/vault-tools.ts` holds the 19 tools (zod schemas, titles, descriptions,
+- **One catalogue.** `shared/vault-tools.ts` holds the 20 tools (zod schemas, titles, descriptions,
   which ones write) and the prompts; the MCP program and main both use it, so the two ends cannot
   disagree. Note text in an answer is always wrapped in `<note path="…">` blocks, so a client can tell
   a note's words from Recto's.
+- **Any file, not only notes.** `read_file` (`vault-tools/files.ts`) reads what is not a note: a PDF's
+  text by pages (pdf.js's Node build in main), text and code files in parts, a canvas
+  (`vault-tools/canvas-context.ts`), a picture's name and pixel size; anything else is said to be
+  unreadable. `scope.fileHidden` / `resolveFile` / `needFile` give files the same rules as notes
+  (excluded folders, chats, the session's reach; a name several files share is asked about). The
+  local chat bots get it too (`bots/model-tools.ts`), with each bot's own exclusions on top.
 - **Why a socket.** The client starts `recto-mcp` as its own process, but only the running app has
   the index, the vault and the settings. The socket (mode 0600, plus a random per-install token compared in constant time) lets that process ask
   main, and when Recto is closed the connect fails and the client is told to open Recto.
@@ -359,7 +365,7 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   vault scope on every call, and `--session` rides on each socket request from `src/mcp/index.ts`.
   Trust is therefore in Recto, not in each provider's own sandbox. In-app chats always *suggest*
   (Suggested edits), even in Write directly mode. Quick ask's session makes only the open note
-  writable. The session's tool calls become the answer's steps card, and the notes they returned its
+  writable; its reach includes the files the note links or embeds. The session's tool calls become the answer's steps card, and the notes they returned its
   sources.
 - **Detection** (`providers/detect.ts`). A Mac app does not inherit the shell PATH, so the CLI is
   looked for through the login shell's PATH (asked once), the app PATH, Homebrew, npm, bun, volta,
@@ -397,7 +403,7 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   list and then the picked bot's chat; `VaultShell` makes it and the graph take turns on the right.
   `FloatingBot` (⌘⇧B, or its status-bar button) is the bot itself, with no plate, draggable, and snaps to the nearest edge. `QuickAsk` (⌘J) is a bubble
   anchored to the bot's saved place (`bubbleAt`: above it in the lower half, below in the upper, lined up with its outer side, a tail
-  pointing at it), not a `FloatingWindow`. The bot stands only along the note area's left, right and bottom edges, under the tab bar and the arrows' row and above Linked mentions (`botArea`, kept current by a `ResizeObserver` on those bars and a `MutationObserver` on the view, so a bar that comes with another tab is seen in the next frame); on a board it is not shown. While it is dragged, `bot-motion.ts` (a small store) carries its position to the bubble, so a drag redraws only those two. Quick ask is about the open note: each question calls `get_note_context` (budgeted) for the note and its links,
+  pointing at it), not a `FloatingWindow`. The bot stands only along the note area's left, right and bottom edges, under the tab bar and the arrows' row and above Linked mentions (`botArea`, kept current by a `ResizeObserver` on those bars and a `MutationObserver` on the view, so a bar that comes with another tab is seen in the next frame); on a board it sits on a frosted disc (`.is-frosted`) that blurs the cards behind it. While it is dragged, `bot-motion.ts` (a small store) carries its position to the bubble, so a drag redraws only those two. Quick ask is about the open note: each question calls `get_note_context` (budgeted) for the note and its links. On a canvas it is about the canvas: `app/canvas-selection.ts` carries the canvas's selected node ids to Quick ask, and main's `canvasContext` turns the selection - a group with what it holds - or the whole canvas into text (cards, notes with their opening, files, groups, arrows; a note AI may not see only as a place), with read-only tools and the notes and files on it as its reach;
   an "About: <note>" line marks a change of note, and the thread lives in memory only; "Save as chat"
   writes it as a normal chat in `Recto/Chats`. `shared/quick-ask.ts` holds its shared types and
   `providers/quick-ask.ts` its prompt and session. ⌘⇧H hides every floating window and the bot. Chats

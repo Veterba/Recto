@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { setCanvasSelection } from '../../../app/canvas-selection'
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -82,6 +83,8 @@ const NEW_NODE = { width: 260, height: 120 }
 const NEW_GROUP = { width: 480, height: 320 }
 /** How near, in canvas units, the eraser must pass a stroke to take it away. */
 const ERASER_REACH = 8
+/** How far from the drawing being drawn a stroke still joins it, in canvas units; further away it starts a new drawing. */
+const DRAW_REACH = 48
 /** Plain text's first size: a line, growing as it is typed. */
 const NEW_PLAIN = { width: 260, height: 44 }
 /** A new shape's size: square, except the ones that are wide by nature. */
@@ -156,6 +159,9 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
   const noSnap = useKeyPress('Meta')
   const transform = useStore((s) => s.transform)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  // Said to Quick ask, whose questions here go with what is selected (nodes only, not arrows).
+  useEffect(() => setCanvasSelection(path, canvas.doc === null ? [] : [...selected].filter((id) => canvas.doc!.nodes.some((n) => n.id === id))), [path, selected, canvas.doc])
+  useEffect(() => () => setCanvasSelection(path, []), [path])
   const [nodes, setNodes] = useState<FlowNode[]>([])
   const [edges, setEdges] = useState<FlowEdge[]>([])
   const [editing, setEditing] = useState<string | null>(null)
@@ -165,6 +171,10 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
   const [guides, setGuides] = useState<Guide[]>([])
   /** What a click on the plane does: select, pan, or put something down (once). */
   const [tool, setTool] = useState<Tool>('select')
+  // Leaving Draw ends drawing on a double-clicked drawing: strokes after that are drawings of their own.
+  useEffect(() => {
+    if (tool !== 'draw') drawTarget.current = null
+  }, [tool])
   const [picking, setPicking] = useState<'note' | 'board' | null>(null)
   /** An arrow being drawn with the Arrow tool, from where the drag began to the pointer, on the canvas. */
   const [drawing, setDrawing] = useState<{ from: Point; to: Point } | null>(null)
@@ -517,7 +527,12 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
     [],
   )
 
-  /** A stroke drawn: into the drawing it is for (the one being drawn on, or one it touches), or a new drawing. */
+  /**
+   * A stroke drawn: a drawing of its own - as in tldraw and Excalidraw, each
+   * stroke is one - unless a drawing was double-clicked to draw on, and the
+   * stroke is near it. Never into a drawing it merely happens to be drawn
+   * over, however soon after the last stroke.
+   */
   const keepStroke = useCallback(
     async (points: Pt[]) => {
       const stroke: Stroke = { points: tidy(points), color: null, size: PEN_SIZE }
@@ -526,24 +541,18 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
       const box = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }
       const nodes = docRef.current?.nodes ?? []
       const chosen = nodes.find((n) => n.id === drawTarget.current)
-      let target: CanvasNode | undefined = chosen
-      let drawn: Drawn | null = chosen?.file === undefined ? null : await drawingOf(chosen.file)
-      if (drawn === null) {
-        target = undefined
-        for (const n of drawingsNear(box, 24)) {
-          const found = await drawingOf(n.file!)
-          if (found !== null) {
-            target = n
-            drawn = found
-            break
-          }
-        }
-      }
+      const near =
+        chosen !== undefined &&
+        chosen.x - DRAW_REACH < box.x + box.width &&
+        chosen.x + chosen.width + DRAW_REACH > box.x &&
+        chosen.y - DRAW_REACH < box.y + box.height &&
+        chosen.y + chosen.height + DRAW_REACH > box.y
+      const target: CanvasNode | undefined = near ? chosen : undefined
+      const drawn: Drawn | null = target?.file === undefined ? null : await drawingOf(target.file)
       if (target !== undefined && drawn !== null) {
         const id = target.id
         const saved = await saveDrawing(target.file!, [...strokesOn(drawn, target), stroke])
         if (!saved.ok) return setSaid(saved.error)
-        drawTarget.current = id
         run((d) => ({ ...d, nodes: d.nodes.map((n) => (n.id === id ? patchNode(n, saved.box) : n)) }))
         return
       }
@@ -562,9 +571,8 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
           nodes: [...d.nodes, { id, type: 'file', file: made.path, x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) }],
         }
       })
-      drawTarget.current = id
     },
-    [drawingsNear, edit, path, run],
+    [edit, path, run],
   )
 
   /** The eraser let go: every stroke it passed over, gone from the drawings it passed over. */
@@ -573,11 +581,13 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
       const xs = trail.map((p) => p[0])
       const ys = trail.map((p) => p[1])
       const box = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }
-      for (const n of drawingsNear(box, ERASER_REACH)) {
+      // Its reach is on the screen, so it is the same size however far the canvas is zoomed.
+      const reach = ERASER_REACH / zoom
+      for (const n of drawingsNear(box, reach)) {
         const drawn = await drawingOf(n.file!)
         if (drawn === null) continue
         const before = strokesOn(drawn, n)
-        const after = trail.reduce((left, [x, y]) => erase(left, { x, y }, ERASER_REACH), before)
+        const after = erase(before, trail, reach)
         if (after.length === before.length) continue
         // Every stroke gone: the drawing goes from the canvas (its file stays, as a note's does).
         if (after.length === 0) {
@@ -588,7 +598,7 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
         if (saved.ok) run((d) => ({ ...d, nodes: d.nodes.map((x) => (x.id === n.id ? patchNode(x, saved.box) : x)) }))
       }
     },
-    [drawingsNear, run],
+    [drawingsNear, run, zoom],
   )
 
   /** The Draw tool and the eraser: a press on the canvas, dragged, let go. */

@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { _electron, type ElectronApplication, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { makePdf } from '../fixtures/make-pdf'
 import { quitApp, removeDir } from './helpers/app'
 
 /**
@@ -40,31 +41,6 @@ function planText(): string {
   ]
   const line = (o: unknown): string => `\t\t${JSON.stringify(o)}`
   return `{\n\t"nodes":[\n${nodes.map(line).join(',\n')}\n\t],\n\t"edges":[\n${edges.map(line).join(',\n')}\n\t],\n\t"metadata":${JSON.stringify(base.metadata)}\n}`
-}
-
-/** A small, valid PDF: one page per string, each its text in Helvetica. */
-function makePdf(pages: string[]): Buffer {
-  const objects: string[] = []
-  const kids = pages.map((_, i) => `${4 + i * 2} 0 R`).join(' ')
-  objects.push('<< /Type /Catalog /Pages 2 0 R >>')
-  objects.push(`<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`)
-  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>')
-  pages.forEach((text, i) => {
-    const stream = `BT /F1 24 Tf 72 700 Td (${text}) Tj ET`
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + i * 2} 0 R >>`)
-    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`)
-  })
-  let out = '%PDF-1.4\n'
-  const offsets: number[] = []
-  objects.forEach((body, i) => {
-    offsets.push(out.length)
-    out += `${i + 1} 0 obj\n${body}\nendobj\n`
-  })
-  const xref = out.length
-  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
-  for (const o of offsets) out += `${String(o).padStart(10, '0')} 00000 n \n`
-  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
-  return Buffer.from(out, 'latin1')
 }
 
 describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
@@ -759,7 +735,7 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await expect.poll(() => page.locator('.canvas-node--video [aria-label="Play the video"]').count()).toBeGreaterThan(0)
   })
 
-  it('the pen draws a drawing, kept as an SVG Obsidian can show; a stroke near it is added to it; the eraser takes strokes away', async () => {
+  it('the pen draws a drawing, kept as an SVG Obsidian can show; each stroke is a drawing of its own, however soon after the last; a double-clicked drawing takes strokes; the eraser takes strokes away', async () => {
     await openPlan()
     await page.locator('.canvas-view .board__tool', { hasText: 'Zoom to fit' }).first().click()
     const pane = (await page.locator('.react-flow__pane').first().boundingBox())!
@@ -778,16 +754,26 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     const svg = read(svgPath)
     expect(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')).toBe(true)
     expect(svg).toContain('<metadata id="recto-drawing">')
-    // The pen stays on: a second stroke over the first goes into the same drawing.
+    const strokes = (file: string): number => (JSON.parse(read(file).match(/<metadata id="recto-drawing">([\s\S]*?)<\/metadata>/)![1]!) as unknown[]).length
+    // A second stroke right over the first, at once: a drawing of its own - the first is left as it was.
+    const first = read(svgPath)
     await stroke({ x: pane.x + 60, y: pane.y + 30 }, { x: pane.x + 70, y: pane.y + 90 })
-    const strokes = (): number => (JSON.parse(read(svgPath).match(/<metadata id="recto-drawing">([\s\S]*?)<\/metadata>/)![1]!) as unknown[]).length
-    await expect.poll(strokes, { timeout: 5000 }).toBe(2)
-    expect(read(PLAN).split(`"file":"${svgPath}"`).length - 1).toBe(1)
-    await expect.poll(() => page.locator('.canvas-node--drawing path').count()).toBe(2)
-    // The eraser, dragged across the second, takes it away.
+    const second = 'Recto/Canvas/Garden plan drawings/Drawing 2.svg'
+    await expect.poll(() => fs.existsSync(path.join(vault, second)), { timeout: 5000 }).toBe(true)
+    expect(read(svgPath)).toBe(first)
+    await expect.poll(() => read(second).includes('recto-drawing'), { timeout: 5000 }).toBe(true)
+    expect(strokes(second)).toBe(1)
+    await page.keyboard.press('Escape')
+    // Double-clicked, a drawing takes the strokes drawn on it.
+    await page.locator('.react-flow__node', { has: page.locator(`.canvas-node--drawing`) }).first().dblclick()
+    await stroke({ x: pane.x + 45, y: pane.y + 50 }, { x: pane.x + 130, y: pane.y + 55 })
+    await expect.poll(() => (read(svgPath).includes('recto-drawing') ? strokes(svgPath) : 0), { timeout: 5000 }).toBe(2)
+    // The eraser, dragged across both its strokes, takes them away: the drawing leaves the canvas (its file stays); the other is untouched.
+    await page.locator('.canvas-view').first().focus()
     await page.keyboard.press('e')
-    await stroke({ x: pane.x + 50, y: pane.y + 60 }, { x: pane.x + 85, y: pane.y + 60 })
-    await expect.poll(strokes, { timeout: 5000 }).toBe(1)
+    await stroke({ x: pane.x + 90, y: pane.y + 40 }, { x: pane.x + 90, y: pane.y + 65 })
+    await expect.poll(() => read(PLAN).includes(`"file":"${svgPath}"`), { timeout: 5000 }).toBe(false)
+    expect(read(PLAN)).toContain(`"file":"${second}"`)
     await page.keyboard.press('Escape')
   })
 

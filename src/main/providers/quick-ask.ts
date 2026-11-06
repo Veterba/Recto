@@ -7,7 +7,8 @@ import { ask } from '../vault-tools/read'
 import { buildScope, readNote, titleOf } from '../vault-tools/scope'
 import { closeSession, openSession } from '../vault-tools'
 import { run } from '.'
-import { quickAskSystem } from './prompts'
+import { canvasContext, canvasTitle } from '../vault-tools/canvas-context'
+import { quickAskCanvasSystem, quickAskSystem } from './prompts'
 import { ProviderError, runCall } from './run'
 
 /**
@@ -18,22 +19,26 @@ import { ProviderError, runCall } from './run'
  * reach, so the note open when it was asked is the one it is about.
  */
 
-export const QUICK_TOOLS = ['get_ai_guide', 'read_note', 'get_note_context', 'propose_edit', 'propose_append', 'get_proposal']
+export const QUICK_TOOLS = ['get_ai_guide', 'read_note', 'read_file', 'get_note_context', 'propose_edit', 'propose_append', 'get_proposal']
+/** On a canvas: read the notes on it, change nothing - changes to a canvas come as proposals of their own (later). */
+export const QUICK_CANVAS_TOOLS = ['get_ai_guide', 'read_note', 'read_file', 'get_note_context']
 
 /** How much of the note and its links goes with each question. */
 const CONTEXT_TOKENS = 3000
 
 const running = new Map<string, AbortController>()
 
-export type QuickAskRequest = { thread: string; note: string; model: string; history: AiMessage[]; question: string }
+/** `note`: the open note, or the open canvas; `selection`: the canvas's selected node ids (none: the whole canvas). */
+export type QuickAskRequest = { thread: string; note: string; model: string; history: AiMessage[]; question: string; selection?: string[] }
 
 /** The note and its neighbours, as far as AI may see them; null when the note itself is excluded. */
 async function reach(note: string): Promise<{ path: string; notes: Set<string> } | null> {
   const scope = buildScope('quick-ask')
   const path = scope.resolve(note)
   if (path === null) return null
+  // The notes it links to, and the files it links or embeds - a PDF, a picture: read_file reads those.
   const out = parseNote(await readNote(path))
-    .links.map((l) => scope.resolve(l.target, path))
+    .links.map((l) => scope.resolve(l.target, path) ?? scope.resolveFile(l.target, path))
     .filter((p): p is string => p !== null)
   const { links } = await ask({ kind: 'backlinks', path }, 'backlinks-result')
   return { path, notes: new Set([path, ...out, ...links.map((l) => l.path).filter((p) => !scope.hidden(p))]) }
@@ -43,6 +48,7 @@ export async function quickAsk(request: QuickAskRequest, local: BotModelProvider
   running.get(request.thread)?.abort()
   const controller = new AbortController()
   running.set(request.thread, controller)
+  if (request.note.toLowerCase().endsWith('.canvas')) return askAboutCanvas(request, local, emit, controller)
   const reached = await reach(request.note).catch(() => null)
   if (reached === null) {
     emit({
@@ -64,6 +70,53 @@ export async function quickAsk(request: QuickAskRequest, local: BotModelProvider
     const context = await runCall(session, 'get_note_context', { note: reached.path, budget_tokens: CONTEXT_TOKENS })
     const question = `The open note and its links:\n\n${context}\n\n---\n\n${request.question}`
     const system = await quickAskSystem(session, titleOf(reached.path))
+    for await (const event of run(
+      { model: request.model, system, messages: [...request.history, { role: 'user', content: question }], session, signal: controller.signal },
+      local,
+    ))
+      emit(event.type === 'text' ? { thread: request.thread, type: 'text', text: event.text } : { thread: request.thread, type: 'steps', steps: event.steps })
+    emit({ thread: request.thread, type: controller.signal.aborted ? 'cancelled' : 'done', sources: [...session.seen] })
+  } catch (err) {
+    if (controller.signal.aborted) emit({ thread: request.thread, type: 'cancelled', sources: [...session.seen] })
+    else
+      emit({
+        thread: request.thread,
+        type: 'error',
+        problem: err instanceof ProviderError ? err.problem : { kind: 'failed', message: err instanceof Error ? err.message : String(err) },
+      })
+  } finally {
+    closeSession(session.id)
+    if (running.get(request.thread) === controller) running.delete(request.thread)
+  }
+}
+
+/** Quick ask on a canvas: its selection (or all of it) goes with each question; only the notes on it can be read. */
+async function askAboutCanvas(
+  request: QuickAskRequest,
+  local: BotModelProvider,
+  emit: (event: QuickAskEvent) => void,
+  controller: AbortController,
+): Promise<void> {
+  const scope = buildScope('quick-ask')
+  const context = await canvasContext(scope, request.note, request.selection ?? [], CONTEXT_TOKENS).catch(() => null)
+  if (context === null) {
+    emit({
+      thread: request.thread,
+      type: 'error',
+      problem: { kind: 'excluded', message: `“${canvasTitle(request.note)}” is in a folder AI may not see (Settings → AI → Excluded), or could not be read.` },
+    })
+    running.delete(request.thread)
+    return
+  }
+  const session = openSession({
+    client: `quick-ask · ${providerInfo(providerOf(request.model)).name}`,
+    tools: new Set(QUICK_CANVAS_TOOLS),
+    notes: context.notes,
+    writable: new Set(),
+  })
+  try {
+    const question = `${context.text}\n\n---\n\n${request.question}`
+    const system = await quickAskCanvasSystem(session, canvasTitle(request.note))
     for await (const event of run(
       { model: request.model, system, messages: [...request.history, { role: 'user', content: question }], session, signal: controller.signal },
       local,

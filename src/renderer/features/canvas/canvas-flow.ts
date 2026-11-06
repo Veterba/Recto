@@ -1,5 +1,5 @@
 import type { Edge, Node } from '@xyflow/react'
-import { isKnownNodeType, type CanvasDoc, type CanvasEdge, type CanvasNode, type CanvasSide } from '@shared/canvas'
+import { childrenOf, isKnownNodeType, type CanvasDoc, type CanvasEdge, type CanvasNode, type CanvasSide } from '@shared/canvas'
 import { isPointNode } from './arrow-geometry'
 
 /**
@@ -97,14 +97,5 @@ export function toFlowEdges(doc: CanvasDoc, selected: ReadonlySet<string>, colla
   return out
 }
 
-/** The nodes a group holds: the ones wholly inside its frame, as Obsidian decides it - by where they are, not by a list. */
-export function childrenOf(doc: CanvasDoc, group: CanvasNode): CanvasNode[] {
-  return doc.nodes.filter(
-    (n) =>
-      n.id !== group.id &&
-      n.x >= group.x &&
-      n.y >= group.y &&
-      n.x + n.width <= group.x + group.width &&
-      n.y + n.height <= group.y + group.height,
-  )
-}
+/** The nodes a group holds (shared/canvas.ts), here where the canvas view has always found it. */
+export { childrenOf } from '@shared/canvas'

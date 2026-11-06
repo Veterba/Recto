@@ -64,6 +64,16 @@ export const VAULT_TOOLS: readonly ToolDef[] = [
     z.object({ note, max_chars: z.number().int().min(500).max(40_000).default(12_000), offset: z.number().int().min(0).default(0) }),
   ),
   tool(
+    'read_file',
+    'Read a file',
+    'Any file in the vault that is not a note: a PDF (its text, by pages), a text or code file, a canvas (its cards, notes, files, groups and arrows), or a picture (its name and size). Give its path, or its name with its extension. Long files come in parts: pass next_offset as offset, or the next pages.',
+    z.object({
+      file: z.string().min(1).describe('A path, or a name with its extension (report.pdf).'),
+      pages: z.string().optional().describe('A PDF’s pages: "3" or "2-5". All, as far as fits, when left out.'),
+      offset: z.number().int().min(0).default(0),
+    }),
+  ),
+  tool(
     'get_note_context',
     'Note with context',
     'A note’s opening and short summaries of the notes it links to and that link to it, within a token budget.',

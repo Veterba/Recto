@@ -178,6 +178,18 @@ export const isPresetColor = (color: string): color is PresetColor => (PRESET_CO
 /** A node Recto draws: text, file, link or group. Anything else is kept and shown as unknown. */
 export const isKnownNodeType = (type: string): type is CanvasNodeType => type === 'text' || type === 'file' || type === 'link' || type === 'group'
 
+/** The nodes a group holds: the ones wholly inside its frame, as Obsidian decides it - by where they are, not by a list. */
+export function childrenOf(doc: CanvasDoc, group: CanvasNode): CanvasNode[] {
+  return doc.nodes.filter(
+    (n) =>
+      n.id !== group.id &&
+      n.x >= group.x &&
+      n.y >= group.y &&
+      n.x + n.width <= group.x + group.width &&
+      n.y + n.height <= group.y + group.height,
+  )
+}
+
 /** The notes (and other files) a canvas puts on it, with the node each is in. */
 export function canvasFiles(doc: CanvasDoc): { node: string; file: string; subpath: string | null }[] {
   return doc.nodes

@@ -554,7 +554,8 @@ export type IpcApi = Exhaustive<
     /** A provider's own page (install, manage usage): only the links providers give. */
     [IPC.providersOpenUrl]: (url: string) => { ok: boolean }
     /** A Quick ask question about the open note; the answer arrives on `quick-ask:event`. */
-    [IPC.quickAskSend]: (request: { thread: string; note: string; model: string; history: AiMessage[]; question: string }) => { ok: boolean }
+    /** `note`: the open note or canvas; `selection`: a canvas's selected node ids. */
+    [IPC.quickAskSend]: (request: { thread: string; note: string; model: string; history: AiMessage[]; question: string; selection?: string[] }) => { ok: boolean }
     [IPC.quickAskCancel]: (thread: string) => { ok: boolean }
     /** A Quick ask thread kept as a normal chat with Recto: its topic file. */
     [IPC.botsSaveThread]: (request: { botId: string; messages: BotMessage[] }) => { ok: true; topic: string } | { ok: false; error: string }

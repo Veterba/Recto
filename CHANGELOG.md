@@ -4,6 +4,20 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.58.0 — 2026-11-06
+### Added
+- The AI reads every file in the vault it may see, not only notes: a new read_file tool for Quick ask, the chats (cloud and local) and AI tools (MCP) reads a PDF's text page by page, text and code files in parts, canvases (cards, notes, files, groups, arrows) and a picture's name and pixel size. A file in a folder AI may not see is "no file"; a name several files share is asked about; what it cannot read yet (.xlsx, .docx) is said.
+- Quick ask works on a canvas: what is selected there - a group with everything in it - or the whole canvas goes with the question, with the start of each note on it; a note in a folder AI may not see is there only as a place, never its name or text. Files on it are read with read_file. It reads; it does not change the canvas yet.
+
+### Changed
+- The floating bot shows on boards too, on a frosted disc that blurs the cards behind it.
+
+### Fixed
+- Every stroke is a drawing of its own, however soon it follows the last one; double-click a drawing to draw more on it. Strokes no longer merge into a drawing they are drawn over.
+- The eraser finds a stroke wherever it crosses it - line against line - and is the same size on screen at any zoom; zoomed out it used to slip between a stroke's points.
+- A card name being typed with a space at the end no longer warns that it won't work on Windows: names are saved trimmed.
+- The choice for a card name several notes have is a list of full-width rows, no longer squeezed into narrow columns.
+
 ## v0.57.0 — 2026-11-05
 ### Added
 - Notes in different folders may share a name, as in Obsidian; a folder holds one file of a name (in any case).

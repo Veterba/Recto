@@ -270,13 +270,16 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
     await page.waitForSelector('[role=treeitem]')
   })
 
-  it('on a board the floating bot is not shown; back in Data it is where it was', async () => {
+  it('on a board the floating bot sits on a frosted disc that blurs the cards behind it; back in Data it is plain, where it was', async () => {
     const before = (await page.locator('.floating-bot').boundingBox())!
+    expect(await page.locator('.floating-bot.is-frosted').count()).toBe(0)
     await page.getByRole('tab', { name: 'Tasks' }).click()
     await page.waitForSelector('.board')
-    expect(await page.locator('.floating-bot').count()).toBe(0)
+    await page.waitForSelector('.floating-bot.is-frosted')
+    const disc = await page.locator('.floating-bot.is-frosted').evaluate((el) => getComputedStyle(el, '::before').backdropFilter)
+    expect(disc).toContain('blur')
     await page.keyboard.press('Meta+1')
-    await page.waitForSelector('.floating-bot')
+    await page.waitForSelector('.floating-bot:not(.is-frosted)')
     await page.waitForTimeout(300)
     expect(await page.locator('.floating-bot').boundingBox()).toEqual(before)
   })
@@ -436,6 +439,53 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
     await page.locator('.quick-ask').getByRole('button', { name: /Close Quick ask/ }).click()
   })
 
+
+  it('Quick ask on a canvas: the canvas - or what is selected - goes with the question, never a note AI may not see', async () => {
+    fs.mkdirSync(path.join(vault, 'Recto/Canvas'), { recursive: true })
+    const node = (id: string, x: number, rest: Record<string, unknown>) => ({ id, x, y: 0, width: 200, height: 120, ...rest })
+    fs.writeFileSync(
+      path.join(vault, 'Recto/Canvas/Ask here.canvas'),
+      JSON.stringify({
+        nodes: [
+          node('a1b2c3d4e5f60001', 0, { type: 'text', text: 'Water daily in summer' }),
+          node('a1b2c3d4e5f60002', 400, { type: 'file', file: 'Garden/Basil.md' }),
+          node('a1b2c3d4e5f60003', 800, { type: 'file', file: 'Kitchen/Sourdough.md' }),
+        ],
+        edges: [{ id: 'a1b2c3d4e5f60009', fromNode: 'a1b2c3d4e5f60001', toNode: 'a1b2c3d4e5f60002', label: 'for' }],
+      }),
+    )
+    await page.evaluate(() => localStorage.setItem('recto.quickAskModel', 'codex'))
+    await page.getByRole('tab', { name: 'Canvas' }).click()
+    await page.locator('.boards__row', { hasText: 'Ask here' }).click()
+    await page.waitForSelector('.react-flow__node')
+    await page.locator('.floating-bot').click()
+    await page.waitForSelector('.quick-ask .quick-ask__input:not([disabled])')
+    expect(await page.locator('.quick-ask__input').getAttribute('placeholder')).toBe('Ask anything about this canvas…')
+    await ask('What is on it?')
+    await page.waitForFunction(() => document.querySelectorAll('.quick-ask__a .bot-md').length >= 1, undefined, { timeout: 20_000 })
+    let sent = JSON.parse(fs.readFileSync(log, 'utf8')) as { prompt: string }
+    expect(sent.prompt).toContain('The whole canvas “Ask here”')
+    expect(sent.prompt).toContain('- card “Water daily in summer” → note “Basil” (“for”)')
+    expect(sent.prompt).toContain('A note AI may not see')
+    expect(sent.prompt).not.toContain(MARKER)
+    // Not even named on the canvas (the AI guide note may link it by name: that is the guide's text, not the canvas's).
+    expect(sent.prompt).not.toContain('note “Sourdough”')
+    expect(await page.locator('.quick-ask__about').allTextContents()).toEqual(['About: Ask here'])
+    await page.locator('.quick-ask').getByRole('button', { name: /Close Quick ask/ }).click()
+
+    // One card selected: only it goes.
+    await page.locator('.react-flow__node[data-id="a1b2c3d4e5f60001"]').click()
+    await page.locator('.floating-bot').click()
+    await page.waitForSelector('.quick-ask .quick-ask__input:not([disabled])')
+    expect(await page.locator('.quick-ask__note').textContent()).toBe('1 selected on Ask here')
+    await ask('And this?')
+    await page.waitForFunction(() => document.querySelectorAll('.quick-ask__a .bot-md').length >= 1, undefined, { timeout: 20_000 })
+    sent = JSON.parse(fs.readFileSync(log, 'utf8')) as { prompt: string }
+    expect(sent.prompt).toContain('1 selected on the canvas “Ask here”')
+    expect(sent.prompt).not.toContain('note “Basil”')
+    await page.locator('.quick-ask').getByRole('button', { name: /Close Quick ask/ }).click()
+    await page.keyboard.press('Meta+1')
+  })
   it('a cloud provider never receives text from an excluded folder: the chat, after a switch from this Mac', async () => {
     // An earlier answer on this Mac that read Sourdough, then the chat switches to Codex.
     const folder = path.join(vault, 'Recto/Chats/recto')

@@ -6,6 +6,7 @@ import { _electron, type ElectronApplication, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DEFAULT_TEMPLATE_SETTINGS } from '../../src/shared/templates'
 import { periodNotePath } from '../../src/shared/periodic'
+import { makePdf } from '../fixtures/make-pdf'
 import { quitApp, removeDir } from './helpers/app'
 
 /**
@@ -129,7 +130,7 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
 
   it('lists every tool, read tools marked read-only and write tools not', async () => {
     const { tools } = (await client.request('tools/list')).result as { tools: { name: string; annotations?: { readOnlyHint?: boolean } }[] }
-    expect(tools).toHaveLength(19)
+    expect(tools).toHaveLength(20)
     expect(tools.find((t) => t.name === 'read_note')?.annotations?.readOnlyHint).toBe(true)
     expect(tools.find((t) => t.name === 'propose_edit')?.annotations?.readOnlyHint).toBe(false)
   })
@@ -327,5 +328,15 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
       /\[\[Soil\]\] could mean 2 notes .* Write the one you mean: \[\[Garden\/Soil\]\] or \[\[Notes\/Soil\]\]/i,
     )
     fs.rmSync(path.join(vault, 'Notes'), { recursive: true, force: true })
+  }, 30_000)
+
+  it('read_file reads any file the AI may see - a PDF by pages - and never one in an excluded folder', async () => {
+    fs.mkdirSync(path.join(vault, 'attachments'), { recursive: true })
+    fs.writeFileSync(path.join(vault, 'attachments/Treatise.pdf'), makePdf(['Of knowledge and probability', 'Of the passions']))
+    const pdf = await client.data<{ kind: string; text: string }>('read_file', { file: 'Treatise.pdf' })
+    expect(pdf.kind).toBe('pdf')
+    expect(pdf.text).toContain('--- page 2 ---\nOf the passions')
+    fs.writeFileSync(path.join(vault, 'Kitchen/Recipes.pdf'), makePdf(['secret recipe']))
+    expect(allText(await client.call('read_file', { file: 'Kitchen/Recipes.pdf' }))).toMatch(/No file/)
   }, 30_000)
 })

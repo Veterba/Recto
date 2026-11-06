@@ -1043,6 +1043,16 @@ button.board-cal__bar:focus-visible {
   display: flex;
   gap: 6px;
 }
+/* A choice among several notes of the name: one full-width row each, so a long name never squeezes them into columns. */
+.new-card__choices--list {
+  flex-direction: column;
+  align-items: stretch;
+}
+.new-card__choices--list .btn {
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+}
 .new-card__link {
   all: unset;
   text-decoration: underline;

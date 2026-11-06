@@ -13,6 +13,7 @@ import { openSuggestedEdits } from '../../suggested-edits'
 import { openChats } from '../chats-store'
 import { BOT_SIZE, pointOf, useBotArea, type BotArea } from './FloatingBot'
 import { useBotMotion } from '../bot-motion'
+import { canvasSelection, useCanvasSelection } from '../../../app/canvas-selection'
 
 /**
  * Quick ask: short questions about the note open right now, in a bubble
@@ -47,7 +48,8 @@ const lastModel = (): string | null => {
   }
 }
 
-const titleOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
+const titleOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.(md|canvas)$/i, '')
+const isCanvas = (path: string | null): boolean => path !== null && path.toLowerCase().endsWith('.canvas')
 
 /** Room kept between the bubble, the bot and the area's edges. */
 const GAP = 10
@@ -139,6 +141,7 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
   }, [turns])
 
   const ready = status?.state === 'ready' || status?.state === 'loading'
+  const selectedHere = useCanvasSelection(isCanvas(note) ? note : null)
 
   const send = useCallback(() => {
     const question = draft.trim()
@@ -149,7 +152,9 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
     setTurns((prev) => [...prev, { role: 'user', content: question, note, at }, { role: 'assistant', content: '', note, at, model, live: true }])
     setDraft('')
     setSaveError(null)
-    void api.invoke(IPC.quickAskSend, { thread, note, model, history, question })
+    // On a canvas, what is selected there goes with the question (main reads the canvas).
+    const selection = isCanvas(note) ? [...canvasSelection(note)] : []
+    void api.invoke(IPC.quickAskSend, { thread, note, model, history, question, ...(selection.length === 0 ? {} : { selection }) })
   }, [draft, note, model, live, ready, turns, thread])
 
   const saveAsChat = useCallback(async () => {
@@ -277,7 +282,17 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
         ref={input}
         className="quick-ask__input"
         rows={1}
-        placeholder={note === null ? 'Open a note to ask about it' : followUp ? 'Anything else you’d like to know?' : 'Ask anything about this note…'}
+        placeholder={
+          note === null
+            ? 'Open a note to ask about it'
+            : followUp
+              ? 'Anything else you’d like to know?'
+              : isCanvas(note)
+                ? selectedHere.length > 0
+                  ? 'Ask anything about what is selected…'
+                  : 'Ask anything about this canvas…'
+                : 'Ask anything about this note…'
+        }
         disabled={note === null}
         value={draft}
         onChange={(ev) => setDraft(ev.target.value)}
@@ -294,10 +309,13 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
 
       <div className="quick-ask__bar">
         {note !== null && (
-          <Tip label="What goes with each question" hint="This note, and the notes it links to or that link to it">
+          <Tip
+            label="What goes with each question"
+            hint={isCanvas(note) ? 'What is selected on this canvas - or all of it - and the notes on it' : 'This note, and the notes it links to or that link to it'}
+          >
             <span className="quick-ask__note">
-              <Icon name="file-text" size={13} />
-              <span>{titleOf(note)}</span>
+              <Icon name={isCanvas(note) ? 'scan' : 'file-text'} size={13} />
+              <span>{isCanvas(note) && selectedHere.length > 0 ? `${selectedHere.length} selected on ${titleOf(note)}` : titleOf(note)}</span>
             </span>
           </Tip>
         )}

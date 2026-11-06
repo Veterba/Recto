@@ -24,6 +24,8 @@ type Props = {
   state: BotState
   /** Quick ask is open: the face shows it is listening. */
   active: boolean
+  /** Over a page with no free corner (a board): on a frosted disc that blurs what is behind it. */
+  frosted?: boolean
 }
 
 /** The bars that bound where the bot may stand. */
@@ -137,7 +139,7 @@ export function snap(point: { x: number; y: number }, area: BotArea): BotPlace {
   return { edge, at: edge === 'bottom' ? along(point.x, area.width) : along(point.y - area.top, area.height + area.below) }
 }
 
-export function FloatingBot({ place, onPlace, onClick, state, active }: Props): React.ReactElement {
+export function FloatingBot({ place, onPlace, onClick, state, active, frosted = false }: Props): React.ReactElement {
   const ref = useRef<HTMLDivElement | null>(null)
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null)
   /** Just let go: it glides to the edge. Any other move - a bar opening, a resize - is at once. */
@@ -197,7 +199,7 @@ export function FloatingBot({ place, onPlace, onClick, state, active }: Props): 
   return (
     <div
       ref={ref}
-      className={`floating-bot${settled ? ' is-settled' : ''}${drag !== null ? ' is-dragging' : ''}${dropped ? ' is-dropped' : ''}${active ? ' is-active' : ''}`}
+      className={`floating-bot${settled ? ' is-settled' : ''}${drag !== null ? ' is-dragging' : ''}${dropped ? ' is-dropped' : ''}${active ? ' is-active' : ''}${frosted ? ' is-frosted' : ''}`}
       style={{ left: at.x, top: at.y, width: BOT_SIZE, height: BOT_SIZE, visibility: measured ? 'visible' : 'hidden' }}
       role="button"
       aria-label="Quick ask"

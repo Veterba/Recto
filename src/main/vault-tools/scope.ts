@@ -40,6 +40,12 @@ export type Scope = {
   need: (target: string) => string
   /** What goes inside `[[ ]]` for a link to `p` written in `source`, as Obsidian writes it - right even before `p` exists. */
   linkTo: (p: string, source: string) => string
+  /** Not for any tool, as a file of any kind: excluded by the person, Recto's chats, or outside what the call may see. */
+  fileHidden: (p: string) => boolean
+  /** The visible file of any kind a link or a name means, read from `source` ('' for none) - or null. */
+  resolveFile: (target: string, source?: string) => string | null
+  /** The file a tool is given, as a path or a name with its extension: its path, or a ToolError - none, or a name several files have. */
+  needFile: (target: string) => string
 }
 
 export const isNote = (p: string): boolean => p.toLowerCase().endsWith('.md')
@@ -63,6 +69,12 @@ export function buildScope(client: string, limit: ScopeLimit = { notes: null }):
   const resolve = (target: string, source = ''): string | null => {
     const found = resolveLinkpath(clean(target), source, files)
     return found === null || hidden(found) ? null : found
+  }
+  const fileHidden = (p: string): boolean =>
+    isChatPath(p) || isExcludedPath(p, settings.excluded) || (limit.notes !== null && !limit.notes.has(p))
+  const resolveFile = (target: string, source = ''): string | null => {
+    const found = resolveLinkpath(clean(target), source, files)
+    return found === null || fileHidden(found) ? null : found
   }
 
   return {
@@ -89,6 +101,19 @@ export function buildScope(client: string, limit: ScopeLimit = { notes: null }):
       return found
     },
     linkTo: (p, source) => formatLink(p, source, files, format, { markdown: false }).slice(2, -2),
+    fileHidden,
+    resolveFile,
+    needFile: (target) => {
+      const name = clean(target)
+      if (!name.includes('/')) {
+        const same = [...files.byPath.values()].map((f) => f.path).filter((p) => !fileHidden(p) && path.posix.basename(p).toLowerCase() === name.toLowerCase())
+        if (same.length > 1) throw new ToolError(`${same.length} files are called “${name}”: ${same.join(', ')}. Give the one you mean by its path.`)
+      }
+      const found = resolveFile(target)
+      // An excluded file is "no file": saying it exists would already say something about it.
+      if (found === null) throw new ToolError(`No file “${target}” in this vault. Give its path, or its name with its extension (report.pdf).`)
+      return found
+    },
   }
 }
 

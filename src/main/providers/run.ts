@@ -61,6 +61,7 @@ const STEP: Record<string, { action: string; kind?: StepKind; arg?: string }> = 
   get_vault_profile: { action: 'Looking at how the vault is organised', kind: 'map' },
   search_notes: { action: 'Searching notes', kind: 'search', arg: 'query' },
   read_note: { action: 'Opened', kind: 'open', arg: 'note' },
+  read_file: { action: 'Opened', kind: 'open', arg: 'file' },
   get_note_context: { action: 'Read around', kind: 'read', arg: 'note' },
   list_folder: { action: 'Listed', kind: 'map', arg: 'folder' },
   recent_notes: { action: 'Recent notes', kind: 'map' },

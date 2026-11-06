@@ -598,9 +598,11 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     if (appearance.floatingBot) setQuickAskOpen(false)
     update({ floatingBot: !appearance.floatingBot })
   }, [appearance.floatingBot, update])
-  // On a board the lanes and the card panel fill the page, with no corner to spare: the bot is not shown there (⌘J still asks).
-  const botShown = appearance.floatingBot && activeSection !== 'tasks'
-  const activeNote = activePath !== null && activePath.toLowerCase().endsWith('.md') ? activePath : null
+  // On a board the lanes and the card panel fill the page, with no corner to spare: there the bot sits on a frosted disc.
+  const botShown = appearance.floatingBot
+  const botFrosted = activeSection === 'tasks'
+  // What Quick ask is about: the open note, or the open canvas (its selection, or all of it).
+  const activeNote = activePath !== null && /\.(md|canvas)$/i.test(activePath) ? activePath : null
 
   useEffect(
     () =>
@@ -834,6 +836,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
               onClick={() => setQuickAskOpen((open) => !open)}
               state={quickAskOpen ? 'listening' : 'idle'}
               active={quickAskOpen}
+              frosted={botFrosted}
             />
           )}
         </main>

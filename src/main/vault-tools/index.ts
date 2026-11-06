@@ -1,4 +1,5 @@
 import { toolNamed, type ResultBlock, type ToolOutcome } from '../../shared/vault-tools'
+import { readAnyFile } from './files'
 import type { ActivityEntry } from '../../shared/ai-access'
 import { logCall, summariseArgs } from './activity'
 import { applyNow, proposal, queue } from './proposals'
@@ -25,6 +26,7 @@ const READERS: Record<string, Run> = {
   get_vault_profile: async (s) => [{ kind: 'data', data: await vaultProfile(s) }],
   search_notes: read.searchNotes,
   read_note: read.readNoteTool,
+  read_file: readAnyFile,
   get_note_context: read.noteContext,
   list_folder: read.listFolder,
   recent_notes: read.recentNotes,

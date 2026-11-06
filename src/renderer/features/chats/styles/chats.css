@@ -184,6 +184,28 @@
 .floating-bot:focus-visible {
   outline: 2px solid var(--accent);
 }
+/* Over a board's cards: a frosted disc under the bot blurs what is behind it, so it reads as floating
+   above the page, not pasted on a card. The shadow moves to the drawing - a filter on the button would
+   keep the disc from seeing the page behind. */
+.floating-bot.is-frosted {
+  filter: none;
+}
+.floating-bot.is-frosted > * {
+  filter: drop-shadow(0 4px 8px rgb(0 0 0 / 0.16));
+}
+.floating-bot.is-frosted::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--glass-surface-bg);
+  backdrop-filter: var(--glass-surface-blur);
+  box-shadow:
+    inset 0 1px 0 var(--glass-surface-highlight),
+    var(--glass-surface-border),
+    var(--glass-surface-shadow);
+}
 
 /* ⌘⇧H: every floating window and the bot out of sight, still open. */
 .shell__main.is-floats-hidden .float,

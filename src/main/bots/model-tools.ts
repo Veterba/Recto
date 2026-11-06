@@ -12,6 +12,9 @@ import { closestTitles, findNote, resolveScope, type VaultNote } from './resolve
 import { cardLine, noteOutline, notesInScope, structurePatterns, vaultMap, wholeNotes, type ScopeNote } from './scope-tools'
 import { groupedTasksTool, notesTool, type Embed, type ToolOptions } from './tools'
 import { searchVectors } from './vectors'
+import { isExcludedPath } from '../../shared/ai-access'
+import { readAnyFile } from '../vault-tools/files'
+import { buildScope, ToolError } from '../vault-tools/scope'
 
 /**
  * Tools the model may call itself (3.6), in Ollama's native format: the same
@@ -34,6 +37,12 @@ export const TOOL_SPECS: ToolSpec[] = [
     ['query'],
   ),
   fn('read_note', 'Read one note by its title.', { title: s('The note title') }, ['title']),
+  fn(
+    'read_file',
+    'Read a file that is not a note: a PDF (its text), a text or code file, a canvas, or a picture (its name and size).',
+    { file: s('Its path, or its name with its extension (report.pdf)'), pages: s('A PDF’s pages: "3" or "2-5"; empty for all') },
+    ['file'],
+  ),
   fn(
     'tasks_in_period',
     'Open tasks written in or carried through a period, grouped.',
@@ -96,6 +105,20 @@ export async function runTool(name: string, args: Record<string, unknown>, c: To
             ? 'Nothing found.'
             : hits.map((h) => `### ${path.basename(h.path, '.md')}${h.heading === '' ? '' : ` › ${h.heading}`}\n${h.text}`).join('\n\n'),
         notes: [...new Set(hits.map((h) => path.basename(h.path, '.md')))],
+      }
+    }
+    case 'read_file': {
+      // The same reader as Quick ask's and the AI tools', so the same rules: AI-excluded folders, Recto's chats - and this bot's own exclusions.
+      try {
+        const scope = buildScope('recto-chat')
+        const file = scope.needFile(str(args['file']))
+        if (isExcludedPath(file, c.bot.exclude ?? [])) throw new ToolError(`No file “${str(args['file'])}” in this vault.`)
+        const pages = str(args['pages'])
+        const blocks = await readAnyFile(scope, { file, ...(pages === '' ? {} : { pages }) })
+        const text = blocks.map((b) => (b.kind === 'data' ? JSON.stringify(b.data, null, 1) : b.text)).join('\n\n')
+        return { text: text.length > c.budget ? `${text.slice(0, c.budget)}…` : text, notes: [path.basename(file)] }
+      } catch (err) {
+        return { text: err instanceof ToolError ? err.message : 'That file could not be read.', notes: [] }
       }
     }
     case 'read_note':

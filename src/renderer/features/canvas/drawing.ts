@@ -145,7 +145,37 @@ export function tidy(points: readonly Pt[]): Pt[] {
   })
 }
 
-/** The strokes the eraser, at `at` with this reach, does not touch. */
-export function erase(strokes: readonly Stroke[], at: { x: number; y: number }, reach: number): Stroke[] {
-  return strokes.filter((s) => !s.points.some(([x, y]) => Math.hypot(x - at.x, y - at.y) <= reach + s.size / 2))
+/** The distance between two segments, ab and cd. */
+function segmentDistance(a: Pt, b: Pt, c: Pt, d: Pt): number {
+  const toSegment = (p: Pt, s: Pt, e: Pt): number => {
+    const dx = e[0] - s[0]
+    const dy = e[1] - s[1]
+    const len = dx * dx + dy * dy
+    const t = len === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - s[0]) * dx + (p[1] - s[1]) * dy) / len))
+    return Math.hypot(p[0] - (s[0] + t * dx), p[1] - (s[1] + t * dy))
+  }
+  // Crossing segments touch.
+  const cross = (p: Pt, q: Pt, r: Pt): number => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+  const d1 = cross(c, d, a)
+  const d2 = cross(c, d, b)
+  const d3 = cross(a, b, c)
+  const d4 = cross(a, b, d)
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return 0
+  return Math.min(toSegment(a, c, d), toSegment(b, c, d), toSegment(c, a, b), toSegment(d, a, b))
+}
+
+/** The segments of a point list; a single point is a segment of no length. */
+const segmentsOf = (points: readonly Pt[]): [Pt, Pt][] =>
+  points.length === 1 ? [[points[0]!, points[0]!]] : points.slice(1).map((p, i) => [points[i]!, p])
+
+/**
+ * The strokes the eraser, dragged along `trail` with this reach, does not
+ * touch: tested line against line, so a sweep between two of a stroke's
+ * points still finds it, however far apart they are.
+ */
+export function erase(strokes: readonly Stroke[], trail: readonly Pt[], reach: number): Stroke[] {
+  const swept = segmentsOf(trail)
+  return strokes.filter(
+    (s) => !segmentsOf(s.points).some(([a, b]) => swept.some(([c, d]) => segmentDistance(a, b, c, d) <= reach + s.size / 2)),
+  )
 }

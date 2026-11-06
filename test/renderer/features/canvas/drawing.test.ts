@@ -49,7 +49,11 @@ describe('drawing', () => {
   it('the eraser takes away the strokes it touches, and only those', () => {
     const a = stroke([[0, 0, 0.5], [10, 0, 0.5]])
     const b = stroke([[100, 100, 0.5], [110, 100, 0.5]])
-    expect(erase([a, b], { x: 5, y: 1 }, 4)).toEqual([b])
+    expect(erase([a, b], [[5, 1, 0.5]], 4)).toEqual([b])
+    // A sweep between two far-apart points of a stroke still finds it: line against line, not point against point.
+    const long = stroke([[0, 50, 0.5], [200, 50, 0.5]])
+    expect(erase([long, b], [[100, 30, 0.5], [100, 70, 0.5]], 2)).toEqual([b])
+    expect(erase([long], [[100, 10, 0.5], [100, 30, 0.5]], 2)).toEqual([long])
     expect(strokePath(a)).toMatch(/^M.*Z$/)
   })
 })

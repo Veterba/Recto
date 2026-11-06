@@ -185,7 +185,7 @@ export function NewCardPopover({ column, columns, anchor, onAdd, onAddExisting, 
               `${taken.elsewhere.length} notes are called “${stemOf(taken.elsewhere[0]!)}”.`
             )}
           </p>
-          <div className="new-card__choices">
+          <div className="new-card__choices new-card__choices--list">
             <button type="button" className="btn btn--sm btn--primary" onClick={() => void submit(false, true)}>
               Create a new “{title.trim()}” on this board
             </button>
