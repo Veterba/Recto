@@ -7,7 +7,6 @@ import { noteIndexChanged } from '../../../app/note-bus'
 import { getActiveEditor } from '../../editor'
 import {
   dayKey,
-  elsewhereNotice,
   ensurePeriodicNote,
   ensureTodayNote,
   NO_PERIOD_NOTICE,
@@ -16,7 +15,6 @@ import {
   type EnsureResult,
   type useTemplateSettings,
 } from '../periodic-notes'
-import { periodNotePath } from '@shared/periodic'
 
 type Templates = ReturnType<typeof useTemplateSettings>
 
@@ -25,7 +23,6 @@ export function useTemplateActions({
   activePath,
   closePicker,
   byPath,
-  notes,
   templates,
   refresh,
   openFile,
@@ -34,8 +31,6 @@ export function useTemplateActions({
   activePath: string | null
   closePicker: () => void
   byPath: ReadonlyMap<string, FileNode>
-  /** Every note in the vault, for the unique-name check. */
-  notes: readonly string[]
   templates: Templates
   refresh: () => Promise<void>
   /** Read at call time, so it is always the current opener. */
@@ -127,34 +122,27 @@ export function useTemplateActions({
     [templates, byPath, refresh],
   )
 
-  /** Open a note `ensurePeriodicNote` answered with, or the note of that name elsewhere. */
+  /** Open the note `ensurePeriodicNote` answered with. */
   const openEnsured = useCallback(
-    async (period: Period, result: EnsureResult) => {
-      if (!result.ok) {
-        if ('elsewhere' in result) {
-          showPeriodicNotice(elsewhereNotice(periodNotePath(period, new Date(), templates.settings.periodic).key, result.elsewhere))
-          openFile.current(result.elsewhere)
-        }
-        return
-      }
+    async (result: EnsureResult) => {
+      if (!result.ok) return
       if (result.created) {
         await refresh()
         noteIndexChanged()
       }
       openFile.current(result.path)
     },
-    [templates.settings, refresh],
+    [refresh],
   )
 
   /**
    * Open the current day's, week's, month's or year's note, making it if
    * needed - also when that period is switched off, since asking for it is
-   * asking for it. A note of that name elsewhere is opened instead, with a
-   * word about why it is not where the settings would put it.
+   * asking for it.
    */
   const openPeriodicNote = useCallback(
-    async (period: Period) => openEnsured(period, await ensurePeriodicNote(period, templates.settings, notes)),
-    [templates.settings, notes, openEnsured],
+    async (period: Period) => openEnsured(await ensurePeriodicNote(period, templates.settings)),
+    [templates.settings, openEnsured],
   )
 
   /**
@@ -163,13 +151,13 @@ export function useTemplateActions({
    * nothing is made and the notice offers the settings that would change that.
    */
   const openTodayNote = useCallback(async () => {
-    const today = await ensureTodayNote(templates.settings, notes)
+    const today = await ensureTodayNote(templates.settings)
     if (today === null) {
       showPeriodicNotice(NO_PERIOD_NOTICE, { label: 'Open settings', run: openPeriodicSettings })
       return
     }
-    await openEnsured(today.period, today.result)
-  }, [templates.settings, notes, openEnsured, openPeriodicSettings])
+    await openEnsured(today.result)
+  }, [templates.settings, openEnsured, openPeriodicSettings])
 
   return { insertTemplate, updateTemplates, openPeriodicNote, openTodayNote }
 }
@@ -194,16 +182,9 @@ export function useTemplateActions({
  * launch would be the app deciding what you do first - "Open today" is one
  * command away for when you want it.
  */
-export function usePeriodicNotesAutoCreate(
-  templates: Templates,
-  notes: readonly string[],
-  refresh: () => Promise<void>,
-  paused: boolean,
-): void {
+export function usePeriodicNotesAutoCreate(templates: Templates, refresh: () => Promise<void>, paused: boolean): void {
   const refreshRef = useRef(refresh)
   refreshRef.current = refresh
-  const notesRef = useRef(notes)
-  notesRef.current = notes
   const on = templates.loaded && !paused && PERIODS.some((p) => templates.settings.periodic[p].enabled)
   useEffect(() => {
     if (!on) return
@@ -217,14 +198,10 @@ export function usePeriodicNotesAutoCreate(
         const results: [Period, EnsureResult][] = []
         for (const period of PERIODS) {
           if (!templates.settings.periodic[period].enabled) continue
-          results.push([period, await ensurePeriodicNote(period, templates.settings, notesRef.current)])
+          results.push([period, await ensurePeriodicNote(period, templates.settings)])
         }
-        // A name taken elsewhere is said once and not retried until tomorrow;
-        // an error is tried again at the next check.
-        for (const [period, result] of results)
-          if (!result.ok && 'elsewhere' in result)
-            showPeriodicNotice(elsewhereNotice(periodNotePath(period, new Date(), templates.settings.periodic).key, result.elsewhere))
-        if (results.every(([, r]) => r.ok || 'elsewhere' in r)) lastDay = today
+        // An error is tried again at the next check.
+        if (results.every(([, r]) => r.ok)) lastDay = today
         if (results.some(([, r]) => r.ok && r.created)) {
           await refreshRef.current()
           noteIndexChanged()

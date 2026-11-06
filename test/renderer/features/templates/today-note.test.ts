@@ -32,6 +32,8 @@ beforeEach(() => {
           files.set(path, '')
           return { ok: true, path }
         }
+        // A link as Obsidian writes it with no other note of the name: the name alone.
+        if (channel === IPC.linksFormat) return `[[${args[0]!.slice(args[0]!.lastIndexOf('/') + 1).replace(/\.md$/, '')}]]`
         throw new Error(`unexpected ${channel}`)
       },
       on: () => () => {},
@@ -60,13 +62,13 @@ const day = new Date(2026, 9, 16, 10, 0)
 
 describe("today's note", () => {
   it('with no period on, makes nothing', async () => {
-    expect(await ensureTodayNote(settings([]), [], day)).toBeNull()
+    expect(await ensureTodayNote(settings([]), day)).toBeNull()
     expect(files.size).toBe(0)
     expect(folders.size).toBe(0)
   })
 
   it('daily off, weekly on: makes this week and no daily folders', async () => {
-    const today = await ensureTodayNote(settings(['weekly']), [], day)
+    const today = await ensureTodayNote(settings(['weekly']), day)
     expect(today).toEqual({ period: 'weekly', result: { ok: true, path: 'Journal/2026/2026-W42.md', created: true } })
     expect([...files.keys()]).toEqual(['Journal/2026/2026-W42.md'])
     expect([...folders].sort()).toEqual(['Journal', 'Journal/2026'])
@@ -78,7 +80,7 @@ describe("today's note", () => {
       files.clear()
       folders.clear()
       const on = PERIODS.filter((_, i) => (mask & (1 << i)) !== 0)
-      const today = await ensureTodayNote(settings(on), [], day)
+      const today = await ensureTodayNote(settings(on), day)
       expect(today?.period).toBe(on[0])
       // One note, in folders its own path needs: never a week folder without daily notes.
       expect(files.size).toBe(1)
@@ -91,15 +93,15 @@ describe("today's note", () => {
 
   it('an existing note is opened, not remade', async () => {
     files.set('Journal/2026/2026-10.md', 'written in')
-    const today = await ensureTodayNote(settings(['monthly', 'yearly']), [], day)
+    const today = await ensureTodayNote(settings(['monthly', 'yearly']), day)
     expect(today).toEqual({ period: 'monthly', result: { ok: true, path: 'Journal/2026/2026-10.md', created: false } })
     expect(files.get('Journal/2026/2026-10.md')).toBe('written in')
     expect(folders.size).toBe(0)
   })
 
   it('in the 53rd ISO week of 2026, including its days in 2027', async () => {
-    expect((await ensureTodayNote(settings(['weekly']), [], new Date(2026, 11, 31)))?.result).toMatchObject({ path: 'Journal/2026/2026-W53.md' })
-    expect((await ensureTodayNote(settings(['weekly']), [], new Date(2027, 0, 3)))?.result).toMatchObject({
+    expect((await ensureTodayNote(settings(['weekly']), new Date(2026, 11, 31)))?.result).toMatchObject({ path: 'Journal/2026/2026-W53.md' })
+    expect((await ensureTodayNote(settings(['weekly']), new Date(2027, 0, 3)))?.result).toMatchObject({
       path: 'Journal/2026/2026-W53.md',
       created: false,
     })

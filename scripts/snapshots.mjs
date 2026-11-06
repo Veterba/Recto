@@ -53,7 +53,7 @@ const NOISE_PIXELS = 100
  * A real change moves a colour by far more than one level in 255.
  */
 const LEVELS = 1
-const SETTINGS_TABS = ['Appearance', 'Editor', 'Writing', 'Templates', 'Topics', 'Obsidian', 'AI', 'Shortcuts', 'Vault']
+const SETTINGS_TABS = ['Appearance', 'Editor', 'Writing', 'Templates', 'Topics', 'Obsidian', 'AI', 'Shortcuts', 'Vault', 'Files and links']
 
 const args = process.argv.slice(2)
 const flag = (name) => {

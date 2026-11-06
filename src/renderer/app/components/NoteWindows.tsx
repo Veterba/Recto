@@ -50,7 +50,7 @@ type Props = {
   /** The workspace area the windows float in. */
   area: React.RefObject<HTMLElement | null>
   onOpenInEditor: (path: string) => void
-  onOpenLink: (target: string, heading: string | null) => void
+  onOpenLink: (target: string, heading: string | null, source: string) => void
 }
 
 export function NoteWindows({ windows, setWindows, area, onOpenInEditor, onOpenLink }: Props): React.ReactElement {

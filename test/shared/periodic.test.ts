@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { folderLayout, nameTakenElsewhere, parentLink, pathTree, periodNotePath, todayPeriod } from '../../src/shared/periodic'
+import { folderLayout, parentLink, pathTree, periodicNoteText, periodNotePath, todayPeriod } from '../../src/shared/periodic'
 import {
   DEFAULT_TEMPLATE_SETTINGS,
   fillTemplate,
@@ -120,17 +120,24 @@ describe('ISO weeks', () => {
 
 describe('links up the chain', () => {
   it('to the nearest period that is on', () => {
-    expect(parentLink('daily', day, settings(['daily', 'weekly', 'monthly', 'yearly']))).toEqual({ key: 'week', value: '[[2026-W41]]' })
-    expect(parentLink('daily', day, settings(['daily', 'monthly']))).toEqual({ key: 'month', value: '[[2026-10]]' })
-    expect(parentLink('daily', day, settings(['daily', 'yearly']))).toEqual({ key: 'year', value: '[[2026]]' })
+    expect(parentLink('daily', day, settings(['daily', 'weekly', 'monthly', 'yearly']))).toMatchObject({ key: 'week', path: expect.stringMatching(/(^|\/)2026-W41\.md$/) })
+    expect(parentLink('daily', day, settings(['daily', 'monthly']))).toMatchObject({ key: 'month', path: expect.stringMatching(/(^|\/)2026-10\.md$/) })
+    expect(parentLink('daily', day, settings(['daily', 'yearly']))).toMatchObject({ key: 'year', path: expect.stringMatching(/(^|\/)2026\.md$/) })
     expect(parentLink('daily', day, settings(['daily']))).toBe(null)
-    expect(parentLink('monthly', day, settings(['monthly', 'yearly']))).toEqual({ key: 'year', value: '[[2026]]' })
+    expect(parentLink('monthly', day, settings(['monthly', 'yearly']))).toMatchObject({ key: 'year', path: expect.stringMatching(/(^|\/)2026\.md$/) })
     expect(parentLink('yearly', day, settings(['yearly', 'monthly']))).toBe(null)
   })
 
   it("a week's month and year are its Thursday's", () => {
-    expect(parentLink('weekly', new Date(2026, 8, 28), settings(['weekly', 'monthly']))).toEqual({ key: 'month', value: '[[2026-10]]' })
-    expect(parentLink('weekly', new Date(2025, 11, 29), settings(['weekly', 'yearly']))).toEqual({ key: 'year', value: '[[2026]]' })
+    expect(parentLink('weekly', new Date(2026, 8, 28), settings(['weekly', 'monthly']))).toMatchObject({ key: 'month', path: expect.stringMatching(/(^|\/)2026-10\.md$/) })
+    expect(parentLink('weekly', new Date(2025, 11, 29), settings(['weekly', 'yearly']))).toMatchObject({ key: 'year', path: expect.stringMatching(/(^|\/)2026\.md$/) })
+  })
+})
+
+describe('a new periodic note’s parent link', () => {
+  it('is what the link writer gives for the parent note’s path', () => {
+    const text = periodicNoteText('daily', settings(['daily', 'weekly']), day, null, (p) => `[[${p.replace(/\.md$/, '')}]]`)
+    expect(text).toMatch(/week: "\[\[.*2026-W41\]\]"/)
   })
 })
 
@@ -163,13 +170,6 @@ describe('preview tree', () => {
 })
 
 describe('unique names', () => {
-  it('refuses a name that exists elsewhere in the vault, whatever its case', () => {
-    const notes = ['Old/2026-W41.md', 'Journal/2026/2026.md', 'Notes/2026-10 plan.md']
-    expect(nameTakenElsewhere('Journal/2026/2026-W41.md', notes)).toBe('Old/2026-W41.md')
-    expect(nameTakenElsewhere('Journal/2026/2026-w41.md', notes)).toBe('Old/2026-W41.md')
-    expect(nameTakenElsewhere('Journal/2026/2026.md', notes)).toBe(null)
-    expect(nameTakenElsewhere('Journal/2026/2026-10.md', notes)).toBe(null)
-  })
 })
 
 describe("today's note", () => {

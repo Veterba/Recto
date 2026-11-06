@@ -20,9 +20,3 @@ export function folderHints(tabs: readonly TabLabel[]): Map<string, string> {
   }
   return hints
 }
-
-/** A link to a file, the way Recto writes one: `[[Note name]]`, a non-note keeps its extension. */
-export function linkTo(path: string): string {
-  const name = path.slice(path.lastIndexOf('/') + 1)
-  return `[[${name.replace(/\.md$/i, '')}]]`
-}

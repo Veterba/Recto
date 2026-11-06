@@ -5,13 +5,13 @@ import { setCardField } from '../../shared/card-fields'
 import { formatChanged, type FormatContext } from '../../shared/formatting'
 import { setField } from '../../shared/frontmatter'
 import { cardLink, doneLane, insertItem, isKanban, moveItem, parseKanban, setChecked, type KanbanBoard } from '../../shared/kanban'
-import { normalizeName, pathsByName } from '../../shared/parse'
+import { normalizeName } from '../../shared/parse'
 import { periodicNoteText } from '../../shared/periodic'
 import { cardFolderFor, inRecto } from '../../shared/recto-paths'
 import { normaliseFolder, type Period } from '../../shared/templates'
 import { nameProblem } from '../../shared/vault'
 import { dateArg, findBoard, periodicPlace } from './read'
-import { folderOf, readNote, titleOf, ToolError, type Scope } from './scope'
+import { readNote, titleOf, ToolError, type Scope } from './scope'
 
 /**
  * The write tools build proposals: the files a call would change, before and
@@ -39,8 +39,13 @@ const count = (text: string, re: RegExp): Map<string, number> => {
   return out
 }
 
-/** Every link the AI added: it must resolve to one note, or be declared as a note that does not exist yet. */
-function checkLinks(scope: Scope, before: string, after: string, newLinks: readonly string[]): void {
+/**
+ * Every link the AI added, in the note at `p`: it must mean one note - read
+ * from `p` by Obsidian's rules - or be declared as a note that does not exist
+ * yet. A bare name several notes have is not left to the rules to pick: the
+ * links to write from this note are given.
+ */
+function checkLinks(scope: Scope, p: string, before: string, after: string, newLinks: readonly string[]): void {
   const declared = new Set(
     newLinks.map((l) =>
       l
@@ -50,18 +55,17 @@ function checkLinks(scope: Scope, before: string, after: string, newLinks: reado
     ),
   )
   const old = count(before, WIKI)
-  const byName = pathsByName(scope.allNotes)
   for (const [target, n] of count(after, WIKI)) {
     if (n <= (old.get(target) ?? 0)) continue
     if (declared.has(target)) {
-      if (scope.resolve(target) === null) continue
+      if (scope.resolve(target, p) === null) continue
     }
-    const same = target.includes('/') ? [] : (byName.get(normalizeName(target)) ?? []).filter((p) => !scope.hidden(p))
+    const same = target.includes('/') ? [] : scope.notes.filter((other) => normalizeName(titleOf(other)) === normalizeName(target))
     if (same.length > 1)
       throw new ToolError(
-        `[[${target}]] is ambiguous: ${same.length} notes have that name (${same.join(', ')}). Write the shortest path that is unique: ${same.map((p) => `[[${scope.linkTo(p)}]]`).join(' or ')}.`,
+        `[[${target}]] could mean ${same.length} notes (${same.join(', ')}). Write the one you mean: ${same.map((other) => `[[${scope.linkTo(other, p)}]]`).join(' or ')}.`,
       )
-    if (scope.resolve(target) === null)
+    if (scope.resolve(target, p) === null)
       throw new ToolError(
         `[[${target}]] links to no note in this vault. Link an existing note by its exact name (search_notes finds it), or list "${target}" in new_links if a note of that name is meant to be made later.`,
       )
@@ -79,10 +83,10 @@ const formatCtx = (scope: Scope, p: string): FormatContext => ({
   name: titleOf(p),
   links: {
     toWiki: (target) => {
-      const found = scope.resolve(target)
-      return found === null ? null : scope.linkTo(found)
+      const found = scope.resolve(target, p)
+      return found === null ? null : scope.linkTo(found, p)
     },
-    toPath: (target) => scope.resolve(target),
+    toPath: (target) => scope.resolve(target, p),
   },
 })
 
@@ -94,7 +98,7 @@ function noteChange(
   after: string,
   newLinks: readonly string[],
 ): { change: FileChange; formatted: string[] } {
-  checkLinks(scope, before ?? '', after, newLinks)
+  checkLinks(scope, p, before ?? '', after, newLinks)
   const result = formatChanged(before, after, scope.settings.formatting, formatCtx(scope, p))
   return { change: { path: p, before, after: result.text }, formatted: result.applied }
 }
@@ -112,26 +116,30 @@ async function editable(scope: Scope, target: string): Promise<{ path: string; t
   return { path: p, text }
 }
 
-/** A new note's name: allowed, and not taken anywhere in the vault. */
-function freeName(scope: Scope, name: string): void {
-  const problem = nameProblem(name, true)
+/**
+ * A new note's name in `folder`: allowed, and not taken in that folder - one
+ * note of a name per folder, as in Obsidian; other folders may have it.
+ */
+function freeName(scope: Scope, name: string, folder: string): void {
+  const problem = nameProblem(name)
   if (problem !== null) throw new ToolError(`${problem}. Choose another name.`)
-  const taken = scope.allNotes.find((p) => titleOf(p).toLowerCase() === name.toLowerCase())
+  const want = (folder === '' ? `${name}.md` : `${folder}/${name}.md`).toLowerCase()
+  const taken = scope.allNotes.find((p) => p.toLowerCase() === want)
   if (taken !== undefined) {
-    const where = scope.hidden(taken) ? 'this vault' : folderOf(taken) === '' ? 'the top of the vault' : `${folderOf(taken)}/`
+    const where = scope.hidden(taken) ? 'that folder' : folder === '' ? 'the top of the vault' : `${folder}/`
     throw new ToolError(
-      `A note “${titleOf(taken)}” already exists in ${where}. Note names are unique in the whole vault: use propose_edit or propose_append to change it, or choose another name.`,
+      `A note “${titleOf(taken)}” is already in ${where}. Use propose_edit or propose_append to change it, or choose another name or folder.`,
     )
   }
 }
 
 export function proposeNewNote(scope: Scope, a: Args): Draft {
   const name = String(a['name']).trim().replace(/\.md$/i, '')
-  freeName(scope, name)
   const typed = String(a['folder'] ?? '').trim()
   const folder = typed.replace(/^\/+|\/+$/g, '') === '' ? '' : normaliseFolder(typed)
   if (folder === null)
     throw new ToolError(`“${String(a['folder'])}” is not a folder Recto can use: no “..” and no folder starting with “.”.`)
+  freeName(scope, name, folder)
   if (inRecto(folder)) throw new ToolError('Recto/ holds boards and their cards. Use propose_task to add a card.')
   const p = folder === '' ? `${name}.md` : `${folder}/${name}.md`
   if (scope.hidden(p)) throw new ToolError(`${folder}/ is excluded from AI in Recto's settings. Choose another folder.`)
@@ -202,7 +210,7 @@ async function periodicNote(scope: Scope, period: Period, date: Date): Promise<{
   }
   const chosen = scope.templates.periodic[period].template
   const template = chosen === null ? null : await readNote(chosen).catch(() => null)
-  return { path: place.path, before: null, base: periodicNoteText(period, scope.templates.periodic, date, template) }
+  return { path: place.path, before: null, base: periodicNoteText(period, scope.templates.periodic, date, template, (p) => `[[${scope.linkTo(p, place.path)}]]`) }
 }
 
 export async function proposeAppend(scope: Scope, a: Args): Promise<Draft> {
@@ -234,7 +242,7 @@ export async function proposeAppend(scope: Scope, a: Args): Promise<Draft> {
 export async function proposeLink(scope: Scope, a: Args): Promise<Draft> {
   const from = await editable(scope, String(a['from']))
   const to = scope.need(String(a['to']))
-  const link = `[[${scope.linkTo(to).replace(/\.md$/i, '')}]]`
+  const link = `[[${scope.linkTo(to, from.path)}]]`
   let after: string
   if (typeof a['after_text'] === 'string') {
     const find = a['after_text']
@@ -286,8 +294,8 @@ export async function proposeTask(scope: Scope, a: Args): Promise<Draft> {
     }
   }
   // A card that is a note: the note in the board's folder, and its [[link]] on the board.
-  freeName(scope, title)
   const folder = cardFolderFor(board.path, board.text)
+  freeName(scope, title, folder)
   const p = `${folder}/${title}.md`
   let text = ''
   if (typeof a['due'] === 'string') text = setCardField(text, 'due', a['due'])
@@ -296,7 +304,7 @@ export async function proposeTask(scope: Scope, a: Args): Promise<Draft> {
     summary: `Card “${title}” on ${titleOf(board.path)}`,
     files: [
       { path: p, before: null, after: text },
-      { path: board.path, before: board.text, after: insertItem(board.text, lane, 0, cardLink(scope.linkTo(p).replace(/\.md$/i, ''))) },
+      { path: board.path, before: board.text, after: insertItem(board.text, lane, 0, cardLink(scope.linkTo(p, board.path))) },
     ],
     formatted: [],
   }
@@ -359,7 +367,7 @@ export async function proposeTaskUpdate(scope: Scope, a: Args): Promise<Draft> {
   if (a['due'] !== undefined) fields.push(['due', a['due'] as string | null])
   if (a['priority'] !== undefined) fields.push(['priority', a['priority'] as string | null])
   if (checked !== item.checked) fields.push(['completed', checked ? today() : null])
-  const cardNote = item.link === null ? null : scope.resolve(item.link)
+  const cardNote = item.link === null ? null : scope.resolve(item.link, board.path)
   if (fields.some(([k]) => k !== 'completed') && cardNote === null)
     throw new ToolError('Due dates and priorities belong to a card that is a note; this card is plain text.')
   if (cardNote !== null && fields.length > 0) {

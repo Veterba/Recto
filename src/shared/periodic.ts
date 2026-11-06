@@ -84,24 +84,35 @@ const PARENTS: Record<Period, readonly Period[]> = {
 const PROPERTY: Record<Period, string> = { daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' }
 
 /**
- * The link one step up the chain, as a property: a daily note's `week:
- * [[2026-W41]]`, or its month or year when weekly notes are off. Only to
- * periods that are on, so the link always has a note to go to. A week's month
- * and year are its Thursday's.
+ * The note one step up the chain, and the property that links it: a daily
+ * note's `week:` (2026-W41), or its month or year when weekly notes are off.
+ * Only to periods that are on, so the link always has a note to go to. A
+ * week's month and year are its Thursday's. By path: the link is written for
+ * that note, wherever another of its name may be.
  */
-export function parentLink(period: Period, date: Date, settings: PeriodicSettings): { key: string; value: string } | null {
+export function parentLink(period: Period, date: Date, settings: PeriodicSettings): { key: string; path: string } | null {
   const parent = PARENTS[period].find((p) => settings[p].enabled)
   if (parent === undefined) return null
   const at = period === 'weekly' ? thursdayOf(date) : date
-  return { key: PROPERTY[parent], value: `[[${periodKey(parent, at)}]]` }
+  return { key: PROPERTY[parent], path: periodNotePath(parent, at, settings).path }
 }
+
+/** A link to a note by its name alone: what a parent link is when nothing better is known. */
+const byName = (path: string): string => `[[${path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')}]]`
 
 /**
  * What a new periodic note contains: its template (`template`, the chosen
  * template's text; null for the built-in one) filled in, and the link to its
  * parent period's note.
  */
-export function periodicNoteText(period: Period, settings: PeriodicSettings, now: Date, template: string | null): string {
+export function periodicNoteText(
+  period: Period,
+  settings: PeriodicSettings,
+  now: Date,
+  template: string | null,
+  /** The parent link as Obsidian writes it from the new note (shared/obsidian-links.ts `formatLink`). */
+  linkTo: (path: string) => string = byName,
+): string {
   const target = periodNotePath(period, now, settings)
   // An EMPTY template counts as no template. That is not hypothetical: a
   // template file created and never written in produced a blank, 0-byte
@@ -116,10 +127,9 @@ export function periodicNoteText(period: Period, settings: PeriodicSettings, now
     template !== null && templateBody(template).trim() !== '' ? template : period === 'daily' ? BUILT_IN_DAILY : '# {{title}}\n\n'
   const text = fillTemplate(body, { title: target.key, path: target.path, now, weekStart: settings.weekStart })
   const link = parentLink(period, now, settings)
-  return link === null ? text : setField(text, link.key, link.value)
+  return link === null ? text : setField(text, link.key, linkTo(link.path))
 }
 
-export { nameTakenElsewhere } from './vault'
 
 export type TreeLine = { depth: number; name: string; file: boolean }
 

@@ -9,6 +9,7 @@ import { Icon } from '../../ui/Icon'
 import { Highlight } from './CommandPalette'
 import { noteEntries } from '../../features/file-tree'
 import { boardMade, createBoard, isTaskPath, useBoards } from '../../features/boards'
+import { NameWarning } from '../../ui/NameWarning'
 
 /**
  * The page a tab's + opens: find something to show here, or make a new one -
@@ -140,6 +141,7 @@ function NewTab({ shell }: { shell: Shell }): React.ReactElement {
             }}
           />
         </label>
+        <NameWarning name={query} />
         {error !== null && <p className="new-tab__error">{error}</p>}
 
         <ul className="new-tab__list" ref={listRef} role="listbox" aria-label={boardMode ? 'Boards' : 'Notes'}>

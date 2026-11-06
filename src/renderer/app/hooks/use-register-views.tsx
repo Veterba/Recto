@@ -44,8 +44,8 @@ export function useRegisterViews(refs: {
   if (registered.current) return
   registered.current = true
   registerMarkdownView(
-    (target, heading) => {
-      void api.invoke(IPC.indexResolveLink, target).then((resolved) => {
+    (target, heading, source) => {
+      void api.invoke(IPC.indexResolveLink, target, source).then((resolved) => {
         if (resolved !== null) refs.openFile.current(resolved, heading)
       })
     },
@@ -73,8 +73,8 @@ export function useRegisterViews(refs: {
   })
   registerCanvasView({
     openFile: (p) => refs.openFile.current(p),
-    openLink: (target) => {
-      void api.invoke(IPC.indexResolveLink, target).then((resolved) => {
+    openLink: (target, source) => {
+      void api.invoke(IPC.indexResolveLink, target, source).then((resolved) => {
         if (resolved !== null) refs.openFile.current(resolved)
       })
     },

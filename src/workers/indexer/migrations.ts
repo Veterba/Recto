@@ -373,6 +373,40 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX idx_canvas_edges_canvas ON canvas_edges(canvas);
     `,
   },
+  {
+    version: 16,
+    name: 'note-ctime',
+    sql: `
+      -- When each note was made: Obsidian's last tie-break among same-named
+      -- notes equally near and equally long (docs/dev/obsidian-link-rules.md).
+      -- Read every note again to fill it.
+      ALTER TABLE notes ADD COLUMN ctime REAL;
+      UPDATE notes SET mtime = -1;
+    `,
+  },
+  {
+    version: 17,
+    name: 'other-files',
+    sql: `
+      -- Every file that is not a note or a canvas - pictures, PDFs - by path,
+      -- with when it was made: a link can name one ([[Image.png]], ![[a.pdf]]),
+      -- so it resolves only if the index knows it is there.
+      CREATE TABLE files (
+        path  TEXT PRIMARY KEY,
+        ctime REAL NOT NULL
+      );
+    `,
+  },
+  {
+    version: 18,
+    name: 'link-by-date',
+    sql: `
+      -- A link whose note was chosen only by when the same-named files were
+      -- made (shared/obsidian-links.ts resolveLinkpathDetail): said in the
+      -- overview, since another Mac can choose the other one.
+      ALTER TABLE links ADD COLUMN by_date INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

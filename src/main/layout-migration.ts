@@ -1,7 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { isKanban, parseKanban, updateSettings } from '../shared/kanban'
-import { normalizeName, pathsByName, resolveLink, shortestLink } from '../shared/parse'
+import { normalizeName } from '../shared/parse'
+import { formatLink, linkVault, resolveLinkpath, splitSubpath } from '../shared/obsidian-links'
 import {
   boardFile,
   boardFolder,
@@ -65,9 +66,9 @@ const key = (p: string): string => p.normalize('NFC').toLowerCase()
 export function planLayout(files: readonly LayoutFile[]): LayoutPlan {
   const plan: LayoutPlan = { moves: [], edits: [], creates: [], conflicts: [] }
   const notes = files.filter((f) => isNote(f.path))
-  const oldPaths = new Set(notes.map((n) => n.path))
-  const oldByName = pathsByName(oldPaths)
-  const resolveOld = (target: string): string | null => resolveLink(target, oldByName, oldPaths)
+  // Links are read as Obsidian reads them, from the note they are in (shared/obsidian-links.ts).
+  const oldVault = linkVault(notes.map((n, i) => ({ path: n.path, ctime: i })))
+  const resolveOld = (target: string, source: string): string | null => resolveLinkpath(splitSubpath(target).path, source, oldVault)
 
   // Boards in tasks/ move to their own folders; boards anywhere list cards.
   const boards = notes.filter((n) => n.text !== undefined && isKanban(n.text))
@@ -77,7 +78,7 @@ export function planLayout(files: readonly LayoutFile[]): LayoutPlan {
   for (const board of boards) {
     for (const lane of parseKanban(board.text!).lanes)
       for (const item of lane.items) {
-        const card = item.link === null ? null : resolveOld(item.link)
+        const card = item.link === null ? null : resolveOld(item.link, board.path)
         if (card !== null && card !== board.path) linkedFrom.set(card, [...new Set([...(linkedFrom.get(card) ?? []), board.path])])
       }
   }
@@ -110,11 +111,10 @@ export function planLayout(files: readonly LayoutFile[]): LayoutPlan {
 
   // Links: compare where each target resolves before and after the moves.
   const moved = (p: string): string => target.get(p) ?? p
-  const newPaths = new Set([...oldPaths].map(moved))
-  const newByName = pathsByName(newPaths)
-  const resolveNew = (t: string): string | null => resolveLink(t, newByName, newPaths)
-  /** The shortest form that names `p` alone (shared/parse.ts). */
-  const linkFor = (p: string): string => shortestLink(p, newPaths)
+  const newVault = linkVault(notes.map((n, i) => ({ path: moved(n.path), ctime: i })))
+  const resolveNew = (t: string, source: string): string | null => resolveLinkpath(splitSubpath(t).path, source, newVault)
+  /** How Obsidian writes a link to `p` from `source`, as a wikilink's target: its name, or its path when another note has the name. */
+  const linkFor = (p: string, source: string): string => formatLink(p, source, newVault, { newLinkFormat: 'shortest', useMarkdownLinks: false }).slice(2, -2)
   const pathStillMatches = (written: string, p: string): boolean => {
     if (!written.includes('/')) return true
     const w = normalizeName(written.replace(/\\/g, '/').replace(/^\.\//, ''))
@@ -127,12 +127,12 @@ export function planLayout(files: readonly LayoutFile[]): LayoutPlan {
     const now = moved(note.path)
     let text = note.text
     const result = mapLinkTargets(text, (written, kind) => {
-      const before = resolveOld(written)
+      const before = resolveOld(written, note.path)
       if (before === null) return null
       const expected = moved(before)
-      if (resolveNew(written) === expected && pathStillMatches(written, expected)) return null
+      if (resolveNew(written, now) === expected && pathStillMatches(written, expected)) return null
       if (kind === 'markdown') return expected
-      return /\.md$/i.test(written) ? `${linkFor(expected)}.md` : linkFor(expected)
+      return /\.md$/i.test(written) ? `${linkFor(expected, now)}.md` : linkFor(expected, now)
     })
     text = result.text
     if (target.has(note.path) && ownFolderOf(now) !== null && isKanban(text)) {
@@ -146,10 +146,8 @@ export function planLayout(files: readonly LayoutFile[]): LayoutPlan {
   }
 
   const all = new Set([...files.map((f) => moved(f.path))].map(key))
-  if (!all.has(key(RECTO_README)) && !all.has(key(RECTO_README_FALLBACK))) {
-    const readmeTaken = [...all].some((p) => nameOf(p) === 'readme.md')
-    plan.creates.push({ path: readmeTaken ? RECTO_README_FALLBACK : RECTO_README, text: RECTO_README_TEXT })
-  }
+  if (!all.has(key(RECTO_README)) && !all.has(key(RECTO_README_FALLBACK)))
+    plan.creates.push({ path: RECTO_README, text: RECTO_README_TEXT })
   return plan
 }
 

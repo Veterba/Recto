@@ -213,10 +213,10 @@ function MarkdownEditor({
       handle.current?.setUnresolved([])
       return
     }
-    void api.invoke(IPC.indexResolveLinks, targets).then((resolved) => {
+    void api.invoke(IPC.indexResolveLinks, targets, path).then((resolved) => {
       handle.current?.setUnresolved(targets.filter((target) => resolved[target] == null))
     })
-  }, [])
+  }, [path])
 
   const onChange = useCallback(
     (next: string) => {
@@ -388,6 +388,7 @@ function MarkdownEditor({
       {createPortal(
         <Properties
           text={text}
+          path={path}
           onOpenLink={onOpenLink}
           getLinkCandidates={getLinkCandidates}
           onChange={(next) => {
@@ -432,9 +433,10 @@ function MarkdownEditor({
         onChange={onChange}
         onSave={flush}
         onOpenLink={onOpenLink}
-        onDragLink={(target, heading, x, y) => beginPaneDrag({ kind: 'link', target, heading }, target, x, y)}
-        onLinkHover={(link) => hoverLink(link === null ? null : { target: link.target, element: link.element })}
+        onDragLink={(target, heading, x, y) => beginPaneDrag({ kind: 'link', target, heading, source: path }, target, x, y)}
+        onLinkHover={(link) => hoverLink(link === null ? null : { target: link.target, source: path, element: link.element })}
         getLinkCandidates={getLinkCandidates}
+        linkSource={path}
         onSelectionChange={syncFormats}
         onFoldsChange={(lines) => writeFolds(path, lines)}
         onAuthorsChange={() => {
@@ -509,7 +511,8 @@ function NoteHost({ path, editor, hosts }: { path: string; editor: React.ReactEl
 }
 
 export function registerMarkdownView(
-  onOpenLink: (target: string, heading: string | null) => void,
+  /** Follow a link: its target, heading, and the note it is in. */
+  onOpenLink: (target: string, heading: string | null, source: string) => void,
   onOpenPath: (path: string, heading?: string | null) => void,
   getLinkCandidates: () => readonly LinkCandidate[],
   getLivePreview: () => boolean,
@@ -523,7 +526,7 @@ export function registerMarkdownView(
       path={path}
       leafId={leafId}
       heading={heading}
-      onOpenLink={onOpenLink}
+      onOpenLink={(target, linkHeading) => onOpenLink(target, linkHeading, path)}
       onOpenPath={onOpenPath}
       getLinkCandidates={getLinkCandidates}
       livePreview={getLivePreview()}

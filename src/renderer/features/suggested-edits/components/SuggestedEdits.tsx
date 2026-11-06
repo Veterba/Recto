@@ -123,10 +123,12 @@ export function SuggestedEditsNotice(): React.ReactElement | null {
   useEffect(() => {
     refresh()
     const offChanged = api.on(IPC_EVENT.aiProposalsChanged, refresh)
-    const show = (): void => {
-      refresh()
-      setOpen(true)
-    }
+    // Opened once the list is in: opened first, the empty list it had would shut it again at once.
+    const show = (): void =>
+      void api.invoke(IPC.aiProposals).then((all) => {
+        setPending(all.filter((p) => p.status === 'pending'))
+        setOpen(true)
+      })
     const offOpen = api.on(IPC_EVENT.aiProposalsOpen, show)
     openers.add(show)
     return () => {

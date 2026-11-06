@@ -10,6 +10,7 @@ import type { TopicsGraph } from '../../shared/indexer-protocol'
 import * as vaultFs from '../vault-fs'
 import { type TopicsState, TOPICS_PROPERTY, topicNameOf, byName } from './state'
 import { linksIn } from '../../shared/link-property'
+import type { LinkVault } from '../../shared/obsidian-links'
 
 export type Note = {
   mtime: number
@@ -34,7 +35,8 @@ export type Context = {
   /** Notes that may have topics, sorted - the order everything is computed in. */
   eligible: string[]
   eligibleSet: Set<string>
-  byName: Map<string, string[]>
+  /** The notes, for reading a link from the note it is in (shared/obsidian-links.ts). */
+  links: LinkVault
   template: Set<string>
   /** Eligible notes per language. */
   languages: Partial<Record<Lang, number>>

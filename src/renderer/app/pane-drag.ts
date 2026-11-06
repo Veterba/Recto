@@ -14,7 +14,7 @@ import { zoneAt, type DropZone, type Rect } from './pane-drop'
 export type PaneDragPayload =
   | { kind: 'leaf'; leafId: string }
   | { kind: 'path'; path: string; heading?: string | null }
-  | { kind: 'link'; target: string; heading: string | null }
+  | { kind: 'link'; target: string; heading: string | null; source: string }
   /** A floating note window, dragged into the layout with ⌥. */
   | { kind: 'window'; windowId: string; path: string }
 

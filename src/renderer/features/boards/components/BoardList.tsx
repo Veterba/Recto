@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { NameWarning } from '../../../ui/NameWarning'
 import type { BoardSummaryInfo } from '@shared/index-results'
 import { IPC } from '@shared/ipc'
 import { api } from '../../../app/api'
@@ -41,6 +42,9 @@ export function BoardList({ activeBoard, query, onOpen, vaultPath, onRenamed }: 
   const boards = useBoards()
   const [adding, setAdding] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
+  /** The name being typed for a new or renamed board, for what to know about it. */
+  const [typed, setTyped] = useState('')
+  useEffect(() => setTyped(''), [renaming, adding])
   const [error, setError] = useState<string | null>(null)
   /** A new board's name that a note has: the name typed and the note that has it. */
   const [taken, setTaken] = useState<{ name: string; path: string } | null>(null)
@@ -114,6 +118,7 @@ export function BoardList({ activeBoard, query, onOpen, vaultPath, onRenamed }: 
               defaultValue={board.name}
               aria-label="Board name"
               autoFocus
+              onChange={(event) => setTyped(event.target.value === board.name ? '' : event.target.value)}
               onBlur={(event) => void rename(board, event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') event.currentTarget.blur()
@@ -140,6 +145,7 @@ export function BoardList({ activeBoard, query, onOpen, vaultPath, onRenamed }: 
           )}
         </div>
       ))}
+      {renaming !== null && <NameWarning name={typed} />}
 
       {boards.length === 0 && !adding && (
         <p className="sidebar__empty">No boards yet. A board is a note; it opens in Obsidian's Kanban plugin too.</p>
@@ -176,22 +182,26 @@ export function BoardList({ activeBoard, query, onOpen, vaultPath, onRenamed }: 
       )}
 
       {adding ? (
-        <input
-          className="boards__rename"
-          defaultValue={taken?.name ?? ''}
-          onFocus={(event) => event.currentTarget.select()}
-          placeholder="Board name"
-          aria-label="New board name"
-          autoFocus
-          onBlur={(event) => void add(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur()
-            if (event.key === 'Escape') {
-              setAdding(false)
-              setTaken(null)
-            }
-          }}
-        />
+        <>
+          <input
+            className="boards__rename"
+            defaultValue={taken?.name ?? ''}
+            onFocus={(event) => event.currentTarget.select()}
+            placeholder="Board name"
+            aria-label="New board name"
+            autoFocus
+            onChange={(event) => setTyped(event.target.value)}
+            onBlur={(event) => void add(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+              if (event.key === 'Escape') {
+                setAdding(false)
+                setTaken(null)
+              }
+            }}
+          />
+          <NameWarning name={typed} />
+        </>
       ) : (
         <button className="boards__add" onClick={() => setAdding(true)}>
           <Icon name="plus" size={13} />

@@ -150,7 +150,7 @@ export async function readNoteTool(scope: Scope, a: Args): Promise<ResultBlock[]
       truncated: offset + max < content.length,
       ...(offset + max < content.length ? { next_offset: offset + max } : {}),
       links_out: [...new Set(parsed.links.map((l) => l.target))].map((target) => {
-        const to = scope.resolve(target)
+        const to = scope.resolve(target, p)
         return { target, path: to }
       }),
       backlinks: links.filter((l) => !scope.hidden(l.path)).map((l) => ({ path: l.path, line: l.line })),
@@ -174,7 +174,7 @@ export async function noteContext(scope: Scope, a: Args): Promise<ResultBlock[]>
   const excerpt = content.slice(0, Math.min(content.length, Math.floor(budget / 3)))
   budget -= excerpt.length
   const out = parseNote(content)
-    .links.map((l) => scope.resolve(l.target))
+    .links.map((l) => scope.resolve(l.target, p))
     .filter((t): t is string => t !== null && t !== p)
   const { links } = await ask({ kind: 'backlinks', path: p }, 'backlinks-result')
   const related = [
@@ -329,9 +329,9 @@ export async function findBoard(scope: Scope, target: string): Promise<{ path: s
 
 type CardInfo = { text: string; note: string | null; checked: boolean; due?: string; priority?: string; tags?: string[] }
 
-async function cardInfo(scope: Scope, item: { text: string; link: string | null; checked: boolean }): Promise<CardInfo> {
+async function cardInfo(scope: Scope, board: string, item: { text: string; link: string | null; checked: boolean }): Promise<CardInfo> {
   if (item.link === null) return { text: item.text, note: null, checked: item.checked }
-  const p = scope.resolve(item.link)
+  const p = scope.resolve(item.link, board)
   // A card whose note is excluded: it is there, and nothing more is said.
   if (p === null)
     return scope.allNotes.some((n) => n.toLowerCase().endsWith(`/${item.link!.toLowerCase()}.md`))
@@ -359,7 +359,7 @@ export async function readBoard(scope: Scope, a: Args): Promise<ResultBlock[]> {
       title: lane.title,
       ...(lane.wip === null ? {} : { wip: lane.wip }),
       done_lane: i === done,
-      cards: await Promise.all(lane.items.map((item) => cardInfo(scope, item))),
+      cards: await Promise.all(lane.items.map((item) => cardInfo(scope, board.path, item))),
     })
   return [data({ path: board.path, name: titleOf(board.path), lanes })]
 }

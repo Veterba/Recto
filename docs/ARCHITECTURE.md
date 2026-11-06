@@ -60,9 +60,9 @@ signature disagree.
 | `vault:` | pick, open, close, switch, recent vaults; `vault:changed` pushes watcher batches |
 | `fs:` | tree, read, read text, read bytes (a PDF), write, create, rename, move, trash, reveal, open with the system's app, import images / files (an open dialog; each file copied into attachments, paths returned) / dropped bytes |
 | `state:` | read and write one `.recto/<feature>.json` |
-| `index:` | search, backlinks, canvases a file is on, stats, vault usage, link resolution, unresolved, graph, boards, context |
+| `index:` | search, backlinks, canvases a file is on, stats, vault usage, link resolution (`index:resolve-link(s)` take the note the link is in), unresolved, graph, boards (`index:board-cards` takes the board), context |
 | canvas | `IPC.canvasLinkPreview` (a link node's preview), `IPC.canvasProposeLink` ("Make it a link": queues a Suggested edit) and `IPC.playerOpen` (plays a YouTube video or vault video in the mini-player window) |
-| `links:` | undo the link rewrite of a rename |
+| `links:` | undo the link rewrite of a rename; `links:settings` (Obsidian's link settings for the vault), `links:format` (main writes a link with `formatLink`), `links:answer` with the event `links:ask` (the Update links dialog); `fs:same-named` lists every file of a name, read from disk |
 | `history:` | a note's stored versions, and restoring one |
 | `archive:` | archive, list, restore, purge, retention |
 | `ai:` | key status (never the key), test, send, cancel; `ai:delta` / `ai:done` / `ai:error` stream the reply |
@@ -148,7 +148,7 @@ fixture run again after a fix to the checks.
 3. **Index.** Each batch goes to the indexer as `note-changed`. It parses the note
    (`shared/parse.ts`: frontmatter, headings, wikilinks, tags, properties), updates `notes`, `links`,
    `tags`, `properties`, `headings` and the FTS table, stores a version snapshot, and re-resolves the
-   links that could now point somewhere.
+   links that could now point somewhere (each read from the note it is in; see Names and links).
 4. **Renderer.** The same batch is pushed as `vault:changed`. The tree applies it to its copy
    (`file-tree/file-tree-ops.ts`), `note-bus.ts` bumps a revision, and views that show derived data -
    backlinks, graph, boards, the vault overview - ask the index again through `index:*`.
@@ -163,6 +163,52 @@ fixture run again after a fix to the checks.
    as one undoable run. A run and the commands from Settings (rename, delete, rebuild, undo) take
    turns through one lock (`exclusive` in `topics/service.ts`), since each reads the topics state,
    works, and saves it whole.
+
+## Names and links
+
+Recto follows Obsidian's rules for note names and links exactly, so a link opens the same file in both.
+Several files may share a name; a folder holds one file of a name, in any case.
+
+- **One rule module.** `src/shared/obsidian-links.ts` is the only place the rules live, and every
+  process uses it: `resolveLinkpath` / `resolveLinkpathDetail` (the second says whether the answer
+  depended on file dates: `byDate`), `formatLink`, `rewriteForRename`, `nameProblem`, `nameWarnings`,
+  `settingsFromAppJson` and `linkVault` (the vault's files by path and by name, keys lowercased and NFC).
+- **Reading a link** is relative to the note it is in: `/path` from the vault's top, `./` and `../`
+  from the note; an exact vault path first; else same-named files in the note's own folder or below,
+  then the shorter path, then the file made first. Links to pictures and other files resolve too.
+- **The spec is measured.** `docs/dev/obsidian-link-rules.md` records what Obsidian 1.15.0 does.
+  `test/fixtures/obsidian-links-measured.ts` holds its answers, shared by
+  `test/shared/obsidian-links.test.ts` and `test/e2e/rename-links.test.ts`.
+- **Writing a link** follows the vault's Obsidian settings (new link format shortest / relative /
+  absolute; wikilinks or Markdown links): the name alone when no other note has it, else the path.
+  `main/link-context.ts` gives main what it needs: `currentLinkVault()` (every vault file with its
+  creation time), `currentLinkSettings()` (`.obsidian/app.json`, else `.recto/link-settings.json` for a
+  vault Obsidian never opened, else Obsidian's defaults) and `rememberAlwaysUpdate()`. Main writes links
+  with `formatLink` (`links:format`); the renderer's `app/link-writer.ts` caches the settings (refreshed
+  on a vault change and when the window gets focus) so sync places such as `[[` completion can call
+  `writeLink`. Settings → Vault → Files and links (`features/settings/components/LinkSettings.tsx`) only
+  shows the three settings; Obsidian owns them.
+- **Names.** `nameProblem` refuses only `\ / :`. `nameWarnings` gives a warning for `# ^ [ ] |`, names
+  Windows cannot hold and a leading `.`; the name is never changed. `ui/NameWarning.tsx` shows it under
+  the name field wherever a name is typed. `fs:same-named` lists the files of a name from disk (not
+  the index, which can lag), and the board "+ card" and canvas "Make it a note" flows use it to offer a
+  choice (create new, or use an existing one) instead of guessing; an existing file never moves.
+- **Index.** Links are resolved per source note (`resolveAllLinks`, updating rows by `source_path` and
+  `target_text`). Schema v16 adds `notes.ctime`; v17 a `files` table (every file that is not a note or a
+  canvas, with ctime, kept current because the watcher now sends every file event); v18 `links.by_date`,
+  which feeds the overview's "Links that depend on file dates" row. `notesLinkVault()` joins notes,
+  canvases and files into the vault the rules read.
+- **Rename and move.** `relocate` in `main/ipc.ts` snapshots the link vault before the move, works out
+  the moves (a file, or every file in a folder), and asks `vaultFs.planLinkUpdates`, which reads every
+  note (it does not trust the index's backlinks), for the rewrites. `applyLinkPlan` writes only files
+  unchanged since the plan. Unless `alwaysUpdateLinks` is on, `askToUpdate` first asks the Update links
+  question (`links:ask`, `app/components/UpdateLinksDialog.tsx`; answers `links:answer`). A run of moves
+  such as a board rename shares one answer object; Recto's own tidying moves pass `{update: true}`.
+  Rewrites keep alias, `#heading` and `!`, keep a moved note's own relative links pointing where they
+  did, skip fenced code and keep CRLF. The undo stays one step.
+- **Removed.** `shared/parse.ts` `resolveLink`, `shortestLink` and `pathsByName`; `nameTakenElsewhere`
+  and the strict name rule in `shared/vault.ts` (which re-exports `nameProblem`); `fs:name-taken` and
+  `fs:link-target`.
 
 ## Where things live
 
@@ -259,8 +305,10 @@ main: vault-tools/socket.ts  (first line must carry the token)
 - **Writes.** Every write tool returns a `Draft`; the mode in `ai-access.json` decides what happens.
   `shared/formatting.ts` (8 rules, detected from the vault or the Obsidian Linter's config) is applied
   only to the lines the AI wrote. A proposal keeps the file's text it was made against; Apply on a
-  note that has changed since writes nothing (stale). Names, links, periodic-note templates, boards
-  (changed only through the board tools) and excluded folders are checked in `write.ts`.
+  note that has changed since writes nothing (stale). Names (free in their folder), links (resolved
+  as Obsidian does; an ambiguous `[[name]]` is refused with the exact links to write), periodic-note
+  templates, boards (changed only through the board tools) and excluded folders are checked in
+  `write.ts`; a note given by a name several notes share is answered with the list, to be given by path.
   `shared/line-diff.ts` makes the diff shown in Suggested edits
   (`renderer/features/suggested-edits/`).
 - **Indexer.** Reads that need the whole vault's notes, tags and properties (profile, folders) use the
@@ -517,8 +565,9 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
   last chosen for "Make it a note". `.recto/pdf-highlights.json` (by PDF path): see PDFs above. A renamed
   or moved canvas or PDF takes its folds and highlights with it (`moveCanvasState`, called from `relocate`).
 - **Make it a note** (`MakeNoteBar`, a glass card with the name and a searchable folder list) makes the note
-  with the card machinery (`createCardNote`, the same name rules and vault-wide unique names) and then
-  changes the node in place to `type: "file"`.
+  with the card machinery (`createCardNote`, the same name rules, free only in its folder) and then
+  changes the node in place to `type: "file"`. A name a note already has offers "Use that note" (the
+  existing file is put on the canvas and stays where it is) or "Create a new “X” here".
 - **Drawing.** `drawing.ts` (pure): strokes as points with pressure, drawn with perfect-freehand (MIT);
   `tidy` pulls a nearly straight stroke part-way to a line and a nearly closed round one part-way to an
   ellipse, and only smooths the rest; `toSvg`/`fromSvg` write a drawing as an SVG whose `<metadata
@@ -538,7 +587,7 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
 - **The list.** `CanvasList.tsx` has a right-click menu (Open, Rename, copy paths, `fs:reveal`, Move to
   archive with a confirm, through `archive:add`) and an × that asks the same; after a create, rename or
   archive it calls `onChanged` so the tree is read again and the list is right at once.
-- **Make it a link.** `IPC.canvasProposeLink` (`main/canvas.ts`) adds `[[shortest name]]` at the end of the
+- **Make it a link.** `IPC.canvasProposeLink` (`main/canvas.ts`) adds a link, written for the vault's link format, at the end of the
   first note and hands it to the Suggested edits queue (`vault-tools/proposals.ts` `queue`) as a draft
   from `recto-canvas`. It is the person's own action, so it doesn't consult the AI write mode or excluded
   folders; it uses only the queue and the diff, and nothing is written before Apply. A note that already
@@ -600,14 +649,9 @@ card another board lists is never trashed. Every delete returns an undo id: `und
 the board, the trashed cards, the moved cards and the lines added to the other board, each only if
 the file is unchanged since.
 
-**Names.** Notes are found by name, so a new note's name is checked once, against the files on disk
-(`fs:name-taken`, `vault-fs.nameTakenBy`), never the index, which can lag. Names are refused, never changed: `nameProblem` in `shared/vault.ts`
-rejects `/ \ : * ? " < > |` and a leading `.` (and, for cards and boards, `# ^ [ ] |`, which break
-links), and `vault-fs` create and rename enforce it. The `[[` "Create" row is not offered for such a name.
-
-**Link targets.** `shortestLink` in `shared/parse.ts` gives the shortest path that names a note alone. The
-layout migration uses it for rewritten wikilinks (Markdown-style links get the full vault path), and
-so does "Add it to this board" (`fs:link-target`).
+**Names and link targets.** See Names and links, above. A card or board name needs to be free only in
+its own folder; a card line on a board resolves from the board's own folder first. "Add it to this
+board" writes its link with `formatLink` (`links:format`).
 
 **Tabs and new files.** `VaultShell`'s prune effect closes a tab only after `fs:existing` confirms on
 disk that the file is gone (`Workspace.paths()` lists the candidates), since the tree can lag behind
@@ -638,9 +682,11 @@ In the vault:
 | `.recto/bots/<id>/` | a bot: `bot.json` (name, specialty, look, personality, model, excluded folders), `SYSTEM.md` and `EXAMPLES.md` (one example answer per kind); Recto is written once into a vault with no `bots` folder, and an unedited SYSTEM.md or EXAMPLES.md is brought up to date | `main/bots` |
 | `.recto/evals/<run id>/` | an eval run's `config.json` and `results.jsonl`, and `graded.jsonl` beside them; the run's report is a note in the evals folder | `scripts/evals` |
 | `**/*.canvas` | JSON Canvas (the format Obsidian uses): nodes and edges, one per line, tab-indented; keys and node types Recto doesn't know are kept | the user |
+| `.obsidian/app.json` | Obsidian's own settings; Recto reads the link settings from it and writes only `alwaysUpdateLinks`, on "Always update" | Obsidian |
+| `.recto/link-settings.json` | the same three link settings for a vault with no `.obsidian/` folder | `main/link-context.ts` |
 | `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive`, `canvas` (folds), `canvas-links` (link previews), `canvas-notes` (last folder for "Make it a note") | `main/state.ts` |
 | `.recto/stats/edits.json`, `.recto/stats/words.json` | the vault overview's history: per day, the notes you edited (editor saves, card edits and moves you made; backfilled once from version history) and the words you wrote (`written`: per day and note, the words your saves brought in and kept, as `{ word: count }` - a save's deletions take back that day's words first, `shared/overview.ts applyWords`; read in once from version history); and the vault's total words, first and last count, with the counting rule (`rule`; a day counted under an older rule starts again). Every write reads, merges and replaces the file whole; an iCloud conflict copy (`edits 2.json`) is merged in and removed on the next read | `main/overview.ts` |
-| `.recto/index.db` | SQLite (WAL): the index, tasks, version snapshots, usage events, topic vectors, the bots' piece vectors, note cards and tasks read from plain text, the files each canvas puts on it (`canvases`, `canvas_nodes`, `canvas_edges`) | indexer, embedder |
+| `.recto/index.db` | SQLite (WAL): the index, tasks, version snapshots, usage events, topic vectors, the bots' piece vectors, note cards and tasks read from plain text, the files each canvas puts on it (`canvases`, `canvas_nodes`, `canvas_edges`), every other file with its creation time (`files`) | indexer, embedder |
 | `.recto/archive/` | archived files until retention runs out | `main/archive.ts` |
 | `.recto/.gitignore` | keeps `index.db`, `.trash/` and `archive/` out of git | written once |
 

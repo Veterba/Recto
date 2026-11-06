@@ -193,6 +193,7 @@ export const TextNode = memo(function TextNode(props: NodeProps<FlowNode>): Reac
             value={node.text ?? ''}
             placeholder="Write here…"
             onChange={(text) => actions.setText(node.id, text)}
+            linkSource={actions.canvas}
             onOpenLink={(target) => actions.openLink(target)}
           />
         ) : (node.text ?? '') === '' ? (
@@ -535,13 +536,14 @@ function NoteNode(props: NodeProps<FlowNode> & { board?: boolean }): React.React
             value={bodyOf(text)}
             placeholder="Empty note"
             onChange={(body) => actions.setNoteBody(path, body)}
-            onOpenLink={(target) => actions.openLink(target)}
+            linkSource={path}
+            onOpenLink={(target) => actions.openLink(target, path)}
           />
         ) : (
           plain ? (
             <PlainText text={shownOf(text)} />
           ) : (
-            <Markdown text={shownOf(text)} onOpenNote={(title) => actions.openLink(title)} />
+            <Markdown text={shownOf(text)} onOpenNote={(title) => actions.openLink(title, path)} />
           )
         )}
       </div>

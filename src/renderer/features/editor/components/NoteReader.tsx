@@ -19,7 +19,8 @@ export function NoteReader({
   onOpenLink,
 }: {
   path: string
-  onOpenLink: (target: string, heading: string | null) => void
+  /** Follow a link: its target, heading, and the note it is in. */
+  onOpenLink: (target: string, heading: string | null, source: string) => void
 }): React.ReactElement {
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -63,8 +64,8 @@ export function NoteReader({
         readOnly
         onChange={() => {}}
         onSave={() => {}}
-        onOpenLink={onOpenLink}
-        onLinkHover={(link) => hoverLink(link === null ? null : { target: link.target, element: link.element })}
+        onOpenLink={(target, heading) => onOpenLink(target, heading, path)}
+        onLinkHover={(link) => hoverLink(link === null ? null : { target: link.target, source: path, element: link.element })}
         onReady={(editor) => {
           handle.current = editor
           // Tables, maths and frontmatter are laid out on a transaction, and a

@@ -20,7 +20,7 @@ import type { OverviewIndex } from '../../shared/overview'
 import { requireDb } from './db'
 import { missingOnCanvases } from './canvases'
 import { CHATS_FOLDER, RECTO_FOLDER, RECTO_README, RECTO_README_FALLBACK } from '../../shared/recto-paths'
-import { pathsByName, resolveLink } from '../../shared/parse'
+import { linkVault, resolveLinkpath, type LinkVault } from '../../shared/obsidian-links'
 import { cardDescription, checklist } from '../../shared/card-fields'
 
 export function search(query: string, limit: number): SearchHit[] {
@@ -90,11 +90,16 @@ export function unresolved(): { target: string; sources: string[] }[] {
  * Reads the notes table rather than the links table, because a link may be
  * typed and clicked before the note containing it has been saved and indexed.
  */
-export function resolveOne(target: string): string | null {
-  const rows = requireDb().prepare('SELECT path FROM notes').all() as { path: string }[]
-  const allPaths = new Set(rows.map((r) => r.path))
-  const byName = pathsByName(allPaths)
-  return resolveLink(target, byName, allPaths)
+export function resolveOne(target: string, source: string): string | null {
+  return resolveLinkpath(target, source, notesLinkVault())
+}
+
+/** Every file the index knows - notes, canvases, the rest - with when each was made, for resolving links (shared/obsidian-links.ts). */
+export function notesLinkVault(): LinkVault {
+  const rows = requireDb()
+    .prepare('SELECT path, ctime FROM notes UNION ALL SELECT path, 0 AS ctime FROM canvases UNION ALL SELECT path, ctime FROM files')
+    .all() as { path: string; ctime: number | null }[]
+  return linkVault(rows.map((r) => ({ path: r.path, ctime: r.ctime ?? 0 })))
 }
 
 /**
@@ -238,11 +243,9 @@ export function graph(autoProperty: string | null): GraphData {
  * table of its own. A card's title is its file name, like every note's in
  * Recto - not its H1. Which lane it is in is the board file's business.
  */
-export function cards(targets: readonly string[]): Record<string, BoardCard | null> {
+export function cards(targets: readonly string[], board: string): Record<string, BoardCard | null> {
   const handle = requireDb()
-  const rows = handle.prepare('SELECT path FROM notes').all() as { path: string }[]
-  const allPaths = new Set(rows.map((r) => r.path))
-  const byName = pathsByName(allPaths)
+  const vault = notesLinkVault()
   const field = (key: string, as: string): string =>
     `(SELECT value FROM properties WHERE properties.path = n.path AND properties.key = '${key}') AS ${as}`
   const read = handle.prepare(
@@ -258,7 +261,7 @@ export function cards(targets: readonly string[]): Record<string, BoardCard | nu
   )
   const out: Record<string, BoardCard | null> = {}
   for (const target of targets) {
-    const path = resolveLink(target, byName, allPaths)
+    const path = resolveLinkpath(target, board, vault)
     const row = path === null ? undefined : (read.get(path) as (Omit<BoardCard, 'description' | 'checklist'> & { body: string | null }) | undefined)
     if (row === undefined) {
       out[target] = null
@@ -392,6 +395,16 @@ export function overview(days: readonly string[]): OverviewIndex {
       .all() as { path: string; title: string | null; name: string; target: string }[]
   ).map((row) => ({ path: row.path, name: name(row), target: row.target }))
 
+  const byDate = (
+    handle
+      .prepare(
+        `SELECT DISTINCT n.path, n.title, n.name, l.target_text AS target, l.target_path AS opens
+           FROM links l JOIN notes n ON n.path = l.source_path
+          WHERE l.by_date = 1 AND ${NOT_RECTO_OWN('n.path')} ORDER BY n.name, l.target_text`,
+      )
+      .all() as { path: string; title: string | null; name: string; target: string; opens: string }[]
+  ).map((row) => ({ path: row.path, name: name(row), target: row.target, opens: row.opens }))
+
   const stages = stagesByPath()
   const boardName = new Map(boards().map((b) => [b.path, b.name]))
   const dueCards = (
@@ -432,6 +445,7 @@ export function overview(days: readonly string[]): OverviewIndex {
     hubs: linked.slice(0, 4),
     orphans,
     broken,
+    byDate,
     dueCards,
     written,
     linked,

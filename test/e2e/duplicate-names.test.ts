@@ -6,10 +6,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { quitApp, removeDir } from './helpers/app'
 
 /**
- * A new card or board whose name a note has elsewhere is a choice, never a
- * guess: add that note to the board as it is, or choose another name. The
- * check reads the disk, so a note the index has not seen yet counts too, and
- * nothing is overwritten, reused or made twice. Runs with `npm run test:e2e`.
+ * A new card whose name a note has in another folder is a choice, never a
+ * guess: a new card on this board (Obsidian allows one note of a name per
+ * folder), or that note as it is. The check reads the disk, so a note the
+ * index has not seen yet counts too, and nothing is overwritten, reused or
+ * made twice. A board's own name is taken only by a board of that name.
+ * Runs with `npm run test:e2e`.
  */
 
 const RUN = process.env['RECTO_E2E'] === '1'
@@ -73,48 +75,59 @@ describe.skipIf(!RUN)('a name a note has already', () => {
     for (const name of ['Basil', 'basil']) {
       await typeCard(name)
       await page.locator('.new-card__exists').waitFor()
-      expect(await page.locator('.new-card__exists .new-card__taken').textContent()).toBe('A note “Basil” already exists in Garden/. Add it to this board?')
-      await page.getByRole('button', { name: 'Choose another name' }).click()
+      expect(await page.locator('.new-card__exists .new-card__taken').textContent()).toBe(`“Basil” is already a note, in Garden/.`)
+      expect(await page.locator('.new-card__choices button').allTextContents()).toEqual([`Create a new “${name}” on this board`, 'Use the one in Garden/'])
+      await page.keyboard.press('Escape')
     }
     // Written a moment ago, before the index could read it.
     fs.writeFileSync(path.join(vault, 'Garden', 'Fresh.md'), 'x\n')
     await typeCard('Fresh')
-    await page.locator('.new-card__exists', { hasText: 'A note “Fresh” already exists in Garden/.' }).waitFor()
+    await page.locator('.new-card__exists', { hasText: '“Fresh” is already a note, in Garden/.' }).waitFor()
     await page.keyboard.press('Escape')
     // A name with "/" is refused, never made "Basil Soil".
     await typeCard('Basil/Soil')
-    await page.locator('.new-card [role=alert]', { hasText: '“/” can\'t be used in a name' }).waitFor()
+    await page.locator('.new-card [role=alert]', { hasText: 'File name cannot contain any of the following characters' }).waitFor()
     await page.keyboard.press('Escape')
     expect(walk(vault).filter((f) => !before.includes(f))).toEqual(['Garden/Fresh.md'])
     expect(read(BOARD)).toBe(boardBefore)
   }, 40_000)
 
-  it('“Add it to this board” adds [[X]] as a card and leaves the file where it is', async () => {
+  it('“Use the one in Garden/” adds it as a card and leaves the file where it is', async () => {
     await typeCard('Basil')
-    await page.getByRole('button', { name: 'Add it to this board' }).click()
+    await page.getByRole('button', { name: 'Use the one in Garden/' }).click()
     await until(() => read(BOARD).includes('- [ ] [[Basil]]'))
     expect(read('Garden/Basil.md')).toBe(fs.readFileSync(path.join(ROOT, 'test/fixtures/snapshot-vault/Garden/Basil.md'), 'utf8'))
     expect(fs.existsSync(path.join(vault, 'Recto/Boards/Launch/Basil.md'))).toBe(false)
     await page.locator('.board-card', { hasText: 'Basil' }).waitFor()
     // A second time: it is on the board already, so it is said, not added twice.
     await typeCard('Basil')
-    await page.getByRole('button', { name: 'Add it to this board' }).click()
+    await page.getByRole('button', { name: 'Use the one in Garden/' }).click()
     await page.locator('.new-card [role=alert]', { hasText: 'is on this board already' }).waitFor()
     await page.keyboard.press('Escape')
     expect(read(BOARD).match(/\[\[Basil\]\]/g)).toHaveLength(1)
   }, 30_000)
 
-  it('a new board: the note that has the name is said, with “Choose another name”', async () => {
+  it('“Create a new” (Enter, once asked) makes this board’s own card, linked by its path; the other note is left alone', async () => {
+    await typeCard('Soil')
+    await page.locator('.new-card__exists').waitFor()
+    // Enter again: the new card, as the first choice says.
+    await title().press('Enter')
+    await until(() => fs.existsSync(path.join(vault, 'Recto/Boards/Launch/Soil.md')))
+    await until(() => read(BOARD).includes('- [ ] [[Recto/Boards/Launch/Soil]]'))
+    expect(read('Garden/Soil.md')).toBe(fs.readFileSync(path.join(ROOT, 'test/fixtures/snapshot-vault/Garden/Soil.md'), 'utf8'))
+  }, 30_000)
+
+  it('a new board: a note of the name elsewhere is fine; a board of the name is said, with “Choose another name”', async () => {
     await page.locator('.boards__add').click()
     const field = page.getByRole('textbox', { name: 'New board name' })
-    await field.fill('Soil')
+    await field.fill('Tomatoes')
     await field.press('Enter')
-    await page.locator('.boards__taken', { hasText: 'A note “Soil” already exists in Garden/.' }).waitFor()
-    expect(fs.existsSync(path.join(vault, 'Recto/Boards/Soil'))).toBe(false)
+    await until(() => fs.existsSync(path.join(vault, 'Recto/Boards/Tomatoes/Tomatoes.md')))
+    expect(read('Garden/Tomatoes.md')).toBe(fs.readFileSync(path.join(ROOT, 'test/fixtures/snapshot-vault/Garden/Tomatoes.md'), 'utf8'))
+    await page.locator('.boards__add').click()
+    await field.fill('Launch')
+    await field.press('Enter')
+    await page.locator('.boards__taken', { hasText: 'A note “Launch” already exists in Recto/Boards/Launch/.' }).waitFor()
     await page.getByRole('button', { name: 'Choose another name' }).click()
-    await field.fill('Soil plan')
-    await field.press('Enter')
-    await until(() => fs.existsSync(path.join(vault, 'Recto/Boards/Soil plan/Soil plan.md')))
-    expect(read('Garden/Soil.md')).toBe(fs.readFileSync(path.join(ROOT, 'test/fixtures/snapshot-vault/Garden/Soil.md'), 'utf8'))
   }, 30_000)
 })

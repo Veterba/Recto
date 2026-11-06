@@ -29,6 +29,11 @@ describe.skipIf(!RUN)('link autocomplete', { timeout: 30_000 }, () => {
     fs.mkdirSync(path.join(vault, 'Garden', 'Beds'), { recursive: true })
     fs.writeFileSync(path.join(vault, 'Garden', 'Beds', 'Raised beds.md'), '# Raised beds\n')
     fs.writeFileSync(path.join(vault, 'Draft.md'), '# Draft\n\nLinks: \n')
+    // Two notes with one name, as Obsidian allows.
+    for (const folder of ['One folder', 'Other folder']) {
+      fs.mkdirSync(path.join(vault, folder), { recursive: true })
+      fs.writeFileSync(path.join(vault, folder, 'Same name.md'), `# ${folder}\n`)
+    }
     fs.mkdirSync(path.join(base, 'profile'))
     fs.writeFileSync(path.join(base, 'profile', 'app-state.json'), JSON.stringify({ lastVaultPath: vault }))
     app = await _electron.launch({
@@ -74,5 +79,17 @@ describe.skipIf(!RUN)('link autocomplete', { timeout: 30_000 }, () => {
     await last.click()
     await expect.poll(saved, { timeout: 5000 }).toContain('[[Compost]]')
     await expect.poll(() => fs.existsSync(path.join(vault, 'Compost.md')), { timeout: 5000 }).toBe(true)
+  })
+
+  it('two notes with one name: each is a row with its folder, and the one picked is linked by its path', async () => {
+    await typeAtEnd(' [[Same na')
+    const rows = page.locator('.cm-tooltip-autocomplete li')
+    await expect.poll(() => rows.locator('.cm-completionPath').count()).toBe(2)
+    expect(await rows.locator('.cm-completionPath').allInnerTexts()).toEqual(['One folder', 'Other folder'])
+    expect(await rows.locator('.cm-completionLabel').first().innerText()).toBe('Same name')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    // Obsidian's shortest form: the name alone would not say which one.
+    await expect.poll(saved, { timeout: 5000 }).toContain('[[Other folder/Same name]]')
   })
 })

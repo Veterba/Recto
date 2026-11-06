@@ -1,6 +1,8 @@
 import { IPC, type IpcApi } from '../shared/ipc'
 import { publicUrl } from './public-url'
-import { parseNote, shortestLink } from '../shared/parse'
+import { parseNote } from '../shared/parse'
+import { formatLink, resolveLinkpath, splitSubpath } from '../shared/obsidian-links'
+import { currentLinkSettings, currentLinkVault } from './link-context'
 import * as vaultFs from './vault-fs'
 import { queue } from './vault-tools/proposals'
 import { readState, writeState } from './state'
@@ -35,15 +37,12 @@ export function registerCanvasIpc(handle: Handle): void {
     if (!read.ok) return { ok: false as const, error: read.error }
     const notes = vaultFs.vaultFiles().filter((p) => p.toLowerCase().endsWith('.md'))
     if (!notes.includes(to)) return { ok: false as const, error: `“${name(to)}” is not a note in this vault.` }
-    // Already linked: nothing to suggest; the edge simply shows it.
-    const already = parseNote(read.content).links.some((l) => {
-      const target = l.target.toLowerCase().replace(/\.md$/i, '')
-      const whole = to.toLowerCase().replace(/\.md$/i, '')
-      return whole === target || whole.endsWith(`/${target}`)
-    })
+    // Already linked: a link in it that Obsidian would read as this note. Nothing to suggest; the edge shows it.
+    const vault = currentLinkVault()
+    const already = parseNote(read.content).links.some((l) => resolveLinkpath(splitSubpath(l.target).path, from, vault) === to)
     if (already) return { ok: true as const, proposal: null }
-    // The shortest name that still says which note, as every link Recto writes.
-    const link = `[[${shortestLink(to, notes)}]]`
+    // Written as Obsidian would write it in that note, by the vault's "New link format".
+    const link = formatLink(to, from, vault, currentLinkSettings())
     const before = read.content
     const after = `${before}${before === '' || before.endsWith('\n') ? '' : '\n'}${link}\n`
     const made = queue(

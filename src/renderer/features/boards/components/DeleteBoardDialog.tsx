@@ -120,7 +120,7 @@ function DeleteBoardDialog({ path, onClose }: { path: string; onClose: (deleted:
     void api.invoke(IPC.fsRead, path).then(async (read) => {
       if (!read.ok) return setNotes([])
       const links = [...new Set(parseKanban(read.content).lanes.flatMap((lane) => lane.items.flatMap((item) => (item.link === null ? [] : [item.link]))))]
-      const found = links.length === 0 ? {} : await api.invoke(IPC.indexCards, links)
+      const found = links.length === 0 ? {} : await api.invoke(IPC.indexCards, links, path)
       setNotes([...new Set(Object.values(found).flatMap((row) => (row === null ? [] : [row.path])))])
     })
   }, [path])

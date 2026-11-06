@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { LinkSettings } from './LinkSettings'
 import { createPortal } from 'react-dom'
 import { HotkeyEditor } from './HotkeyEditor'
 import { ObsidianSync } from './ObsidianSync'
@@ -30,7 +31,7 @@ import { clampInside, resizeFrom, type Bounds, type Edges, type Rect } from '../
  */
 
 export type SettingsTab =
-  'appearance' | 'editor' | 'writing' | 'templates' | 'periodic' | 'topics' | 'obsidian' | 'ai' | 'bots' | 'shortcuts' | 'vault'
+  'appearance' | 'editor' | 'writing' | 'templates' | 'periodic' | 'topics' | 'obsidian' | 'ai' | 'bots' | 'shortcuts' | 'vault' | 'links'
 
 type Section = {
   id: SettingsTab
@@ -86,6 +87,14 @@ const SECTIONS: readonly Section[] = [
     group: 'Vault',
     description: 'This folder of notes, its attachments, deleted notes and the search index.',
     render: (deps) => <VaultSettings {...deps} />,
+    searchable: true,
+  },
+  {
+    id: 'links',
+    label: 'Files and links',
+    group: 'Vault',
+    description: 'How links are written and kept up to date: Obsidian’s settings for this vault.',
+    render: () => <LinkSettings />,
     searchable: true,
   },
   {

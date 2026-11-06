@@ -90,38 +90,15 @@ export const nameOf = (path: string): string => path.slice(path.lastIndexOf('/')
 /** A file name as compared for clashes: without case, as the Mac disk does, and in one Unicode form. */
 const nameKey = (path: string): string => nameOf(path).normalize('NFC').toLowerCase()
 
-/**
- * Another file with this one's name anywhere in the vault, or null.
- *
- * A note is linked by name (`[[Plan]]`), so two notes of one name would make
- * every link to it ambiguous; a file is linked by its full name
- * (`[[Plan.pdf]]`). Comparing whole names, extension included, covers both:
- * Plan.md and Plan.pdf may live side by side, two Plan.md or two Plan.pdf may
- * not.
- */
-export function nameTakenElsewhere(path: string, paths: readonly string[]): string | null {
-  return nameTaken(path, paths.filter((other) => other !== path))
-}
-
 /** The first of `paths` with this one's file name, or null. The path itself counts: leave it out to ignore it. */
 export function nameTaken(path: string, paths: readonly string[]): string | null {
   const name = nameKey(path)
   return paths.find((other) => nameKey(other) === name) ?? null
 }
 
-/** What a file name cannot hold: a path separator, or what macOS, Windows or Obsidian refuse. */
-const NOT_IN_NAME = /[/\\:*?"<>|\u0000-\u001f]/
-/** What a `[[link]]` to a note cannot hold: cards and boards are linked by name. */
-const NOT_IN_LINK_NAME = /[#^[\]|]/
-
 /**
- * Why a typed name cannot be used, or null. A name is never changed to fit:
- * "Basil/Soil" is refused, not made "Basil Soil". `linked` adds what a link
- * cannot hold, for cards and boards.
+ * Why a typed name cannot be used, or null: Obsidian's rule - only \ / : are
+ * refused (shared/obsidian-links.ts). A name is never changed to fit; what
+ * will not work well is warned about (`nameWarnings`), not refused.
  */
-export function nameProblem(name: string, linked = false): string | null {
-  const bad = NOT_IN_NAME.exec(name)?.[0] ?? (linked ? NOT_IN_LINK_NAME.exec(name)?.[0] : undefined)
-  if (bad !== undefined) return `“${bad}” can't be used in a name`
-  if (name.trim().startsWith('.')) return "A name can't start with “.”"
-  return null
-}
+export { nameProblem } from './obsidian-links'

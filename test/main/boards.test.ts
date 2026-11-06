@@ -109,14 +109,13 @@ describe('renaming a board', () => {
   })
 
   it('refuses a name with “/”, and changes nothing', async () => {
-    expect(await ops.renameBoard(A, 'A/B')).toEqual({ ok: false, error: '“/” can\'t be used in a name' })
+    expect(await ops.renameBoard(A, 'A/B')).toEqual({ ok: false, error: 'File name cannot contain any of the following characters: \\ / :' })
     expect(exists(A)).toBe(true)
   })
 
-  it('refuses a name a note has anywhere, and changes nothing', async () => {
-    const result = await ops.renameBoard(A, 'Basil')
-    expect(result).toMatchObject({ ok: false })
-    expect(exists(A)).toBe(true)
+  it('allows a name a note has in another folder, as Obsidian does', async () => {
+    expect(await ops.renameBoard(A, 'Basil')).toEqual({ ok: true, path: 'Recto/Boards/Basil/Basil.md' })
+    expect(read('Garden/Basil.md')).toBe('basil')
   })
 })
 
@@ -167,20 +166,21 @@ describe('deleting a board', () => {
 })
 
 describe('the README', () => {
-  it('is written once the Recto folder exists, as Recto README when a README is elsewhere', () => {
+  it('is written once the Recto folder exists, as README whatever README another folder has', () => {
     expect(ensureReadme(root)).toBe('Recto/README.md')
     expect(read('Recto/README.md')).toMatch(/managed by Recto/)
     expect(ensureReadme(root)).toBeNull()
 
     fs.rmSync(path.join(root, 'Recto/README.md'))
     put('Docs/README.md', 'mine')
-    expect(ensureReadme(root)).toBe('Recto/Recto README.md')
+    expect(ensureReadme(root)).toBe('Recto/README.md')
+    expect(read('Docs/README.md')).toBe('mine')
   })
 })
 
 describe('one name check, on disk', () => {
-  it('finds the note that has a name anywhere, in any case', () => {
-    expect(vaultFs.nameTakenBy('basil.md')).toBe('Garden/Basil.md')
-    expect(vaultFs.nameTakenBy('Nothing.md')).toBeNull()
+  it('finds every note that has a name, in any folder and any case', () => {
+    expect(vaultFs.sameNamed('basil.md')).toEqual(['Garden/Basil.md'])
+    expect(vaultFs.sameNamed('Nothing.md')).toEqual([])
   })
 })

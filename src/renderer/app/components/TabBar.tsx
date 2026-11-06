@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { IPC } from '@shared/ipc'
+import { api } from '../api'
 import { getView, viewTitle } from '../view-registry'
 import type { LeafNode, TabsNode, Workspace } from '../workspace'
-import { folderHints, linkTo } from '../tab-labels'
+import { folderHints } from '../tab-labels'
 import { revealInTree } from '../reveal-in-tree'
 import { beginPaneDrag } from '../pane-drag'
 import { Icon } from '../../ui/Icon'
@@ -85,7 +87,8 @@ export function TabBar({ workspace, node }: { workspace: Workspace; node: TabsNo
         icon: 'link',
         disabled: path === null,
         run: () => {
-          if (path !== null) void navigator.clipboard.writeText(linkTo(path)).catch(() => {})
+          if (path !== null) // A link to paste anywhere: as Obsidian writes one from no note, by the vault's link settings.
+            void api.invoke(IPC.linksFormat, path, '').then((link) => navigator.clipboard.writeText(link)).catch(() => {})
         },
       },
       {

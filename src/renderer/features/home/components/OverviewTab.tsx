@@ -18,6 +18,7 @@ const TITLE: Record<OverviewView['kind'], string> = {
   main: 'Overview',
   orphans: 'Notes with no links',
   broken: 'Broken links',
+  dates: 'Links that depend on file dates',
   overdue: 'Overdue',
   day: 'Overview',
   topic: 'Overview',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractTargets, normalizeName, parseNote, pathsByName, resolveLink, shortestLink } from '../../src/shared/parse'
+import { extractTargets, parseNote } from '../../src/shared/parse'
 
 describe('parsing a note', () => {
   it('splits frontmatter from body and types the values', () => {
@@ -67,45 +67,6 @@ describe('parsing a note', () => {
 
   it('finds links inside heading text', () => {
     expect(parseNote('## see [[other]]').links.map((l) => l.target)).toEqual(['other'])
-  })
-})
-
-describe('resolving wikilinks', () => {
-  const paths = new Set(['work/nordicsync.md', 'work/2026/notes.md', 'archive/notes.md', 'Заметки/день.md'])
-  const byName = new Map<string, string[]>([
-    ['nordicsync', ['work/nordicsync.md']],
-    ['notes', ['work/2026/notes.md', 'archive/notes.md']],
-    ['день', ['Заметки/день.md']],
-  ])
-
-  it('resolves by bare filename', () => {
-    expect(resolveLink('nordicsync', byName, paths)).toBe('work/nordicsync.md')
-  })
-
-  it('resolves an exact path', () => {
-    expect(resolveLink('work/2026/notes.md', byName, paths)).toBe('work/2026/notes.md')
-  })
-
-  it('disambiguates a duplicate name by path suffix', () => {
-    expect(resolveLink('archive/notes', byName, paths)).toBe('archive/notes.md')
-    expect(resolveLink('2026/notes', byName, paths)).toBe('work/2026/notes.md')
-  })
-
-  it('falls back to the shortest path when still ambiguous', () => {
-    expect(resolveLink('notes', byName, paths)).toBe('archive/notes.md')
-  })
-
-  it('resolves unicode targets', () => {
-    expect(resolveLink('день', byName, paths)).toBe('Заметки/день.md')
-  })
-
-  it('returns null for an unresolved link rather than guessing', () => {
-    expect(resolveLink('does-not-exist', byName, paths)).toBeNull()
-  })
-
-  it('normalises case and the .md suffix', () => {
-    expect(normalizeName('Nordicsync.md')).toBe('nordicsync')
-    expect(normalizeName('ЗАМЕТКА')).toBe('заметка')
   })
 })
 
@@ -184,20 +145,6 @@ describe('extracting link targets', () => {
   })
 })
 
-describe('the name lookup', () => {
-  it('keys paths by normalised file name, keeping every path that shares one', () => {
-    const byName = pathsByName(['a/Note.md', 'b/note.md', 'c/Other.md'])
-    expect(byName.get(normalizeName('Note.md'))).toEqual(['a/Note.md', 'b/note.md'])
-    expect(byName.get(normalizeName('Other.md'))).toEqual(['c/Other.md'])
-    expect(byName.size).toBe(2)
-  })
-
-  it('is what resolveLink resolves against', () => {
-    const paths = ['a/Note.md', 'c/Other.md']
-    expect(resolveLink('other', pathsByName(paths), new Set(paths))).toBe('c/Other.md')
-  })
-})
-
 describe('HTML comments', () => {
   const note = [
     '# Thread',
@@ -227,21 +174,3 @@ describe('HTML comments', () => {
   })
 })
 
-describe('shortestLink', () => {
-  const paths = ['Recto/Boards/Launch/Choose a name.md', 'Kitchen/Choose a name.md', 'Projects/A/Plan.md', 'Projects/B/Plan.md', 'Solo.md', 'Deep/Only.md']
-  it('is the name when no other note has it', () => {
-    expect(shortestLink('Deep/Only.md', paths)).toBe('Only')
-    expect(shortestLink('Solo.md', paths)).toBe('Solo')
-  })
-  it('is as few last folders as make it unique, not the whole path', () => {
-    expect(shortestLink('Recto/Boards/Launch/Choose a name.md', paths)).toBe('Launch/Choose a name')
-    expect(shortestLink('Kitchen/Choose a name.md', paths)).toBe('Kitchen/Choose a name')
-    expect(shortestLink('Projects/A/Plan.md', paths)).toBe('A/Plan')
-  })
-  it('ignores case, as names do', () => {
-    expect(shortestLink('Deep/Only.md', [...paths, 'Other/only.md'])).toBe('Deep/Only')
-  })
-  it('the whole path only when nothing shorter is unique', () => {
-    expect(shortestLink('A/Plan.md', ['A/Plan.md', 'X/A/Plan.md'])).toBe('A/Plan')
-  })
-})

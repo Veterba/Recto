@@ -91,6 +91,9 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     vault = path.join(base, 'vault')
     const profile = path.join(base, 'profile')
     fs.cpSync(path.join(ROOT, 'test/fixtures/snapshot-vault'), vault, { recursive: true })
+    // Links follow renames without asking ("Always update" chosen once); the question itself is tested in rename-links.test.ts.
+    fs.mkdirSync(path.join(vault, '.recto'), { recursive: true })
+    fs.writeFileSync(path.join(vault, '.recto', 'link-settings.json'), JSON.stringify({ alwaysUpdateLinks: true }))
     fs.mkdirSync(path.dirname(path.join(vault, PLAN)), { recursive: true })
     fs.writeFileSync(path.join(vault, PLAN), planText())
     fs.mkdirSync(profile)
@@ -351,9 +354,10 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await page.locator('.canvas-view').focus()
     await page.keyboard.press('Escape')
     await page.locator('.canvas-tools__tool[aria-label="Note"]').click()
+    const before = read(PLAN).split('"file":"Garden/Basil.md"').length - 1
     await page.locator('[aria-label="Find a note"]').fill('Basil')
     await page.keyboard.press('Enter')
-    await expect.poll(() => read(PLAN).split('"file":"Garden/Basil.md"').length - 1).toBe(2)
+    await expect.poll(() => read(PLAN).split('"file":"Garden/Basil.md"').length - 1).toBe(before + 1)
   })
 
   it('a board on the canvas is its Markdown: the wheel over it scrolls its text, not the canvas; Obsidian’s %% settings %% are not shown', async () => {
@@ -383,13 +387,14 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await page.keyboard.press('Enter')
     await expect.poll(() => read('Recto/Boards/Launch/Launch.md')).toContain('[[Plant garlic]]')
     await expect.poll(() => nodeOf(id).locator('.canvas-board__title', { hasText: 'Plant garlic' }).count()).toBe(1)
-    // A name a note has already: said where, and that note put here if asked.
+    // A name a note has in another folder: said where; a new card here, or that note put here if asked.
     await nodeOf(id).locator('[aria-label="Add a task to To do"]').click()
     fs.writeFileSync(path.join(vault, 'Garden/Garlic notes.md'), 'Cloves in October.\n')
     await nodeOf(id).locator('[aria-label="New task in To do"]').fill('Garlic notes')
     await page.keyboard.press('Enter')
     await expect.poll(() => nodeOf(id).locator('.canvas-board__said').textContent()).toContain('is already a note, in Garden')
-    await nodeOf(id).getByRole('button', { name: 'Add that one here' }).click()
+    expect(await nodeOf(id).locator('.canvas-board__choices button').allTextContents()).toEqual(['Create a new “Garlic notes” here', 'Use the one in Garden'])
+    await nodeOf(id).getByRole('button', { name: 'Use the one in Garden' }).click()
     await expect.poll(() => read('Recto/Boards/Launch/Launch.md')).toContain('[[Garlic notes]]')
     // Its name bar switches it to its Markdown, and back.
     await nodeOf(id).locator('[aria-label="Show Markdown"]').click()
@@ -796,5 +801,39 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await page.keyboard.press('Escape')
     await expect.poll(() => read(PLAN)).toContain('"text":"Just words"')
     expect(read(PLAN)).toMatch(/"text":"Just words"[^}]*"styleAttributes":\{"border":"invisible","fill":"none"\}/)
+  })
+
+  it('“Make it a note” with a name another note has: “Use that note” puts that note on the canvas and never moves it; “Create a new” makes one beside the canvas', async () => {
+    const basilNodes = (): number => read(PLAN).split('"file":"Garden/Basil.md"').length - 1
+    const textNode = async (words: string, dx: number): Promise<void> => {
+      const pane = (await page.locator('.react-flow__pane').boundingBox())!
+      await page.mouse.dblclick(pane.x + 160 + dx, pane.y + pane.height - 120)
+      await page.waitForFunction(() => document.activeElement?.closest('.cm-editor') !== null)
+      await page.keyboard.type(words)
+      await page.keyboard.press('Escape')
+      await expect.poll(() => read(PLAN)).toContain(`"text":"${words}"`)
+      await page.locator('.canvas-node', { hasText: words }).click({ button: 'right' })
+      await page.locator('.menu__item', { hasText: 'Make it a note' }).click()
+      await page.locator('[aria-label="Note name"]').fill('Basil')
+      await page.keyboard.press('Enter')
+      await expect.poll(() => page.locator('[aria-label="A note of this name exists"]').textContent()).toContain('“Basil” is already a note, in Garden.')
+    }
+    await openPlan()
+    const garden = read('Garden/Basil.md')
+    const before = basilNodes()
+
+    await textNode('Sow basil early', 0)
+    await page.locator('.canvas-bar__use', { hasText: 'Use that note' }).click()
+    await expect.poll(basilNodes).toBe(before + 1)
+    expect(read(PLAN)).not.toContain('Sow basil early')
+    expect(read('Garden/Basil.md')).toBe(garden)
+    expect(fs.existsSync(path.join(vault, 'Basil.md'))).toBe(false)
+
+    await textNode('Pinch the flowers', 300)
+    await page.locator('.canvas-bar .btn--primary', { hasText: 'Create a new “Basil” here' }).click()
+    await expect.poll(() => (fs.existsSync(path.join(vault, 'Basil.md')) ? read('Basil.md') : null)).toBe('Pinch the flowers\n')
+    await expect.poll(() => read(PLAN)).toContain('"file":"Basil.md"')
+    expect(read('Garden/Basil.md')).toBe(garden)
+    expect(basilNodes()).toBe(before + 1)
   })
 })

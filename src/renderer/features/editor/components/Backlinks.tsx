@@ -40,6 +40,10 @@ type Props = {
   onOpen: (path: string) => void
 }
 
+/** What a linking note is called in the list: its title, or its file name. */
+const nameOf = (link: { path: string; title: string | null }): string => link.title ?? link.path.slice(link.path.lastIndexOf('/') + 1).replace(/\.md$/, '')
+const folderOf = (path: string): string => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '')
+
 export function Backlinks({ path, revision, onOpen }: Props): React.ReactElement | null {
   const [links, setLinks] = useState<BacklinkResult[] | null>(null)
   /** The canvases this note is on: each an "On canvas …" entry. */
@@ -60,6 +64,10 @@ export function Backlinks({ path, revision, onOpen }: Props): React.ReactElement
     setCollapsed(next)
     writeCollapsed(next)
   }
+
+  const names = new Map<string, Set<string>>()
+  for (const link of links) names.set(nameOf(link).toLowerCase(), (names.get(nameOf(link).toLowerCase()) ?? new Set()).add(link.path))
+  const repeated = new Set([...names].filter(([, paths]) => paths.size > 1).map(([name]) => name))
 
   return (
     <section className={`backlinks${collapsed ? ' is-collapsed' : ''}`}>
@@ -89,7 +97,9 @@ export function Backlinks({ path, revision, onOpen }: Props): React.ReactElement
                 <li key={`${link.path}:${link.line}:${i}`}>
                   <button className="backlink" onClick={() => onOpen(link.path)}>
                     <span className="backlink__name">
-                      {link.title ?? link.path.slice(link.path.lastIndexOf('/') + 1).replace(/\.md$/, '')}
+                      {nameOf(link)}
+                      {/* Two notes of one name, in different folders: each says which. */}
+                      {repeated.has(nameOf(link).toLowerCase()) && <span className="backlink__folder">{folderOf(link.path) || 'top of the vault'}</span>}
                     </span>
                     {link.context !== null && link.context !== '' && (
                       <span className="backlink__context">{plainSnippet(link.context)}</span>

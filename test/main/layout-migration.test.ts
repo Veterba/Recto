@@ -76,7 +76,7 @@ describe('planLayout', () => {
     expect(plan.edits.some((e) => e.path.startsWith('Recto/Chats/'))).toBe(false)
   })
 
-  it('a [[tasks/X]] link written because another X exists becomes the shortest path that names it alone', () => {
+  it('a [[tasks/X]] link written because another X exists is written again as Obsidian would: the whole path', () => {
     const files: LayoutFile[] = [
       { path: 'tasks/Board.md', text: board(['[[tasks/X]]']) },
       { path: 'tasks/X.md', text: 'the card' },
@@ -88,25 +88,29 @@ describe('planLayout', () => {
     expect(moveOf(p, 'tasks/X.md')).toBe('Recto/Boards/Board/X.md')
     const index = p.edits.find((e) => e.path === 'Index.md')!
     // `[[X]]` found tasks/X before (the shorter path); after the move Elsewhere/X would win, so it is pinned too.
-    expect(index.after).toBe('[[Board/X|the card]] and [[Board/X]]\n')
-    expect(p.edits.find((e) => e.path === 'Recto/Boards/Board/Board.md')!.after).toContain('- [ ] [[Board/X]]')
+    expect(index.after).toBe('[[Recto/Boards/Board/X|the card]] and [[Recto/Boards/Board/X]]\n')
+    expect(p.edits.find((e) => e.path === 'Recto/Boards/Board/Board.md')!.after).toContain('- [ ] [[Recto/Boards/Board/X]]')
     // A link to the other X never changes.
     expect(p.edits.some((e) => e.path === 'Other.md')).toBe(false)
   })
 
-  it('a bare link whose shortest-path winner would change is pinned to the same note', () => {
+  it('a bare link still meaning the same note after the move is left as it is; one that would not is pinned', () => {
     const files: LayoutFile[] = [
       { path: 'tasks/Board.md', text: board(['[[X]]']) },
       { path: 'tasks/X.md', text: 'the card' },
       { path: 'Deep/er/X.md', text: 'another X' },
+      { path: 'Index.md', text: '[[X]]\n' },
     ]
     const p = planLayout(files)
-    expect(p.edits.find((e) => e.path === 'Recto/Boards/Board/Board.md')!.links).toEqual([{ from: 'X', to: 'Board/X' }])
+    // From the board's own folder its card is still nearest.
+    expect(p.edits.find((e) => e.path === 'Recto/Boards/Board/Board.md')?.links ?? []).toEqual([])
+    // From the vault's top, Deep/er/X.md would now be the shorter path: pinned to the card.
+    expect(p.edits.find((e) => e.path === 'Index.md')!.links).toEqual([{ from: 'X', to: 'Recto/Boards/Board/X' }])
   })
 
-  it('writes the README, under another name when a README is elsewhere', () => {
+  it('writes the README, as README whatever README is elsewhere', () => {
     expect(plan.creates.map((c) => c.path)).toEqual(['Recto/README.md'])
-    expect(planLayout([...FILES, { path: 'README.md', text: '' }]).creates.map((c) => c.path)).toEqual(['Recto/Recto README.md'])
+    expect(planLayout([...FILES, { path: 'README.md', text: '' }]).creates.map((c) => c.path)).toEqual(['Recto/README.md'])
   })
 
   it('stops, writing nothing, when a target is taken', () => {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { shortestLink } from '../../../../src/shared/parse'
+import { formatLink, linkVault, OBSIDIAN_DEFAULTS } from '../../../../src/shared/obsidian-links'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -124,12 +124,12 @@ beforeEach(() => {
         indexed.add(to)
         return { ok: true, path: to, rewrittenLinks: 1, rewrittenFiles: 1 }
       }
-      case IPC.fsNameTaken: {
+      case IPC.fsSameNamed: {
         const name = String(args[0]).toLowerCase()
-        return [...files.keys()].find((p) => p.slice(p.lastIndexOf('/') + 1).toLowerCase() === name) ?? null
+        return [...files.keys()].filter((p) => p.slice(p.lastIndexOf('/') + 1).toLowerCase() === name)
       }
-      case IPC.fsLinkTarget:
-        return shortestLink(args[0] as string, files.keys())
+      case IPC.linksFormat:
+        return formatLink(args[0] as string, args[1] as string, linkVault([...files.keys()].map((p) => ({ path: p, ctime: 0 }))), OBSIDIAN_DEFAULTS, args[2] as object)
       case IPC.boardsPlace:
         return []
       case IPC.indexResolveLink:
@@ -382,16 +382,34 @@ describe('adding a card', () => {
     expect(board().match(/\[\[Twice\]\]/g)).toHaveLength(1)
   })
 
-  it('refuses a name that is already a note, and makes nothing', async () => {
+  it('a name another folder has is a choice, never a guess: nothing is made until a new card is asked for', async () => {
     files.set('Notes/Groceries.md', '# Groceries\n')
     const hook = await mount()
     let result: unknown = null
     await act(async () => {
       result = await hook.current.addCard('0', 'Groceries')
     })
-    expect(result).toEqual({ ok: false, exists: 'Notes/Groceries.md' })
+    expect(result).toEqual({ ok: false, elsewhere: ['Notes/Groceries.md'] })
     expect(calls.some((c) => c.channel === IPC.fsCreate)).toBe(false)
     expect(board()).toBe(boardText)
+    // "Create a new one on this board": its own note, linked by its path - the name alone would not say which.
+    await act(async () => {
+      result = await hook.current.addCard('0', 'Groceries', true)
+    })
+    expect(result).toEqual({ ok: true, path: 'Recto/Boards/Launch/Groceries.md' })
+    expect(board()).toContain('- [ ] [[Recto/Boards/Launch/Groceries]]')
+    expect(files.get('Notes/Groceries.md')).toBe('# Groceries\n')
+  })
+
+  it('a name this board’s folder has: that note is offered, nothing is made', async () => {
+    files.set('Recto/Boards/Launch/groceries.md', '')
+    const hook = await mount()
+    let result: unknown = null
+    await act(async () => {
+      result = await hook.current.addCard('0', 'Groceries', true)
+    })
+    expect(result).toEqual({ ok: false, here: 'Recto/Boards/Launch/groceries.md' })
+    expect(calls.some((c) => c.channel === IPC.fsCreate)).toBe(false)
   })
 
   it('takes the note away again when the board cannot be written', async () => {
@@ -421,13 +439,13 @@ describe('a line of text', () => {
     expect(card(hook, 'Buy stamps')).toMatchObject({ light: false, path: 'Recto/Boards/Launch/Buy stamps.md' })
   })
 
-  it('is not made a note when one has its name; the board is left alone', async () => {
-    files.set('Errands/Buy stamps.md', '')
+  it('is not made a note when the board’s folder has its name; the board is left alone', async () => {
+    files.set('Recto/Boards/Launch/Buy stamps.md', '')
     const hook = await mount()
     await act(async () => {
       await hook.current.makeNote(card(hook, 'Buy stamps')!.key)
     })
-    expect(hook.current.notice).toMatch(/exists already/)
+    expect(hook.current.notice).toMatch(/already in this board’s folder/)
     expect(board()).toBe(boardText)
   })
 
@@ -524,7 +542,7 @@ describe('a name with “/”', () => {
     await act(async () => {
       result = await hook.current.addCard('0', 'Basil/Soil')
     })
-    expect(result).toEqual({ ok: false, error: '“/” can\'t be used in a name' })
+    expect(result).toEqual({ ok: false, error: 'File name cannot contain any of the following characters: \\ / :' })
     expect(calls.some((c) => c.channel === IPC.fsCreate)).toBe(false)
     expect(board()).toBe(boardText)
   })
@@ -535,7 +553,7 @@ describe('a name with “/”', () => {
     await act(async () => {
       await hook.current.makeNote(card(hook, 'Buy stamps/envelopes')!.key)
     })
-    expect(hook.current.notice).toBe('Couldn\'t make the note: “/” can\'t be used in a name.')
+    expect(hook.current.notice).toBe('Couldn\'t make the note: File name cannot contain any of the following characters: \\ / :.')
     expect(calls.some((c) => c.channel === IPC.fsCreate)).toBe(false)
   })
 
@@ -546,7 +564,7 @@ describe('a name with “/”', () => {
       next = await hook.current.renameCard('Recto/Boards/Launch/Ship it.md', 'Ship/it')
     })
     expect(next).toBeNull()
-    expect(hook.current.notice).toBe('Couldn\'t rename the card: “/” can\'t be used in a name.')
+    expect(hook.current.notice).toBe('Couldn\'t rename the card: File name cannot contain any of the following characters: \\ / :.')
     expect(calls.some((c) => c.channel === IPC.fsRename)).toBe(false)
   })
 })

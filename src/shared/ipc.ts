@@ -6,6 +6,7 @@
  * signature, and fail to compile if they and the name lists ever disagree.
  */
 
+import type { LinkSettings } from './obsidian-links'
 import type { AiDelta, AiDone, AiError, AiMessage } from './ai'
 import type { ArchiveState } from './archive'
 import type { Bot, BotJob, BotMemoryStatus, BotMessage, BotModelStatus, BotSettings, ModelChoice, NoteCardsStatus, PullProgress } from './bots'
@@ -86,8 +87,10 @@ export const IPC = {
   fsRename: 'fs:rename',
   fsTrash: 'fs:trash',
   fsMove: 'fs:move',
-  fsNameTaken: 'fs:name-taken',
-  fsLinkTarget: 'fs:link-target',
+  fsSameNamed: 'fs:same-named',
+  linksSettings: 'links:settings',
+  linksFormat: 'links:format',
+  linksAnswer: 'links:answer',
   fsExisting: 'fs:existing',
   boardsPlace: 'boards:place',
   boardsRename: 'boards:rename',
@@ -206,6 +209,7 @@ export const IPC = {
 /** Push channels: main -> renderer. Subscribed through `api.on`. */
 export const IPC_EVENT = {
   vaultChanged: 'vault:changed',
+  linksAsk: 'links:ask',
   appFullscreen: 'app:fullscreen',
   obsidianStatus: 'obsidian:status',
   aiDelta: 'ai:delta',
@@ -240,6 +244,8 @@ export type IpcEvents = Exhaustive<
   IpcEventChannel,
   {
     [IPC_EVENT.vaultChanged]: (changes: VaultChange[]) => void
+    /** A rename would change links, and the vault says to ask first (Obsidian's Update links): answered with `links:answer`. */
+    [IPC_EVENT.linksAsk]: (ask: { id: string; links: number; files: number }) => void
     /** The window entered or left macOS full screen. */
     [IPC_EVENT.appFullscreen]: (on: boolean) => void
     /** Sync state changed: a pass started, finished, or stopped for a reason. */
@@ -343,10 +349,14 @@ export type IpcApi = Exhaustive<
     [IPC.fsOpenWithApp]: (path: string) => { ok: boolean }
     /** A vault file's bytes, undecoded (a PDF for its reader). */
     [IPC.fsReadBytes]: (path: string) => { ok: true; data: Uint8Array } | { ok: false; error: string }
-    /** The file that already has this file name (`Plan.md`) anywhere in the vault, read from disk; null when it is free. */
-    [IPC.fsNameTaken]: (fileName: string) => string | null
-    /** The shortest `[[link]]` target that names this note and no other (shared/parse.ts `shortestLink`). */
-    [IPC.fsLinkTarget]: (path: string) => string
+    /** Every file with this file name (`Plan.md`), in any folder, ignoring case, read from disk: Obsidian allows one per folder. */
+    [IPC.fsSameNamed]: (fileName: string) => string[]
+    /** The vault's link settings: Obsidian's, from `.obsidian/app.json`, or its defaults. */
+    [IPC.linksSettings]: () => LinkSettings
+    /** A link to the file at `target`, written in `source` as Obsidian writes it (shared/obsidian-links.ts `formatLink`). */
+    /** The Update links dialog's answer. */
+    [IPC.linksAnswer]: (id: string, answer: 'always' | 'once' | 'never') => void
+    [IPC.linksFormat]: (target: string, source: string, opts?: { subpath?: string; alias?: string; embed?: boolean; markdown?: boolean }) => string
     /** Which of these vault paths are on disk now, whatever the tree has caught up with. */
     [IPC.fsExisting]: (paths: string[]) => string[]
     /** Put placed cards where the layout rules say, after a change in Recto; `boards` are board notes written since the index last read. */
@@ -373,12 +383,13 @@ export type IpcApi = Exhaustive<
     [IPC.indexCanvasesOf]: (path: string) => string[]
     [IPC.indexStats]: () => IndexStats
     [IPC.indexReindex]: () => { ok: boolean }
-    [IPC.indexResolveLink]: (target: string) => string | null
-    [IPC.indexResolveLinks]: (targets: string[]) => Record<string, string | null>
+    /** A link's file, read from `source` - the note it is in, or '' for none (Obsidian's rules: shared/obsidian-links.ts). */
+    [IPC.indexResolveLink]: (target: string, source: string) => string | null
+    [IPC.indexResolveLinks]: (targets: string[], source: string) => Record<string, string | null>
     [IPC.indexUnresolved]: () => { target: string; sources: string[] }[]
     [IPC.indexGraph]: () => GraphInfo
     /** Card fields of the notes these link texts name (null for a name no note has). */
-    [IPC.indexCards]: (targets: string[]) => Record<string, BoardCardInfo | null>
+    [IPC.indexCards]: (targets: string[], board: string) => Record<string, BoardCardInfo | null>
     /** Board notes: every note in the Obsidian Kanban format. */
     [IPC.indexBoards]: () => BoardSummaryInfo[]
     /** Every card on every board and where it stands there. */

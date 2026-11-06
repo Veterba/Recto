@@ -9,6 +9,8 @@ import type { EndTarget } from './canvas-arrows'
  * by the library, so this is how they reach the file without a prop chain.
  */
 export type CanvasActions = {
+  /** The canvas file: what links typed into its cards are written from. */
+  canvas: string
   /** The node whose text is being edited, if any. */
   editing: string | null
   startEditing: (id: string) => void
@@ -23,7 +25,8 @@ export type CanvasActions = {
   editingEdge: string | null
   startEdgeLabel: (id: string) => void
   setEdgeLabel: (id: string, label: string) => void
-  openLink: (target: string) => void
+  /** Follow a link in a node: from the note it is in, or else from the canvas. */
+  openLink: (target: string, from?: string) => void
   openFile: (path: string) => void
   /** Draw on a drawing again: the Draw tool, its strokes added to this one. */
   drawOn: (id: string) => void
@@ -57,6 +60,7 @@ export type CanvasActions = {
 const noop = (): void => {}
 
 export const CanvasActionsContext = createContext<CanvasActions>({
+  canvas: '',
   editing: null,
   startEditing: noop,
   stopEditing: noop,

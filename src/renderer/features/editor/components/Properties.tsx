@@ -55,11 +55,14 @@ function LinkValue({
   onChange,
   onOpenLink,
   getCandidates,
+  source,
 }: {
   field: Field
   onChange: (value: Field['value']) => void
   onOpenLink: (target: string, heading: string | null) => void
   getCandidates: () => readonly LinkCandidate[]
+  /** The note the properties are in: its links are read from there. */
+  source: string
 }): React.ReactElement {
   const isList = Array.isArray(field.value)
   const raw = isList ? (field.value as string[]).join(', ') : typeof field.value === 'string' ? field.value : ''
@@ -86,7 +89,7 @@ function LinkValue({
   useEffect(() => {
     if (targets.length === 0) return
     let cancelled = false
-    void api.invoke(IPC.indexResolveLinks, targets).then((resolved) => {
+    void api.invoke(IPC.indexResolveLinks, targets, source).then((resolved) => {
       if (!cancelled) setUnresolved(new Set(targets.filter((target) => resolved[target] == null)))
     })
     return () => {
@@ -94,7 +97,7 @@ function LinkValue({
     }
     // Keyed on the joined targets, not the array identity, which is new every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetKey])
+  }, [targetKey, source])
 
   const commit = (): void => {
     setEditing(false)
@@ -109,6 +112,7 @@ function LinkValue({
         value={draft}
         autoFocus
         getCandidates={getCandidates}
+        source={source}
         placeholder="[[Note name]]"
         onChange={setDraft}
         onBlur={commit}
@@ -193,15 +197,18 @@ function ValueEditor({
   onChange,
   onOpenLink,
   getCandidates,
+  source,
 }: {
   field: Field
   onChange: (value: Field['value']) => void
   onOpenLink: (target: string, heading: string | null) => void
   getCandidates: () => readonly LinkCandidate[]
+  /** The note the properties are in: its links are read from there. */
+  source: string
 }): React.ReactElement {
   const linked =
     field.type === 'link' || (field.type === 'list' && Array.isArray(field.value) && field.value.some((item) => HAS_LINK.test(item)))
-  if (linked) return <LinkValue field={field} onChange={onChange} onOpenLink={onOpenLink} getCandidates={getCandidates} />
+  if (linked) return <LinkValue field={field} onChange={onChange} onOpenLink={onOpenLink} getCandidates={getCandidates} source={source} />
 
   if (field.type === 'boolean') {
     return <Toggle on={field.value === true} onChange={() => onChange(field.value !== true)} small />
@@ -238,6 +245,7 @@ function ValueEditor({
         value={items.join(', ')}
         placeholder="comma, separated"
         getCandidates={getCandidates}
+        source={source}
         onChange={(next) => onChange(splitItems(next))}
       />
     )
@@ -249,6 +257,7 @@ function ValueEditor({
       value={typeof field.value === 'string' ? field.value : ''}
       placeholder="empty — type [[ to link a note"
       getCandidates={getCandidates}
+      source={source}
       onChange={(next) => onChange(next)}
     />
   )
@@ -262,9 +271,11 @@ type Props = {
   onOpenLink: (target: string, heading: string | null) => void
   /** Note names offered after `[[` in a value. */
   getLinkCandidates: () => readonly LinkCandidate[]
+  /** The note's path: links in its properties are read from there. */
+  path: string
 }
 
-export function Properties({ text, onChange, onOpenLink, getLinkCandidates }: Props): React.ReactElement {
+export function Properties({ text, onChange, onOpenLink, getLinkCandidates, path }: Props): React.ReactElement {
   /**
    * Shut until it is opened.
    *
@@ -375,6 +386,7 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates }: Pr
                   onChange={(value) => onChange(setField(text, field.key, value))}
                   onOpenLink={onOpenLink}
                   getCandidates={getLinkCandidates}
+                  source={path}
                 />
               )}
 

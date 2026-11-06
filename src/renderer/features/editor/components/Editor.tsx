@@ -23,6 +23,8 @@ type EditorProps = {
   /** Rendered and not editable: a reading view. */
   readOnly?: boolean
   getLinkCandidates?: () => readonly LinkCandidate[]
+  /** The file the text is in, for the links written into it ('' for none). */
+  linkSource?: string
   onSelectionChange?: () => void
   onFoldsChange?: (lines: number[]) => void
   onAuthorsChange?: () => void
@@ -42,6 +44,7 @@ export function Editor({
   onLinkHover,
   readOnly,
   getLinkCandidates,
+  linkSource,
   onSelectionChange,
   onFoldsChange,
   onAuthorsChange,
@@ -62,6 +65,7 @@ export function Editor({
     onLinkHover,
     onReady,
     getLinkCandidates,
+    linkSource,
     onSelectionChange,
     onFoldsChange,
     onAuthorsChange,
@@ -75,6 +79,7 @@ export function Editor({
     onLinkHover,
     onReady,
     getLinkCandidates,
+    linkSource,
     onSelectionChange,
     onFoldsChange,
     onAuthorsChange,
@@ -94,6 +99,7 @@ export function Editor({
       onLinkHover: (link) => callbacks.current.onLinkHover?.(link),
       readOnly: readOnly === true,
       getLinkCandidates: () => callbacks.current.getLinkCandidates?.() ?? [],
+      getLinkSource: () => callbacks.current.linkSource ?? '',
       onSelectionChange: () => callbacks.current.onSelectionChange?.(),
       onFoldsChange: (lines) => callbacks.current.onFoldsChange?.(lines),
       onAuthorsChange: () => callbacks.current.onAuthorsChange?.(),

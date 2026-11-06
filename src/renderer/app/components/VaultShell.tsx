@@ -1,4 +1,6 @@
 import { CANVAS_FOLDER } from '@shared/recto-paths'
+import { UpdateLinksDialog } from './UpdateLinksDialog'
+import { refreshLinkSettings } from '../link-writer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ATTACHMENTS_FOLDER, type FileNode, type VaultInfo } from '@shared/vault'
 import { IPC } from '@shared/ipc'
@@ -229,6 +231,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const [boardsNoticeSettled, setBoardsNoticeSettled] = useState(0)
   const onBoardsNoticeSettled = useCallback(() => setBoardsNoticeSettled((n) => n + 1), [])
   useEffect(() => loadRectoFolderSetting(vault.path), [vault.path])
+  // How links are written here: this vault's Obsidian settings (app/link-writer.ts).
+  useEffect(() => refreshLinkSettings(), [vault.path])
   const visibleTree = useMemo(() => {
     // Templates are NOT hidden: they are notes the user writes and edits, so
     // the folder sits in the tree with its own icon. Chats and attachments are
@@ -339,8 +343,8 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   )
   /** A link followed from a pinned note opens it in the main editor. */
   const openLinkInEditor = useCallback(
-    (target: string, heading: string | null) => {
-      void api.invoke(IPC.indexResolveLink, target).then((resolved) => {
+    (target: string, heading: string | null, source: string) => {
+      void api.invoke(IPC.indexResolveLink, target, source).then((resolved) => {
         if (resolved !== null) openFile(resolved, heading)
       })
     },
@@ -363,7 +367,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
         open(tabsId, zone, payload.path)
         setNoteWindowsRef.current((prev) => closeNoteWindow(prev, payload.windowId))
       } else
-        void api.invoke(IPC.indexResolveLink, payload.target).then((resolved) => {
+        void api.invoke(IPC.indexResolveLink, payload.target, payload.source).then((resolved) => {
           if (resolved !== null) open(tabsId, zone, resolved, payload.heading)
         })
     })
@@ -454,7 +458,6 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     activePath,
     closePicker: () => setTemplatesOpen(false),
     byPath: tree.byPath,
-    notes: allNotes,
     templates,
     refresh,
     openFile: openFileRef,
@@ -665,7 +668,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     setShortcutsOpen,
   })
 
-  usePeriodicNotesAutoCreate(templates, allNotes, refresh, settingsOpen)
+  usePeriodicNotesAutoCreate(templates, refresh, settingsOpen)
 
   useEffect(() => {
     const off = commands.registerAll([
@@ -806,6 +809,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
               <p>Restoring layout…</p>
             </div>
           )}
+          <UpdateLinksDialog />
           <NoteWindows
             windows={noteWindows}
             setWindows={setNoteWindows}

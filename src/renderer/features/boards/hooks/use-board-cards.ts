@@ -4,13 +4,13 @@ import type { BoardCardInfo } from '@shared/index-results'
 import { cardFields, isoDay, setCardField } from '@shared/card-fields'
 import { cardFolderFor, isPlacedCard } from '@shared/recto-paths'
 import { nameProblem } from '@shared/vault'
-import { cardLink, findItem, insertItem, moveItem, parseKanban, removeItem, replaceItem, type KanbanBoard } from '@shared/kanban'
+import { findItem, insertItem, moveItem, parseKanban, removeItem, replaceItem, type KanbanBoard } from '@shared/kanban'
 import { api } from '../../../app/api'
 import { noteIndexChanged, useNoteBus } from '../../../app/note-bus'
 import { noteEdited } from '../../../app/usage'
 import { boardFrom, doneColumn, type Board } from '../boards'
 import { toView, type CardView } from '../board-view'
-import { cardName, createCardNote, noteNamed } from '../create-card'
+import { cardName, createCardNote, inFolder, notesNamed } from '../create-card'
 
 /** How long to trust our own write over what the index says. */
 const OVERRIDE_TTL_MS = 15_000
@@ -19,7 +19,16 @@ const OVERRIDE_TTL_MS = 15_000
 export type Drop = { column: string; index: number }
 
 /** What adding a card came to: made, refused because the name is taken, or failed. */
-export type AddResult = { ok: true; path: string } | { ok: false; exists: string } | { ok: false; error: string }
+/**
+ * A card added, or why not yet: `here` - the board's folder has a note of
+ * the name already (one per folder, as in Obsidian); `elsewhere` - notes of
+ * the name in other folders, to use one or make a new card beside them.
+ */
+export type AddResult =
+  | { ok: true; path: string }
+  | { ok: false; here: string }
+  | { ok: false; elsewhere: string[] }
+  | { ok: false; error: string }
 
 type Patch = Partial<BoardCardInfo>
 
@@ -53,7 +62,8 @@ export function useBoardCards(path: string): {
   /** Edit one card's note; the edit is handed the text and returns the new text. */
   editCard: (path: string, edit: (text: string) => string) => Promise<boolean>
   move: (key: string, target: Drop) => Promise<void>
-  addCard: (column: string, title: string) => Promise<AddResult>
+  /** `anyway`: make a new card even when other folders have a note of the name. */
+  addCard: (column: string, title: string, anyway?: boolean) => Promise<AddResult>
   /** A note that exists already, put on this board as a card; its file is not made or copied. */
   addExisting: (column: string, notePath: string) => Promise<AddResult>
   /** A plain-text card becomes a note in this board's folder, and its line a link to it. Resolves to the note's path. */
@@ -119,7 +129,7 @@ export function useBoardCards(path: string): {
       return
     }
     const load = (): void => {
-      void api.invoke(IPC.indexCards, links).then((found) => {
+      void api.invoke(IPC.indexCards, links, path).then((found) => {
         setRows(found)
         setOverlay((prev) => prune(prev, found, Date.now()))
       })
@@ -129,7 +139,7 @@ export function useBoardCards(path: string): {
     const timer = window.setTimeout(load, 1200)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `linkKey` stands for `links`
-  }, [linkKey, revision, tick])
+  }, [linkKey, path, revision, tick])
 
   // A notice says its piece and goes.
   useEffect(() => {
@@ -334,21 +344,25 @@ export function useBoardCards(path: string): {
 
   /** A new card: its note in the board's folder, then its line at the top of the column. */
   const addCard = useCallback(
-    async (column: string, title: string): Promise<AddResult> => {
+    async (column: string, title: string, anyway = false): Promise<AddResult> => {
       const name = cardName(title)
       const key = lower(name)
       if (name === '') return { ok: false, error: 'A card needs a name.' }
-      const problem = nameProblem(name, true)
+      const problem = nameProblem(name)
       if (problem !== null) return { ok: false, error: problem }
       if (creating.current.has(key)) return { ok: false, error: 'That card is already being made.' }
       creating.current.add(key)
       try {
-        const existing = await noteNamed(name)
-        if (existing !== null) return { ok: false, exists: existing }
-        const created = await createCardNote(name, cardFolderFor(path, textRef.current))
+        const folder = cardFolderFor(path, textRef.current)
+        const named = await notesNamed(name)
+        const here = inFolder(named, folder)
+        if (here !== null) return { ok: false, here }
+        if (named.length > 0 && !anyway) return { ok: false, elsewhere: named }
+        const created = await createCardNote(name, folder)
         if (!created.ok) return created
-        const stem = showMade(created.path)
-        const ok = await editBoard((t) => insertItem(t, Number(column), 0, cardLink(stem)))
+        showMade(created.path)
+        const link = await api.invoke(IPC.linksFormat, created.path, path, { markdown: false })
+        const ok = await editBoard((t) => insertItem(t, Number(column), 0, link))
         if (!ok) {
           // A card note with no board to be on helps nobody.
           await api.invoke(IPC.fsTrash, created.path)
@@ -364,16 +378,17 @@ export function useBoardCards(path: string): {
   )
 
   /**
-   * An existing note as a card: `[[Name]]` at the top of the column - the
-   * shortest path that names it alone when another note shares the name - and
+   * An existing note as a card: its link at the top of the column, as
+   * Obsidian writes it from the board (its name, or its path when another
+   * note shares the name), and
    * nothing made. A note already on this board is said, not added twice.
    */
   const addExisting = useCallback(
     async (column: string, notePath: string): Promise<AddResult> => {
       const stem = notePath.slice(notePath.lastIndexOf('/') + 1).replace(/\.md$/i, '')
       if (cardsRef.current?.some((c) => c.path === notePath)) return { ok: false, error: `“${stem}” is on this board already.` }
-      const target = await api.invoke(IPC.fsLinkTarget, notePath)
-      const ok = await editBoard((t) => insertItem(t, Number(column), 0, cardLink(target)))
+      const link = await api.invoke(IPC.linksFormat, notePath, path, { markdown: false })
+      const ok = await editBoard((t) => insertItem(t, Number(column), 0, link))
       if (!ok) return { ok: false, error: 'Could not add it to the board.' }
       place(notePath)
       return { ok: true, path: notePath }
@@ -391,23 +406,26 @@ export function useBoardCards(path: string): {
         setNotice('This card has no text to name a note after.')
         return null
       }
-      const problem = nameProblem(name, true)
+      const problem = nameProblem(name)
       if (problem !== null) {
         setNotice(`Couldn't make the note: ${problem}.`)
         return null
       }
-      const existing = await noteNamed(name)
-      if (existing !== null) {
-        setNotice(`A note called “${name}” exists already (${existing}). Rename the card first.`)
+      const folder = cardFolderFor(path, textRef.current)
+      // Another folder's note of the name is fine, as in Obsidian; this board's folder holds one per name.
+      const here = inFolder(await notesNamed(name), folder)
+      if (here !== null) {
+        setNotice(`“${name}” is already in this board’s folder (${here}). Rename the card first.`)
         return null
       }
-      const created = await createCardNote(name, cardFolderFor(path, textRef.current), rest.join('\n').trim())
+      const created = await createCardNote(name, folder, rest.join('\n').trim())
       if (!created.ok) {
         setNotice(`Couldn't make the note. ${created.error}`)
         return null
       }
-      const stem = showMade(created.path)
-      const ok = await editBoard((t) => replaceItem(t, locate(card)(t), cardLink(stem)))
+      showMade(created.path)
+      const link = await api.invoke(IPC.linksFormat, created.path, path, { markdown: false })
+      const ok = await editBoard((t) => replaceItem(t, locate(card)(t), link))
       if (!ok) {
         await api.invoke(IPC.fsTrash, created.path)
         return null
@@ -438,7 +456,7 @@ export function useBoardCards(path: string): {
     const title = cardName(name)
     const slash = cardPath.lastIndexOf('/')
     if (title === '' || `${cardPath.slice(slash + 1)}` === `${title}.md`) return null
-    const problem = nameProblem(title, true)
+    const problem = nameProblem(title)
     if (problem !== null) {
       setNotice(`Couldn't rename the card: ${problem}.`)
       return null

@@ -213,10 +213,10 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     expect(open.tasks.map((t) => t.text).sort()).toEqual(['Fix the export bug', 'Record the demo', 'Write the announcement'])
   }, 30_000)
 
-  it('hard rules: a taken name, a link to nothing, a board edited as text, an excluded folder', async () => {
-    const taken = await client.call('propose_new_note', { name: 'basil', text: 'x' })
-    expect(allText(taken)).toMatch(/A note “Basil” already exists in Garden\//)
-    expect(allText(await client.call('propose_new_note', { name: 'A/B', text: 'x' }))).toMatch(/can't be used in a name/)
+  it('hard rules: a name taken in its folder, a link to nothing, a board edited as text, an excluded folder', async () => {
+    const taken = await client.call('propose_new_note', { name: 'basil', folder: 'Garden', text: 'x' })
+    expect(allText(taken)).toMatch(/A note “Basil” is already in Garden\//)
+    expect(allText(await client.call('propose_new_note', { name: 'A/B', text: 'x' }))).toMatch(/File name cannot contain any of the following characters/)
     expect(allText(await client.call('propose_new_note', { name: 'Fresh', text: 'See [[Nowhere]].' }))).toMatch(/links to no note/)
     expect(allText(await client.call('propose_new_note', { name: 'Fresh', text: 'See [b](Garden/Basil.md).' }))).toMatch(
       /written \[\[Note name\]\]/,
@@ -316,5 +316,16 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     const backups = path.join(vault, '.recto', 'backup', 'ai')
     const [stamp] = fs.readdirSync(backups)
     expect(fs.readFileSync(path.join(backups, stamp!, 'Ideas.md'), 'utf8')).toBe(before)
+  }, 30_000)
+
+  it('a name two notes have: a tool given it asks which, and a new link to it is written with its path', async () => {
+    fs.mkdirSync(path.join(vault, 'Notes'), { recursive: true })
+    fs.writeFileSync(path.join(vault, 'Notes', 'Soil.md'), '# Soil, again\n')
+    expect(allText(await client.call('read_note', { note: 'Soil' }))).toMatch(/2 notes are called “Soil”: .*Garden\/Soil\.md.*Notes\/Soil\.md.*Give the one you mean by its path/)
+    expect(allText(await client.call('read_note', { note: 'Notes/Soil' }))).toContain('Soil, again')
+    expect(allText(await client.call('propose_new_note', { name: 'Compost', text: 'See [[Soil]].' }))).toMatch(
+      /\[\[Soil\]\] could mean 2 notes .* Write the one you mean: \[\[Garden\/Soil\]\] or \[\[Notes\/Soil\]\]/i,
+    )
+    fs.rmSync(path.join(vault, 'Notes'), { recursive: true, force: true })
   }, 30_000)
 })

@@ -112,7 +112,7 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
   const since = index.oldest
   const counted = countedLine([data.editsSince, data.writtenSince, data.activeSince], today)
   const missing = index.missingOnCanvases ?? []
-  const attention = index.orphans.length + index.broken.length + late.length + missing.length > 0
+  const attention = index.orphans.length + index.broken.length + index.byDate.length + late.length + missing.length > 0
   const lists = [index.folders.length > 0, index.hubs.length > 0].filter(Boolean).length
 
   return (
@@ -181,6 +181,15 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
                 title="Broken links"
                 detail="[[Links]] to notes that don’t exist"
                 onClick={() => actions.go({ kind: 'broken' })}
+              />
+            )}
+            {index.byDate.length > 0 && (
+              <Attention
+                count={index.byDate.length}
+                title="Links that depend on file dates"
+                detail="Notes of one name, equally near: the oldest file opens - another Mac may open the other"
+                warn
+                onClick={() => actions.go({ kind: 'dates' })}
               />
             )}
             {missing.length > 0 && (
@@ -465,6 +474,19 @@ export function OverviewList({
           title: 'Broken links',
           rows: data.index.broken.map((b) => (
             <Row key={`${b.path}\n${b.target}`} name={b.name} count={`[[${b.target}]]`} onClick={() => actions.openNote(b.path)} />
+          )),
+        }
+      case 'dates':
+        return {
+          // Which note opens is chosen by when each file was made: a copy, a clone or a sync can change that.
+          title: 'Links that depend on file dates',
+          rows: data.index.byDate.map((b) => (
+            <Row
+              key={`${b.path}\n${b.target}`}
+              name={b.name}
+              count={`[[${b.target}]] → ${folderOf(b.opens) || 'top of the vault'}`}
+              onClick={() => actions.openNote(b.path)}
+            />
           )),
         }
       case 'overdue':

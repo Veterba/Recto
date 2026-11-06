@@ -9,7 +9,7 @@ import {
 } from '../../shared/topics'
 import { VAULT_STATE_DIR } from '../../shared/vault'
 import type { StateRow } from '../../shared/embedder-protocol'
-import { pathsByName, resolveLink } from '../../shared/parse'
+import { linkVault, resolveLinkpath } from '../../shared/obsidian-links'
 import { linksIn } from '../../shared/link-property'
 import { coerceTemplateSettings, isInFolder } from '../../shared/templates'
 import { send } from '../index-client'
@@ -123,7 +123,7 @@ export async function context(settings: TopicsSettings): Promise<Context> {
   const excluded = excludedFolders(templates, settings.excluded)
   const all = new Set(graph.notes.map((n) => n.path))
 
-  const byName = pathsByName(all)
+  const links = linkVault([...all].map((path) => ({ path, ctime: 0 })))
   const templateTexts: string[] = []
   for (const p of all) {
     if (!isInFolder(p, templates.folder)) continue
@@ -149,7 +149,7 @@ export async function context(settings: TopicsSettings): Promise<Context> {
     const lang = notes.get(p)?.lang
     if (lang !== undefined) languages[lang] = (languages[lang] ?? 0) + 1
   }
-  return { settings, graph, all, eligible, eligibleSet: new Set(eligible), byName, template, languages }
+  return { settings, graph, all, eligible, eligibleSet: new Set(eligible), links, template, languages }
 }
 
 // ---- embedding ------------------------------------------------------------------
@@ -363,7 +363,7 @@ async function removeOldRelatedLinks(ctx: Context, state: TopicsState): Promise<
     if (!read.ok) continue
     const entries = linksIn(read.content, OLD_PROPERTY)
     const drop = entries.filter((e) => {
-      const resolved = resolveLink(e, ctx.byName, ctx.all)
+      const resolved = resolveLinkpath(e, p, ctx.links)
       return resolved !== null && ours.has(resolved)
     })
     if (drop.length === 0) continue

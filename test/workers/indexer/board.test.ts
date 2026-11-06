@@ -70,7 +70,7 @@ describe('board cards from the index', () => {
         '- [ ] three see [[Other]]',
       ].join('\n'),
     })
-    expect(cards(['Ship it', 'Nobody'])).toEqual({
+    expect(cards(['Ship it', 'Nobody'], 'Main.md')).toEqual({
       'Ship it': {
         path: 'tasks/Ship it.md',
         title: 'Ship it',

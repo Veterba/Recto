@@ -171,12 +171,13 @@ export type IndexRequest =
   | { kind: 'canvases-of'; path: string }
   /** The canvases with this file, or anything in this folder, on them: what a rename rewrites. */
   | { kind: 'canvas-referrers'; path: string }
-  | { kind: 'resolve-link'; target: string }
-  | { kind: 'resolve-links'; targets: string[] }
+  /** `source`: the note (or canvas, or board) the link is in - '' for none, the vault's top. */
+  | { kind: 'resolve-link'; target: string; source: string }
+  | { kind: 'resolve-links'; targets: string[]; source: string }
   | { kind: 'unresolved' }
   | { kind: 'graph'; autoProperty?: string }
   /** Card fields of the notes these link texts name; null for a name that is no note. */
-  | { kind: 'board-cards'; targets: string[] }
+  | { kind: 'board-cards'; targets: string[]; board: string }
   | { kind: 'boards' }
   /** Every card on every board, and where it stands there. */
   | { kind: 'card-places' }

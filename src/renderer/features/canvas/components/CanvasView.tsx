@@ -51,7 +51,7 @@ import type { FileNode } from '@shared/vault'
 import { noteFolderBeside } from '@shared/recto-paths'
 import { noteEntries } from '../../file-tree'
 import { boardOfCard, isBoardPath, useBoards } from '../../boards'
-import { createCardNote, noteNamed } from '../../boards/create-card'
+import { createCardNote } from '../../boards/create-card'
 import { openSuggestedEdits } from '../../suggested-edits'
 import { useNoteBus } from '../../../app/note-bus'
 
@@ -65,7 +65,8 @@ import { useNoteBus } from '../../../app/note-bus'
 
 export type CanvasShell = {
   openFile: (path: string) => void
-  openLink: (target: string) => void
+  /** Follow a link: its target, and the canvas or note it is in. */
+  openLink: (target: string, source: string) => void
   /** The vault's folders, for where "Make it a note" puts a note (Recto's own left out). */
   folders: () => readonly string[]
   /** The vault's tree, for the toolbar's note picker. */
@@ -178,11 +179,11 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
     [shell],
   )
   const openLink = useCallback(
-    (target: string) =>
-      void api.invoke(IPC.indexResolveLink, target).then((resolved) => {
+    (target: string, from?: string) =>
+      void api.invoke(IPC.indexResolveLink, target, from ?? path).then((resolved) => {
         if (resolved !== null) open(resolved)
       }),
-    [open],
+    [open, path],
   )
   /** The stroke being drawn with the Draw tool (canvas units), or the eraser's path, for the live preview. */
   const [ink, setInk] = useState<{ points: Pt[]; erasing: boolean } | null>(null)
@@ -460,12 +461,17 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
     [boards],
   )
 
-  /** A note picked or named in the toolbar, put down in the middle of the view. Made beside the canvas when new. */
+  /**
+   * A note named in the toolbar's "Create", put down in the middle of the view: made where notes from this
+   * canvas go, even when another folder has a note of that name (as in Obsidian). One of that name already
+   * in that folder is the one put down.
+   */
   const createNote = useCallback(
     async (name: string) => {
-      const existing = await noteNamed(name)
-      if (existing !== null) return void addFiles([existing], viewCentre())
-      const made = await createCardNote(name, noteFolderBeside(path))
+      const folder = noteFolderBeside(path)
+      const [existing] = await api.invoke(IPC.fsExisting, [`${folder === '' ? '' : `${folder}/`}${name}.md`])
+      if (existing !== undefined) return void addFiles([existing], viewCentre())
+      const made = await createCardNote(name, folder)
       if (made.ok) await addFiles([made.path], viewCentre())
       else setSaid(made.error)
     },
@@ -748,6 +754,7 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
         }))
       },
       startEdgeLabel: (id) => setEditingEdge(id),
+      canvas: path,
       openLink,
       openFile: open,
       openBeside: (file) => shell.openBeside(leafId, file),
@@ -792,7 +799,7 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
       setEdgeEnd: (id, which, end) => run((d) => setEnd(d, id, which, end)),
       setEdgeBend: (id, bend) => run((d) => setBend(d, id, bend)),
     }),
-    [editing, editingEdge, stopEditing, run, shell, linked, toggleFold, leafId, open, openLink, rawBoards, toggleRaw],
+    [editing, editingEdge, stopEditing, run, shell, path, linked, toggleFold, leafId, open, openLink, rawBoards, toggleRaw],
   )
 
   const onNodesChange = useCallback(
@@ -1077,6 +1084,7 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
             // Beside the canvas, to start with.
             folder={noteFolderBeside(path)}
             folders={makeFolders}
+            sameNamed={(name) => noteEntries(shell.roots()).filter((n) => n.name.toLowerCase() === name.toLowerCase()).map((n) => n.path)}
             onCancel={() => setMaking(null)}
             onMade={(note) => {
               const id = making

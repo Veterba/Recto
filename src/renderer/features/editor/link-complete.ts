@@ -12,6 +12,7 @@ import { IPC } from '@shared/ipc'
 import { api } from '../../app/api'
 import { noteIndexChanged } from '../../app/note-bus'
 import { linkKindOf, type LinkKind } from '../../app/link-kinds'
+import { writeLink } from '../../app/link-writer'
 import { highlightCompletion } from './highlights'
 import { linkIcon } from './link-icons'
 
@@ -91,7 +92,13 @@ async function createNote(name: string): Promise<void> {
   if (created.ok) noteIndexChanged()
 }
 
-export function linkCompletion(getCandidates: () => readonly LinkCandidate[]): Extension {
+/**
+ * `[[` and a note picked: the link Obsidian would write there, from the note
+ * being edited (`getSource`, '' for none) - the name alone when no other note
+ * has it, else its path (or relative, or absolute, or a Markdown link, as the
+ * vault's settings say). Notes sharing a name are each offered, by folder.
+ */
+export function linkCompletion(getCandidates: () => readonly LinkCandidate[], getSource: () => string = () => ''): Extension {
   return [
     editorWidth,
     autocompletion({
@@ -119,16 +126,18 @@ export function linkCompletion(getCandidates: () => readonly LinkCandidate[]): E
               label: candidate.name,
               ...(candidate.folder === '' ? {} : { folder: candidate.folder }),
               ...(kind === undefined ? {} : { kind }),
-              // Close the brackets on accept, so the link is complete rather
-              // than leaving the user to type ']]' themselves - unless they
-              // already did.
-              apply: `${candidate.name}${close}`,
+              // The whole link from its `[[`, closed, so it is complete rather
+              // than leaving the user to type ']]' themselves - and closed once
+              // when they already did.
+              apply: (view, _completion, start, end) => {
+                const link = writeLink(candidate.path, getSource(), candidates)
+                view.dispatch(insertCompletionText(view.state, link, start - 2, end + (close === '' ? 2 : 0)))
+              },
             }
           })
 
-          // No note has this name yet: the last row makes one. Names are
-          // unique in the vault ignoring case, so that is how they are compared.
-          // A name main would refuse (`a/b` is a path) gets no row.
+          // No note has this name yet: the last row makes one. A name main
+          // would refuse (`a/b` is a path) gets no row.
           const name = typed.trim()
           if (name !== '' && nameProblem(name) === null && !candidates.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
             options.push({

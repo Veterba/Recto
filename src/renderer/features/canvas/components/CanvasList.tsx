@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { serializeCanvas, parseCanvas } from '@shared/canvas'
 import { IPC } from '@shared/ipc'
 import type { FileNode } from '@shared/vault'
@@ -9,6 +9,7 @@ import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextM
 import { fuzzyMatch } from '../../../ui/fuzzy'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
+import { NameWarning } from '../../../ui/NameWarning'
 
 /**
  * The Canvas section's sidebar: every canvas in the vault, the one changed
@@ -84,6 +85,9 @@ export function CanvasList({
 }: Props): React.ReactElement {
   const [error, setError] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
+  /** The name being typed for a new or renamed canvas, for what to know about it. */
+  const [typed, setTyped] = useState('')
+  useEffect(() => setTyped(''), [renaming, adding])
   const [confirming, setConfirming] = useState<Entry | null>(null)
   const [moving, setMoving] = useState(false)
   const contextMenu = useContextMenu<Entry>()
@@ -184,6 +188,7 @@ export function CanvasList({
               defaultValue={c.name}
               aria-label="Canvas name"
               autoFocus
+              onChange={(event) => setTyped(event.target.value === c.name ? '' : event.target.value)}
               onFocus={(event) => event.currentTarget.select()}
               onBlur={(event) => void rename(c, event.target.value)}
               onKeyDown={(event) => {
@@ -215,6 +220,7 @@ export function CanvasList({
           )}
         </div>
       ))}
+      {renaming !== null && <NameWarning name={typed} />}
       {all.length === 0 && !adding && <p className="sidebar__empty">No canvases yet. A canvas is a .canvas file; Obsidian opens it too.</p>}
       {all.length > 0 && shown.length === 0 && <p className="sidebar__empty">No canvas matches “{trimmed}”.</p>}
       {error !== null && (
@@ -223,17 +229,21 @@ export function CanvasList({
         </p>
       )}
       {adding ? (
-        <input
-          className="boards__rename"
-          placeholder="Canvas name"
-          aria-label="New canvas name"
-          autoFocus
-          onBlur={(event) => void add(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur()
-            if (event.key === 'Escape') setAdding(false)
-          }}
-        />
+        <>
+          <input
+            className="boards__rename"
+            placeholder="Canvas name"
+            aria-label="New canvas name"
+            autoFocus
+            onChange={(event) => setTyped(event.target.value)}
+            onBlur={(event) => void add(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+              if (event.key === 'Escape') setAdding(false)
+            }}
+          />
+          <NameWarning name={typed} />
+        </>
       ) : (
         <button className="boards__add" onClick={() => setAdding(true)}>
           <Icon name="plus" size={13} />

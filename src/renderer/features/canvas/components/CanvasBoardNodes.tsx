@@ -142,17 +142,22 @@ export function BoardPreview({
   const today = isoDay(new Date())
   /** The lane a task is being named in, and what came of the last try. */
   const [adding, setAdding] = useState<string | null>(null)
-  const [said, setSaid] = useState<{ lane: string; text: string; exists?: string } | null>(null)
-  const add = async (lane: string, title: string): Promise<void> => {
+  /** What came of the last try; `use` - notes of the name to use instead, `title` - the name, for a new one anyway. */
+  const [said, setSaid] = useState<{ lane: string; text: string; use?: string[]; title?: string } | null>(null)
+  const folderName = (p: string): string => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : 'the vault’s top level')
+  const add = async (lane: string, title: string, anyway = false): Promise<void> => {
     if (title.trim() === '') return setAdding(null)
-    const made = await addCard(lane, title.trim())
+    const made = await addCard(lane, title.trim(), anyway)
     if (made.ok) {
       setAdding(null)
       setSaid(null)
-    } else if ('exists' in made) {
-      // Names are unique in the vault: say where the note that has it is, and offer it.
-      const folder = made.exists.includes('/') ? made.exists.slice(0, made.exists.lastIndexOf('/')) : 'the vault’s top level'
-      setSaid({ lane, text: `“${title.trim()}” is already a note, in ${folder}.`, exists: made.exists })
+    } else if ('here' in made) {
+      // One note of a name per folder, as in Obsidian: this board's folder has it.
+      setSaid({ lane, text: `“${title.trim()}” is already in this board’s folder.`, use: [made.here] })
+    } else if ('elsewhere' in made) {
+      // Other folders have it: a new card here, or one of those (its file stays where it is).
+      const text = made.elsewhere.length === 1 ? `“${title.trim()}” is already a note, in ${folderName(made.elsewhere[0]!)}.` : `${made.elsewhere.length} notes are called “${title.trim()}”.`
+      setSaid({ lane, text, use: made.elsewhere, title: title.trim() })
     } else setSaid({ lane, text: made.error })
   }
   if (board === null || cards === null) return <div className="canvas-board" />
@@ -196,22 +201,33 @@ export function BoardPreview({
             {said !== null && said.lane === column.id && (
               <div className="canvas-board__said" role="status">
                 <p>{said.text}</p>
-                {said.exists !== undefined && (
+                {said.use !== undefined && (
                   <div className="canvas-board__choices">
-                    <button
-                      className="btn btn--sm nodrag"
-                      onClick={() => {
-                        void addExisting(column.id, said.exists!).then(() => {
-                          setSaid(null)
-                          setAdding(null)
-                        })
-                      }}
-                    >
-                      Add that one here
-                    </button>
-                    <button className="btn btn--ghost btn--sm nodrag" onClick={() => setSaid(null)}>
-                      Choose another name
-                    </button>
+                    {said.title !== undefined && (
+                      <button className="btn btn--sm btn--primary nodrag" onClick={() => void add(column.id, said.title!, true)}>
+                        Create a new “{said.title}” here
+                      </button>
+                    )}
+                    {said.use.map((p) => (
+                      <button
+                        key={p}
+                        className="btn btn--sm nodrag"
+                        title={p}
+                        onClick={() => {
+                          void addExisting(column.id, p).then(() => {
+                            setSaid(null)
+                            setAdding(null)
+                          })
+                        }}
+                      >
+                        {said.title === undefined ? 'Add it to this board' : `Use the one in ${folderName(p)}`}
+                      </button>
+                    ))}
+                    {said.title === undefined && (
+                      <button className="btn btn--ghost btn--sm nodrag" onClick={() => setSaid(null)}>
+                        Choose another name
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

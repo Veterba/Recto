@@ -153,6 +153,7 @@ export async function runTool(name: string, args: Record<string, unknown>, c: To
           note.title,
           linkStatus(
             r.content,
+            note.path,
             c.vaultNotes.map((n) => n.path),
           ),
         ),

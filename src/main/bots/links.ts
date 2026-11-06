@@ -1,4 +1,5 @@
-import { extractTargets, pathsByName, resolveLink } from '../../shared/parse'
+import { linkVault, resolveLinkpath } from '../../shared/obsidian-links'
+import { extractTargets } from '../../shared/parse'
 
 /**
  * link_status: every [[link]] in a note and whether a note by that name
@@ -8,13 +9,13 @@ import { extractTargets, pathsByName, resolveLink } from '../../shared/parse'
 
 export type LinkStatus = { target: string; exists: boolean; path: string | null }
 
-export function linkStatus(content: string, vaultPaths: readonly string[]): LinkStatus[] {
-  const byName = pathsByName(vaultPaths)
-  const all = new Set(vaultPaths)
+/** Each link in the note at `source`, read from there by Obsidian's rules (shared/obsidian-links.ts). */
+export function linkStatus(content: string, source: string, vaultPaths: readonly string[]): LinkStatus[] {
+  const vault = linkVault(vaultPaths.map((path) => ({ path, ctime: 0 })))
   return extractTargets(content).map((raw) => {
     // "Note#Heading" and "Note|alias" link to Note.
     const target = raw.split(/[#|]/)[0]!.trim()
-    const path = target === '' ? null : resolveLink(target, byName, all)
+    const path = target === '' ? null : resolveLinkpath(target, source, vault)
     return { target: target === '' ? raw : target, exists: path !== null, path }
   })
 }

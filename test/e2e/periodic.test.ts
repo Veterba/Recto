@@ -11,7 +11,7 @@ import { quitApp, removeDir } from './helpers/app'
  * Periodic notes on a copy of the fixture vault, whose settings are still in
  * the old daily-note shape: switching Weekly and Monthly on makes this week's
  * and this month's notes in the right folders, the preview tree says exactly
- * that, and a name already taken elsewhere is refused and said. Then the
+ * that, and a name another folder has is no obstacle - as in Obsidian. Then the
  * formatting toolbar: hidden, and focus mode still one click away in the
  * status bar. Runs with `npm run test:e2e`; the window is never shown.
  */
@@ -108,18 +108,15 @@ describe.skipIf(!RUN)('periodic notes and the hideable toolbar', () => {
     expect(saved.periodic.weekly.enabled).toBe(true)
   }, 30_000)
 
-  it('a name already taken elsewhere is refused, and the status bar says where it is', async () => {
+  it('a name another folder has is no obstacle: the year’s note is made in its folder, the other left alone', async () => {
     await openTab('Periodic notes')
     // The notes just made are marked as there.
     expect(await page.locator('.periodic__exists').count()).toBe(2)
     await page.locator('[aria-label="Yearly notes"]').click()
     await page.keyboard.press('Escape')
-    await page.locator('.status__notice', { hasText: 'Archive/' }).waitFor()
-    const notice = await page.locator('.status__notice', { hasText: 'Archive/' }).textContent()
-    expect(notice).toContain(`${now.getFullYear()} wasn't created`)
-    expect(fs.existsSync(path.join(vault, periodNotePath('yearly', now, on({ weekly: true, monthly: true, yearly: true })).path))).toBe(
-      false,
-    )
+    const year = periodNotePath('yearly', now, on({ weekly: true, monthly: true, yearly: true })).path
+    await until(() => fs.existsSync(path.join(vault, year)))
+    expect(fs.readFileSync(path.join(vault, 'Archive', `${now.getFullYear()}.md`), 'utf8')).toBe('# An older year note\n')
   }, 20_000)
 
   it("Today's note opens this week with daily notes off, and with nothing on makes nothing", async () => {

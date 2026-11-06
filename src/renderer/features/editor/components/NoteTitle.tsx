@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { NameWarning } from '../../../ui/NameWarning'
 
 /**
  * The note's name, as an editable heading above the text.
@@ -79,6 +80,7 @@ export function NoteTitle({ path, onRename }: { path: string; onRename: (name: s
           }
         }}
       />
+      {draft !== current && <NameWarning name={draft} />}
       {error !== null && <p className="note-title__error">{error}</p>}
     </div>
   )

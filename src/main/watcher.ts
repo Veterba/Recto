@@ -77,11 +77,11 @@ function flush(): void {
 
   if (target && !target.isDestroyed()) sendEvent(target, IPC_EVENT.vaultChanged, batch)
 
-  // Feed the same batch to the index. Only markdown matters to it, and only
-  // content changes - a directory event carries no note to parse.
+  // Feed the same batch to the index: notes and canvases to read, any other
+  // file only to know it is there (a link may name it). A directory event
+  // carries no file.
   const changes = batch
-    // Canvases too: the index keeps which notes each one has on it.
-    .filter((change) => 'path' in change && /\.(md|canvas)$/i.test(change.path))
+    .filter((change) => change.type === 'add' || change.type === 'change' || change.type === 'unlink')
     .map((change) => ({
       type: change.type === 'unlink' ? ('removed' as const) : ('upserted' as const),
       path: 'path' in change ? change.path : '',

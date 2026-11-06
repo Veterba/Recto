@@ -3,6 +3,7 @@ import { fuzzyFilter } from '../../../ui/fuzzy'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { figureOf, type Shape } from '../shapes'
+import { NameWarning } from '../../../ui/NameWarning'
 
 /**
  * The bar at the bottom of a canvas: what a click on the plane does next, as
@@ -100,18 +101,35 @@ function Picker({
   const [cursor, setCursor] = useState(0)
   const typed = query.trim()
   const found = useMemo(
-    () => (typed === '' ? items.slice(0, LIMIT) : fuzzyFilter(typed, items, (i) => i.name).map((m) => m.item).slice(0, LIMIT)),
+    () => {
+      if (typed === '') return items.slice(0, LIMIT)
+      const matches = fuzzyFilter(typed, items, (i) => i.name).map((m) => m.item)
+      const isExact = (i: PickItem): boolean => i.name.toLowerCase() === typed.toLowerCase()
+      return [...matches.filter(isExact), ...matches.filter((i) => !isExact(i))].slice(0, LIMIT)
+    },
     [items, typed],
   )
-  const create = onCreate !== undefined && typed !== '' && !items.some((i) => i.name.toLowerCase() === typed.toLowerCase())
+  // Always offered: another folder may have a note of this name, as in Obsidian - the new one goes where notes from this canvas go.
+  const create = onCreate !== undefined && typed !== ''
+  // A note already named exactly so comes first, so Enter picks it; "Create" then goes last.
+  const exact = found.some((i) => i.name.toLowerCase() === typed.toLowerCase())
+  const createAt = !create ? -1 : exact ? found.length : 0
   const rows = (create ? 1 : 0) + found.length
   const choose = (index: number): void => {
-    if (create && index === 0) onCreate(typed)
+    if (index === createAt) onCreate?.(typed)
     else {
-      const item = found[index - (create ? 1 : 0)]
+      const item = found[createAt !== -1 && index > createAt ? index - 1 : index]
       if (item !== undefined) onPick(item.path)
     }
   }
+  const createRow = (
+    <li key="create">
+      <button className={`canvas-bar__option${cursor === createAt ? ' is-cursor' : ''}`} onClick={() => choose(createAt)}>
+        <Icon name="plus" size={14} />
+        Create “{typed}”
+      </button>
+    </li>
+  )
   return (
     <div className="canvas-tools__picker glass-surface" role="dialog" aria-label={kind === 'note' ? 'Add a note' : 'Add a board'}>
       <input
@@ -134,17 +152,11 @@ function Picker({
           ev.preventDefault()
         }}
       />
+      {onCreate !== undefined && <NameWarning name={typed} />}
       <ul className="canvas-bar__list" role="listbox">
-        {create && (
-          <li>
-            <button className={`canvas-bar__option${cursor === 0 ? ' is-cursor' : ''}`} onClick={() => choose(0)}>
-              <Icon name="plus" size={14} />
-              Create “{typed}”
-            </button>
-          </li>
-        )}
+        {createAt === 0 && createRow}
         {found.map((item, i) => {
-          const index = i + (create ? 1 : 0)
+          const index = createAt === 0 ? i + 1 : i
           return (
             <li key={item.path}>
               <button className={`canvas-bar__option${cursor === index ? ' is-cursor' : ''}`} onClick={() => choose(index)}>
@@ -155,6 +167,7 @@ function Picker({
             </li>
           )
         })}
+        {createAt > 0 && createRow}
         {rows === 0 && <li className="canvas-bar__hint">{kind === 'note' ? 'No notes yet.' : 'No boards yet.'}</li>}
       </ul>
     </div>

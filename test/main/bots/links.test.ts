@@ -6,7 +6,7 @@ describe('link_status', () => {
 
   it('lists each link and whether its note exists, headings and aliases ignored', () => {
     const note = 'See [[Soil]], [[Running plan#Goals|my plan]], [[Projects/Recto/Plan]] and [[Ghost note]].\n```\n[[in code]]\n```'
-    expect(linkStatus(note, vault).map((l) => [l.target, l.exists])).toEqual([
+    expect(linkStatus(note, 'Plans.md', vault).map((l) => [l.target, l.exists])).toEqual([
       ['Soil', true],
       ['Running plan', true],
       ['Projects/Recto/Plan', true],
@@ -15,7 +15,7 @@ describe('link_status', () => {
   })
 
   it('says it plainly for the model', () => {
-    const text = linkStatusText('Plans', linkStatus('[[Soil]] [[Ghost note]]', vault))
+    const text = linkStatusText('Plans', linkStatus('[[Soil]] [[Ghost note]]', 'Plans.md', vault))
     expect(text).toBe('Links in "Plans": 2, 1 to notes that don\'t exist.\n- [[Soil]] - exists\n- [[Ghost note]] - no such note')
     expect(linkStatusText('Empty', [])).toBe('"Empty" has no [[links]].')
   })

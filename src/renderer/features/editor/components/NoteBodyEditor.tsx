@@ -18,6 +18,7 @@ export function NoteBodyEditor({
   placeholder,
   onChange,
   onOpenLink,
+  linkSource,
 }: {
   docKey: string
   value: string
@@ -25,6 +26,8 @@ export function NoteBodyEditor({
   placeholder: string
   onChange: (value: string) => void
   onOpenLink: (target: string, heading: string | null) => void
+  /** The file the text is in, for the links written into it. */
+  linkSource?: string
 }): React.ReactElement {
   const handle = useRef<EditorHandle | null>(null)
   const host = useRef<HTMLDivElement | null>(null)
@@ -52,6 +55,7 @@ export function NoteBodyEditor({
         onSave={() => {}}
         onOpenLink={onOpenLink}
         getLinkCandidates={currentLinkCandidates}
+        linkSource={linkSource ?? ''}
         onReady={(editor) => {
           handle.current = editor
           editor.setLivePreview(true)

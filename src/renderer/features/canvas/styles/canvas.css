@@ -1442,3 +1442,10 @@
   overflow: visible;
   color: var(--text-primary);
 }
+/* Notes of the name typed, already in the vault: one button per note to use it. */
+.canvas-bar__taken {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}

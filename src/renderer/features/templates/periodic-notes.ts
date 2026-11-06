@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { api } from '../../app/api'
-import { nameTakenElsewhere, periodicNoteText, periodNotePath, todayPeriod } from '@shared/periodic'
+import { parentLink, periodicNoteText, periodNotePath, todayPeriod } from '@shared/periodic'
 import { coerceTemplateSettings, DEFAULT_TEMPLATE_SETTINGS, PERIODS, type Period, type TemplateSettings } from '@shared/templates'
 import { IPC } from '@shared/ipc'
 
@@ -40,11 +40,7 @@ export function useTemplateSettings(vaultPath: string): {
   return { settings, loaded, update }
 }
 
-export type EnsureResult =
-  | { ok: true; path: string; created: boolean }
-  /** A note with the same name is somewhere else in the vault: nothing was made. */
-  | { ok: false; elsewhere: string }
-  | { ok: false; error: string }
+export type EnsureResult = { ok: true; path: string; created: boolean } | { ok: false; error: string }
 
 /**
  * Make sure the note for this period exists. Returns its path, and whether it
@@ -56,23 +52,19 @@ export type EnsureResult =
  * check is a read rather than a look at the file tree, because the tree can be
  * a beat behind a note created a moment ago.
  *
- * Names are unique in a vault, so a note called "2026-W41" anywhere else - an
- * old one left behind when the folder setting changed, say - means this one is
- * not made: two notes of one name would make every link to it ambiguous.
+ * Found by its path, never its name: a note called "2026-W41" in another
+ * folder - an old one left behind when the folder setting changed, say - is
+ * another note, as in Obsidian, and this one is made beside it.
  */
 export async function ensurePeriodicNote(
   period: Period,
   settings: TemplateSettings,
-  notes: readonly string[],
   now: Date = new Date(),
 ): Promise<EnsureResult> {
   const target = periodNotePath(period, now, settings.periodic)
 
   const existing = await api.invoke(IPC.fsRead, target.path)
   if (existing.ok) return { ok: true, path: target.path, created: false }
-
-  const elsewhere = nameTakenElsewhere(target.path, notes)
-  if (elsewhere !== null) return { ok: false, elsewhere }
 
   // A chosen template that has since been deleted falls back to the built-in
   // one rather than skipping the period: a missing template is a settings
@@ -81,10 +73,9 @@ export async function ensurePeriodicNote(
 
   // `fs:create` makes every missing folder on the way down, so the year, the
   // month and the week folders all appear from this one call.
-  // `fs:create` refuses a name taken anywhere in the vault, so it never
+  // `fs:create` refuses a name its folder has already, so it never
   // overwrites. If something else made this very note between the read and
-  // the create, that note is the one to open; `notes` may also be a beat
-  // behind a note of this name elsewhere, and then main's refusal names it.
+  // the create, that note is the one to open.
   const created = await api.invoke(IPC.fsCreate, target.folder, target.name, 'file')
   if (!created.ok) {
     const raced = await api.invoke(IPC.fsRead, target.path)
@@ -103,12 +94,11 @@ export async function ensurePeriodicNote(
  */
 export async function ensureTodayNote(
   settings: TemplateSettings,
-  notes: readonly string[],
   now: Date = new Date(),
 ): Promise<{ period: Period; result: EnsureResult } | null> {
   const period = todayPeriod(settings.periodic)
   if (period === null) return null
-  return { period, result: await ensurePeriodicNote(period, settings, notes, now) }
+  return { period, result: await ensurePeriodicNote(period, settings, now) }
 }
 
 /** What to say when "Today's note" has no period to open. */
@@ -121,7 +111,10 @@ export const dayKey = (date: Date = new Date()): string => `${date.getFullYear()
 async function generatedText(period: Period, settings: TemplateSettings, now: Date): Promise<string> {
   const chosen = settings.periodic[period].template
   const template = chosen === null ? null : await api.invoke(IPC.fsRead, chosen)
-  return periodicNoteText(period, settings.periodic, now, template?.ok === true ? template.content : null)
+  // The parent note's link as Obsidian writes it from this note: its name, or its path when another note has the name.
+  const parent = parentLink(period, now, settings.periodic)
+  const link = parent === null ? '' : await api.invoke(IPC.linksFormat, parent.path, periodNotePath(period, now, settings.periodic).path, { markdown: false })
+  return periodicNoteText(period, settings.periodic, now, template?.ok === true ? template.content : null, () => link)
 }
 
 /**
@@ -179,7 +172,3 @@ export function usePeriodicNotice(): PeriodicNoticeState | null {
     () => notice,
   )
 }
-
-/** What to say when a note was not made because its name is taken. */
-export const elsewhereNotice = (key: string, elsewhere: string): string =>
-  `${key} wasn't created: a note with that name is already at ${elsewhere}. Note names are unique in a vault.`

@@ -415,6 +415,7 @@ export async function prepare(bot: Bot, messages: readonly AiMessage[], o: Prepa
         n.title,
         linkStatus(
           read.content,
+          n.path,
           catalog.map((c) => c.path),
         ),
       )

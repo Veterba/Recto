@@ -9,8 +9,9 @@ import { rewriteWikiLinks } from './link-rewrite'
 import { leavesVault, resolveInVault } from './paths'
 import { currentVault } from './vault'
 import { notTextMessage, notTextReason } from './text-file'
-import { isHidden, nameOf, nameProblem, nameTaken, sortNodes } from '../shared/vault'
+import { isHidden, nameOf, nameProblem, sortNodes } from '../shared/vault'
 import { parseCanvas, renameInCanvas, serializeCanvas } from '../shared/canvas'
+import { rewriteForRename, type LinkSettings, type LinkVault } from '../shared/obsidian-links'
 
 /**
  * All vault file access. Every path arriving from the renderer goes through
@@ -225,27 +226,24 @@ export function existing(paths: readonly string[]): string[] {
   })
 }
 
-/** The file that has this file name (`Plan.md`) anywhere in the vault, or null. One check, on disk, never the index. */
-export function nameTakenBy(fileName: string): string | null {
-  return nameTaken(sanitiseName(fileName), vaultFiles())
+/** Every file with this file name, in any folder, ignoring case and Unicode form. One check, on disk. */
+export function sameNamed(fileName: string): string[] {
+  const want = sanitiseName(fileName).normalize('NFC').toLowerCase()
+  return vaultFiles().filter((p) => nameOf(p).normalize('NFC').toLowerCase() === want)
 }
 
-/**
- * File names are unique in the whole vault, not just in their folder: links go
- * by name, so a second `Plan.md` anywhere makes `[[Plan]]` ambiguous (see
- * `nameTaken`). The message names the file that has it.
- */
+/** A move onto a file that is already there, in the folder moved into: the message names it. */
 function takenMessage(existing: string): string {
-  return `"${nameOf(existing)}" already exists: ${existing}`
+  return `“${nameOf(existing)}” is already in that folder: ${existing}`
 }
 
 /**
  * Append ' 2', ' 3'... until the name is free, rather than overwriting. Free
- * means nothing at this path and, for a file, no file of that name anywhere in
- * `files`.
+ * means nothing at this path: other folders may have a file of the same name,
+ * as in Obsidian (docs/dev/obsidian-link-rules.md).
  */
-function uniquePath(absolute: string, files: readonly string[] = []): string {
-  const free = (candidate: string): boolean => !fs.existsSync(candidate) && nameTaken(path.basename(candidate), files) === null
+function uniquePath(absolute: string): string {
+  const free = (candidate: string): boolean => !fs.existsSync(candidate)
   if (free(absolute)) return absolute
   const dir = path.dirname(absolute)
   const ext = path.extname(absolute)
@@ -270,7 +268,7 @@ export async function importFile(source: string, folder: string): Promise<{ ok: 
     const root = requireVault()
     const bare = sanitiseName(path.basename(source))
     if (bare.length === 0) return { ok: false, error: 'That file has no usable name.' }
-    const target = uniquePath(resolveInVault(root, path.join(folder, bare)), allFiles(root))
+    const target = uniquePath(resolveInVault(root, path.join(folder, bare)))
     await fsp.mkdir(path.dirname(target), { recursive: true })
     await fsp.copyFile(source, target)
     return { ok: true, path: toRelative(root, target) }
@@ -295,7 +293,7 @@ export async function importData(
     const root = requireVault()
     const bare = sanitiseName(name)
     if (bare.length === 0) return { ok: false, error: 'That file has no usable name.' }
-    const target = uniquePath(resolveInVault(root, path.join(folder, bare)), allFiles(root))
+    const target = uniquePath(resolveInVault(root, path.join(folder, bare)))
     await fsp.mkdir(path.dirname(target), { recursive: true })
     await fsp.writeFile(target, data)
     return { ok: true, path: toRelative(root, target) }
@@ -323,14 +321,11 @@ export async function create(
     const bare = sanitiseName(name)
     if (bare.length === 0) return { ok: false, error: 'Name cannot be empty.' }
     let target = resolveInVault(root, path.join(parentRelative, bare))
+    // Only this folder counts: another folder may have a file of the same name, as in Obsidian. Names that
+    // differ only in case are the same file here (the Mac's disk, and Obsidian, say so).
     if (kind === 'file') {
-      const files = allFiles(root)
-      if (onTaken === 'number') target = uniquePath(target, files)
-      else {
-        const existing = nameTaken(bare, files)
-        if (existing !== null) return { ok: false, error: takenMessage(existing) }
-        if (fs.existsSync(target)) return { ok: false, error: `"${bare}" already exists here.` }
-      }
+      if (onTaken === 'number') target = uniquePath(target)
+      else if (fs.existsSync(target)) return { ok: false, error: `“${bare}” is already in this folder.` }
     } else target = uniquePath(target)
     if (kind === 'folder') {
       await fsp.mkdir(target, { recursive: true })
@@ -360,14 +355,10 @@ export async function rename(relative: string, newName: string): Promise<{ ok: t
     if (bare.length === 0) return { ok: false, error: 'Name cannot be empty.' }
     const to = resolveInVault(root, path.join(path.dirname(relative), bare))
     if (from === to) return { ok: true, path: relative }
-    // A file's new name, type change included, must be free in the whole vault.
-    if (fs.statSync(from).isFile()) {
-      const existing = nameTaken(bare, allFiles(root).filter((other) => other !== relative))
-      if (existing !== null) return { ok: false, error: takenMessage(existing) }
-    }
+    // Only this folder counts, as in Obsidian: another folder may have a file of this name.
     // On a case-insensitive disk (the Mac default) `to` exists when only the
     // case changes - it is the same file, so it is not in the way.
-    if (fs.existsSync(to) && !sameFile(from, to)) return { ok: false, error: `"${bare}" already exists here.` }
+    if (fs.existsSync(to) && !sameFile(from, to)) return { ok: false, error: `“${bare}” is already in this folder.` }
     await fsp.rename(from, to)
     return { ok: true, path: toRelative(root, to) }
   } catch (err) {
@@ -440,6 +431,51 @@ export async function rewriteLinksTo(
     links += result.count
   }
 
+  return { changed, links }
+}
+
+/** The links a move would change: each file, as it is now and as it would be written. */
+export type LinkPlan = { files: (RewrittenFile & { links: number })[]; links: number }
+
+/**
+ * What every note's links would become after files moved (`moves`: old path →
+ * new path), by Obsidian's rules (shared/obsidian-links.ts `rewriteForRename`):
+ * read now, nothing written. Every note is read, not only those the index
+ * says link there - a note it has not read yet, or a link it cannot see,
+ * would otherwise keep pointing at nothing.
+ */
+export async function planLinkUpdates(
+  moves: ReadonlyMap<string, string>,
+  before: LinkVault,
+  after: LinkVault,
+  settings: Pick<LinkSettings, 'newLinkFormat'>,
+): Promise<LinkPlan> {
+  const back = new Map([...moves].map(([from, to]) => [to, from]))
+  const files: LinkPlan['files'] = []
+  let links = 0
+  for (const note of vaultFiles()) {
+    if (!note.toLowerCase().endsWith('.md')) continue
+    const read = await readFile(note)
+    if (!read.ok || !read.content.includes('[')) continue
+    const result = rewriteForRename(read.content, { before: back.get(note) ?? note, after: note }, moves, before, after, settings)
+    if (result.changed === 0 || result.text === read.content) continue
+    files.push({ path: note, before: read.content, after: result.text, links: result.changed })
+    links += result.changed
+  }
+  return { files, links }
+}
+
+/** Write a plan's files - each only if it is still as it was read, so an edit since is never lost. */
+export async function applyLinkPlan(plan: LinkPlan): Promise<{ changed: RewrittenFile[]; links: number }> {
+  const changed: RewrittenFile[] = []
+  let links = 0
+  for (const file of plan.files) {
+    const read = await readFile(file.path)
+    if (!read.ok || read.content !== file.before) continue
+    if (!(await writeFile(file.path, file.after)).ok) continue
+    changed.push({ path: file.path, before: file.before, after: file.after })
+    links += file.links
+  }
   return { changed, links }
 }
 

@@ -54,6 +54,8 @@ type EditorOptions = {
   readOnly?: boolean
   /** Note names offered after typing `[[`. Read lazily, so it stays current. */
   getLinkCandidates?: () => readonly LinkCandidate[]
+  /** The file the text is in, for links written into it: picked after `[[`, or an image dropped. */
+  getLinkSource?: () => string
   /** Fires when the cursor moves, so the toolbar can update. */
   onSelectionChange?: () => void
   vim?: boolean
@@ -268,7 +270,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         writingTools(),
         findInNote(),
         tableEditing(),
-        ...(options.getLinkCandidates === undefined ? [] : [linkCompletion(options.getLinkCandidates)]),
+        ...(options.getLinkCandidates === undefined ? [] : [linkCompletion(options.getLinkCandidates, options.getLinkSource)]),
         EditorState.allowMultipleSelections.of(true),
         // Markdown with GFM-ish extensions; the grammar is CM's own, so
         // highlighting stays incremental as you type.
@@ -285,7 +287,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         // runtime without rebuilding the editor and losing undo history.
         livePreviewCompartment.of(livePreview((v) => v.state.field(unresolvedField, false) ?? new Set<string>())),
         editorTheme(),
-        imageDrop(),
+        imageDrop(options.getLinkSource ?? (() => '')),
         linkClick,
         linkHover,
         EditorView.lineWrapping,

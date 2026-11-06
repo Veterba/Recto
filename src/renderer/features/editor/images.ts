@@ -38,14 +38,14 @@ function nameFor(file: File): string {
 
 const isImage = (file: File): boolean => file.type.startsWith('image/')
 
-async function importAt(view: EditorView, files: readonly File[], at: number): Promise<void> {
+async function importAt(view: EditorView, files: readonly File[], at: number, source: string): Promise<void> {
   const markdown: string[] = []
   for (const file of files) {
     const bytes = new Uint8Array(await file.arrayBuffer())
     const result = await api.invoke(IPC.fsImportData, nameFor(file), bytes)
     if (!result.ok) continue
-    const label = result.path.slice(result.path.lastIndexOf('/') + 1)
-    markdown.push(`![${label}](${encodeURI(result.path)})`)
+    // As Obsidian embeds it, from this note, by the vault's link settings.
+    markdown.push(await api.invoke(IPC.linksFormat, result.path, source, { embed: true }))
   }
   if (markdown.length === 0) return
 
@@ -63,14 +63,14 @@ async function importAt(view: EditorView, files: readonly File[], at: number): P
   })
 }
 
-export function imageDrop(): Extension {
+export function imageDrop(getSource: () => string): Extension {
   return EditorView.domEventHandlers({
     drop: (event, view) => {
       const files = [...(event.dataTransfer?.files ?? [])].filter(isImage)
       if (files.length === 0) return false
       event.preventDefault()
       const at = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head
-      void importAt(view, files, at)
+      void importAt(view, files, at, getSource())
       return true
     },
     dragover: (event) => {
@@ -85,7 +85,7 @@ export function imageDrop(): Extension {
       const files = [...(event.clipboardData?.files ?? [])].filter(isImage)
       if (files.length === 0) return false
       event.preventDefault()
-      void importAt(view, files, view.state.selection.main.head)
+      void importAt(view, files, view.state.selection.main.head, getSource())
       return true
     },
   })

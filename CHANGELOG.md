@@ -4,6 +4,37 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.57.0 — 2026-11-05
+### Added
+- Notes in different folders may share a name, as in Obsidian; a folder holds one file of a name (in any case).
+- A warning under the name field, before anything is made, for names with `# ^ [ ] |` (links will not find them), names Windows cannot hold (`* " < > ? |`, or ending in a dot or space) and names starting with a dot. The name is never changed. It shows in the tree's rename and new dialogs, the note title, new card and card title, new and renamed boards and canvases, Make it a note, the canvas Note picker and New tab.
+- Links resolve as Obsidian resolves them, read from the note they are in: `/path` from the vault's top, `./` and `../` relative to the note, an exact vault path first, else a same-named file in the note's own folder or below, then the shorter path, then the file made first. Checked against Obsidian 1.15.0 on a test vault: all 92 links from 5 folders open the same file in Recto (e2e test).
+- Links to pictures and other files that are not notes resolve too; they used to count as broken.
+- Links are written as Obsidian writes them, following the vault's Files and links settings in `.obsidian/app.json` (new link format shortest, relative or absolute; `[[Wikilinks]]` or Markdown links): the name alone when no other note has it, else the path. This covers the `[[` suggestions, links in properties, the chat composer, dropped and pasted pictures (embedded as Obsidian embeds them, `![[image.png]]` by default), board cards, Copy link in the tab menu, the week, month and year links of periodic notes, and AI (MCP) edits.
+- The `[[` suggestions list each same-named note as its own row with its folder; the one you pick is linked by its path.
+- A Files and links tab in Settings, under Vault, shows Obsidian's three settings for this vault. It is read-only; change them in Obsidian.
+- Overview, Needs attention: a "Links that depend on file dates" row lists links whose note was chosen only because one same-named file was made first (equally near, equally long paths). Creation dates change on copy, git clone or some syncs, so another Mac can open the other note (Obsidian too). Each row says which folder it opens on this Mac.
+- Linked mentions shows the folder next to linking notes that share a name.
+- Board "+ card" with a name another folder has asks instead of guessing: "Create a new “X” on this board" (the default, Enter) or "Use the one in <folder>" for each existing note. The existing file never moves. If the board's own folder has the name: "Add it to this board" or "Choose another name". The same on a board drawn on a canvas.
+- Canvas "Make it a note" with a taken name offers "Use that note" (puts the existing note on the canvas; the file stays where it is) or "Create a new “X” here", and "Choose another name" when the target folder has it. The canvas Note picker puts an exact name match first, so Enter picks it.
+- AI tools (MCP): a note given by a name several notes share is answered with the list, so you give it by path; a new `[[link]]` with such a name is refused with the exact links to write; the rule text the AI reads now describes Obsidian's rules.
+
+### Changed
+- Only `\ / :` are refused in a name, with Obsidian's message.
+- Renaming or moving a note, folder, board or card writes again every link that pointed at it, for its new place and in the vault's format, keeping alias, `#heading` and `!`. A moved note's own relative links still point where they did, and links in code blocks are left alone.
+- When the vault's "Automatically update internal links" is off (Obsidian's default), a rename or move asks Obsidian's "Update links" question: Always update (turns the setting on in `.obsidian/app.json`, or in `.recto/link-settings.json` for a vault Obsidian never opened), Just once, or Do not update. A board rename asks once for all its cards; Recto's own tidying moves never ask.
+- A card line on a board resolves from the board's own folder first, so a new card is never silently linked to another board's card of the same name.
+- New boards may share a name with a note elsewhere.
+- Today's note, and the week, month and year notes, are made in their own folder even when another folder has a note of that name.
+- A new note's name through the AI tools only has to be free in its folder.
+
+### Fixed
+- The Suggested edits dialog sometimes did not open after a proposal; it opened and shut at once.
+
+### Removed
+- The rule that note names are unique in the whole vault, and its refusals.
+- The "Recto README" fallback name: Recto/README.md is made whatever README exists elsewhere (an existing Recto README.md still counts).
+
 ## v0.56.0 — 2026-11-04
 ### Added
 - Canvases: a `.canvas` file (JSON Canvas) opens as a plane you pan and zoom, and Obsidian opens the same files. Keys Recto doesn't know and plugin nodes are kept as they are, and a change rewrites only that node's own line, in the layout Obsidian writes.

@@ -2,7 +2,8 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { getSnapshot, listSnapshots, pruneSnapshots, takeSnapshot } from './snapshots'
-import { parseNote, pathsByName, resolveLink } from '../../shared/parse'
+import { parseNote } from '../../shared/parse'
+import { resolveLinkpath, resolveLinkpathDetail } from '../../shared/obsidian-links'
 import { extractTasks, normaliseTask, noteDate, writtenDate } from '../../shared/tasks'
 import { noteWords } from '../../shared/overview'
 import { isKanban, parseKanban, stageOf } from '../../shared/kanban'
@@ -10,7 +11,7 @@ import type { CatalogNote, IndexRequest, IndexResponse, PeriodNote, StoredCard, 
 import { isHidden } from '../../shared/vault'
 import { vaultRoot, requireDb, open, closeDb } from './db'
 import { canvasesOf, canvasReferrers, removeCanvas, writeCanvas } from './canvases'
-import { search, backlinks, resolveOne, unresolved, graph, cards, boards, cardPlaces, context, overview, vaultMeta } from './queries'
+import { search, backlinks, resolveOne, notesLinkVault, unresolved, graph, cards, boards, cardPlaces, context, overview, vaultMeta } from './queries'
 
 /**
  * The indexer, running in its own process.
@@ -39,9 +40,13 @@ export function notePath(relative: string): string {
 }
 
 const isCanvas = (name: string): boolean => name.toLowerCase().endsWith('.canvas')
+const isNoteFile = (name: string): boolean => name.toLowerCase().endsWith('.md')
 
-/** Every markdown file in the vault - and every canvas - with its stat. */
-async function walk(dir: string, out: { path: string; mtime: number; size: number }[] = []): Promise<typeof out> {
+/** When a file was made: its birth time, or its change time where the disk keeps none. */
+const madeAt = (stat: fs.Stats): number => (stat.birthtimeMs > 0 ? stat.birthtimeMs : stat.ctimeMs)
+
+/** Every file in the vault with its stat: notes and canvases are read, the rest only listed (`files`). */
+async function walk(dir: string, out: { path: string; mtime: number; size: number; ctime: number }[] = []): Promise<typeof out> {
   let entries: fs.Dirent[]
   try {
     entries = await fsp.readdir(dir, { withFileTypes: true })
@@ -52,13 +57,14 @@ async function walk(dir: string, out: { path: string; mtime: number; size: numbe
     if (isHidden(entry.name)) continue
     const absolute = path.join(dir, entry.name)
     if (entry.isDirectory()) await walk(absolute, out)
-    else if (entry.isFile() && (entry.name.toLowerCase().endsWith('.md') || isCanvas(entry.name))) {
+    else if (entry.isFile()) {
       try {
         const stat = await fsp.stat(absolute)
         out.push({
           path: path.relative(vaultRoot, absolute).split(path.sep).join('/'),
           mtime: stat.mtimeMs,
           size: stat.size,
+          ctime: madeAt(stat),
         })
       } catch {
         // Vanished between readdir and stat; nothing to index.
@@ -69,20 +75,20 @@ async function walk(dir: string, out: { path: string; mtime: number; size: numbe
 }
 
 /** Write one note's rows. Caller wraps this in a transaction. Exported for the tests. */
-export function writeNote(relative: string, content: string, mtime: number, size: number): void {
+export function writeNote(relative: string, content: string, mtime: number, size: number, ctime = mtime): void {
   const handle = requireDb()
   const parsed = parseNote(content)
   const name = relative.slice(relative.lastIndexOf('/') + 1)
 
   handle
     .prepare(
-      `INSERT INTO notes (path, name, title, mtime, size, indexed_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO notes (path, name, title, mtime, size, ctime, indexed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(path) DO UPDATE SET
          name = excluded.name, title = excluded.title,
-         mtime = excluded.mtime, size = excluded.size, indexed_at = excluded.indexed_at`,
+         mtime = excluded.mtime, size = excluded.size, ctime = excluded.ctime, indexed_at = excluded.indexed_at`,
     )
-    .run(relative, name, parsed.title, mtime, size, Date.now())
+    .run(relative, name, parsed.title, mtime, size, ctime, Date.now())
   const date = noteDate(relative, parsed.frontmatter, mtime)
   handle
     .prepare('UPDATE notes SET note_date = ?, written = ?, words = ? WHERE path = ?')
@@ -403,30 +409,33 @@ function renameNote(from: string, to: string): void {
 }
 
 /**
- * Re-point every link whose text resolves to a known note.
+ * Re-point every link at the note it means, read from the note it is in -
+ * Obsidian's rules (shared/obsidian-links.ts): the same `[[Plan]]` can mean
+ * a different Plan in another folder.
  *
  * Done as a pass over the whole link table rather than per-note, because
  * creating one file can resolve links in a hundred others. Exported for the tests.
  */
 export function resolveAllLinks(): number {
   const handle = requireDb()
-  const rows = handle.prepare('SELECT path FROM notes').all() as { path: string }[]
-  const allPaths = new Set(rows.map((r) => r.path))
-  const byName = pathsByName(allPaths)
+  const vault = notesLinkVault()
 
-  const links = handle.prepare('SELECT DISTINCT target_text FROM links').all() as { target_text: string }[]
-  const update = handle.prepare('UPDATE links SET target_path = ? WHERE target_text = ?')
-  const cards = handle.prepare('SELECT DISTINCT target_text FROM board_items WHERE target_text IS NOT NULL').all() as { target_text: string }[]
-  const updateCard = handle.prepare('UPDATE board_items SET target_path = ? WHERE target_text = ?')
+  const links = handle.prepare('SELECT DISTINCT source_path, target_text FROM links').all() as { source_path: string; target_text: string }[]
+  const update = handle.prepare('UPDATE links SET target_path = ?, by_date = ? WHERE source_path = ? AND target_text = ?')
+  const cards = handle.prepare('SELECT DISTINCT board_path, target_text FROM board_items WHERE target_text IS NOT NULL').all() as {
+    board_path: string
+    target_text: string
+  }[]
+  const updateCard = handle.prepare('UPDATE board_items SET target_path = ? WHERE board_path = ? AND target_text = ?')
   let resolved = 0
 
   handle.transaction(() => {
-    for (const { target_text } of links) {
-      const target = resolveLink(target_text, byName, allPaths)
-      update.run(target, target_text)
+    for (const { source_path, target_text } of links) {
+      const { path: target, byDate } = resolveLinkpathDetail(target_text, source_path, vault)
+      update.run(target, byDate ? 1 : 0, source_path, target_text)
       if (target !== null) resolved++
     }
-    for (const { target_text } of cards) updateCard.run(resolveLink(target_text, byName, allPaths), target_text)
+    for (const { board_path, target_text } of cards) updateCard.run(resolveLinkpath(target_text, board_path, vault), board_path, target_text)
   })()
 
   return resolved
@@ -437,7 +446,13 @@ export async function reindex(force: boolean): Promise<{ indexed: number; remove
   const handle = requireDb()
   const found = await walk(vaultRoot)
   await reconcileCanvases(found.filter((f) => isCanvas(f.path)), force)
-  const onDisk = found.filter((f) => !isCanvas(f.path))
+  const others = found.filter((f) => !isCanvas(f.path) && !isNoteFile(f.path))
+  handle.transaction(() => {
+    handle.prepare('DELETE FROM files').run()
+    const insert = handle.prepare('INSERT INTO files (path, ctime) VALUES (?, ?)')
+    for (const f of others) insert.run(f.path, f.ctime)
+  })()
+  const onDisk = found.filter((f) => isNoteFile(f.path))
   const known = new Map(
     (handle.prepare('SELECT path, mtime, size FROM notes').all() as { path: string; mtime: number; size: number }[]).map((r) => [
       r.path,
@@ -472,7 +487,7 @@ export async function reindex(force: boolean): Promise<{ indexed: number; remove
     handle.transaction(() => {
       for (const entry of contents) {
         if (entry === null) continue
-        writeNote(entry.file.path, entry.content, entry.file.mtime, entry.file.size)
+        writeNote(entry.file.path, entry.content, entry.file.mtime, entry.file.size, entry.file.ctime)
         // Snapshot here too, not only on change. Otherwise history begins at
         // your FIRST edit and the content you had before it - the version you
         // are most likely to want back - is never captured. The
@@ -526,15 +541,13 @@ function handle(request: IndexRequest): IndexResponse {
     case 'canvas-referrers':
       return { kind: 'canvases-result', canvases: canvasReferrers(request.path) }
     case 'resolve-link':
-      return { kind: 'resolve-link-result', path: resolveOne(request.target) }
+      return { kind: 'resolve-link-result', path: resolveOne(request.target, request.source) }
     case 'resolve-links': {
       // One lookup table for the whole batch: the editor asks about every link
       // in a document at once, and rebuilding the index per target is O(n*m).
-      const rows = requireDb().prepare('SELECT path FROM notes').all() as { path: string }[]
-      const allPaths = new Set(rows.map((r) => r.path))
-      const byName = pathsByName(allPaths)
+      const vault = notesLinkVault()
       const resolved: Record<string, string | null> = {}
-      for (const target of request.targets) resolved[target] = resolveLink(target, byName, allPaths)
+      for (const target of request.targets) resolved[target] = resolveLinkpath(target, request.source, vault)
       return { kind: 'resolve-links-result', resolved }
     }
     case 'unresolved':
@@ -542,7 +555,7 @@ function handle(request: IndexRequest): IndexResponse {
     case 'graph':
       return { kind: 'graph-result', graph: graph(request.autoProperty ?? null) }
     case 'board-cards':
-      return { kind: 'board-cards-result', cards: cards(request.targets) }
+      return { kind: 'board-cards-result', cards: cards(request.targets, request.board) }
     case 'boards':
       return { kind: 'boards-result', boards: boards() }
     case 'card-places':
@@ -666,6 +679,18 @@ process.parentPort?.on('message', (event) => {
     if (request.kind === 'note-changed') {
       const handleDb = requireDb()
       for (const change of request.changes) {
+        if (!isCanvas(change.path) && !isNoteFile(change.path)) {
+          // A picture or another file: only that it is there, for the links that name it.
+          if (change.type === 'removed') handleDb.prepare('DELETE FROM files WHERE path = ?').run(change.path)
+          else
+            try {
+              const stat = fs.statSync(notePath(change.path))
+              handleDb.prepare('INSERT INTO files (path, ctime) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET ctime = excluded.ctime').run(change.path, madeAt(stat))
+            } catch {
+              // Gone again; the next reconcile catches it.
+            }
+          continue
+        }
         if (isCanvas(change.path)) {
           if (change.type === 'removed') handleDb.transaction(() => removeCanvas(change.path))()
           else
@@ -689,7 +714,7 @@ process.parentPort?.on('message', (event) => {
           const stat = fs.statSync(absolute)
           const content = fs.readFileSync(absolute, 'utf8')
           handleDb.transaction(() => {
-            writeNote(change.path, content, stat.mtimeMs, stat.size)
+            writeNote(change.path, content, stat.mtimeMs, stat.size, madeAt(stat))
             takeSnapshot(handleDb, change.path, content)
           })()
         } catch {

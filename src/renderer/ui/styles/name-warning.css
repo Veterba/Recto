@@ -1,0 +1,8 @@
+/* What to know about a name typed for a file: allowed, but links, Windows or the tree will not take it well. */
+.name-warning {
+  margin: var(--size-2) 0 0;
+  font-size: var(--font-size-11-5);
+  line-height: 1.45;
+  color: var(--warning);
+  overflow-wrap: anywhere;
+}

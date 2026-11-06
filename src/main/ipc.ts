@@ -1,6 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import { ATTACHMENTS_FOLDER as ATTACHMENTS, type RenameOutcome } from '../shared/vault'
-import { IPC, type IpcApi } from '../shared/ipc'
+import { IPC, IPC_EVENT, type IpcApi } from '../shared/ipc'
+import { sendEvent } from './events'
 import * as ai from './ai'
 import * as bots from './bots'
 import * as answers from './bots/answers'
@@ -9,7 +10,8 @@ import { migrateBoards } from './board-migration'
 import { createBoardOps, ensureReadme } from './boards'
 import { migrateLayout, type LayoutMigrationResult } from './layout-migration'
 import { inRecto } from '../shared/recto-paths'
-import { shortestLink } from '../shared/parse'
+import { formatLink } from '../shared/obsidian-links'
+import { currentLinkSettings, currentLinkVault, rememberAlwaysUpdate } from './link-context'
 import type { BoardMigrationResult } from '../shared/board-migration'
 import * as topics from './topics/service'
 import * as topicCommands from './topics/commands'
@@ -44,6 +46,10 @@ function handle<C extends keyof IpcApi>(
  * In memory only and capped: this is for "that rename was a mistake, put it
  * back" in the next minute, not a history feature.
  */
+/** One answer to Update links, shared by a run of moves; unset until asked. */
+export type LinkAnswer = { update?: boolean }
+/** Update links dialogs waiting for the window's answer. */
+const linkAnswers = new Map<string, (answer: 'always' | 'once' | 'never') => void>()
 const renameUndo = new Map<string, { from: string; to: string; entries: vaultFs.RewrittenFile[] }>()
 
 /** Restart the watcher and the index whenever the open vault changes. */
@@ -221,6 +227,30 @@ export function registerIpc(): void {
     return created
   })
   /**
+   * Obsidian's Update links dialog, in the window: "Always update" turns the
+   * vault's setting on (link-context.ts), "Just once" updates this time, "Do
+   * not update" leaves the links. One answer serves a whole run of moves.
+   */
+  async function askToUpdate(plan: vaultFs.LinkPlan, asked: LinkAnswer): Promise<boolean> {
+    if (asked.update !== undefined) return asked.update
+    const win = BrowserWindow.getAllWindows()[0]
+    // Nobody to ask: links are kept working, as they always were.
+    if (win === undefined) return true
+    const id = `links-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    const answer = await new Promise<'always' | 'once' | 'never'>((resolve) => {
+      linkAnswers.set(id, resolve)
+      sendEvent(win, IPC_EVENT.linksAsk, { id, links: plan.links, files: plan.files.length })
+    })
+    if (answer === 'always') rememberAlwaysUpdate()
+    asked.update = answer !== 'never'
+    return asked.update
+  }
+  handle(IPC.linksAnswer, (id, answer) => {
+    linkAnswers.get(id)?.(answer)
+    linkAnswers.delete(id)
+  })
+
+  /**
    * Rename and move are the same operation to a user: the note ends up
    * somewhere else and every link to it must follow. They were not sharing
    * this, so dragging a file into a folder silently broke its links while
@@ -229,19 +259,11 @@ export function registerIpc(): void {
   async function relocate(
     from: string,
     apply: () => Promise<{ ok: true; path: string } | { ok: false; error: string }>,
+    /** One answer to Update links for a run of moves - a board's folder, file by file. */
+    asked: LinkAnswer = {},
   ): Promise<RenameOutcome | { ok: false; error: string }> {
-    // Collect referrers BEFORE the move: afterwards the index no longer knows
-    // anything pointed at the old path.
-    let sources: string[] = []
-    try {
-      const response = await send({ kind: 'backlinks', path: from }, 15_000)
-      if (response.kind === 'backlinks-result') {
-        sources = [...new Set(response.links.map((link) => link.path))]
-      }
-    } catch {
-      // No index: the move still happens, links just are not rewritten. Said in
-      // the result rather than silently pretending it worked.
-    }
+    // The vault as it is BEFORE the move: what each link meant is read from it.
+    const before = currentLinkVault()
 
     // And the canvases that have it on them (or anything in it, for a folder).
     let canvases: string[] = []
@@ -249,7 +271,7 @@ export function registerIpc(): void {
       const response = await send({ kind: 'canvas-referrers', path: from }, 15_000)
       if (response.kind === 'canvases-result') canvases = response.canvases
     } catch {
-      // As above: no index, no rewrite.
+      // No index: no canvas rewrite.
     }
 
     const moved = await apply()
@@ -271,7 +293,15 @@ export function registerIpc(): void {
     overview.moved(from, moved.path)
     void topicCommands.moved(from, moved.path).catch((err: unknown) => console.error('[topics]', err))
 
-    const links = await vaultFs.rewriteLinksTo(sources, from, moved.path)
+    // Every file that moved: this one, or everything in a folder.
+    const moves = new Map<string, string>()
+    for (const file of before.byPath.values())
+      if (file.path === from) moves.set(from, moved.path)
+      else if (file.path.startsWith(`${from}/`)) moves.set(file.path, `${moved.path}${file.path.slice(from.length)}`)
+    const settings = currentLinkSettings()
+    const plan = await vaultFs.planLinkUpdates(moves, before, currentLinkVault(), settings)
+    const update = plan.links > 0 && (settings.alwaysUpdateLinks || (await askToUpdate(plan, asked)))
+    const links = update ? await vaultFs.applyLinkPlan(plan) : { changed: [], links: 0 }
     // A canvas moved itself is not one of its own referrers.
     const onCanvases = await vaultFs.rewriteCanvasesTo(canvases.filter((c) => c !== from), from, moved.path)
     const rewrite = { changed: [...links.changed, ...onCanvases], links: links.links + onCanvases.length }
@@ -302,9 +332,10 @@ export function registerIpc(): void {
       return response.kind === 'boards-result' ? response.boards.map((b) => b.path) : []
     },
   })
-  handle(IPC.fsNameTaken, (fileName) => vaultFs.nameTakenBy(fileName))
+  handle(IPC.fsSameNamed, (fileName) => vaultFs.sameNamed(fileName))
   handle(IPC.fsExisting, (paths) => vaultFs.existing(paths))
-  handle(IPC.fsLinkTarget, (p) => shortestLink(p, vaultFs.vaultFiles().filter((f) => f.toLowerCase().endsWith('.md'))))
+  handle(IPC.linksSettings, () => currentLinkSettings())
+  handle(IPC.linksFormat, (target, source, opts) => formatLink(target, source, currentLinkVault(), currentLinkSettings(), opts))
   handle(IPC.boardsPlace, (cards, boards) => boardOps.placeCards(cards, boards))
   handle(IPC.boardsRename, (p, name) => boardOps.renameBoard(p, name))
   handle(IPC.boardsDelete, (p, choice) => boardOps.deleteBoard(p, choice))
@@ -537,13 +568,13 @@ export function registerIpc(): void {
     writeAppState({ overviewPlace: place })
     return { ok: true }
   })
-  handle(IPC.indexResolveLink, async (target) => {
-    const response = await send({ kind: 'resolve-link', target }, 15_000)
+  handle(IPC.indexResolveLink, async (target, source) => {
+    const response = await send({ kind: 'resolve-link', target, source }, 15_000)
     return response.kind === 'resolve-link-result' ? response.path : null
   })
-  handle(IPC.indexResolveLinks, async (targets) => {
+  handle(IPC.indexResolveLinks, async (targets, source) => {
     if (targets.length === 0) return {}
-    const response = await send({ kind: 'resolve-links', targets }, 15_000)
+    const response = await send({ kind: 'resolve-links', targets, source }, 15_000)
     return response.kind === 'resolve-links-result' ? response.resolved : {}
   })
   handle(IPC.indexUnresolved, async () => {
@@ -554,8 +585,8 @@ export function registerIpc(): void {
     const response = await send({ kind: 'graph', autoProperty: 'topics' }, 30_000)
     return response.kind === 'graph-result' ? response.graph : { nodes: [], edges: [] }
   })
-  handle(IPC.indexCards, async (targets) => {
-    const response = await send({ kind: 'board-cards', targets }, 30_000)
+  handle(IPC.indexCards, async (targets, board) => {
+    const response = await send({ kind: 'board-cards', targets, board }, 30_000)
     return response.kind === 'board-cards-result' ? response.cards : {}
   })
   handle(IPC.indexBoards, async () => {

@@ -3,6 +3,7 @@ import { commands } from '../../../app/commands'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { fuzzyFilter } from '../../../ui/fuzzy'
+import { writeLink } from '../../../app/link-writer'
 import { GlassMenu } from './GlassMenu'
 import { ModelChip } from './ModelMenu'
 
@@ -70,11 +71,13 @@ export function Composer(props: Props): React.ReactElement {
     setLink(open === null ? null : { query: open[1] ?? '', active: 0 })
   }
 
-  const acceptLink = (name: string): void => {
+  /** A note picked after `[[`: linked as Obsidian links it from no note - its name, or its path when another note has the name. */
+  const acceptLink = (note: { path: string }): void => {
     const field = inputRef.current
     if (field === null) return
     const caret = field.selectionStart
-    const before = field.value.slice(0, caret).replace(OPEN_LINK, `[[${name}]]`)
+    const link = writeLink(note.path, '', props.notes(), { markdown: false })
+    const before = field.value.slice(0, caret).replace(OPEN_LINK, () => link)
     const after = field.value.slice(caret).replace(/^\]\]/, '')
     onDraft(before + after)
     setLink(null)
@@ -143,7 +146,7 @@ export function Composer(props: Props): React.ReactElement {
                 aria-selected={i === link.active}
                 onMouseDown={(event) => {
                   event.preventDefault()
-                  acceptLink(item.name)
+                  acceptLink(item)
                 }}
               >
                 <span className="glass-menu__label">
@@ -194,7 +197,7 @@ export function Composer(props: Props): React.ReactElement {
                 if (event.key === 'Enter' || event.key === 'Tab') {
                   event.preventDefault()
                   const pick = matches[link.active]
-                  if (pick !== undefined) acceptLink(pick.item.name)
+                  if (pick !== undefined) acceptLink(pick.item)
                   return
                 }
                 if (event.key === 'Escape') {

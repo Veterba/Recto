@@ -1,4 +1,4 @@
-import { cardLink, insertItem, isKanban, updateSettings } from '@shared/kanban'
+import { insertItem, isKanban, updateSettings } from '@shared/kanban'
 import { IPC } from '@shared/ipc'
 import { boardFolder, cardFolderFor, NEW_NOTE_FOLDER_KEY } from '@shared/recto-paths'
 import { nameProblem } from '@shared/vault'
@@ -28,11 +28,15 @@ export const cardName = (text: string): string =>
     .trim()
 
 /**
- * The note a new card's or board's name would collide with, or null. A link
- * resolves by name across the vault, so a note of that name anywhere is a
- * clash. Asked of the disk, not the index, which can be behind either way.
+ * The notes already called `name`, in any folder - Obsidian allows one per
+ * folder, so these are choices for a new card, not a clash. Asked of the
+ * disk, not the index, which can be behind either way.
  */
-export const noteNamed = (name: string): Promise<string | null> => api.invoke(IPC.fsNameTaken, `${name}.md`)
+export const notesNamed = (name: string): Promise<string[]> => api.invoke(IPC.fsSameNamed, `${name}.md`)
+
+/** The one of `paths` in `folder`, ignoring case, as the disk does; null when the folder has none. */
+export const inFolder = (paths: readonly string[], folder: string): string | null =>
+  paths.find((p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '').toLowerCase() === folder.toLowerCase()) ?? null
 
 /**
  * A card's note in `folder`, empty or with a body. `onTaken: 'number'` for a
@@ -72,11 +76,11 @@ export async function createCard(
   const read = await api.invoke(IPC.fsRead, boardPath)
   const created = await createCardNote(title.trim(), cardFolderFor(boardPath, read.ok ? read.content : null), '', onTaken)
   if (!created.ok) return created
-  const stem = created.path.slice(created.path.lastIndexOf('/') + 1).replace(/\.md$/i, '')
   if (!read.ok || !isKanban(read.content)) return created
+  const link = await api.invoke(IPC.linksFormat, created.path, boardPath, { markdown: false })
   let next: string
   try {
-    next = insertItem(read.content, 0, 0, cardLink(stem))
+    next = insertItem(read.content, 0, 0, link)
   } catch {
     // A board with no column yet: the note is made, and stays a note.
     return created
@@ -90,15 +94,17 @@ export async function createCard(
 }
 
 /**
- * A new board note in its own folder, under a typed name. A name a note has
- * anywhere is not taken over: `exists` says which note, and nothing is made.
+ * A new board note in its own folder, under a typed name. Another note of
+ * the name elsewhere is fine, as in Obsidian; a board of the name already
+ * (its folder has the note) is not taken over: `exists` says which, and
+ * nothing is made.
  */
 export async function createBoard(name: string): Promise<{ ok: true; path: string } | { ok: false; exists: string } | { ok: false; error: string }> {
-  const problem = nameProblem(name, true)
+  const problem = nameProblem(name)
   if (problem !== null) return { ok: false, error: problem }
-  const existing = await noteNamed(name)
-  if (existing !== null) return { ok: false, exists: existing }
   const folder = boardFolder(name)
+  const existing = inFolder(await notesNamed(name), folder)
+  if (existing !== null) return { ok: false, exists: existing }
   const created = await api.invoke(IPC.fsCreate, folder, `${name}.md`, 'file', 'refuse')
   if (!created.ok) return created
   const text = updateSettings(newBoardText(), (settings) => ({ ...settings, [NEW_NOTE_FOLDER_KEY]: folder }))

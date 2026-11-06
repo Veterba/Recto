@@ -68,13 +68,14 @@ export function registerAiAccessIpc(handle: Handle): void {
   handle(IPC.aiAccessDraftGuide, () => draftGuide(buildScope('recto')))
   handle(IPC.aiAccessSaveGuide, async (name, text) => {
     const clean = name.trim().replace(/\.md$/i, '')
-    const problem = nameProblem(clean, true)
+    const problem = nameProblem(clean)
     if (problem !== null) return { ok: false as const, error: problem }
-    const taken = vaultFs.nameTakenBy(`${clean}.md`)
-    if (taken !== null)
+    // Written at the vault's top: only a note there of the name is in the way, as in Obsidian.
+    const taken = vaultFs.sameNamed(`${clean}.md`).find((p) => !p.includes('/'))
+    if (taken !== undefined)
       return {
         ok: false as const,
-        error: `A note “${titleOf(taken)}” already exists. Choose another name, or pick that note as the guide.`,
+        error: `A note “${titleOf(taken)}” is already at the top of the vault. Choose another name, or pick that note as the guide.`,
       }
     const file = `${clean}.md`
     markSelfWrite(file)

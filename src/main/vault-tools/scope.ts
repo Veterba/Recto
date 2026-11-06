@@ -1,10 +1,11 @@
 import path from 'node:path'
 import { coerceAiAccess, isExcludedPath, AI_ACCESS_STATE, type AiAccessSettings } from '../../shared/ai-access'
-import { pathsByName, resolveLink, shortestLink } from '../../shared/parse'
+import { formatLink, resolveLinkpath, splitSubpath } from '../../shared/obsidian-links'
 import { isChatPath } from '../../shared/recto-paths'
 import { coerceTemplateSettings, type TemplateSettings } from '../../shared/templates'
 import { readState } from '../state'
 import { currentVault } from '../vault'
+import { currentLinkSettings, currentLinkVault } from '../link-context'
 import * as vaultFs from '../vault-fs'
 
 /**
@@ -21,18 +22,24 @@ export type Scope = {
   settings: AiAccessSettings
   templates: TemplateSettings
   client: string
-  /** Every note in the vault, hidden ones too: names are unique across all of them. */
+  /** Every note in the vault, hidden ones too: a link is read against all of them. */
   allNotes: string[]
   /** The notes a tool may return. */
   notes: string[]
   /** Not for any tool: excluded by the person, Recto's chats, or not a note. */
   hidden: (p: string) => boolean
-  /** A note given as a path or a name, as a visible note's path - or null. */
-  resolve: (target: string) => string | null
-  /** The note's path, or a ToolError saying there is no such note. */
+  /**
+   * The visible note a link means, read from the note it is in (`source`, ''
+   * for none), by Obsidian's rules (shared/obsidian-links.ts) - or null.
+   */
+  resolve: (target: string, source?: string) => string | null
+  /**
+   * The note a tool is given, as a path or a name: its path, or a ToolError -
+   * no such note, or a name several notes have (each listed, to give one by path).
+   */
   need: (target: string) => string
-  /** How a link to this note is written: its name, or the shortest path that is unique. */
-  linkTo: (p: string) => string
+  /** What goes inside `[[ ]]` for a link to `p` written in `source`, as Obsidian writes it - right even before `p` exists. */
+  linkTo: (p: string, source: string) => string
 }
 
 export const isNote = (p: string): boolean => p.toLowerCase().endsWith('.md')
@@ -49,18 +56,12 @@ export function buildScope(client: string, limit: ScopeLimit = { notes: null }):
   const hidden = (p: string): boolean =>
     !isNote(p) || isChatPath(p) || isExcludedPath(p, settings.excluded) || (limit.notes !== null && !limit.notes.has(p))
   const notes = allNotes.filter((p) => !hidden(p))
-  const byName = pathsByName(allNotes)
-  const all = new Set(allNotes)
-  const lower = new Map(allNotes.map((p) => [p.toLowerCase(), p]))
+  const files = currentLinkVault()
+  const format = { newLinkFormat: currentLinkSettings().newLinkFormat, useMarkdownLinks: false }
 
-  const resolve = (target: string): string | null => {
-    const clean = target
-      .trim()
-      .replace(/^\[\[|\]\]$/g, '')
-      .replace(/^\/+/, '')
-    if (clean === '') return null
-    const exact = lower.get(clean.toLowerCase()) ?? lower.get(`${clean.toLowerCase()}.md`)
-    const found = exact ?? resolveLink(clean.replace(/\.md$/i, ''), byName, all)
+  const clean = (target: string): string => splitSubpath(target.trim().replace(/^\[\[|\]\]$/g, '').split('|')[0]!).path.trim()
+  const resolve = (target: string, source = ''): string | null => {
+    const found = resolveLinkpath(clean(target), source, files)
     return found === null || hidden(found) ? null : found
   }
 
@@ -74,12 +75,20 @@ export function buildScope(client: string, limit: ScopeLimit = { notes: null }):
     hidden,
     resolve,
     need: (target) => {
+      const name = clean(target)
+      // A bare name several visible notes have: which one is not guessed.
+      if (!name.includes('/')) {
+        const want = name.replace(/\.md$/i, '').toLowerCase()
+        const same = notes.filter((p) => titleOf(p).toLowerCase() === want)
+        if (same.length > 1)
+          throw new ToolError(`${same.length} notes are called “${titleOf(same[0]!)}”: ${same.join(', ')}. Give the one you mean by its path.`)
+      }
       const found = resolve(target)
       // An excluded note is "no note": saying it exists would already say something about it.
       if (found === null) throw new ToolError(`No note “${target}” in this vault. Use search_notes to find it.`)
       return found
     },
-    linkTo: (p) => shortestLink(p, allNotes),
+    linkTo: (p, source) => formatLink(p, source, files, format, { markdown: false }).slice(2, -2),
   }
 }
 

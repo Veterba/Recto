@@ -9,6 +9,7 @@ import { NoteBodyEditor } from '../../editor'
 import type { Board } from '../boards'
 import type { CardView } from '../board-view'
 import type { Drop } from '../hooks/use-board-cards'
+import { NameWarning } from '../../../ui/NameWarning'
 
 type Props = {
   board: Board
@@ -95,6 +96,8 @@ function LightCardPanel({ board, card, move, onMakeNote, onClose }: Props): Reac
 
 function NoteCardPanel({ board, card, editCard, move, onRename, onOpenNote, onClose }: Props): React.ReactElement {
   const [text, setText] = useState<string | null>(null)
+  /** The title being typed, for what to know about it as a file name; '' when it is the card's own. */
+  const [typedTitle, setTypedTitle] = useState('')
   const [dateError, setDateError] = useState(false)
   const { revision } = useNoteBus()
 
@@ -174,7 +177,9 @@ function NoteCardPanel({ board, card, editCard, move, onRename, onOpenNote, onCl
           defaultValue={card.title}
           aria-label="Card title"
           spellCheck={false}
+          onChange={(event) => setTypedTitle(event.target.value === card.title ? '' : event.target.value)}
           onBlur={(event) => {
+            setTypedTitle('')
             const name = event.target.value.trim()
             if (name === '' || name === card.title) {
               event.target.value = card.title
@@ -191,6 +196,7 @@ function NoteCardPanel({ board, card, editCard, move, onRename, onOpenNote, onCl
             }
           }}
         />
+        <NameWarning name={typedTitle} />
 
         <div className="card-panel__fields">
           <label htmlFor="card-status">Status</label>
@@ -275,8 +281,9 @@ function NoteCardPanel({ board, card, editCard, move, onRename, onOpenNote, onCl
               value={body}
               placeholder="Notes, steps, links. Markdown works: “- [ ] ” starts a checklist item."
               onChange={writeBody}
+              linkSource={card.path}
               onOpenLink={(target) =>
-                void api.invoke(IPC.indexResolveLink, target).then((found) => {
+                void api.invoke(IPC.indexResolveLink, target, card.path).then((found) => {
                   if (found !== null) onOpenNote(found)
                 })
               }

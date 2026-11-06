@@ -53,6 +53,9 @@ describe.skipIf(!RUN)('boards as notes', () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-e2e-board-'))
     vault = path.join(base, 'vault')
     fs.cpSync(path.join(ROOT, 'test/fixtures/snapshot-vault'), vault, { recursive: true })
+    // Links follow renames without asking ("Always update" chosen once); the question itself is tested in rename-links.test.ts.
+    fs.mkdirSync(path.join(vault, '.recto'), { recursive: true })
+    fs.writeFileSync(path.join(vault, '.recto', 'link-settings.json'), JSON.stringify({ alwaysUpdateLinks: true }))
     // A card dated around today for the calendar, and a line of text.
     fs.writeFileSync(path.join(vault, DIR, 'This week.md'), `---\npriority: low\nstart: ${day(-1)}\ndue: ${day()}\n---\n`)
     fs.writeFileSync(
@@ -139,16 +142,12 @@ describe.skipIf(!RUN)('boards as notes', () => {
     await column('To do').getByRole('button', { name: 'New card in To do' }).click()
     await title.fill('Handbook')
     await title.press('Enter')
-    await popover.getByText('A note “').waitFor()
-    expect(await popover.locator('.new-card__taken').textContent()).toBe('A note “Handbook” already exists in the top of the vault. Add it to this board?')
+    await popover.locator('.new-card__exists').waitFor()
+    expect(await popover.locator('.new-card__taken').textContent()).toBe('“Handbook” is already a note, in the top of the vault.')
     expect(fs.existsSync(path.join(vault, DIR, 'Handbook.md'))).toBe(false)
     expect(board()).not.toContain('[[Handbook]]')
-    // Choose another name: the field is back, nothing made.
-    await popover.getByRole('button', { name: 'Choose another name' }).click()
-    expect(await popover.locator('.new-card__exists').count()).toBe(0)
-    // Add it: the existing note goes on the board as a link, its file left where it is.
-    await title.press('Enter')
-    await popover.getByRole('button', { name: 'Add it to this board' }).click()
+    // Use it: the existing note goes on the board as a link, its file left where it is.
+    await popover.getByRole('button', { name: 'Use the one in the top of the vault' }).click()
     await until(() => board().includes('- [ ] [[Handbook]]'))
     expect(fs.existsSync(path.join(vault, 'Handbook.md'))).toBe(true)
     expect(fs.existsSync(path.join(vault, DIR, 'Handbook.md'))).toBe(false)

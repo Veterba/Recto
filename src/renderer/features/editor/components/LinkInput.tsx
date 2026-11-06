@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { fuzzyFilter } from '../../../ui/fuzzy'
 import type { LinkCandidate } from '../link-complete'
+import { writeLink } from '../../../app/link-writer'
 
 /**
  * A text input that offers note names after `[[`.
@@ -20,6 +21,8 @@ type Props = {
   value: string
   onChange: (value: string) => void
   getCandidates: () => readonly LinkCandidate[]
+  /** The note the value is in: a note picked is linked as Obsidian links it from there. */
+  source?: string
   className?: string
   placeholder?: string
   autoFocus?: boolean
@@ -31,6 +34,7 @@ export function LinkInput({
   value,
   onChange,
   getCandidates,
+  source = '',
   className,
   placeholder,
   autoFocus,
@@ -64,8 +68,10 @@ export function LinkInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matches.length, value])
 
-  const pick = (name: string): void => {
+  /** A property's link is a wikilink, in Obsidian too: the name alone, or the path when another note has the name. */
+  const pick = (candidate: LinkCandidate): void => {
     if (open === null) return
+    const name = writeLink(candidate.path, source, getCandidates(), { markdown: false }).slice(2, -2)
     const start = caret - (open[1] ?? '').length
     const after = value.slice(caret)
     // Do not close brackets that are already closed.
@@ -110,7 +116,7 @@ export function LinkInput({
             if (event.key === 'Enter' || event.key === 'Tab') {
               event.preventDefault()
               const chosen = matches[cursor]
-              if (chosen !== undefined) pick(chosen.item.name)
+              if (chosen !== undefined) pick(chosen.item)
               return
             }
             if (event.key === 'Escape') {
@@ -137,7 +143,7 @@ export function LinkInput({
                 // which commits the half-typed value and closes the list.
                 onMouseDown={(event) => {
                   event.preventDefault()
-                  pick(match.item.name)
+                  pick(match.item)
                 }}
                 onMouseEnter={() => setCursor(index)}
               >

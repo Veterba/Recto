@@ -255,68 +255,6 @@ export function withoutComments(line: string, open: boolean): { text: string; op
   }
 }
 
-/** Note paths keyed by their normalised file name: the lookup `resolveLink` takes. */
-export function pathsByName(paths: Iterable<string>): Map<string, string[]> {
-  const out = new Map<string, string[]>()
-  for (const p of paths) {
-    const key = normalizeName(p.slice(p.lastIndexOf('/') + 1))
-    const list = out.get(key)
-    if (list) list.push(p)
-    else out.set(key, [p])
-  }
-  return out
-}
-
-/**
- * Resolve a wikilink target against known note paths, Obsidian-style: prefer an
- * exact path, then the shortest unique path whose filename matches.
- *
- * Case-insensitive and Unicode-normalised, because `Заметка` typed two different
- * ways is the same file to a user.
- */
-export function resolveLink(target: string, pathsByName: ReadonlyMap<string, string[]>, allPaths: ReadonlySet<string>): string | null {
-  const clean = target.replace(/\\/g, '/').replace(/^\.\//, '').trim()
-
-  for (const candidate of [clean, `${clean}.md`]) {
-    if (allPaths.has(candidate)) return candidate
-  }
-
-  const name = normalizeName(clean.slice(clean.lastIndexOf('/') + 1))
-  const matches = pathsByName.get(name)
-  if (matches === undefined || matches.length === 0) return null
-  if (matches.length === 1) return matches[0] ?? null
-
-  // Ambiguous name: prefer one whose path ends with what was written - but only
-  // when a path was actually written. For a bare name every candidate ends with
-  // it, so this branch would just return whichever happened to be first.
-  if (clean.includes('/')) {
-    const suffix = normalizeName(clean)
-    const exact = matches.find((p) => normalizeName(p.replace(/\.md$/, '')).endsWith(suffix))
-    if (exact !== undefined) return exact
-  }
-
-  // Still ambiguous - shortest path wins, which is Obsidian's rule.
-  return [...matches].sort((a, b) => a.split('/').length - b.split('/').length || a.length - b.length)[0] ?? null
-}
-
-/**
- * The shortest link that names `path` and no other note: its name when that
- * is unique, else as few of its last folders as it takes (`[[Launch/Plan]]`),
- * the whole path only when nothing shorter is unique. Obsidian resolves each
- * of these to the same note.
- */
-export function shortestLink(path: string, allPaths: Iterable<string>): string {
-  const bare = path.replace(/\.md$/i, '')
-  const others = [...allPaths].map((p) => normalizeName(p)).filter((p) => p !== normalizeName(path))
-  const segments = bare.split('/')
-  for (let n = 1; n < segments.length; n++) {
-    const tail = segments.slice(-n).join('/')
-    const key = normalizeName(tail)
-    if (!others.some((p) => p === key || p.endsWith(`/${key}`))) return tail
-  }
-  return bare
-}
-
 export const normalizeName = (value: string): string => value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
 
 /**

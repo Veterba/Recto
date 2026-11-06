@@ -80,7 +80,7 @@ function watch(): void {
  * The pointer came to rest on an anchor - a link (`target`, resolved like a
  * link) or a note row (`path`) - or left it (null).
  */
-export function hoverLink(request: { target?: string; path?: string; element: HTMLElement } | null): void {
+export function hoverLink(request: { target?: string; source?: string; path?: string; element: HTMLElement } | null): void {
   window.clearTimeout(openTimer)
   window.clearTimeout(closeTimer)
   const mine = ++token
@@ -96,7 +96,7 @@ export function hoverLink(request: { target?: string; path?: string; element: HT
   watch()
   openTimer = window.setTimeout(
     () => {
-      const resolve = request.path !== undefined ? Promise.resolve(request.path) : api.invoke(IPC.indexResolveLink, request.target ?? '')
+      const resolve = request.path !== undefined ? Promise.resolve(request.path) : api.invoke(IPC.indexResolveLink, request.target ?? '', request.source ?? '')
       void resolve.then((path) => {
         // A link to nothing has nothing to preview; a request since, or an anchor gone, wins.
         if (mine !== token || path === null || anchor !== element || !anchorHolds(element)) return

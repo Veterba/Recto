@@ -112,7 +112,7 @@ export const VAULT_TOOLS: readonly ToolDef[] = [
   tool(
     'propose_new_note',
     'Propose a new note',
-    'A new note. Its name must be unique in the whole vault. Links are [[Note name]] and must point at existing notes, unless listed in new_links.',
+    'A new note. Its folder must not have a note of that name already; other folders may. Links are [[Note name]] (with the path when several notes have the name) and must point at existing notes, unless listed in new_links.',
     z.object({
       name: z.string().min(1).describe('Without .md.'),
       folder: z.string().default(''),

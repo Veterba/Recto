@@ -23,7 +23,7 @@ export const UNSORTED_FOLDER = `${RECTO_FOLDER}/Unsorted`
 export const CHATS_FOLDER = `${RECTO_FOLDER}/Chats`
 export const CANVAS_FOLDER = `${RECTO_FOLDER}/Canvas`
 export const RECTO_README = `${RECTO_FOLDER}/README.md`
-/** The README's name when a note called README exists elsewhere already: names are unique vault-wide. */
+/** The README an older Recto wrote when a README was elsewhere (names were unique vault-wide then): still the README, never made now. */
 export const RECTO_README_FALLBACK = `${RECTO_FOLDER}/Recto README.md`
 export const RECTO_README_TEXT =
   "This folder is managed by Recto (boards and their tasks, canvases, chats). Notes here are normal Markdown and canvases JSON Canvas; don't rename the folder.\n"

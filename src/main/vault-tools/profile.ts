@@ -26,7 +26,7 @@ const KEY_PATTERN: Record<Period, RegExp> = {
 const top = <T>(map: Map<T, number>, n: number): [T, number][] => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, n)
 
 const LINK_STYLE =
-  'Recto writes and accepts links as [[Note name]]. Note names are unique in the whole vault, so a name is enough; only where two notes share a name is the shortest unique path written ([[Folder/Note name]]). Links are never written as Markdown paths unless the formatting profile says so. Obsidian and plain Markdown read these links the same way.'
+  'Recto follows Obsidian’s rules for names and links. Notes in different folders may share a name; a folder holds one of each. Links are written [[Note name]] when only one note has the name, else with its path ([[Folder/Note name]]) - as this vault’s Obsidian settings write them - and never as Markdown paths unless the formatting profile says so. A link is read from the note it is in: a bare name means the note there or below first, then the one with the shorter path.'
 
 const TOPICS_HOW =
   'Topics are written by Recto, not by people: it reads notes that have been quiet for a while, groups them by meaning with a local model, and lists each note’s topics as [[topics/Name]] links in its "topics" property. Leave that property alone; link notes in the text instead.'

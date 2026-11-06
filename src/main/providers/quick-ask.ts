@@ -33,7 +33,7 @@ async function reach(note: string): Promise<{ path: string; notes: Set<string> }
   const path = scope.resolve(note)
   if (path === null) return null
   const out = parseNote(await readNote(path))
-    .links.map((l) => scope.resolve(l.target))
+    .links.map((l) => scope.resolve(l.target, path))
     .filter((p): p is string => p !== null)
   const { links } = await ask({ kind: 'backlinks', path }, 'backlinks-result')
   return { path, notes: new Set([path, ...out, ...links.map((l) => l.path).filter((p) => !scope.hidden(p))]) }

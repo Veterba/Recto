@@ -220,7 +220,7 @@ function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps)
       const source = sources.find((s) => noteTitle(s.path).toLowerCase() === title.toLowerCase())
       if (source !== undefined) onOpen(source.path, source.heading)
       else
-        void api.invoke(IPC.indexResolveLink, title).then((resolved) => {
+        void api.invoke(IPC.indexResolveLink, title, '').then((resolved) => {
           if (resolved !== null) onOpen(resolved)
         })
     },

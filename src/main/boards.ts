@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { shell } from 'electron'
 import { insertItem, isKanban, parseKanban, updateSettings } from '../shared/kanban'
-import { pathsByName, resolveLink } from '../shared/parse'
+import { formatLink, resolveLinkpath } from '../shared/obsidian-links'
 import {
   boardFolder,
   isPlacedCard,
@@ -15,8 +15,9 @@ import {
   RECTO_README_TEXT,
   UNSORTED_FOLDER,
 } from '../shared/recto-paths'
-import { isHidden, nameOf, nameProblem, nameTaken, type RenameOutcome } from '../shared/vault'
+import { nameOf, nameProblem, type RenameOutcome } from '../shared/vault'
 import type { BoardDeleteChoice, BoardDeleteResult } from '../shared/ipc'
+import { currentLinkSettings, currentLinkVault } from './link-context'
 import { resolveInVault } from './paths'
 import { currentVault } from './vault'
 import * as vaultFs from './vault-fs'
@@ -39,6 +40,8 @@ import { markSelfWrite } from './watcher'
 type Relocate = (
   from: string,
   apply: () => Promise<{ ok: true; path: string } | { ok: false; error: string }>,
+  /** One answer to Update links for a run of moves (main/ipc.ts). */
+  asked?: { update?: boolean },
 ) => Promise<RenameOutcome | { ok: false; error: string }>
 
 type Deps = {
@@ -68,20 +71,17 @@ function writeText(relative: string, text: string): void {
   fs.writeFileSync(file, text, 'utf8')
 }
 
-/** The note each `[[link]]` on a board names, resolved the way the index resolves it. */
-function resolver(): (target: string) => string | null {
-  const notes = vaultFs.vaultFiles().filter((p) => p.toLowerCase().endsWith('.md'))
-  const all = new Set(notes)
-  const byName = pathsByName(notes)
-  return (target) => resolveLink(target, byName, all)
+/** The note each `[[link]]` on a board names, read from the board it is on - Obsidian's rules, as the index reads it. */
+function resolver(): (target: string, board: string) => string | null {
+  const files = currentLinkVault()
+  return (target, board) => resolveLinkpath(target, board, files)
 }
 
 /** The notes a board's lines link, its `## Archive` left out. */
-function cardsOn(text: string, resolve: (target: string) => string | null): string[] {
-  const board = parseKanban(text)
-  return board.lanes.flatMap((lane) =>
+function cardsOn(text: string, board: string, resolve: (target: string, board: string) => string | null): string[] {
+  return parseKanban(text).lanes.flatMap((lane) =>
     lane.items.flatMap((item) => {
-      const card = item.link === null ? null : resolve(item.link)
+      const card = item.link === null ? null : resolve(item.link, board)
       return card === null ? [] : [card]
     }),
   )
@@ -113,7 +113,8 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
 
   async function moveTo(card: string, folder: string): Promise<string | null> {
     fs.mkdirSync(resolveInVault(root(), folder), { recursive: true })
-    const moved = await relocate(card, () => vaultFs.move(card, folder))
+    // Recto's own tidying, not the user's move: the links follow without asking, or they would break.
+    const moved = await relocate(card, () => vaultFs.move(card, folder), { update: true })
     return moved.ok ? moved.path : null
   }
 
@@ -131,7 +132,7 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
     const boards = await boardTexts(extra, gone)
     const resolve = resolver()
     const linking = new Map<string, string[]>()
-    for (const [board, text] of boards) for (const card of cardsOn(text, resolve)) linking.set(card, [...(linking.get(card) ?? []), board])
+    for (const [board, text] of boards) for (const card of cardsOn(text, board, resolve)) linking.set(card, [...(linking.get(card) ?? []), board])
     const moved: { from: string; to: string }[] = []
     for (const card of new Set(placed)) {
       const target = placeFor(card, [...new Set(linking.get(card) ?? [])])
@@ -151,24 +152,26 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
   async function renameBoard(boardPath: string, name: string): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
     const clean = name.trim()
     if (clean === '') return { ok: false, error: 'A board needs a name.' }
-    const problem = nameProblem(clean, true)
+    const problem = nameProblem(clean)
     if (problem !== null) return { ok: false, error: problem }
     const own = ownFolderOf(boardPath)
+    // The board and every file in its folder move: Update links is asked once for them all.
+    const asked: { update?: boolean } = {}
     if (own === null) {
-      const renamed = await relocate(boardPath, () => vaultFs.rename(boardPath, `${clean}.md`))
+      const renamed = await relocate(boardPath, () => vaultFs.rename(boardPath, `${clean}.md`), asked)
       return renamed.ok ? { ok: true, path: renamed.path } : renamed
     }
     const folder = boardFolder(clean)
     const sameFolder = folder.normalize('NFC').toLowerCase() === own.normalize('NFC').toLowerCase()
     if (!sameFolder && fs.existsSync(resolveInVault(root(), folder))) return { ok: false, error: `A folder ${folder}/ exists already.` }
-    const renamed = await relocate(boardPath, () => vaultFs.rename(boardPath, `${clean}.md`))
+    const renamed = await relocate(boardPath, () => vaultFs.rename(boardPath, `${clean}.md`), asked)
     if (!renamed.ok) return renamed
     let board = renamed.path
     if (!sameFolder) {
       fs.mkdirSync(resolveInVault(root(), folder), { recursive: true })
       for (const entry of fs.readdirSync(resolveInVault(root(), own))) {
         const from = `${own}/${entry}`
-        const moved = await relocate(from, () => vaultFs.move(from, folder))
+        const moved = await relocate(from, () => vaultFs.move(from, folder), asked)
         if (moved.ok && from === board) board = moved.path
       }
       removeIfEmpty(own)
@@ -197,23 +200,27 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
     const text = readText(boardPath)
     if (text === null) return { ok: false, error: 'The board could not be read.' }
     const resolve = resolver()
-    const cards = [...new Set(cardsOn(text, resolve))]
+    const cards = [...new Set(cardsOn(text, boardPath, resolve))]
     const extra: string[] = []
     let merged: Undo['merged'] = null
 
     if (choice.kind === 'board') {
+      const linkFiles = currentLinkVault()
+      const linkFormat = { newLinkFormat: currentLinkSettings().newLinkFormat, useMarkdownLinks: false }
       const target = readText(choice.to)
       if (target === null || !isKanban(target)) return { ok: false, error: 'The other board could not be read.' }
-      const there = new Set(cardsOn(target, resolve))
+      const there = new Set(cardsOn(target, choice.to, resolve))
       const lanes = parseKanban(target).lanes
       if (lanes.length === 0) return { ok: false, error: `${nameOf(choice.to).replace(/\.md$/i, '')} has no column to put the cards in.` }
       let next = target
       for (const lane of parseKanban(text).lanes) {
         const index = Math.max(0, lanes.findIndex((l) => l.title === lane.title))
         for (const item of lane.items) {
-          const card = item.link === null ? null : resolve(item.link)
+          const card = item.link === null ? null : resolve(item.link, boardPath)
           if (card !== null && there.has(card)) continue
-          next = insertItem(next, index, Number.MAX_SAFE_INTEGER, item.text.replace(/\n/g, '\n    '), item.checked)
+          // Its link written again for the board it goes to: the same words there could mean another note.
+          const line = card === null ? item.text : item.text.replace(/\[\[[^\]|]*/, () => formatLink(card, choice.to, linkFiles, linkFormat, { markdown: false }).slice(0, -2))
+          next = insertItem(next, index, Number.MAX_SAFE_INTEGER, line.replace(/\n/g, '\n    '), item.checked)
         }
       }
       if (next !== target) {
@@ -237,7 +244,7 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
     }
 
     const boards = await boardTexts(extra, [boardPath])
-    const stillListed = new Set([...boards.values()].flatMap((t) => cardsOn(t, resolve)))
+    const stillListed = new Set([...boards].flatMap(([b, t]) => cardsOn(t, b, resolve)))
     if (choice.kind === 'trash') for (const card of cards) if (isPlacedCard(card) && !stillListed.has(card)) await toTrash(card)
     const rest = cards.filter((c) => !trashed.some((t) => t.path === c))
     const moved = await placeCards(rest, extra, [boardPath])
@@ -313,31 +320,15 @@ function removeIfEmpty(folder: string): void {
 }
 
 /**
- * `Recto/README.md` - what the folder is - once the folder exists. Named
- * "Recto README" when a note called README is elsewhere: names are unique
- * vault-wide.
+ * `Recto/README.md` - what the folder is - once the folder exists, whatever
+ * README another folder has (one of a name per folder, as in Obsidian). A
+ * "Recto README" an older Recto wrote counts as the README.
  */
 export function ensureReadme(vault: string): string | null {
   if (!fs.existsSync(path.join(vault, RECTO_FOLDER))) return null
   for (const candidate of [RECTO_README, RECTO_README_FALLBACK]) if (fs.existsSync(path.join(vault, candidate))) return null
-  const elsewhere = nameTaken(nameOf(RECTO_README), allNotes(vault))
-  const target = elsewhere === null ? RECTO_README : RECTO_README_FALLBACK
-  markSelfWrite(target)
-  fs.writeFileSync(path.join(vault, target), RECTO_README_TEXT, { encoding: 'utf8', flag: 'wx' })
-  return target
+  markSelfWrite(RECTO_README)
+  fs.writeFileSync(path.join(vault, RECTO_README), RECTO_README_TEXT, { encoding: 'utf8', flag: 'wx' })
+  return RECTO_README
 }
 
-/** Every file's vault path, hidden folders left out, for a vault that may not be the open one. */
-function allNotes(vault: string): string[] {
-  const out: string[] = []
-  const walk = (dir: string, rel: string): void => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (isHidden(entry.name)) continue
-      const relative = rel === '' ? entry.name : `${rel}/${entry.name}`
-      if (entry.isDirectory()) walk(path.join(dir, entry.name), relative)
-      else if (entry.isFile()) out.push(relative)
-    }
-  }
-  walk(vault, '')
-  return out
-}

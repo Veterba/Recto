@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { folderHints, linkTo } from '../../../src/renderer/app/tab-labels'
+import { folderHints } from '../../../src/renderer/app/tab-labels'
 
 describe('tab labels', () => {
   it('shows the parent folder only for tabs that share a name', () => {
@@ -11,10 +11,5 @@ describe('tab labels', () => {
       { id: 'e', title: 'Graph', path: null },
     ])
     expect(Object.fromEntries(hints)).toEqual({ a: 'Garden', b: 'Kitchen', c: '/' })
-  })
-
-  it('links a note by its name and any other file with its extension', () => {
-    expect(linkTo('Garden/Ideas.md')).toBe('[[Ideas]]')
-    expect(linkTo('Data/settings.json')).toBe('[[settings.json]]')
   })
 })

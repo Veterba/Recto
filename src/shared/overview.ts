@@ -30,6 +30,8 @@ export type OverviewIndex = {
   orphans: { path: string; name: string }[]
   /** `[[Target]]` with no such note, one row per note and target. */
   broken: { path: string; name: string; target: string }[]
+  /** Links whose note only the files' dates chose, among same-named notes equally near (`opens`: the one it opens on this Mac). */
+  byDate: { path: string; name: string; target: string; opens: string }[]
   /** Board cards with a `due` before today, whatever their column - the renderer knows which column is Done. */
   /** Cards with a due day; `done` when every board they are on has them in its done lane. `board`: the first board's name. */
   dueCards: { path: string; name: string; due: Day; done: boolean; board: string | null }[]
@@ -76,6 +78,7 @@ export type OverviewView =
   | { kind: 'main' }
   | { kind: 'orphans' }
   | { kind: 'broken' }
+  | { kind: 'dates' }
   | { kind: 'overdue' }
   | { kind: 'day'; day: Day }
   | { kind: 'topic'; id: string }

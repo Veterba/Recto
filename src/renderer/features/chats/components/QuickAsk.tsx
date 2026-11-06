@@ -242,7 +242,7 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
                         text={turn.content}
                         titles={(turn.sources ?? []).map(titleOf)}
                         onOpenNote={(title) =>
-                          void api.invoke(IPC.indexResolveLink, title).then((resolved) => {
+                          void api.invoke(IPC.indexResolveLink, title, '').then((resolved) => {
                             if (resolved !== null) openFile(resolved)
                           })
                         }

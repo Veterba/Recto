@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { NameWarning } from '../../../ui/NameWarning'
 import { createPortal } from 'react-dom'
 import { Icon } from '../../../ui/Icon'
 import { ConfirmDialog } from '../../../ui/ConfirmDialog'
@@ -164,6 +165,7 @@ export function NameDialog({
             {submitLabel}
           </button>
         </form>
+        {value !== initial && <NameWarning name={value} />}
         {error !== null && (
           <p className="dialog__error" role="alert">
             {error}
