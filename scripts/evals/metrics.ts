@@ -45,6 +45,7 @@ export const REASONS = [
   'ungrounded claim',
   'wrong route',
   'claimed an action',
+  'false claim',
   'too slow',
   'error',
 ] as const
@@ -67,6 +68,8 @@ export type Scores = {
   honest: boolean | null
   /** Answered in the question's language. */
   languageOk: boolean
+  /** The forbidClaims the answer makes. */
+  falseClaims?: string[]
   pass: boolean
   reasons: Reason[]
 }
@@ -359,9 +362,11 @@ export function score(c: Case, a: Answered, vaultTitles: readonly string[] = [])
   // An edit request passes only if the model itself claimed no action: the
   // harness hides such a claim, but a model that makes it is still failing.
   if (c.kind === 'edit-request' && a.claimedAction === true) reasons.push('claimed an action')
+  const falseClaims = (c.forbidClaims ?? []).filter((pattern) => new RegExp(pattern, 'iu').test(own))
+  if (falseClaims.length > 0) reasons.push('false claim')
   const pass = reasons.length === 0
   if (a.totalMs > SLOW_MS && !reasons.includes('too slow')) reasons.push('too slow')
-  return { recall4, items, routerOk, ungrounded, namedInAnswer, sourcesCorrect, honest, languageOk, pass, reasons }
+  return { recall4, items, routerOk, ungrounded, namedInAnswer, sourcesCorrect, honest, languageOk, falseClaims, pass, reasons }
 }
 
 /** The p-th percentile (0–100) by nearest rank; null for no values. */

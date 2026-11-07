@@ -1,8 +1,8 @@
 import type { LinkKind } from '../../app/link-kinds'
 
 /**
- * The icon inside a link to a board or a card, drawn for CodeMirror (not
- * React): a board, or where the card stands - an open circle in its first
+ * The icon inside a link to a canvas, a board or a card, drawn for CodeMirror
+ * (not React): a canvas, a board, or where the card stands - an open circle in its first
  * column, half filled on its way, a check when done, and a dashed circle when
  * it is on several boards that disagree. Lucide's shapes, at text size.
  */
@@ -11,6 +11,7 @@ const SVG = 'http://www.w3.org/2000/svg'
 
 /** What each icon says, for the tooltip and screen readers. */
 export const LINK_KIND_LABEL: Record<LinkKind, string> = {
+  canvas: 'Canvas',
   board: 'Board',
   open: 'Task, not started',
   doing: 'Task, in progress',
@@ -23,6 +24,12 @@ type Shape = { tag: 'path' | 'circle' | 'rect'; attrs: Record<string, string> }
 const RING: Shape = { tag: 'circle', attrs: { cx: '12', cy: '12', r: '9' } }
 
 const SHAPES: Record<LinkKind, Shape[]> = {
+  canvas: [
+    { tag: 'path', attrs: { d: 'M3 7V5a2 2 0 0 1 2-2h2' } },
+    { tag: 'path', attrs: { d: 'M17 3h2a2 2 0 0 1 2 2v2' } },
+    { tag: 'path', attrs: { d: 'M21 17v2a2 2 0 0 1-2 2h-2' } },
+    { tag: 'path', attrs: { d: 'M7 21H5a2 2 0 0 1-2-2v-2' } },
+  ],
   board: [
     { tag: 'rect', attrs: { x: '3', y: '3', width: '18', height: '18', rx: '2' } },
     { tag: 'path', attrs: { d: 'M8 7v7' } },

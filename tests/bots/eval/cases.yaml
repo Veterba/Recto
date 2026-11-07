@@ -292,3 +292,15 @@ cases:
     question: Переименуй заметку «Running plan» в «Беговой план».
     expectNotes: [Running plan]
     expectAnswer: Говорит, что не может переименовывать заметки, и как это сделать самому; не утверждает, что переименовал.
+
+  # ---------------- links that exist ----------------
+  # A copy of the demo vault's "Japan trip plan" and the notes around it. The
+  # Tokyo, Osaka and Kyoto notes all exist; an answer may never call them missing.
+  - id: review-trip-plan-links-exist
+    kind: review
+    question: Analyze my Japan trip plan note and suggest how to improve it.
+    expectNotes: [Japan trip plan]
+    expectAnswer: Concrete suggestions for the plan; when it mentions Tokyo, Osaka or Kyoto, it treats them as notes that exist.
+    forbidClaims:
+      - "(Tokyo|Osaka|Kyoto)\\b[^.\\n]{0,80}\\b(do(es)?n['’]?t exist|do(es)? not exist|exists? yet|(is|are) missing|not (written|created|made) yet|no such note|(is|are) empty)"
+      - "(missing|non-?existent|empty|unwritten) notes?[^.\\n]{0,60}\\b(Tokyo|Osaka|Kyoto)\\b"

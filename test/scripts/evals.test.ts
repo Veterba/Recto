@@ -195,6 +195,20 @@ describe('the new checks', () => {
     expect(s.reasons).toEqual(expect.arrayContaining(['missing items', 'decoy in context', 'ungrounded claim']))
   })
 
+  it('a forbidden claim fails the case: the trip plan case catches "Tokyo is missing", not a plain mention', async () => {
+    const { readFileSync } = await import('node:fs')
+    const file = readCases(readFileSync('tests/bots/eval/cases.yaml', 'utf8'))
+    const c = file.cases.find((x) => x.id === 'review-trip-plan-links-exist')!
+    expect(c.forbidClaims).toHaveLength(2)
+    const ctxPlan = ctx('Projects/Japan trip/Japan trip plan.md')
+    const bad = score(c, answered({ context: ctxPlan, answer: 'The Itinerary links to Tokyo, Hakone and Osaka, but none of these notes exist yet.' }))
+    expect(bad.reasons).toContain('false claim')
+    const alsoBad = score(c, answered({ context: ctxPlan, answer: 'Fill in the missing notes for Tokyo and Osaka.' }))
+    expect(alsoBad.reasons).toContain('false claim')
+    const fine = score(c, answered({ context: ctxPlan, answer: 'Link [[Tokyo]] and [[Osaka]] from the plan, and add the Kyoto dates.' }))
+    expect(fine.reasons).not.toContain('false claim')
+  })
+
   it('recall@4 is out of at most four expected notes', () => {
     const c = caseOf({ kind: 'recent', expectNotes: ['a', 'b', 'c', 'd', 'e', 'f'] })
     expect(score(c, answered({ context: ctx('a.md', 'b.md', 'c.md', 'd.md') })).recall4).toBe(1)

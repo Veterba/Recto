@@ -1,6 +1,6 @@
 {
   "name": "recto",
-  "version": "0.59.0",
+  "version": "0.59.1",
   "description": "Local-first, markdown-on-disk knowledge app",
   "license": "MIT",
   "private": true,
@@ -25,9 +25,6 @@
     "bots:eval": "electron-vite build && node --disable-warning=ExperimentalWarning scripts/evals/run.ts",
     "bots:eval:compare": "node --disable-warning=ExperimentalWarning scripts/evals/compare.ts",
     "bots:eval:rescore": "node --disable-warning=ExperimentalWarning scripts/evals/rescore.ts",
-    "demo:vault": "electron-vite build && node scripts/demo/make-vault.mjs",
-    "demo:record-ai": "electron-vite build && node scripts/demo/record-ai.mjs",
-    "demo:record": "electron-vite build && node scripts/demo/record.mjs",
     "vault:tidy": "node --disable-warning=ExperimentalWarning scripts/vault-tidy.ts"
   },
   "devDependencies": {

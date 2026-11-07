@@ -46,6 +46,12 @@ export type Scope = {
   resolveFile: (target: string, source?: string) => string | null
   /** The file a tool is given, as a path or a name with its extension: its path, or a ToolError - none, or a name several files have. */
   needFile: (target: string) => string
+  /**
+   * Whether a link from `source` points at a file that exists, whether or not
+   * this call may read it - so a note beyond Quick ask's reach is not taken for
+   * a missing one. Excluded files and chats count as missing, as everywhere.
+   */
+  exists: (target: string, source?: string) => boolean
 }
 
 export const isNote = (p: string): boolean => p.toLowerCase().endsWith('.md')
@@ -113,6 +119,10 @@ export function buildScope(client: string, limit: ScopeLimit = { notes: null }):
       // An excluded file is "no file": saying it exists would already say something about it.
       if (found === null) throw new ToolError(`No file “${target}” in this vault. Give its path, or its name with its extension (report.pdf).`)
       return found
+    },
+    exists: (target, source = '') => {
+      const found = resolveLinkpath(clean(target), source, files)
+      return found !== null && !isChatPath(found) && !isExcludedPath(found, settings.excluded)
     },
   }
 }

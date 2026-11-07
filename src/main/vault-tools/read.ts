@@ -149,10 +149,12 @@ export async function readNoteTool(scope: Scope, a: Args): Promise<ResultBlock[]
       modified: new Date(stat.mtimeMs).toISOString(),
       truncated: offset + max < content.length,
       ...(offset + max < content.length ? { next_offset: offset + max } : {}),
-      links_out: [...new Set(parsed.links.map((l) => l.target))].map((target) => {
-        const to = scope.resolve(target, p)
-        return { target, path: to }
-      }),
+      links_out: [...new Set(parsed.links.map((l) => l.target))].map((target) => ({
+        target,
+        // Null when this call may not read it; `exists` says whether it is there at all.
+        path: scope.resolve(target, p),
+        exists: scope.exists(target, p),
+      })),
       backlinks: links.filter((l) => !scope.hidden(l.path)).map((l) => ({ path: l.path, line: l.line })),
     }),
     noteBlock(p, text),
@@ -194,9 +196,17 @@ export async function noteContext(scope: Scope, a: Args): Promise<ResultBlock[]>
     shown.push({ ...r, title: titleOf(r.path) })
     blocks.push(noteBlock(r.path, text, 'summary'))
   }
+  // Every link the note has, found or not - so a note beyond reach, or one left out for room, is never taken for a missing one.
+  const linkList = [...new Set(parseNote(content).links.map((l) => l.target))].map((target) => ({
+    target,
+    exists: scope.exists(target, p),
+    readable: scope.resolve(target, p) !== null || scope.resolveFile(target, p) !== null,
+  }))
   return [
     data({
       note: { path: p, title: titleOf(p), excerpt_truncated: excerpt.length < content.length },
+      links: linkList,
+      backlinks: new Set(links.map((l) => l.path).filter((s) => !scope.hidden(s))).size,
       related: shown,
       omitted: related.length - shown.length,
     }),

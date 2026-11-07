@@ -159,14 +159,14 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     expect(allText(search)).not.toContain('Kitchen/')
     expect(allText(await client.call('search_notes', { query: 'starter', mode: 'text' }))).not.toContain('Kitchen/')
 
-    const note = await client.data<{ path: string; backlinks: { path: string }[]; links_out: { target: string; path: string | null }[] }>(
+    const note = await client.data<{ path: string; backlinks: { path: string }[]; links_out: { target: string; path: string | null; exists: boolean }[] }>(
       'read_note',
       { note: 'Basil' },
     )
     expect(note.path).toBe('Garden/Basil.md')
     expect(note.backlinks.map((b) => b.path)).toContain('Garden/Tomatoes.md')
     expect(note.backlinks.map((b) => b.path)).not.toContain('Kitchen/Sourdough.md')
-    expect(note.links_out).toContainEqual({ target: 'Tomatoes', path: 'Garden/Tomatoes.md' })
+    expect(note.links_out).toContainEqual({ target: 'Tomatoes', path: 'Garden/Tomatoes.md', exists: true })
 
     const sourdough = await client.call('read_note', { note: 'Kitchen/Sourdough.md' })
     expect(sourdough.isError).toBe(true)

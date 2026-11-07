@@ -98,8 +98,9 @@ export function hoverLink(request: { target?: string; source?: string; path?: st
     () => {
       const resolve = request.path !== undefined ? Promise.resolve(request.path) : api.invoke(IPC.indexResolveLink, request.target ?? '', request.source ?? '')
       void resolve.then((path) => {
-        // A link to nothing has nothing to preview; a request since, or an anchor gone, wins.
-        if (mine !== token || path === null || anchor !== element || !anchorHolds(element)) return
+        // A link to nothing has nothing to preview, nor has a canvas or a file that is not a note
+        // (its text is not one); a request since, or an anchor gone, wins.
+        if (mine !== token || path === null || !/\.md$/i.test(path) || anchor !== element || !anchorHolds(element)) return
         const box = element.getBoundingClientRect()
         anchorBox = box
         set({ path, anchor: { top: box.top, right: box.right, bottom: box.bottom } })

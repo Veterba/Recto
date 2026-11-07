@@ -57,24 +57,28 @@ export class TaskBox extends WidgetType {
 
 /**
  * Rendered `[[target]]` — the alias when there is one, else the target. A
- * link to a board or a card carries an icon before the name (link-icons.ts).
+ * link to a canvas, a board or a card carries an icon before the name
+ * (link-icons.ts). It holds where it goes in `data-target` (with any
+ * `#heading`): its text is the alias, and following the alias would go nowhere.
  */
 export class LinkLabel extends WidgetType {
   constructor(
     private readonly label: string,
     private readonly unresolved: boolean,
     private readonly kind?: LinkKind,
+    private readonly target?: string,
   ) {
     super()
   }
 
   override eq(other: LinkLabel): boolean {
-    return other.label === this.label && other.unresolved === this.unresolved && other.kind === this.kind
+    return other.label === this.label && other.unresolved === this.unresolved && other.kind === this.kind && other.target === this.target
   }
 
   override toDOM(): HTMLElement {
     const span = document.createElement('span')
     span.className = `cm-wikilink${this.unresolved ? ' cm-wikilink-unresolved' : ''}`
+    if (this.target !== undefined) span.dataset['target'] = this.target
     if (this.kind !== undefined) {
       span.classList.add('cm-wikilink--kind')
       span.append(linkIcon(this.kind))

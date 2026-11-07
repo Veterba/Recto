@@ -14,6 +14,13 @@ const COMMON = [
   'After proposing, say what you suggested and that it waits for Apply. Never say a note was changed.',
 ].join(' ')
 
+/** Why a note the tools cannot read is not a missing note. */
+const LINKS_EXIST = [
+  'Every link of the open note is listed with exists: true or false, and read_note gives the same for the links of a note it reads.',
+  'A note with exists: true is in the vault, even when the tools cannot read it here or it was left out for room: never say it is missing, empty or not written yet.',
+  'Only a link with exists: false points at a note that does not exist.',
+].join(' ')
+
 const today = (): string => new Date().toLocaleDateString('en-CA')
 
 /** The AI guide's text, through the session (an excluded guide is not read). */
@@ -39,6 +46,7 @@ export async function quickAskSystem(session: ToolSession, note: string): Promis
     `Today is ${today()}. The open note is “${note}”. Its text and its linked notes are given with each question.`,
     'Answer only from that note, the notes it links to or that link to it, and the files it links or embeds (read_file reads PDFs, text files, canvases and pictures); the tools can read nothing else.',
     `Edits may only be suggested to “${note}”.`,
+    LINKS_EXIST,
     COMMON,
   ].join('\n\n') + (await guide(session))
 }

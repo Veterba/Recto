@@ -279,6 +279,7 @@ function why(r: Scored): string {
       parts.push(
         `ungrounded claim: ${(r.scores.ungrounded ?? []).map((t) => (/^(number|description) /.test(t) ? t : `named “${t}”`)).join(', ')}, not in what it was given`,
       )
+    else if (reason === 'false claim') parts.push(`false claim: said what ${(r.scores.falseClaims ?? []).map((p) => `/${p}/`).join(', ')} catches`)
     else if (reason === 'wrong route')
       parts.push(`wrong route: router said ${String((r.answered.router as { kind?: unknown } | null)?.kind)}`)
     else parts.push(`error: ${r.answered.error ?? ''}`)

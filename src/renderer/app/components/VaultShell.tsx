@@ -39,7 +39,7 @@ import { useAppCommands } from '../hooks/use-app-commands'
 import { useShellKeys } from '../hooks/use-shell-keys'
 import { useShellCreate } from '../hooks/use-shell-create'
 import { fuzzyMatch } from '../../ui/fuzzy'
-import { FileTree, NameDialog, allFilePaths, allFolderPaths, filterTree, noteEntries, notePaths } from '../../features/file-tree'
+import { FileTree, NameDialog, allFilePaths, allFolderPaths, filterTree, linkEntries, notePaths } from '../../features/file-tree'
 import { focusEditorOnOpen, type LinkCandidate } from '../../features/editor'
 import { QuickSwitcher, SearchPanel } from '../../features/search'
 import { SettingsPanel, SidebarThemePicker, type SettingsTab } from '../../features/settings'
@@ -386,13 +386,13 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   openBoardRef.current = openBoard
 
   /**
-   * Note names for `[[` autocomplete.
+   * Note and canvas names for `[[` autocomplete.
    *
    * Held in a ref and read lazily by the editor, so the list is current without
    * the editor being rebuilt every time a file appears in the vault.
    */
   const linkCandidatesRef = useRef<LinkCandidate[]>([])
-  linkCandidatesRef.current = useMemo(() => noteEntries(tree.roots), [tree.roots])
+  linkCandidatesRef.current = useMemo(() => linkEntries(tree.roots), [tree.roots])
 
   // Set further down, once what they point at exists; read only when an overview tab is used.
   const openFolderRef = useRef<(name: string) => void>(() => {})

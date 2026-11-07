@@ -4,6 +4,15 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.59.1 — 2026-11-07
+### Added
+- Links to canvases work as in Obsidian: the [[ list offers your canvases beside your notes, with a canvas icon, and picking one writes [[Name.canvas]] in your link format. In the editor the link shows the canvas's name without ".canvas"; the text keeps it.
+
+### Fixed
+- A link with an alias, such as [[Japan moodboard.canvas|Japan moodboard]] or [[Kyoto|the city]], opens what it points at. A click, ⌘-click or drag used to follow the alias and find nothing.
+- Quick ask no longer says that a linked note is missing when it exists. It is told which of the note's links point at a note and which at nothing, also for notes it may not read from there.
+- Hovering a link to a canvas or another file that is not a note shows no preview card, instead of the file's raw text.
+
 ## v0.59.0 — 2026-11-06
 ### Added
 - AI on the canvas, as suggestions you see in place: an AI's changes to a canvas - new cards, notes, files and links, arrows, groups, moves - appear as translucent ghosts with ✓ and ✕ each, and Accept all / Reject all at the top. Nothing is written until accepted; an accepted change goes in as an edit ⌘Z undoes, onto the canvas as it is then (a change whose node you deleted since is skipped). Suggested edits lists a canvas's changes as one line, with "Open to review".

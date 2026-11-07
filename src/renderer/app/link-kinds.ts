@@ -1,6 +1,6 @@
 /**
- * What a `[[link]]` points at, when it is more than a note: a board, or a
- * card and where it stands. The editor draws an icon in the link for it, and
+ * What a `[[link]]` points at, when it is more than a note: a canvas, a board,
+ * or a card and where it stands. The editor draws an icon in the link for it, and
  * the `[[` list beside the name.
  *
  * Set by the boards feature from the index (features/boards/boards-store.ts),
@@ -9,7 +9,7 @@
  * or its path without `.md`.
  */
 
-export type LinkKind = 'board' | 'open' | 'doing' | 'done' | 'mixed'
+export type LinkKind = 'canvas' | 'board' | 'open' | 'doing' | 'done' | 'mixed'
 
 let kinds: ReadonlyMap<string, LinkKind> = new Map()
 const listeners = new Set<() => void>()
@@ -23,8 +23,10 @@ export function setLinkKinds(next: ReadonlyMap<string, LinkKind>): void {
 
 export const linkKinds = (): ReadonlyMap<string, LinkKind> => kinds
 
-/** The kind of a link's target (`Note`, `folder/Note`, `Note.md`), or undefined for a plain note. */
+/** The kind of a link's target (`Note`, `folder/Note`, `Note.md`, `Map.canvas`), or undefined for a plain note. */
 export function linkKindOf(target: string): LinkKind | undefined {
+  // A canvas is named by its file, extension and all, as Obsidian writes it.
+  if (/\.canvas$/i.test(target.trim())) return 'canvas'
   const key = target
     .replace(/\.md$/i, '')
     .normalize('NFC')

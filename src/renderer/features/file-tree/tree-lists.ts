@@ -34,3 +34,18 @@ export function noteEntries(roots: readonly FileNode[], out: NoteEntry[] = []): 
   }
   return out
 }
+
+/**
+ * What a `[[` link may point at, as autocomplete lists it: every note, and every
+ * canvas - named without `.canvas` here, the link itself keeps it (as Obsidian).
+ */
+export function linkEntries(roots: readonly FileNode[], out: NoteEntry[] = []): NoteEntry[] {
+  for (const node of roots) {
+    if (node.kind === 'folder') linkEntries(node.children ?? [], out)
+    else if (/\.(md|canvas)$/i.test(node.name)) {
+      const at = node.path.lastIndexOf('/')
+      out.push({ path: node.path, name: node.name.replace(/\.(md|canvas)$/i, ''), folder: at === -1 ? '' : node.path.slice(0, at) })
+    }
+  }
+  return out
+}

@@ -267,12 +267,14 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
         const end = start + match[0].length
         const target = match[1]?.trim() ?? ''
         const alias = match[3]?.slice(1).trim()
-        const label = alias !== undefined && alias !== '' ? alias : target
+        // A canvas shows as its name, as Obsidian shows it; the text keeps `.canvas`.
+        const label = alias !== undefined && alias !== '' ? alias : target.replace(/\.canvas$/i, '')
+        const heading = match[2]?.trim() ?? ''
         ranges.push({
           from: start,
           to: end,
           deco: Decoration.replace({
-            widget: new LinkLabel(label, unresolved.has(target.normalize('NFC').toLowerCase()), linkKindOf(target)),
+            widget: new LinkLabel(label, unresolved.has(target.normalize('NFC').toLowerCase()), linkKindOf(target), `${target}${heading}`),
           }),
         })
       }

@@ -39,6 +39,8 @@ export type Case = {
   expectItems: string[]
   /** Notes that must never be in the context. */
   forbidNotes: string[]
+  /** What the answer must never say: a regular expression each, any case - "Tokyo is missing" when the note exists. */
+  forbidClaims?: string[]
   /** What a good answer must contain or avoid, for whoever judges it (private cases). */
   rubric?: string[]
   /** expectNotes proposed by Claude, waiting for the user to confirm: listed in the report. */
@@ -100,6 +102,7 @@ function normalise(raw: unknown, index: number, prefix: string): Case | null {
     expectNoSources,
     expectItems: list(r['expectItems'] ?? r['items']),
     forbidNotes: list(r['forbidNotes']).map((n) => n.replace(/^\[\[|\]\]$/g, '').replace(/\.md$/i, '')),
+    ...(Array.isArray(r['forbidClaims']) ? { forbidClaims: list(r['forbidClaims']) } : {}),
     ...(Array.isArray(r['rubric']) ? { rubric: list(r['rubric']) } : {}),
     ...(r['proposed'] === true ? { proposed: true } : {}),
   }
