@@ -162,6 +162,21 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     expect(read('Recto/Canvas/Second plan.canvas')).not.toContain('1234abcd5678ef90')
   })
 
+  it('⌘Z right after a paste takes the pasted node away, and only it; ⇧⌘Z brings it back', async () => {
+    const second = (): string => read('Recto/Canvas/Second plan.canvas')
+    const count = (): number => (JSON.parse(second()) as { nodes: unknown[] }).nodes.length
+    const before = count()
+    await page.locator('.canvas-view').focus()
+    await page.keyboard.press('Meta+v')
+    await expect.poll(count).toBe(before + 1)
+    // The paste made new ids: undo used to look for others, find nothing, and take the step before instead.
+    await page.keyboard.press('Meta+z')
+    await expect.poll(count).toBe(before)
+    expect(second()).toContain('"text":"Plugin node"')
+    await page.keyboard.press('Meta+Shift+z')
+    await expect.poll(count).toBe(before + 1)
+  })
+
   it('“Make it a note” makes the text a note in the canvas’s folder and puts it in the node’s place', async () => {
     await openPlan()
     await nodeOf('a1b2c3d4e5f60718').click({ button: 'right' })
@@ -805,7 +820,22 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await expect.poll(() => strokes(cutPath), { timeout: 5000 }).toBe(1)
     await page.keyboard.press('Meta+z')
     await expect.poll(() => strokes(cutPath), { timeout: 5000 }).toBe(2)
-    const xs = (): number => Math.min(...(JSON.parse(read(cutPath).match(/<metadata id="recto-drawing">([\s\S]*?)<\/metadata>/)![1]!) as { points: number[][] }[]).flatMap((x) => x.points.map((q) => q[0]!)))
+    // Keys typed in a field elsewhere (here a stand-in for the chat box) are the field's: ⌘A and Backspace there leave the strokes alone.
+    await page.evaluate(() => {
+      const field = document.createElement('textarea')
+      field.id = 'elsewhere'
+      document.body.append(field)
+      field.focus()
+    })
+    await page.keyboard.type('hello')
+    await page.keyboard.press('Meta+a')
+    await page.keyboard.press('Backspace')
+    expect(await page.locator('#elsewhere').inputValue()).toBe('')
+    await page.waitForTimeout(300)
+    expect(strokes(cutPath)).toBe(2)
+    expect(await page.locator('.drawing-editor').count()).toBe(1)
+    await page.evaluate(() => document.getElementById('elsewhere')?.remove())
+    const xs =(): number => Math.min(...(JSON.parse(read(cutPath).match(/<metadata id="recto-drawing">([\s\S]*?)<\/metadata>/)![1]!) as { points: number[][] }[]).flatMap((x) => x.points.map((q) => q[0]!)))
     const before = read(cutPath)
     await page.mouse.click(pane.x + 80, pane.y + 260)
     await page.mouse.move(pane.x + 80, pane.y + 260)

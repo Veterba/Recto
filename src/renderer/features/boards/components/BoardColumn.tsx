@@ -22,6 +22,7 @@ type Props = {
   onDragStart: (key: string) => void
   onDragEnd: () => void
   onDragOver: (index: number) => void
+  onDragLeave: () => void
   onDrop: (key: string, index: number) => void
   onOpenCard: (key: string) => void
   onCardMenu: (event: React.MouseEvent, card: CardView) => void
@@ -72,6 +73,9 @@ export function BoardColumn(props: Props): React.ReactElement {
   ]
 
   const dragOver = (index: number) => (event: React.DragEvent) => {
+    // Only a card lands here. Anything else (a file from Finder) lit the
+    // column, and with no card dropped or ended, nothing put it out.
+    if (!event.dataTransfer.types.includes('application/x-recto-card')) return
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
@@ -93,6 +97,9 @@ export function BoardColumn(props: Props): React.ReactElement {
       // A card dragged onto a column lands in it, not in a new pane.
       data-accepts-drop
       onDragOver={dragOver(cards.length)}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) props.onDragLeave()
+      }}
       onDrop={drop(cards.length)}
     >
       <header className="board-col__head">

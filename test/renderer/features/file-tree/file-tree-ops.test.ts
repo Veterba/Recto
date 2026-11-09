@@ -48,6 +48,15 @@ describe('applying watcher changes', () => {
     expect(after[0]?.mtime).toBe(99)
   })
 
+  it("a file Recto wrote itself goes in when it is new, and is only updated when it is there", () => {
+    // A card or a chat made by main arrives as 'written', with no 'add' before it.
+    const made = applyChanges([folder('Recto')], [{ type: 'written', path: 'Recto/Chats/Today.md', mtime: 7, size: 1 }])
+    expect(paths(made)).toEqual(['Recto', 'Recto/Chats', 'Recto/Chats/Today.md'])
+    const again = applyChanges(made, [{ type: 'written', path: 'Recto/Chats/Today.md', mtime: 9, size: 2 }])
+    expect(paths(again)).toEqual(paths(made))
+    expect(again[0]?.children?.[0]?.children?.[0]).toMatchObject({ mtime: 9, size: 2 })
+  })
+
   it('handles a rename arriving as unlink + add', () => {
     // chokidar reports a rename as two unrelated events; the tree must end up right.
     const before = [file('old.md')]

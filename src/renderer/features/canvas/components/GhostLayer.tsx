@@ -17,6 +17,9 @@ import { Icon } from '../../../ui/Icon'
 
 type Rect = { x: number; y: number; width: number; height: number }
 
+/** Edits of one proposal to accept: these indexes, or `null` for every pending one. */
+export type GhostAccept = { proposal: Proposal; indexes: number[] | null }
+
 /** The canvas's pending proposals, kept current. */
 export function useCanvasProposals(path: string): Proposal[] {
   const [list, setList] = useState<Proposal[]>([])
@@ -66,8 +69,8 @@ export function GhostLayer({
   proposals: readonly Proposal[]
   doc: CanvasDoc
   transform: readonly [number, number, number]
-  /** Accept these edits of a proposal (`null`: every pending one). */
-  onAccept: (proposal: Proposal, indexes: number[] | null) => void
+  /** Accept these edits of these proposals (`null`: every pending one), in one go. */
+  onAccept: (accepted: readonly GhostAccept[]) => void
   onReject: (proposal: Proposal, indexes: number[] | null) => void
 }): React.ReactElement | null {
   const [tx, ty, zoom] = transform
@@ -82,7 +85,7 @@ export function GhostLayer({
         <span>
           {who(proposals[0]!.client)} suggests {pendingCount} change{pendingCount === 1 ? '' : 's'}
         </span>
-        <button className="btn btn--sm btn--primary" onClick={() => proposals.forEach((p) => onAccept(p, null))}>
+        <button className="btn btn--sm btn--primary" onClick={() => onAccept(proposals.map((proposal) => ({ proposal, indexes: null })))}>
           Accept all
         </button>
         <button className="btn btn--sm btn--ghost" onClick={() => proposals.forEach((p) => onReject(p, null))}>
@@ -110,7 +113,7 @@ export function GhostLayer({
               op.op === 'add-group' && pending(op, i) ? (
                 <div key={i} className="canvas-ghost is-group" style={screen(op)}>
                   <span className="canvas-ghost__label">{op.label}</span>
-                  <Chips onAccept={() => onAccept(p, [i])} onReject={() => onReject(p, [i])} />
+                  <Chips onAccept={() => onAccept([{ proposal: p, indexes: [i] }])} onReject={() => onReject(p, [i])} />
                 </div>
               ) : null,
             )}
@@ -137,7 +140,7 @@ export function GhostLayer({
             </svg>
             {c.ops.map((op, i) => {
               if (!pending(op, i)) return null
-              const accept = (): void => onAccept(p, [i])
+              const accept = (): void => onAccept([{ proposal: p, indexes: [i] }])
               const reject = (): void => onReject(p, [i])
               if (op.op === 'add-group') return null
               if (op.op === 'add-node')

@@ -46,13 +46,13 @@ describe('reading a card', () => {
     expect(cardSpan(null, null)).toBeNull()
   })
 
-  it('late after its last day, due soon within two days', () => {
+  it('late after its last day, due soon within three days - as the Due soon widget counts', () => {
     const today = '2026-10-16'
     expect(dueState(cardSpan(null, '2026-10-15'), today)).toBe('late')
     expect(dueState(cardSpan(null, '2026-10-16'), today)).toBe('soon')
-    expect(dueState(cardSpan(null, '2026-10-18'), today)).toBe('soon')
-    expect(dueState(cardSpan(null, '2026-10-19'), today)).toBeNull()
-    expect(dueState(cardSpan('2026-10-10', '2026-10-20'), today)).toBeNull()
+    expect(dueState(cardSpan(null, '2026-10-19'), today)).toBe('soon')
+    expect(dueState(cardSpan(null, '2026-10-20'), today)).toBeNull()
+    expect(dueState(cardSpan('2026-10-10', '2026-10-21'), today)).toBeNull()
   })
 
   it('the description is the first paragraph, Markdown stripped', () => {

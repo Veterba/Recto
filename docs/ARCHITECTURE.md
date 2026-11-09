@@ -144,9 +144,11 @@ fixture run again after a fix to the checks.
    writes of identical bytes so the mtime means something.
 2. **Watcher.** `watcher.ts` (chokidar) sees every change, including other apps'. Changes are batched
    for 60 ms. The app's own writes are marked just before they happen (`markSelfWrite`), so they are
-   indexed but not echoed back to the editor as an external edit.
+   indexed but not echoed back as an external edit (`change`); they go out as `written` instead. An
+   open note takes a `written` file only when it has nothing unsaved and no save on its way, so a card
+   changed on a board shows in its open note while the note's own saves never come back into it.
 3. **Index.** Each batch goes to the indexer as `note-changed`. It parses the note
-   (`shared/parse.ts`: frontmatter, headings, wikilinks, tags, properties), updates `notes`, `links`,
+   (`shared/parse.ts`: frontmatter, headings, wikilinks, tags - inline and in the `tags` property - properties), updates `notes`, `links`,
    `tags`, `properties`, `headings` and the FTS table, stores a version snapshot, and re-resolves the
    links that could now point somewhere (each read from the note it is in; see Names and links).
 4. **Renderer.** The same batch is pushed as `vault:changed`. The tree applies it to its copy
@@ -698,6 +700,10 @@ If any target is taken it stops and writes nothing. Each move is announced to th
 `note-renamed` before the reindex, so history carries over. Links resolve by name and mostly need no
 change; only a link whose target would otherwise change, or that spells a path that no longer
 exists, is rewritten (`mapLinkTargets` in `link-rewrite.ts`). Boards it moves get `new-note-folder`.
+The boards migration, which runs before it, writes its boards straight into `Recto/Boards/<Board>/`
+(with `new-note-folder`), never into `tasks/`: in a vault whose layout migration is long done, a
+board made there stayed in the root. Both, and the chats migration, count an iCloud copy of their
+record (`boards-migration 2.json`) as the record (`main/migration-record.ts`), so none runs twice.
 
 ## On disk
 
@@ -719,7 +725,7 @@ In the vault:
 | `.obsidian/app.json` | Obsidian's own settings; Recto reads the link settings from it and writes only `alwaysUpdateLinks`, on "Always update" | Obsidian |
 | `.recto/link-settings.json` | the same three link settings for a vault with no `.obsidian/` folder | `main/link-context.ts` |
 | `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive`, `canvas` (folds), `canvas-links` (link previews), `canvas-notes` (last folder for "Make it a note") | `main/state.ts` |
-| `.recto/stats/edits.json`, `.recto/stats/words.json` | the vault overview's history: per day, the notes you edited (editor saves, card edits and moves you made; backfilled once from version history) and the words you wrote (`written`: per day and note, the words your saves brought in and kept, as `{ word: count }` - a save's deletions take back that day's words first, `shared/overview.ts applyWords`; read in once from version history); and the vault's total words, first and last count, with the counting rule (`rule`; a day counted under an older rule starts again). Every write reads, merges and replaces the file whole; an iCloud conflict copy (`edits 2.json`) is merged in and removed on the next read | `main/overview.ts` |
+| `.recto/stats/edits.json`, `.recto/stats/words.json`, `.recto/stats/active.json` | the vault overview's history, kept in the vault so every build and Mac that opens it adds to the same counts: per day, the notes you edited (editor saves, card edits and moves you made; backfilled once from version history); the vault's total words - every note, boards, cards and chats too, `%%comments%%` left out - first and last count, with the counting rule (`rule`; a day counted under an older rule starts again), and the last count taken again each time the overview reads, so words written are how far the total moved (`shared/overview.ts wordsChange`); and seconds active in Recto with this vault open, written once a minute and on a switch or quit. Every write reads, merges and replaces the file whole; an iCloud conflict copy (`edits 2.json`) is merged in and removed on the next read (time by the larger per day) | `main/overview.ts` |
 | `.recto/index.db` | SQLite (WAL): the index, tasks, version snapshots, usage events, topic vectors, the bots' piece vectors, note cards and tasks read from plain text, the files each canvas puts on it (`canvases`, `canvas_nodes`, `canvas_edges`), every other file with its creation time (`files`) | indexer, embedder |
 | `.recto/archive/` | archived files until retention runs out | `main/archive.ts` |
 | `.recto/.gitignore` | keeps `index.db`, `.trash/` and `archive/` out of git | written once |
@@ -728,7 +734,7 @@ Topics are written into notes as `topics: ["[[topics/Name]]"]`; a topic has no f
 
 Outside the vault, in the app-data folder (`~/Library/Application Support/Recto/`):
 `app-state.json` (last and recent vaults, where the vault overview was left), `overview-usage.json`
-(seconds active in Recto per day; per vault, when each note was last opened), `secrets.bin` (the API key, encrypted with Electron
+(per vault, when each note was last opened), `secrets.bin` (the API key, encrypted with Electron
 `safeStorage`), `obsidian-sync.json` and `obsidian-sync/` (pairings and sync manifests), `models/`
 (the embedding model).
 

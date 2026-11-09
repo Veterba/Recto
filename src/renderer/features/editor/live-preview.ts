@@ -109,7 +109,9 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
           if (node.name === 'InlineMath') {
             const display = text.startsWith('$$')
             const tex = text.slice(display ? 2 : 1, text.length - (display ? 2 : 1))
-            ranges.push({ from: node.from, to: node.to, deco: Decoration.replace({ widget: new MathWidget(tex, display, false) }) })
+            // Alone on its line, `$$…$$` is a formula of its own, centred, as Obsidian draws it.
+            const alone = display && view.state.doc.lineAt(node.from).text.trim() === text
+            ranges.push({ from: node.from, to: node.to, deco: Decoration.replace({ widget: new MathWidget(tex, display, alone) }) })
           } else {
             ranges.push({ from: node.from, to: node.to, deco: Decoration.replace({ widget: new FootnoteWidget(text.slice(2, -1)) }) })
           }
@@ -142,6 +144,9 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
           // Only unordered lists. `1.` is content - renumbering it as a dot
           // would lose the one thing an ordered list is for.
           if (!/^[-*+]$/.test(view.state.doc.sliceString(node.from, node.to))) return
+          // A task's dash is hidden below, for its checkbox: a dot here too
+          // drew a bullet AND a box, where Obsidian shows only the box.
+          if (TASK.test(view.state.doc.lineAt(node.from).text)) return
           // The space after the marker goes too, so the dot's box stands for
           // exactly `- ` and the item's hanging indent has one width to match
           // rather than a dot plus a stray space that only shows on the first

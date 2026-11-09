@@ -134,7 +134,7 @@ export function BoardList({ activeBoard, query, onOpen, vaultPath, onRenamed }: 
                 onDoubleClick={() => setRenaming(board.path)}
               >
                 <Icon name="square-kanban" size={14} />
-                {board.name}
+                <span className="boards__label">{board.name}</span>
               </button>
               <Tip label="Delete this board" hint="Asks about its cards">
                 <button className="boards__remove" aria-label={`Delete ${board.name}`} onClick={() => requestBoardDelete(board.path)}>

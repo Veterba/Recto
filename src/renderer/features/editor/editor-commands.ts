@@ -65,8 +65,9 @@ function editorCommand(
 const TABLE_NAMES: Record<TableAction, [name: string, hotkey: string]> = {
   'row-up': ['Move row up', 'Alt+ArrowUp'],
   'row-down': ['Move row down', 'Alt+ArrowDown'],
-  'column-left': ['Move column left', 'Alt+ArrowLeft'],
-  'column-right': ['Move column right', 'Alt+ArrowRight'],
+  // ⌃⌥, not ⌥: in a cell ⌥← ⌥→ are the Mac's word moves (⌥⇧ selects by word), as in any text.
+  'column-left': ['Move column left', 'Ctrl+Alt+ArrowLeft'],
+  'column-right': ['Move column right', 'Ctrl+Alt+ArrowRight'],
   'add-row-below': ['Add row below', 'Mod+Enter'],
 }
 

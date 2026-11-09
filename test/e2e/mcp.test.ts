@@ -395,4 +395,29 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     await page.waitForSelector('.canvas-ghosts', { state: 'detached' })
     expect(fs.readFileSync(path.join(vault, canvasPath), 'utf8')).toBe(kept)
   }, 40_000)
+
+  it('Accept all with two proposals on one canvas writes both, in one edit ⌘Z takes back', async () => {
+    const canvasPath = 'Recto/Canvas/Herbs.canvas'
+    const nodes = (): string[] => (JSON.parse(fs.readFileSync(path.join(vault, canvasPath), 'utf8')) as { nodes: { text?: string }[] }).nodes.map((n) => n.text ?? '')
+    const before = nodes()
+    const ids: string[] = []
+    for (const text of ['Mint', 'Thyme']) {
+      const proposed = JSON.parse((await client.call('canvas_propose_nodes', { canvas: 'Herbs', nodes: [{ text, near: 'n1' }] })).content[0]!.text) as {
+        proposal_id: string
+      }
+      ids.push(proposed.proposal_id)
+    }
+    await page.waitForFunction(() => document.querySelector('.canvas-ghosts__bar')?.textContent?.includes('suggests 2 changes') === true)
+    await page.locator('.canvas-ghosts__bar').getByRole('button', { name: 'Accept all' }).click()
+    // Both, in whichever order the proposals are listed (newest first).
+    await expect.poll(() => nodes().slice(before.length).sort(), { timeout: 5000 }).toEqual(['Mint', 'Thyme'])
+    expect(nodes().slice(0, before.length)).toEqual(before)
+    await page.waitForSelector('.canvas-ghosts', { state: 'detached' })
+    for (const id of ids) expect(await client.data('get_proposal', { id })).toMatchObject({ status: 'applied' })
+    // One edit: one ⌘Z takes both back.
+    await page.locator('.react-flow__pane').click({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('Meta+z')
+    await expect.poll(nodes, { timeout: 5000 }).toEqual(before)
+  }, 40_000)
 })
+

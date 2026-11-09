@@ -17,8 +17,8 @@ import {
   streak,
   todayChange,
   weekStart,
-  writtenBetween,
-  writtenOn,
+  wordsChange,
+  wordsSince,
 } from '@shared/overview'
 
 /**
@@ -88,8 +88,10 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
   const weekDays = Array.from({ length: elapsed + 1 }, (_, i) => addDays(week, i))
 
   const touched = notesBetween(data.edits, week, today)
-  // Words you added, this week; today's on its own beside it. Never a net change: deleting is not unwriting.
-  const written = writtenBetween(data.written, week, today)
+  // How far the vault's words moved this week, and today on its own beside it:
+  // anyone's words count, and deleting or archiving takes them off.
+  const written = wordsChange(data.words, week, today) ?? 0
+  const writtenToday = wordsChange(data.words, today, today)
 
   const run = streak(data.edits, today)
 
@@ -104,13 +106,14 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
 
   // A line needs three days to say anything.
   const editDays = weekDays.filter((d) => data.editsSince !== null && d >= data.editsSince)
-  const wordDays = weekDays.filter((d) => data.writtenSince !== null && d >= data.writtenSince)
+  const wordsFrom = wordsSince(data.words)
+  const wordDays = weekDays.filter((d) => wordsFrom !== null && d >= wordsFrom)
 
   const late = useMemo(() => overdue(index.dueCards, today), [index.dueCards, today])
   const lateBoards = [...new Set(late.map((c) => c.board ?? 'a board'))]
   const again = rediscover(index, data.opened, data.openedSince, today, now)
   const since = index.oldest
-  const counted = countedLine([data.editsSince, data.writtenSince, data.activeSince], today)
+  const counted = countedLine([data.editsSince, wordsFrom, data.activeSince], today)
   const missing = index.missingOnCanvases ?? []
   const attention = index.orphans.length + index.broken.length + index.byDate.length + late.length + missing.length > 0
   const lists = [index.folders.length > 0, index.hubs.length > 0].filter(Boolean).length
@@ -147,15 +150,16 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
           />
           <Stat
             value={num(written)}
-            delta={todayChange(writtenOn(data.written, today))}
+            delta={todayChange(writtenToday)}
             caption="words written"
-            spark={wordDays.length >= 3 ? weekDays.map((d) => writtenOn(data.written, d)) : undefined}
+            spark={wordDays.length >= 3 ? weekDays.map((d) => wordsChange(data.words, d, d) ?? 0) : undefined}
             floor={250}
           />
           <Stat value={plural(run.current, 'day')} caption={`writing streak · longest ${plural(run.longest, 'day')}`} />
           <Stat
             value={duration(avg)}
-            caption={avgBefore === null ? 'a day in Recto' : `a day in Recto · last week ${duration(avgBefore)}`}
+            // Both are averages per day; "last week 39 min" read as the week's total.
+            caption={avgBefore === null ? 'a day in Recto this week' : `a day in Recto this week · ${duration(avgBefore)} a day last week`}
             extra={`${duration(month)} this month · ${duration(total)} in all`}
           />
         </div>

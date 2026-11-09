@@ -19,6 +19,7 @@ import {
 } from '../shared/recto-paths'
 import { isHidden, nameOf } from '../shared/vault'
 import { mapLinkTargets } from './link-rewrite'
+import { recordExists } from './migration-record'
 
 /**
  * Once per vault: the flat `tasks/` and `chats/` folders become Recto's
@@ -196,7 +197,7 @@ function removeEmpty(dir: string): void {
  */
 export function migrateLayout(vault: string, now: Date = new Date()): LayoutMigrationResult {
   const record = path.join(vault, LAYOUT_RECORD)
-  if (fs.existsSync(record)) return { state: 'none' }
+  if (recordExists(record)) return { state: 'none' }
   const legacy = [LEGACY_TASKS_FOLDER, LEGACY_CHATS_FOLDER].some((f) => fs.existsSync(path.join(vault, f)))
   if (!legacy) {
     writeFile(record, `${JSON.stringify({ state: 'none' } satisfies LayoutMigrationResult, null, 2)}\n`)

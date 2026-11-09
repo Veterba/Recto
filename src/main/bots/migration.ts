@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { CHATS_FOLDER } from '../../shared/bots'
 import { createdStamp, fallbackTitle, parseTopic, topicFile, topicFileName } from '../../shared/chat-topics'
+import { recordExists } from '../migration-record'
 
 /**
  * Once per vault: the old main chat's conversations (`chats/*.md`) and the
@@ -46,7 +47,7 @@ const isTopic = (text: string): boolean => parseTopic(text, []).meta.bot !== und
 
 export function migrateChats(vault: string, now: Date = new Date()): MigrationReport | null {
   const record = path.join(vault, MIGRATION_RECORD)
-  if (fs.existsSync(record)) return null
+  if (recordExists(record)) return null
   const chats = path.join(vault, CHATS_FOLDER)
   const report: MigrationReport = { at: now.toISOString(), backup: null, moved: [], skipped: [] }
 

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { planMigration, type BoardMigrationResult, type MigrationNote } from '../shared/board-migration'
 import { isHidden } from '../shared/vault'
+import { recordExists } from './migration-record'
 
 /**
  * Runs the boards migration (shared/board-migration.ts) on a vault's files.
@@ -69,7 +70,7 @@ export function migrateBoards(vault: string, names: Readonly<Record<string, stri
   // only boards.json coming back runs it again. Without this, a note with a
   // `board:` key of its own (or synced from Obsidian) was taken for an old
   // card on every open and lost its keys, and every note was read to see.
-  if (boardsJson === undefined && fs.existsSync(record)) return { state: 'none' }
+  if (boardsJson === undefined && recordExists(record)) return { state: 'none' }
   const notes = notesOf(vault)
   const plan = planMigration(boardsJson, notes, names)
   if (plan.done) {

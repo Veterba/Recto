@@ -2,6 +2,9 @@
 
 .cm-tbl {
   outline: none;
+  /* A line's own side padding (CodeMirror's .cm-line): without it the table
+     sat 6px left of the text column, and out past a selection's edge. */
+  padding: 0 2px 0 6px;
 }
 .cm-tbl .cm-table td,
 .cm-tbl .cm-table th {

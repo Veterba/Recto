@@ -702,7 +702,7 @@ class TableController {
       return
     }
 
-    // The table commands - ⌥↑ ⌥↓ move the row, ⌥← ⌥→ the column (the cell
+    // The table commands - ⌥↑ ⌥↓ move the row, ⌃⌥← ⌃⌥→ the column (the cell
     // goes along), ⌘↵ adds a row below - by whatever they are bound to now.
     // Through the registry, like every other command: runTableAction finds this table.
     for (const id of Object.keys(TABLE_COMMANDS)) {

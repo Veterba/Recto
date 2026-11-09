@@ -184,6 +184,10 @@ export function DrawingEditor({
 
   useEffect(() => {
     const key = (ev: KeyboardEvent): void => {
+      // Typed somewhere else - the chat, Quick ask, a rename - is not for the
+      // drawing: ⌘A and Backspace in the chat box deleted every stroke.
+      const target = ev.target as HTMLElement | null
+      if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
       if (ev.key === 'Escape') onClose()
       else if (ev.key === 'Backspace' || ev.key === 'Delete') remove()
       else if (ev.metaKey && ev.key.toLowerCase() === 'z') step(ev.shiftKey ? redos : undos, ev.shiftKey ? undos : redos)

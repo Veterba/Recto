@@ -92,6 +92,34 @@ describe.skipIf(!RUN)('boards as notes', () => {
     expect(board()).toContain('- [ ] Buy stamps\n    at the post office')
   }, 20_000)
 
+  it('a column lights up only under a card being dragged, and goes dark when the drag leaves it', async () => {
+    const lit = (): Promise<number> => page.locator('.board-col.is-target').count()
+    // Sends drag events to Done as the browser does: a file from Finder, or a card.
+    const drag = (types: 'file' | 'card', events: ('dragover' | 'drop' | 'dragleave')[]): Promise<void> =>
+      column('Done').evaluate(
+        (col, [types, events]) => {
+          const data = new DataTransfer()
+          if (types === 'file') data.items.add(new File(['x'], 'picture.png', { type: 'image/png' }))
+          else data.setData('application/x-recto-card', 'nothing-by-this-key')
+          const cards = col.querySelector('.board-col__cards')!
+          for (const type of events)
+            // Leaving: for the window itself, no element is entered.
+            cards.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data, relatedTarget: null }))
+        },
+        [types, events] as const,
+      )
+    // A file dropped on Done: no highlight, and none left behind.
+    await drag('file', ['dragover'])
+    expect(await lit()).toBe(0)
+    await drag('file', ['dragover', 'drop'])
+    expect(await lit()).toBe(0)
+    // A card over Done lights it; dragged out of the window, Done goes dark.
+    await drag('card', ['dragover'])
+    expect(await lit()).toBe(1)
+    await drag('card', ['dragleave'])
+    expect(await lit()).toBe(0)
+  }, 20_000)
+
   it('dragging to Done moves and ticks its line and writes completed; back unticks and removes it', async () => {
     const before = board()
     const note = file('Record the demo')
@@ -354,6 +382,27 @@ describe.skipIf(!RUN)('boards as notes', () => {
     expect(read(side)).toMatch(/^---\n\nkanban-plugin: board\n\n---\n\n## To do\n/)
     expect(parseKanban(read(side)).settings['new-note-folder']).toBe('Recto/Boards/Side project')
     await page.locator('.board__name', { hasText: 'Side project' }).waitFor()
+    await page.locator('.boards__row', { hasText: 'Launch' }).click()
+  }, 20_000)
+
+  it('a board name too long for the list ends in "…", and its icon keeps its size, hovered too', async () => {
+    const long = 'A board whose name is far too long for the sidebar'
+    await page.locator('.boards__add').click()
+    const field = page.getByRole('textbox', { name: 'New board name' })
+    await field.fill(long)
+    await field.press('Enter')
+    const row = page.locator('.boards__row', { hasText: long })
+    // Hovered, the delete button takes its room from the name.
+    await row.hover()
+    const drawn = await row.locator('.boards__name').evaluate((button) => {
+      const label = button.querySelector('span') ?? button
+      return {
+        icon: button.querySelector('svg')!.getBoundingClientRect().width,
+        cut: label.scrollWidth > label.clientWidth,
+        ellipsis: getComputedStyle(label).textOverflow,
+      }
+    })
+    expect(drawn).toEqual({ icon: 14, cut: true, ellipsis: 'ellipsis' })
     await page.locator('.boards__row', { hasText: 'Launch' }).click()
   }, 20_000)
 

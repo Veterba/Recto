@@ -33,9 +33,17 @@
   font-size: calc(13px * var(--sidebar-scale));
   font-weight: var(--sidebar-weight);
   color: var(--text-primary);
+  white-space: nowrap;
+}
+/* The name gives way, not the icon: squeezed by a long name and the hover's
+   delete button, the icon shrank to nothing. */
+.boards__name > svg {
+  flex-shrink: 0;
+}
+.boards__label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .boards__remove {
   display: inline-flex;

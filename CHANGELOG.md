@@ -4,6 +4,46 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.59.4 — 2026-11-09
+### Fixed
+- A `tasks` folder no longer appears in the root of the vault. When the boards migration ran again in a vault already in today's layout - its record lost, or an old boards.json synced back - it made its board in `tasks/` and left it there. Boards it makes now go straight into `Recto/Boards/<Board>/`.
+- A migration's record that iCloud renamed to "… 2.json" still counts, so the migration does not run again and strip `board:` keys from notes.
+- A file Recto makes itself - a card, a chat, a note brought back by Undo - shows in the file tree at once.
+
+## v0.59.3 — 2026-11-09
+### Changed
+- Words written in the overview are how far the vault's words moved: everything that is in the vault counts, whoever wrote it - you, an AI, a paste - and deleting or archiving takes words off, so a day can show "−120 today".
+- The overview's Words total counts every note, boards and their cards and chats included. Obsidian's `%%comments%%` are left out, a board's settings among them. The index is rebuilt once to recount.
+- Time in Recto is counted per vault and kept in the vault: the installed app and a development build add to the same figure, and other vaults' time no longer shows. It starts again from today.
+
+### Fixed
+- The vault's word count for a day kept starting over with each count, so a day's change was always zero.
+
+## v0.59.2 — 2026-11-08
+### Changed
+- In a table cell, ⌥← ⌥→ move by word and ⌥⇧← ⌥⇧→ select by word, as in any Mac text. Moving a column is now ⌃⌥← ⌃⌥→ (⌥↑ ⌥↓ still move the row).
+- The overview says its time figures are per day: "a day in Recto this week · 39 min a day last week".
+- Settings opens taller, so the whole list of sections shows without scrolling.
+
+### Fixed
+- Quick ask (⌘J) opens with its field focused. The question used to be typed into the note.
+- Typing in a property keeps every key and space: the value is written when you press Enter or leave the field, and Esc drops it. Home and End move within the field instead of scrolling the note away.
+- A card changed on a board shows at once in its open note, and that note's next save no longer puts the old value back.
+- Accept all with several AI suggestions on one canvas keeps them all, as one change ⌘Z takes back. It used to keep only the last.
+- ⌘Z right after a paste on a canvas takes the pasted node away. It used to do nothing, and the next ⌘Z took back the change before it.
+- With a drawing open to edit, keys typed in the chat box or another field stay there. ⌘A and Backspace in the chat used to delete the drawing.
+- Tags in a note's properties (tags: [garden, herbs]) count as tags, as in Obsidian: the overview, Settings → Vault and the graph showed none. The index is rebuilt once to pick them up.
+- A note embedded in a numbered list (2. ![[Note]]) keeps its label inside its card, clear of the number.
+- Tidy's preview takes focus when it opens, so Esc closes it.
+- A task shows only its checkbox, without a bullet beside it, as in Obsidian.
+- A formula alone on its line ($$…$$) is centred, as in Obsidian.
+- A board column no longer stays outlined in blue after a file is dragged over it, or a card is dragged over it and away: only a card lights a column, and only while it is over it.
+- A card's "soon" mark and the Due soon widget count the same three days ahead. The mark used to stop at two, so a card in the widget could be unmarked.
+- A file whose name contains ".tmp-" (notes.tmp-ideas.md) shows in the tree and the index. It used to be taken for one of Recto's temporary files and skipped.
+- Words written no longer grow when you undo a deletion or paste back text you cut a moment before. Each used to count as newly written.
+- A table starts at the text column, in line with the text above and below and with a selection. It sat a little out to the left.
+- A board or canvas with a long name keeps its icon in the sidebar list, and the name ends in "…". The icon used to shrink to a dot or vanish, worst on hover.
+
 ## v0.59.1 — 2026-11-07
 ### Added
 - Links to canvases work as in Obsidian: the [[ list offers your canvases beside your notes, with a canvas icon, and picking one writes [[Name.canvas]] in your link format. In the editor the link shows the canvas's name without ".canvas"; the text keeps it.

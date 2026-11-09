@@ -208,7 +208,7 @@ export function CanvasList({
                 }}
               >
                 <Icon name="scan" size={14} />
-                {c.name}
+                <span className="boards__label">{c.name}</span>
                 {c.folder !== '' && c.folder !== CANVAS_FOLDER && <span className="canvas-list__folder">{c.folder}</span>}
               </button>
               <Tip label="Move this canvas to the archive">

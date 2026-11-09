@@ -45,13 +45,14 @@ describe.skipIf(!RUN)('the boards migration on first open', () => {
   it('says what it made and where the backup is, and the board opens with its cards', async () => {
     const notice = page.getByRole('alertdialog', { name: 'Boards are notes now' })
     await notice.waitFor({ timeout: 20_000 })
-    await notice.getByText('tasks/Launch.md').waitFor()
+    // Made straight in its own folder in Recto/Boards, never in a tasks/ folder in the root.
+    await notice.getByText('Recto/Boards/Launch/Launch.md').waitFor()
     await notice.getByText(/\.recto\/backup\/\d{4}-\d{2}-\d{2}/).waitFor()
     expect(fs.existsSync(path.join(vault, '.recto', 'boards.json'))).toBe(false)
     await notice.getByRole('button', { name: 'OK' }).click()
     await notice.waitFor({ state: 'detached' })
 
-    // Then, in the same open, tasks/ moves into Recto/: the board to its folder, its cards beside it.
+    // Then, in the same open, the old tasks/ folder moves into Recto/: the cards go beside their board.
     const layout = page.getByRole('alertdialog', { name: 'Boards and chats moved' })
     await layout.waitFor({ timeout: 20_000 })
     expect(fs.existsSync(path.join(vault, 'tasks'))).toBe(false)

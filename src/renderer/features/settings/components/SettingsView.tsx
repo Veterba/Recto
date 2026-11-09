@@ -156,7 +156,10 @@ const SECTIONS: readonly Section[] = [
 const GROUPS = ['App', 'Vault', 'Connections'] as const
 
 export const SETTINGS_PANEL_MIN: Bounds = { width: 460, height: 300 }
-const DEFAULT_SIZE: Bounds = { width: 780, height: 560 }
+/** Tall enough for the whole list of sections: at 560 the list scrolled and Bots was cut off. */
+const DEFAULT_SIZE: Bounds = { width: 780, height: 680 }
+/** Room kept above and below a panel opened at its default size in a short window. */
+const DEFAULT_MARGIN = 40
 
 const windowBounds = (): Bounds => ({ width: window.innerWidth, height: window.innerHeight })
 
@@ -196,7 +199,9 @@ export function SettingsPanel({
   const panel = useRef<HTMLDivElement | null>(null)
   const { appearance, update } = deps
   const [rect, setRect] = useState<Rect>(() =>
-    appearance.settingsPanel === null ? centred(DEFAULT_SIZE) : clampInside(appearance.settingsPanel, windowBounds(), SETTINGS_PANEL_MIN),
+    appearance.settingsPanel === null
+      ? centred({ ...DEFAULT_SIZE, height: Math.min(DEFAULT_SIZE.height, window.innerHeight - DEFAULT_MARGIN * 2) })
+      : clampInside(appearance.settingsPanel, windowBounds(), SETTINGS_PANEL_MIN),
   )
   const rectRef = useRef(rect)
   rectRef.current = rect

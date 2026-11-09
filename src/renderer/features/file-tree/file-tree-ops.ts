@@ -102,6 +102,13 @@ export function applyChanges(roots: FileNode[], changes: readonly VaultChange[])
       case 'change':
         next = update(next, change.path, { mtime: change.mtime ?? 0, size: change.size ?? 0 })
         break
+      case 'written': {
+        // Recto's own write: often a file it has just made (a card, a chat, an
+        // undone delete), which no 'add' announces - so it goes in if missing.
+        const stat = { mtime: change.mtime ?? 0, size: change.size ?? 0 }
+        next = insert(update(next, change.path, stat), { path: change.path, name: nameOf(change.path), kind: 'file', ...stat })
+        break
+      }
       case 'unlink':
       case 'unlinkDir':
         next = remove(next, change.path)

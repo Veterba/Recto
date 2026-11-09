@@ -256,4 +256,12 @@ describe.skipIf(!RUN)('renaming from the file tree', () => {
     expect(await opened()).toEqual({ focused: true, value: 'notes.v2.md', selected: 'notes.v2' })
     await escape()
   }, 30_000)
+
+  it('Tidy opens with focus in its dialog, so Escape closes it', async () => {
+    await evaluate("[...document.querySelectorAll('.sidebar button')].find((b) => b.textContent?.trim() === 'Tidy')?.click() ?? null")
+    await until(async () => (await evaluate("document.querySelector('[role=dialog][aria-label=Tidy]') !== null")) === true)
+    expect(await evaluate("document.querySelector('[role=dialog][aria-label=Tidy]')?.contains(document.activeElement) ?? false")).toBe(true)
+    await escape()
+    expect(await evaluate("document.querySelector('[role=dialog][aria-label=Tidy]') === null")).toBe(true)
+  }, 30_000)
 })

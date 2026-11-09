@@ -145,6 +145,11 @@ export async function readText(relative: string): Promise<TextFileResult> {
 
 let tmpCount = 0
 
+/** The temp file an atomic write goes through: `note.md.tmp-<pid>-<n>`, renamed over the note. */
+const tempPath = (absolute: string): string => `${absolute}.tmp-${process.pid}-${++tmpCount}`
+/** True for a name tempPath made - the watcher skips these; a note merely containing ".tmp-" is not one. */
+export const isTempWrite = (name: string): boolean => /\.tmp-\d+-\d+$/.test(name)
+
 /**
  * Write-then-rename, so a crash mid-write cannot truncate a note. Callers are
  * expected to have registered the path as a self-write first (see watcher).
@@ -174,7 +179,7 @@ export async function writeFile(relative: string, content: string): Promise<{ ok
       )
     // Unique per write: two writes to one note in flight (an autosave and a
     // board edit) shared one temp file, and one could rename the other's half.
-    const tmp = `${absolute}.tmp-${process.pid}-${++tmpCount}`
+    const tmp = tempPath(absolute)
     await fsp.mkdir(path.dirname(absolute), { recursive: true })
     await fsp.writeFile(tmp, bytes)
     await fsp.rename(tmp, absolute)

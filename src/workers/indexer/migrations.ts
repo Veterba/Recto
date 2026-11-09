@@ -407,6 +407,26 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE links ADD COLUMN by_date INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    version: 19,
+    name: 'property-tags',
+    sql: `
+      -- No schema change. Tags in a note's properties (tags: [a, b]) are
+      -- indexed now, as Obsidian counts them; the migration makes the next
+      -- open reindex every note, or they would wait for each note's next edit.
+      SELECT 1;
+    `,
+  },
+  {
+    version: 20,
+    name: 'every-note-words',
+    sql: `
+      -- No schema change. Every note's words count now, a board's too, and
+      -- %%comments%% do not (shared/overview.ts WORDS_RULE 3); the next open
+      -- recounts every note, so the vault's total is right at once.
+      SELECT 1;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {
