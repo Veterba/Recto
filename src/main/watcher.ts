@@ -7,6 +7,7 @@ import { currentVault } from './vault'
 import { IPC_EVENT } from '../shared/ipc'
 import { sendEvent } from './events'
 import { leavesVault, realPath } from './paths'
+import { isTempWrite } from './vault-fs'
 
 /**
  * Watches the vault and pushes changes to the renderer.
@@ -121,8 +122,8 @@ export function startWatching(window: BrowserWindow): void {
     ignored: (candidate: string) => {
       const name = path.basename(candidate)
       if (candidate === root) return false
-      // Our own atomic writes land as `note.md.tmp-1234` before the rename.
-      if (name.includes('.tmp-')) return true
+      // Our own atomic writes land as a temp file before the rename.
+      if (isTempWrite(name)) return true
       return name === VAULT_STATE_DIR || name === 'node_modules' || name.startsWith('.')
     },
     awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 30 },
@@ -144,6 +145,8 @@ export function startWatching(window: BrowserWindow): void {
       // backlinks and did not appear on a board until something edited it again.
       if (isSelfWrite(absolute)) {
         indexNote(relative)
+        // An atomic save over an existing file can arrive as an add.
+        enqueue({ type: 'written', path: relative, mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })
         return
       }
       enqueue({ type: 'add', path: relative, mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })
@@ -153,8 +156,11 @@ export function startWatching(window: BrowserWindow): void {
       const relative = toRelative(absolute)
       if (isSelfWrite(absolute)) {
         // Suppression stops the EDITOR reloading its buffer. The index still
-        // has to see the new content, or search goes stale on every save.
+        // has to see the new content, or search goes stale on every save; and
+        // the window is told it was written, for an open note with nothing
+        // unsaved (VaultChange 'written').
         indexNote(relative)
+        enqueue({ type: 'written', path: relative, mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })
         return
       }
       enqueue({ type: 'change', path: relative, mtime: stat?.mtimeMs ?? 0, size: stat?.size ?? 0 })

@@ -174,6 +174,11 @@ export function wordDiff(beforeBody: string, afterBody: string): WordDiff {
  * typed and deleted again is taken back off; a word that was in the note
  * before you started that day can be deleted without taking anything off,
  * so the count is never below zero. Moving text changes nothing.
+ *
+ * A count below zero is a word that was there before today and has been
+ * deleted today: it adds nothing to the day, and the same word coming back
+ * - an undo, the paste after a cut, each in its own autosave - cancels it
+ * instead of counting as written.
  * A day read in from older records, which knew only a number, keeps it under
  * `#` - no word can be `#`.
  */
@@ -187,16 +192,17 @@ const OLD_COUNT = '#'
  */
 const countOf = (words: Record<string, number>, word: string): number => (Object.hasOwn(words, word) ? words[word]! : 0)
 
-/** One save's change folded into its note's day: its deletions take back what you wrote that day, then its additions count. */
+/**
+ * One save's change folded into its note's day: its deletions take back what
+ * you wrote that day (or are kept below zero, for words from before), then its
+ * additions count - or first cancel those.
+ */
 export function applyWords(written: Written, day: Day, path: string, diff: WordDiff): Written {
   if (diff.added.length === 0 && diff.removed.length === 0) return written
   const words = { ...written[day]?.[path] }
-  for (const word of diff.removed) {
-    const left = countOf(words, word)
-    if (left > 1) words[word] = left - 1
-    else if (left === 1) delete words[word]
-  }
+  for (const word of diff.removed) words[word] = countOf(words, word) - 1
   for (const word of diff.added) words[word] = countOf(words, word) + 1
+  for (const word of Object.keys(words)) if (words[word] === 0) delete words[word]
   const notes = { ...written[day] }
   if (Object.keys(words).length === 0) delete notes[path]
   else notes[path] = words
@@ -209,14 +215,18 @@ export function applyWords(written: Written, day: Day, path: string, diff: WordD
 /** A count from before words were kept one by one, as a day's record. */
 export const oldCount = (n: number): Record<string, number> => ({ [OLD_COUNT]: n })
 
-/** Two copies of the record, from two copies of the file: each word's count is the larger, never the sum. */
+/**
+ * Two copies of the record, from two copies of the file: each word's count is
+ * the larger, never the sum. A word only one copy has keeps its count, below
+ * zero too.
+ */
 export function mergeWritten(a: Written, b: Written): Written {
   const out: Written = { ...a }
   for (const [day, notes] of Object.entries(b)) {
     const mergedNotes = { ...out[day] }
     for (const [path, words] of Object.entries(notes)) {
       const merged = { ...mergedNotes[path] }
-      for (const [word, n] of Object.entries(words)) merged[word] = Math.max(countOf(merged, word), n)
+      for (const [word, n] of Object.entries(words)) merged[word] = Object.hasOwn(merged, word) ? Math.max(merged[word]!, n) : n
       mergedNotes[path] = merged
     }
     out[day] = mergedNotes
@@ -224,7 +234,8 @@ export function mergeWritten(a: Written, b: Written): Written {
   return out
 }
 
-const noteCount = (words: Record<string, number>): number => Object.values(words).reduce((a, b) => a + b, 0)
+/** Words written in a note on a day: the words above zero (below zero are deletions of older words). */
+const noteCount = (words: Record<string, number>): number => Object.values(words).reduce((a, b) => a + Math.max(0, b), 0)
 
 /** Words you wrote on a day; 0 for a day with none. */
 export const writtenOn = (written: Written, day: Day): number => Object.values(written[day] ?? {}).reduce((sum, words) => sum + noteCount(words), 0)

@@ -155,7 +155,8 @@ function Figures({ data, topics, today, now, actions }: Props & { data: Overview
           <Stat value={plural(run.current, 'day')} caption={`writing streak · longest ${plural(run.longest, 'day')}`} />
           <Stat
             value={duration(avg)}
-            caption={avgBefore === null ? 'a day in Recto' : `a day in Recto · last week ${duration(avgBefore)}`}
+            // Both are averages per day; "last week 39 min" read as the week's total.
+            caption={avgBefore === null ? 'a day in Recto this week' : `a day in Recto this week · ${duration(avgBefore)} a day last week`}
             extra={`${duration(month)} this month · ${duration(total)} in all`}
           />
         </div>

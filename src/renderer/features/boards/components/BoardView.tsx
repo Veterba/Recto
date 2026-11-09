@@ -283,6 +283,7 @@ export function BoardView({
       onDragStart: (key: string) => setDragging(key),
       onDragEnd: finishDrag,
       onDragOver: (at: number) => setDrop({ column: id, at }),
+      onDragLeave: () => setDrop((now) => (now?.column === id ? null : now)),
       onDrop: (key: string, at: number) => {
         finishDrag()
         moveTo(key, id, at)

@@ -87,7 +87,8 @@ function parseEdits(raw: unknown): EditsFile {
         if (typeof words === 'number' && Number.isFinite(words) && words > 0) kept[p] = oldCount(words)
         else if (isObject(words)) {
           const counts: Record<string, number> = {}
-          for (const [w, n] of Object.entries(words)) if (typeof n === 'number' && Number.isFinite(n) && n > 0) counts[w] = n
+          // Below zero: an older word deleted that day (shared/overview.ts Written).
+          for (const [w, n] of Object.entries(words)) if (typeof n === 'number' && Number.isInteger(n) && n !== 0) counts[w] = n
           if (Object.keys(counts).length > 0) kept[p] = counts
         }
       }

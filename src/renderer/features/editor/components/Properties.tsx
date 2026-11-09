@@ -215,14 +215,7 @@ function ValueEditor({
   }
 
   if (field.type === 'number') {
-    return (
-      <input
-        className="prop__input"
-        type="number"
-        value={typeof field.value === 'number' ? field.value : ''}
-        onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))}
-      />
-    )
+    return <NumberDraft value={typeof field.value === 'number' ? field.value : null} onChange={onChange} />
   }
 
   if (field.type === 'date') {
@@ -240,25 +233,101 @@ function ValueEditor({
   if (field.type === 'list') {
     const items = Array.isArray(field.value) ? field.value : []
     return (
-      <LinkInput
-        className="prop__input"
+      <TextDraft
         value={items.join(', ')}
         placeholder="comma, separated"
         getCandidates={getCandidates}
         source={source}
-        onChange={(next) => onChange(splitItems(next))}
+        onCommit={(next) => onChange(splitItems(next))}
       />
     )
   }
 
   return (
-    <LinkInput
-      className="prop__input"
+    <TextDraft
       value={typeof field.value === 'string' ? field.value : ''}
       placeholder="empty — type [[ to link a note"
       getCandidates={getCandidates}
       source={source}
-      onChange={(next) => onChange(next)}
+      onCommit={(next) => onChange(next)}
+    />
+  )
+}
+
+/**
+ * What is typed in a value, kept here until it is done: written on blur or
+ * Enter, dropped on Escape. Null while nothing is being typed, so a change made
+ * elsewhere (a board, another app) shows at once.
+ *
+ * It used to be written on every key: each key rewrote the note, and the value
+ * was trimmed as it went - `in progress` lost its space.
+ */
+function useDraft<T>(value: T, commit: (next: T) => void) {
+  const [draft, setDraft] = useState<T | null>(null)
+  return {
+    shown: draft ?? value,
+    setDraft,
+    onBlur: (): void => {
+      if (draft !== null && draft !== value) commit(draft)
+      setDraft(null)
+    },
+    onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>): void => {
+      // On a Mac, Home and End in a field scroll the page: the note scrolled
+      // away, its properties left the screen and took the field with them.
+      if ((event.key === 'Home' || event.key === 'End') && !event.shiftKey && !event.metaKey && !event.altKey && !event.ctrlKey) {
+        event.preventDefault()
+        const at = event.key === 'Home' ? 0 : event.currentTarget.value.length
+        event.currentTarget.setSelectionRange(at, at)
+      }
+      if (event.key === 'Enter') event.currentTarget.blur()
+      if (event.key === 'Escape') {
+        setDraft(null)
+        // Blurred after the draft is gone, so nothing is written.
+        const field = event.currentTarget
+        requestAnimationFrame(() => field.blur())
+      }
+    },
+  }
+}
+
+function TextDraft({
+  value,
+  placeholder,
+  getCandidates,
+  source,
+  onCommit,
+}: {
+  value: string
+  placeholder: string
+  getCandidates: () => readonly LinkCandidate[]
+  source: string
+  onCommit: (next: string) => void
+}): React.ReactElement {
+  const draft = useDraft(value, onCommit)
+  return (
+    <LinkInput
+      className="prop__input"
+      value={draft.shown}
+      placeholder={placeholder}
+      getCandidates={getCandidates}
+      source={source}
+      onChange={draft.setDraft}
+      onBlur={draft.onBlur}
+      onKeyDown={draft.onKeyDown}
+    />
+  )
+}
+
+function NumberDraft({ value, onChange }: { value: number | null; onChange: (value: Field['value']) => void }): React.ReactElement {
+  const draft = useDraft(value === null ? '' : String(value), (next) => onChange(next === '' ? null : Number(next)))
+  return (
+    <input
+      className="prop__input"
+      type="number"
+      value={draft.shown}
+      onChange={(event) => draft.setDraft(event.target.value)}
+      onBlur={draft.onBlur}
+      onKeyDown={draft.onKeyDown}
     />
   )
 }

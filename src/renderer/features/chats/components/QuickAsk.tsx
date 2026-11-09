@@ -106,10 +106,15 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
     if (model === null) void api.invoke(IPC.botsSettings).then((s) => setModel(s.defaultModel))
   }, [model])
 
-  useEffect(() => input.current?.focus(), [])
-
   // Where the bot may stand, so the bubble lines up with it.
   const size = useBotArea(() => area.current)
+
+  // Focused once it shows: the bubble is hidden until the bot's area is
+  // measured, and a hidden field takes no focus - typing went into the note.
+  const shown = size.width > 0
+  useEffect(() => {
+    if (shown) input.current?.focus()
+  }, [shown])
 
   // The answer as it streams.
   useEffect(
@@ -206,7 +211,7 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
   return (
     <div
       className={`quick-ask${above ? ' is-above' : ' is-below'}${right ? ' is-right' : ' is-left'}${motion.gliding ? ' is-gliding' : ''}`}
-      style={{ ...style, visibility: size.width > 0 ? 'visible' : 'hidden' }}
+      style={{ ...style, visibility: shown ? 'visible' : 'hidden' }}
       role="dialog"
       aria-label="Quick ask"
       onKeyDown={(ev) => {

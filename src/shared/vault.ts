@@ -49,6 +49,14 @@ export type FileNode = {
 /** What the watcher reports. One event per path, already debounced by chokidar. */
 export type VaultChange =
   | { type: 'add' | 'change' | 'unlink'; path: string; mtime?: number; size?: number }
+  /**
+   * Recto wrote this file itself (a save, a board, a card panel). Not a
+   * `change`, which reloads what is open: a tab's own save must not come back
+   * into it mid-keystroke. An open note takes it only when it has nothing
+   * unsaved - so a card changed on a board shows in its open note, and that
+   * note's next save does not put the old value back.
+   */
+  | { type: 'written'; path: string; mtime?: number; size?: number }
   | { type: 'addDir' | 'unlinkDir'; path: string }
   | { type: 'ready' }
 

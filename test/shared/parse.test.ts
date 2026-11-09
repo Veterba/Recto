@@ -70,6 +70,40 @@ describe('parsing a note', () => {
   })
 })
 
+describe('tags in properties', () => {
+  const tagsOf = (yaml: string): [string, number][] => parseNote(`---\n${yaml}\n---\nBody #inline`).tags.map((t) => [t.tag, t.line])
+
+  it('reads a bracket list, a comma list and a dash list, as Obsidian does, on their own lines', () => {
+    expect(tagsOf('tags: [garden, herbs]')).toEqual([
+      ['garden', 1],
+      ['herbs', 1],
+      ['inline', 3],
+    ])
+    expect(tagsOf('title: x\ntags: garden, "herbs"')).toEqual([
+      ['garden', 2],
+      ['herbs', 2],
+      ['inline', 4],
+    ])
+    expect(tagsOf('tags:\n  - garden\n  - "#herbs"\nstatus: draft\n  - not-a-tag')).toEqual([
+      ['garden', 2],
+      ['herbs', 3],
+      ['inline', 7],
+    ])
+  })
+
+  it('takes the older `tag` key and a single value, and leaves other keys, empty lists and numbers alone', () => {
+    expect(tagsOf('tag: video')).toEqual([
+      ['video', 1],
+      ['inline', 3],
+    ])
+    expect(tagsOf('tags: []\nkeywords: [garden]\ntags2: x')).toEqual([['inline', 5]])
+    expect(tagsOf('tags: [2024, w37]')).toEqual([
+      ['w37', 1],
+      ['inline', 3],
+    ])
+  })
+})
+
 describe('links in frontmatter', () => {
   it('counts a link in a property, on its own line number', () => {
     const parsed = parseNote('---\nrelated: "[[Q4 plan]]"\nstatus: draft\n---\nBody with [[Other]].')

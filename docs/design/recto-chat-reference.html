@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Recto chat mock</title>
+<title>Recto chat panel</title>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -46,11 +46,19 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .bar button{font:500 11px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 11px}
 .app{width:min(1180px,100%);height:min(780px,calc(100vh - 90px));min-height:560px;display:flex;background:var(--bg);border-radius:14px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.18);border:1px solid var(--line)}
 
-/* sidebar */
-.side{width:260px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 10px}
-.side .lights{display:flex;gap:7px;padding:2px 6px 14px}
-.side .lights i{width:11px;height:11px;border-radius:50%;background:#e2e0da;display:block}
-:root[data-theme=dark] .side .lights i{background:#2c2a33}
+/* the note the panel sits beside */
+.note{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--paper);border-right:1px solid var(--line)}
+.note .lights{display:flex;gap:7px;padding:16px 18px 0}
+.note .lights i{width:11px;height:11px;border-radius:50%;background:#e2e0da;display:block}
+:root[data-theme=dark] .note .lights i{background:#2c2a33}
+.note .page{max-width:560px;margin:0 auto;padding:36px 28px;color:var(--soft)}
+.note .page h1{font-size:26px;color:var(--ink);margin:0 0 18px;text-align:center}
+.note .page p{margin:0 0 12px}
+.note .page .ln{color:#3b5bdb;text-decoration:underline;text-underline-offset:3px}
+/* the panel's AI / People switch */
+.tabs{display:flex;gap:2px;border:1px solid var(--line);border-radius:9px;padding:2px;background:var(--side)}
+.tabs span{font:500 10.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:7px;color:var(--muted)}
+.tabs span.on{background:var(--bg);color:var(--ink)}
 .search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:7px 10px;color:var(--muted);font-size:13px;margin:0 2px 10px}
 .sect{font:500 10.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:10px 8px 6px}
 .row{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;cursor:pointer}
@@ -61,10 +69,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .row .time{font-size:12px;color:var(--muted)}
 .row .prev{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row.dim{opacity:.45;cursor:default}
-.side .grow{flex:1}
 
 /* chat */
-.chat{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+.chat{width:420px;flex:none;display:flex;flex-direction:column;min-width:0;position:relative}
+.chat .top{height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-bottom:1px solid var(--line)}
 .head{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--line)}
 .head .who{flex:1;min-width:0}
 .head .n{font-weight:600}
@@ -166,12 +174,12 @@ textarea::placeholder{color:var(--muted)}
 
 svg{overflow:visible;display:block}
 .notes{width:min(1180px,100%);color:var(--muted);font-size:12.5px;line-height:1.6}
-@media (max-width:760px){.side{display:none}.msg,.sources,.steps{max-width:88%}#modelMenu{right:0;width:min(330px,100%)}}
+@media (max-width:760px){.note{display:none}.chat{width:100%}.msg,.sources,.steps{max-width:88%}#modelMenu{right:0;width:min(330px,100%)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body>
 
 <div class="bar">
-  <span class="t">Recto · chat mock</span>
+  <span class="t">Recto · chat panel</span>
   <div class="btns"><div class="pal" id="pal"><button data-p="paper">Paper</button><button data-p="neutral">Neutral</button><button data-p="ink">Ink</button><button data-p="graphite">Graphite</button></div>
     <button id="sim">Simulate answer</button>
     <button id="theme">Dark</button>
@@ -179,22 +187,25 @@ svg{overflow:visible;display:block}
 </div>
 
 <div class="app">
-  <aside class="side">
+  <section class="note" aria-label="The open note">
     <div class="lights"><i></i><i></i><i></i></div>
-    <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search chats</div>
-    <div class="row on"><span data-face="32"></span><div class="txt"><div class="top"><span class="name">Recto</span><span class="time" id="sideTime">14:06</span></div><div class="prev" id="sidePrev">Да, подсказка появляется только после 50 заметок.</div></div></div>
-    <div class="sect">Specialists · soon</div>
-    <div class="row dim"><span data-face="32" data-still="1"></span><div class="txt"><div class="top"><span class="name">Critic</span></div><div class="prev">Margin notes on your drafts</div></div></div>
-    <div class="grow"></div>
-  </aside>
+    <div class="page">
+      <h1>Recto plan</h1>
+      <p>Темы: все на одном языке — на том, где больше всего заметок. Подсказка тем появляется после 50 заметок.</p>
+      <p>См. <span class="ln">Topics</span> и <span class="ln">2026-09-24 — v0.36.0</span>.</p>
+    </div>
+  </section>
 
-  <main class="chat">
+  <main class="chat" aria-label="Chats panel">
+    <div class="top">
+      <div class="tabs"><span class="on">AI</span><span>People</span></div>
+      <button class="ib" title="Hide the panel ⌘⇧C"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
+    </div>
     <div class="head">
-      <span data-face="40" id="headFace"></span>
-      <div class="who"><div class="n">Recto</div><div class="s" id="headSub">Правила тем · qwen3.5 · 9b</div></div>
-      <button class="ib" title="History"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></button>
-      <button class="ib" title="New topic ⌘N"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
-      <button class="ib" title="More"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+      <div class="who"><div class="n">Recto</div><div class="s" id="headSub">The keeper of your vault · qwen3.5 · 9b</div></div>
+      <button class="ib" title="New topic ⌘N"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="ib" title="Topics"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></button>
+      <button class="ib" title="Other bots, settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
     </div>
 
     <div class="scroll" id="scroll"><div class="col" id="col"></div></div>
@@ -225,7 +236,7 @@ svg{overflow:visible;display:block}
   </main>
 </div>
 
-<div class="notes">Наведи на сообщение: время, панель действий, реакции. Нажми на чип модели и на «+». «Simulate answer» или Enter в поле — Recto ищет (riffle + шаги), «found» на первом токене, потом стрим. Рисованный макет, данные выдуманы.</div>
+<div class="notes">The Chats panel as the app has it: on the right of the open note, AI and People at the top, Recto's chat open (other bots in its ⋯ menu), a topic per conversation (+ for a new one, the clock for the list). Hover a message: time, actions, reactions. Click the model chip and «+». «Simulate answer» or Enter in the field: Recto searches (steps), «found» on the first token, then the stream. A drawn mock; the data is made up.</div>
 
 <script>
 /* ---------- face ---------- */
@@ -371,12 +382,12 @@ async function ask(text){
   const t=now();const mine=msg('me',text.replace(/\[\[(.+?)\]\]/g,(_,x)=>N(x)),t);bottom();
   const status=document.getElementById('status');status.innerHTML='<span class="dot"></span>Recto ищет…';
   await wait(450);setReact(mine,'🤔');
-  const g=group('bot');const f=g._fobj;setState(f,'riffle');setState(headFace,'riffle');
+  const g=group('bot');const f=g._fobj;setState(f,'riffle');window.headFace&&setState(headFace,'riffle');
   const c=stepsCard(g);bottom();
   const steps=[['<b>Задачи</b> → прошлая неделя',700,'<b>Задачи</b> → 4 открыты с прошлой недели'],['<b>Ищу в заметках</b> → «refactor week»',800,'<b>Ищу в заметках</b> → «refactor week» · 3'],['<b>Недавнее</b> → с понедельника',650,'<b>Недавнее</b> → 9 заметок с понедельника']];
   for(const [run,ms,done] of steps){if(stop)break;const d=addStep(c,run,true);bottom();await wait(ms);d.querySelector('span:last-child').innerHTML=done;doneStep(d)}
   await wait(500);
-  setState(f,'found');setState(headFace,'found');
+  setState(f,'found');window.headFace&&setState(headFace,'found');
   c.dataset.done=1;c.classList.add('collapsed');c.querySelector('.sum').textContent='Просмотрел 7 заметок ▸';
   const m=msg('bot','<p></p>',now());const p=m.querySelector('p');
   const ans='С прошлой недели висят 4 задачи: разнести app.css по фичам, тест на split-drag, тёмная палитра главной и подпись приложения. Сделано: find bar, плавающие окна заметок и ремонт снапшотов. Начать с app.css?';
@@ -384,8 +395,8 @@ async function ask(text){
   for(let i=0;i<ans.length&&!stop;i+=3){p.innerHTML=ans.slice(0,i+3)+'<span class="caret"></span>';if(i%12===0)bottom();await wait(28)}
   p.innerHTML=stop?p.innerHTML.replace('<span class="caret"></span>',' …'):ans;
   sources(g,['Refactor week','2026-10-01 — v0.40.0','2026-10-02 — v0.41.1','Later','Recto log']);bottom();
-  setState(f,'idle');setState(headFace,'idle');
-  document.getElementById('sidePrev').textContent=ans;document.getElementById('sideTime').textContent=now();
+  setState(f,'idle');window.headFace&&setState(headFace,'idle');
+
   status.innerHTML='<span class="dot"></span>qwen3.5:9b загружена · локально';
   busy=false;send.innerHTML=UP;fit();
 }

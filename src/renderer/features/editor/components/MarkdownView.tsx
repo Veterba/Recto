@@ -128,6 +128,8 @@ function MarkdownEditor({
   const [text, setText] = useState('')
   /** What we last wrote, so our own watcher echo is not mistaken for an edit. */
   const lastWritten = useRef<string | null>(null)
+  /** Saves on their way to disk: until they land, what the file says is older than this tab. */
+  const saving = useRef(0)
 
   /** Bumped to read the file again - by the retry button, or by a watcher event. */
   const [attempt, setAttempt] = useState(0)
@@ -177,7 +179,8 @@ function MarkdownEditor({
       // what the save is measured against for the words it added.
       const before = lastWritten.current
       lastWritten.current = next
-      const result = await api.invoke(IPC.fsWrite, path, next)
+      saving.current++
+      const result = await api.invoke(IPC.fsWrite, path, next).finally(() => saving.current--)
       if (result.ok) {
         setStatus('saved')
         setSaveError(null)
@@ -326,14 +329,19 @@ function MarkdownEditor({
     () =>
       api.on(IPC_EVENT.vaultChanged, (changes) => {
         const touched = changes.some((c) => 'path' in c && c.path === path && c.type === 'change')
+        // Written by Recto elsewhere - a board, a card panel - or by this tab.
+        const written = !touched && changes.some((c) => 'path' in c && c.path === path && c.type === 'written')
         // A note that failed to open is retried when anything happens to it -
         // an atomic save elsewhere arrives as add, not change.
-        if (!touched) {
+        if (!touched && !written) {
           if (error !== null && changes.some((c) => 'path' in c && c.path === path)) setAttempt((n) => n + 1)
           return
         }
         void api.invoke(IPC.fsRead, path).then((result) => {
           if (!result.ok || result.content === lastWritten.current) return
+          // Recto's own write is taken only into a note with nothing unsaved:
+          // typing not yet written wins, as it always did.
+          if (written && (saving.current > 0 || handle.current?.getValue() !== lastWritten.current)) return
           lastWritten.current = result.content
           setText(result.content)
           handle.current?.setValue(result.content)

@@ -130,6 +130,28 @@ describe('words written: the words you added that day and kept', () => {
     expect(moved.count()).toBe(0)
   })
 
+  it('deleting older text and getting it back in a later save - undo, or the paste after a cut - writes nothing', () => {
+    const old = words(50)
+    const undone = note(old)
+    undone.save('')
+    undone.save(old)
+    expect(undone.count()).toBe(0)
+    const cut = note('one two\n\nthree four')
+    cut.save('three four')
+    cut.save('three four\n\none two')
+    expect(cut.count()).toBe(0)
+    // Typing after it still counts.
+    cut.save('three four\n\none two five')
+    expect(cut.count()).toBe(1)
+  })
+
+  it('a deletion of older words survives a merge of the two copies of the file', () => {
+    let written = applyWords({}, '2026-10-19', 'A.md', wordDiff('old words here', ''))
+    written = mergeWritten({}, written)
+    written = applyWords(written, '2026-10-19', 'A.md', wordDiff('', 'old words here'))
+    expect(writtenOn(written, '2026-10-19')).toBe(0)
+  })
+
   it("Recto's own writes and other apps' never count: no words in, none out", () => {
     // A board move, a completed stamp: noteEdited without texts sends an empty change.
     expect(applyWords({}, '2026-10-19', 'tasks/Board.md', { added: [], removed: [] })).toEqual({})

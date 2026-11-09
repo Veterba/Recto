@@ -127,6 +127,38 @@ function parseFrontmatter(lines: readonly string[]): Record<string, string | num
   return out
 }
 
+/** Property names whose values are tags, as Obsidian reads them (`tag` is the older one). */
+const TAG_KEYS = /^tags?$/i
+
+/**
+ * The tags in a note's properties: `tags: [garden, herbs]`, `tags: garden,
+ * herbs` or a `- garden` list, each with or without its `#`. Obsidian counts
+ * them as tags as much as a `#garden` in the text; leaving them out showed "0
+ * tags" for a vault whose tags all live in properties. Line numbers are the
+ * file's own, as for links in the frontmatter.
+ */
+function propertyTags(yaml: readonly string[]): Tag[] {
+  const tags: Tag[] = []
+  const add = (raw: string, line: number): void => {
+    const tag = raw.trim().replace(/^["']|["']$/g, '').replace(/^#/, '')
+    if (tag !== '' && !PURELY_NUMERIC.test(tag)) tags.push({ tag, line })
+  }
+  let inTags = false
+  yaml.forEach((text, index) => {
+    const own = /^([^\s#-][^:]*):(.*)$/.exec(text)
+    if (own !== null) {
+      inTags = TAG_KEYS.test(own[1]!.trim())
+      if (!inTags) return
+      // Tags hold no spaces, so a space separates them as a comma does.
+      for (const item of own[2]!.trim().replace(/^\[|\]$/g, '').split(/[,\s]+/)) add(item, index + 1)
+      return
+    }
+    const item = /^\s*-\s+(.*)$/.exec(text)
+    if (inTags && item !== null) add(item[1]!, index + 1)
+  })
+  return tags
+}
+
 export function parseNote(content: string): ParsedNote {
   const lines = content.split(/\r?\n/)
   const { yaml, bodyStart } = splitFrontmatter(lines)
@@ -134,7 +166,7 @@ export function parseNote(content: string): ParsedNote {
 
   const headings: Heading[] = []
   const links: WikiLink[] = []
-  const tags: Tag[] = []
+  const tags: Tag[] = propertyTags(yaml)
   const bodyLines: string[] = []
 
   /**

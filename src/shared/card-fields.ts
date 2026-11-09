@@ -52,11 +52,14 @@ export function cardSpan(start: string | null, due: string | null): { from: stri
   return start > due ? { from: due, to: due } : { from: start, to: due }
 }
 
-/** Late once its last day has passed; due soon when that day is today or within two days. */
+/** How far ahead "due soon" looks, in days: the card chip and the Due soon widget alike. */
+export const SOON_DAYS = 3
+
+/** Late once its last day has passed; due soon when that day is today or within SOON_DAYS. */
 export function dueState(span: { from: string; to: string } | null, today: string): 'late' | 'soon' | null {
   if (span === null) return null
   if (span.to < today) return 'late'
-  if (span.to <= addDays(today, 2)) return 'soon'
+  if (span.to <= addDays(today, SOON_DAYS)) return 'soon'
   return null
 }
 

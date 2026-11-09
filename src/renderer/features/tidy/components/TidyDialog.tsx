@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../../../ui/Icon'
 import type { TidyPlan } from '../tidy'
@@ -40,6 +40,12 @@ export function TidyDialog({ plan, busy, onConfirm, onCancel }: Props): React.Re
 
   const newFolders = groups.filter(([, g]) => g.creates).length
   const nothingToDo = plan.moves.length === 0
+
+  // Focus in the dialog, as ConfirmDialog has it: opened from the sidebar's
+  // button, focus stayed behind on it and Escape never reached the dialog.
+  const move = useRef<HTMLButtonElement>(null)
+  const cancel = useRef<HTMLButtonElement>(null)
+  useEffect(() => (nothingToDo ? cancel : move).current?.focus(), [nothingToDo])
 
   return createPortal(
     <div
@@ -114,10 +120,10 @@ export function TidyDialog({ plan, busy, onConfirm, onCancel }: Props): React.Re
         )}
 
         <footer className="dialog__actions">
-          <button className="dialog__ghost" onClick={onCancel} disabled={busy}>
+          <button ref={cancel} className="dialog__ghost" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
-          <button className="dialog__submit" onClick={onConfirm} disabled={busy || nothingToDo}>
+          <button ref={move} className="dialog__submit" onClick={onConfirm} disabled={busy || nothingToDo}>
             {busy ? 'Moving…' : `Move ${plan.moves.length}`}
           </button>
         </footer>

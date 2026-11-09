@@ -350,7 +350,8 @@ describe.skipIf(!RUN)('editing tables', () => {
             scrolls: max > 0 ? 1 : 0,
             boxRight: r('.cm-tbl .cm-table-scroll').right,
             contentRight: r('.cm-content').right,
-            lineLeft: r('.cm-line').left,
+            // Where a line's text starts: inside its padding, where a selection starts too.
+            lineLeft: r('.cm-line').left + parseFloat(getComputedStyle(document.querySelector('.cm-line')!).paddingLeft),
             first: r('.cm-tbl td[data-col="0"]').left,
             colX: r('.cm-tbl-add-col').left,
             colY: r('.cm-tbl-add-col').top,
@@ -365,7 +366,7 @@ describe.skipIf(!RUN)('editing tables', () => {
       const middle = await at('middle')
       const end = await at('end')
       expect(start.scrolls).toBe(1)
-      // In the text column: the cells start at its edge, the box ends inside it.
+      // In the text column: the cells start where text does, the box ends inside it.
       expect(Math.abs(start.first - start.lineLeft)).toBeLessThan(2)
       expect(start.boxRight).toBeLessThanOrEqual(start.contentRight + 1)
       // The whole table moves; nothing is held.
@@ -621,14 +622,34 @@ describe.skipIf(!RUN)('editing tables', () => {
       await sleep(400)
     })
 
-    it('⌥↓ and ⌥→ move the row and the column of the cell being edited', async () => {
+    it('⌥↓ and ⌃⌥→ move the row and the column of the cell being edited', async () => {
       await page.locator('.cm-tbl [data-row="1"][data-col="0"]').click()
       await page.keyboard.press('Alt+ArrowDown')
       await expect.poll(() => body(read()).map((r) => r[0])).toEqual(['A', '1', '2', '3'])
       await page.waitForSelector('.cm-tbl [data-row="2"][data-col="0"].is-editing')
-      await page.keyboard.press('Alt+ArrowRight')
+      await page.keyboard.press('Control+Alt+ArrowRight')
       await expect.poll(() => body(read())[0]).toEqual(['B', 'A', 'C'])
       await page.keyboard.press('Escape')
+    })
+
+    it('in a cell, ⌥← ⌥→ move by word and ⌥⇧← selects a word, as in any Mac text; the column stays', async () => {
+      const before = read()
+      await page.locator('.cm-tbl [data-row="1"][data-col="0"]').click()
+      await page.keyboard.press('Meta+a')
+      await page.keyboard.type('one two three')
+      await page.keyboard.press('Alt+ArrowLeft')
+      const caret = (): Promise<number> => page.evaluate(() => window.getSelection()!.focusOffset)
+      expect(await caret()).toBe('one two '.length)
+      await page.keyboard.press('Alt+ArrowLeft')
+      expect(await caret()).toBe('one '.length)
+      await page.keyboard.press('Alt+ArrowRight')
+      expect(await caret()).toBe('one two'.length)
+      await page.keyboard.press('Alt+Shift+ArrowLeft')
+      expect(await page.evaluate(() => window.getSelection()!.toString())).toBe('two')
+      // Typed into the cell, and nothing moved: it is still the first column.
+      await page.keyboard.press('Escape')
+      await expect.poll(() => body(read()).find((r) => r.includes('one two three'))?.[0]).toBe('one two three')
+      expect(read()).not.toBe(before)
     })
   })
 })

@@ -114,7 +114,12 @@ describe('the vault stats files', () => {
     await overview.flushEdits()
     const edits = readJson('edits.json')
     expect(edits['days']).toEqual({ '2026-10-19': ['a.md', 'tasks/Board.md'] })
-    expect(edits['written']).toEqual({ '2026-10-19': { 'a.md': { one: 1, three: 1, four: 1 } } })
+    // `old` was there before the day: kept below zero, so it adds nothing yet cancels its own return.
+    expect(edits['written']).toEqual({ '2026-10-19': { 'a.md': { one: 1, three: 1, four: 1, old: -1 } } })
+    // Read back in, the deletion survives, and the old word coming back writes nothing.
+    overview.recordEdit('a.md', '2026-10-19', { added: ['old'], removed: [] })
+    await overview.flushEdits()
+    expect(readJson('edits.json')['written']).toEqual({ '2026-10-19': { 'a.md': { one: 1, three: 1, four: 1 } } })
   })
 
   it("backfills words written once from version history: your notes' versions only, boards left out, then counts from there", async () => {

@@ -65,14 +65,22 @@ export function useCanvas(path: string): {
 
   useEffect(read, [read, revision])
 
-  /** Shown now, written next: `change` is made to the canvas on screen, then again to the file as it is. */
+  /**
+   * Shown now, written next: `change` is made to the canvas on screen, then
+   * again to the file as it is - unless the file is what is on screen.
+   * `made` is the change already worked out on the canvas shown, so it is not
+   * made twice: a change that makes new ids (paste, group, an arrow) made a
+   * second time gets other ids, and undo, keyed on the first, found nothing.
+   */
   const apply = useCallback(
-    (change: CanvasChange): Promise<boolean> => {
+    (change: CanvasChange, made?: { from: CanvasDoc; to: CanvasDoc }): Promise<boolean> => {
       const shown = docRef.current
       if (shown === null) return Promise.resolve(false)
-      const next = change(shown)
+      const next = made !== undefined && made.from === shown ? made.to : change(shown)
       if (next === shown) return Promise.resolve(true)
       setDoc(next)
+      // Now, not at the next render: a second edit in the same moment builds on this one.
+      docRef.current = next
       pending.current++
       const run = async (): Promise<boolean> => {
         try {
@@ -127,7 +135,7 @@ export function useCanvas(path: string): {
         redos.current = []
         setSteps((n) => n + 1)
       }
-      return apply(change)
+      return apply(change, { from: shown, to: next })
     },
     [apply],
   )

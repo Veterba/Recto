@@ -1,6 +1,6 @@
 import type { BoardCardInfo } from '@shared/index-results'
 import type { KanbanItem } from '@shared/kanban'
-import { addDays, cardSpan, dateOnly, dueState, readPriority, readTags, type Priority } from '@shared/card-fields'
+import { SOON_DAYS, addDays, cardSpan, dateOnly, dueState, readPriority, readTags, type Priority } from '@shared/card-fields'
 import type { Column } from './boards'
 
 /**
@@ -224,9 +224,9 @@ const open = (card: CardView, done: string | null): boolean => card.column !== d
 const byEnd = (a: CardView, b: CardView): number =>
   a.span!.to < b.span!.to ? -1 : a.span!.to > b.span!.to ? 1 : a.title.localeCompare(b.title)
 
-/** Unfinished cards due today or within three days, soonest first. Late ones are Overdue's. */
+/** Unfinished cards due today or within SOON_DAYS, soonest first. Late ones are Overdue's. */
 export function dueSoon(cards: readonly CardView[], today: string, done: string | null): CardView[] {
-  const limit = addDays(today, 3)
+  const limit = addDays(today, SOON_DAYS)
   return cards.filter((card) => open(card, done) && card.span !== null && card.span.to >= today && card.span.to <= limit).sort(byEnd)
 }
 

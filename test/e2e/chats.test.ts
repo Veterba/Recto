@@ -155,6 +155,19 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
     expect(await bot.getAttribute('data-edge')).toBe('left')
   })
 
+  it('⌘J opens Quick ask with its field focused, so typing never lands in the note', async () => {
+    await open('Handbook')
+    const before = fs.readFileSync(path.join(vault, 'Handbook.md'), 'utf8')
+    await page.locator('.cm-content').first().focus()
+    await page.keyboard.press('Meta+j')
+    await page.waitForFunction(() => document.activeElement?.classList.contains('quick-ask__input') === true, undefined, { timeout: 5000 })
+    await page.keyboard.type('abc')
+    expect(await page.locator('.quick-ask__input').inputValue()).toBe('abc')
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('.quick-ask', { state: 'detached' })
+    expect(fs.readFileSync(path.join(vault, 'Handbook.md'), 'utf8')).toBe(before)
+  })
+
   it('Quick ask asks about the open note, marks a switch of note, and is never saved as a chat', async () => {
     const before = topics().length
     await open('Handbook')

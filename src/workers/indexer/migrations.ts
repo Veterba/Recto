@@ -407,6 +407,16 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE links ADD COLUMN by_date INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    version: 19,
+    name: 'property-tags',
+    sql: `
+      -- No schema change. Tags in a note's properties (tags: [a, b]) are
+      -- indexed now, as Obsidian counts them; the migration makes the next
+      -- open reindex every note, or they would wait for each note's next edit.
+      SELECT 1;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

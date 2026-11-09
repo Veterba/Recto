@@ -144,9 +144,11 @@ fixture run again after a fix to the checks.
    writes of identical bytes so the mtime means something.
 2. **Watcher.** `watcher.ts` (chokidar) sees every change, including other apps'. Changes are batched
    for 60 ms. The app's own writes are marked just before they happen (`markSelfWrite`), so they are
-   indexed but not echoed back to the editor as an external edit.
+   indexed but not echoed back as an external edit (`change`); they go out as `written` instead. An
+   open note takes a `written` file only when it has nothing unsaved and no save on its way, so a card
+   changed on a board shows in its open note while the note's own saves never come back into it.
 3. **Index.** Each batch goes to the indexer as `note-changed`. It parses the note
-   (`shared/parse.ts`: frontmatter, headings, wikilinks, tags, properties), updates `notes`, `links`,
+   (`shared/parse.ts`: frontmatter, headings, wikilinks, tags - inline and in the `tags` property - properties), updates `notes`, `links`,
    `tags`, `properties`, `headings` and the FTS table, stores a version snapshot, and re-resolves the
    links that could now point somewhere (each read from the note it is in; see Names and links).
 4. **Renderer.** The same batch is pushed as `vault:changed`. The tree applies it to its copy

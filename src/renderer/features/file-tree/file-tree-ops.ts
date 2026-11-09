@@ -100,6 +100,7 @@ export function applyChanges(roots: FileNode[], changes: readonly VaultChange[])
         next = insert(next, { path: change.path, name: nameOf(change.path), kind: 'folder', children: [] })
         break
       case 'change':
+      case 'written':
         next = update(next, change.path, { mtime: change.mtime ?? 0, size: change.size ?? 0 })
         break
       case 'unlink':
