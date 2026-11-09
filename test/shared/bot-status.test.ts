@@ -38,6 +38,16 @@ describe('status text', () => {
     expect(stepsSummary([{ action: 'Ищу в заметках', result: 'ничего', state: 'done', kind: 'search' }])).toBe('1 шаг')
   })
 
+  it('counts only notes opened in full; with none, the ones it only saw summaries of are "skimmed"', () => {
+    const around = { action: 'Read around', result: '“Japan trip plan”', state: 'done', kind: 'read' } as const
+    const opened = (subject: string) => ({ action: 'Opened', result: `“${subject}”`, state: 'done', kind: 'open', subject }) as const
+    expect(stepsSummary([around, opened('Itinerary'), opened('Budget')], 4)).toBe('Looked through 2 notes')
+    expect(stepsSummary([around, opened('Kyoto'), opened('Kyoto'), { ...opened('Budget'), state: 'failed' }], 4)).toBe('Looked through 1 note')
+    expect(stepsSummary([around], 4)).toBe('Skimmed 4 notes')
+    expect(stepsSummary([{ ...around, action: 'Читаю вокруг' }], 2)).toBe('Пролистал 2 заметки')
+    expect(stepsSummary([around])).toBe('1 step')
+  })
+
   it('the language of a question', () => {
     expect(langOfText('Что у меня по Recto?')).toBe('ru')
     expect(langOfText('What about Recto?')).toBe('en')

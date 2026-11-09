@@ -29,6 +29,24 @@ export type Answered = {
   claimedAction?: boolean
   steps?: unknown
   toolCalls?: unknown
+  /** A Quick ask conversation, turn by turn (main/providers/quick-ask-eval.ts). */
+  turns?: QuickTurn[]
+}
+
+/** One Quick ask turn as the app reports it. */
+export type QuickTurn = {
+  question: string
+  answer: string
+  appliedFirst: boolean
+  /** "Looked through N notes": N; null when the card says something else. */
+  shown: number | null
+  /** What the activity log shows it read in full. */
+  reads: string[]
+  claimsEditWithout: boolean
+  proposals: number
+  reproposed: boolean
+  error: string | null
+  ms: number
 }
 
 export type Lang = 'en' | 'ru' | 'no'
@@ -46,6 +64,9 @@ export const REASONS = [
   'wrong route',
   'claimed an action',
   'false claim',
+  'edit claimed, none made',
+  'count does not match reads',
+  'applied edit suggested again',
   'too slow',
   'error',
 ] as const
@@ -134,6 +155,7 @@ export const ROUTE: Record<Case['kind'], string> = {
   review: 'review',
   advice: 'advice',
   'edit-request': 'notes',
+  'quick-ask': 'notes',
 }
 
 /** "a|b": does the answer say either? Case-insensitive. */
@@ -160,7 +182,8 @@ export function ungroundedClaims(
   const out = new Set<string>()
   for (const m of text.matchAll(/\[\[([^\]|#]+)/g)) {
     const t = m[1]!.trim()
-    if (t !== '') out.add(titles.get(t) ?? t)
+    // A link copied from a note it was given is that note's claim, not the answer's.
+    if (t !== '' && !given.includes(`[[${t}`)) out.add(titles.get(t) ?? t)
   }
   const quoted = /[«“"„]([^»”"\n]{2,80})[»”"]|\*\*([^*\n]{2,80})\*\*|\*([^*\n]{2,80})\*|\(([^)\n]{2,80})\)/g
   for (const m of text.matchAll(quoted)) {
@@ -364,6 +387,10 @@ export function score(c: Case, a: Answered, vaultTitles: readonly string[] = [])
   if (c.kind === 'edit-request' && a.claimedAction === true) reasons.push('claimed an action')
   const falseClaims = (c.forbidClaims ?? []).filter((pattern) => new RegExp(pattern, 'iu').test(own))
   if (falseClaims.length > 0) reasons.push('false claim')
+  const turns = a.turns ?? []
+  if (turns.some((t) => t.claimsEditWithout)) reasons.push('edit claimed, none made')
+  if (turns.some((t) => (t.shown ?? 0) !== t.reads.length)) reasons.push('count does not match reads')
+  if (turns.some((t) => t.reproposed)) reasons.push('applied edit suggested again')
   const pass = reasons.length === 0
   if (a.totalMs > SLOW_MS && !reasons.includes('too slow')) reasons.push('too slow')
   return { recall4, items, routerOk, ungrounded, namedInAnswer, sourcesCorrect, honest, languageOk, falseClaims, pass, reasons }

@@ -14,6 +14,7 @@ import { answerLang, honestAnswer } from './honesty'
 import { writeBotsEnabled } from './enabled'
 import type { Route } from './router'
 import { DEFAULT_HARNESS, type BotHarness } from '../../shared/bots'
+import { runQuickAskEval, type QuickAskEvalJob } from '../providers/quick-ask-eval'
 
 /**
  * The evals' way into the app (`npm run bots:eval`): with RECTO_EVAL_JOB set,
@@ -73,7 +74,9 @@ const CASE_TIMEOUT_MS = 180_000
 const write = (out: string, line: object): void => fs.appendFileSync(out, `${JSON.stringify(line)}\n`)
 
 export async function runEvalJob(jobPath: string): Promise<void> {
-  const job = JSON.parse(fs.readFileSync(jobPath, 'utf8')) as EvalJob
+  const parsed = JSON.parse(fs.readFileSync(jobPath, 'utf8')) as EvalJob | QuickAskEvalJob
+  if ('quickAsk' in parsed) return runQuickAskEval(parsed)
+  const job = parsed
   const opened = openVault(job.vault)
   if (!opened.ok) throw new Error(`Could not open the eval vault: ${'error' in opened ? opened.error : 'cancelled'}`)
   await openIndexForVault()

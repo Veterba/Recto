@@ -3,7 +3,16 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { readCases, type Case } from '../../scripts/evals/cases.ts'
-import { descriptionClaims, languageOf, numberClaims, percentile, saysNotFound, score, type Answered } from '../../scripts/evals/metrics.ts'
+import {
+  descriptionClaims,
+  languageOf,
+  numberClaims,
+  percentile,
+  saysNotFound,
+  score,
+  type Answered,
+  type QuickTurn,
+} from '../../scripts/evals/metrics.ts'
 import { differentSnapshot, readGrades, renderReport, snapshotName, type RunConfig } from '../../scripts/evals/report.ts'
 import { guard, newRunId, noteNames, runPaths } from '../../scripts/evals/store.ts'
 
@@ -201,12 +210,57 @@ describe('the new checks', () => {
     const c = file.cases.find((x) => x.id === 'review-trip-plan-links-exist')!
     expect(c.forbidClaims).toHaveLength(2)
     const ctxPlan = ctx('Projects/Japan trip/Japan trip plan.md')
-    const bad = score(c, answered({ context: ctxPlan, answer: 'The Itinerary links to Tokyo, Hakone and Osaka, but none of these notes exist yet.' }))
+    const bad = score(
+      c,
+      answered({ context: ctxPlan, answer: 'The Itinerary links to Tokyo, Hakone and Osaka, but none of these notes exist yet.' }),
+    )
     expect(bad.reasons).toContain('false claim')
     const alsoBad = score(c, answered({ context: ctxPlan, answer: 'Fill in the missing notes for Tokyo and Osaka.' }))
     expect(alsoBad.reasons).toContain('false claim')
     const fine = score(c, answered({ context: ctxPlan, answer: 'Link [[Tokyo]] and [[Osaka]] from the plan, and add the Kyoto dates.' }))
     expect(fine.reasons).not.toContain('false claim')
+  })
+
+  it('Quick ask cases: read with their turns; an edit claimed with none made, a wrong count, a re-suggested edit and a retraction each fail', async () => {
+    const { readFileSync } = await import('node:fs')
+    const file = readCases(readFileSync('tests/bots/eval/cases.yaml', 'utf8'))
+    const c = file.cases.find((x) => x.id === 'quick-ask-applied-then-more')!
+    expect(c.kind).toBe('quick-ask')
+    expect(c.note).toBe('Projects/Japan trip/Japan trip plan.md')
+    expect(c.followUps).toEqual([
+      { question: 'Add a short Day-by-day section based on that.', applyFirst: false },
+      { question: 'Anything else?', applyFirst: true },
+    ])
+    const turn: QuickTurn = {
+      question: 'q',
+      answer: 'Two ideas.',
+      appliedFirst: false,
+      shown: 2,
+      reads: ['Itinerary', 'Kyoto'],
+      claimsEditWithout: false,
+      proposals: 0,
+      reproposed: false,
+      error: null,
+      ms: 1,
+    }
+    const plan = ctx('Projects/Japan trip/Japan trip plan.md')
+    const run = (turns: QuickTurn[], answer = 'Two ideas.') => score(c, answered({ context: plan, answer, turns })).reasons
+    expect(run([turn])).not.toEqual(
+      expect.arrayContaining(['edit claimed, none made', 'count does not match reads', 'applied edit suggested again', 'false claim']),
+    )
+    expect(run([{ ...turn, claimsEditWithout: true }])).toContain('edit claimed, none made')
+    expect(run([{ ...turn, shown: 4 }])).toContain('count does not match reads')
+    expect(run([{ ...turn, shown: null, reads: [] }])).not.toContain('count does not match reads')
+    expect(run([{ ...turn, appliedFirst: true, reproposed: true }])).toContain('applied edit suggested again')
+    expect(run([turn], 'My first answer had mistakes. I never proposed the edits I described.')).toContain('false claim')
+    expect(run([turn], 'I only skimmed Budget, so I have not checked the prices.')).not.toContain('false claim')
+    expect(run([turn], 'Hakone and Nara, all linked from [[Itinerary]], don’t exist as notes yet.')).not.toContain('false claim')
+    expect(run([turn], 'The [[Kyoto]] note doesn’t exist.')).toContain('false claim')
+    expect(run([turn], '[[Kyoto]] doesn’t exist yet.')).toContain('false claim')
+    // A link copied from a note it read is grounded; one it made up is not.
+    const given = { context: plan, contextText: '| 1 | [[Tokyo]] |', turns: [turn] }
+    expect(score(c, answered({ ...given, answer: '- 26–29 Nov: [[Tokyo]]' }), ['Tokyo']).ungrounded).toEqual([])
+    expect(score(c, answered({ ...given, answer: '- 30 Nov: [[Hakone]]' }), ['Hakone']).ungrounded).toEqual(['Hakone'])
   })
 
   it('recall@4 is out of at most four expected notes', () => {

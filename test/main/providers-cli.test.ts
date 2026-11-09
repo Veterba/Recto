@@ -129,7 +129,7 @@ describe('reading their streams', () => {
 })
 
 describe('an answer from a fake CLI', () => {
-  const session = { id: 's1', client: 'test', tools: null, notes: null, writable: null, seen: new Set<string>() }
+  const session = { id: 's1', client: 'test', tools: null, notes: null, writable: null, seen: new Set<string>(), record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
   const ask = async (name: 'codex' | 'claude', signal = new AbortController().signal, messages = [{ role: 'user' as const, content: 'Soil?' }]) => {
     const file = install('opt/homebrew/bin', name)
     const run = cliRunner(name, { find: async () => file, path: async () => process.env['PATH'] ?? '', launcher: () => '/x/recto-mcp' })
@@ -193,8 +193,8 @@ describe('switching provider mid-conversation', () => {
       { role: 'assistant' as const, content: 'Compost and loam (answered on this Mac).', model: 'qwen3.5:9b', sources: [{ path: 'Garden/Soil.md', heading: null }] },
       { role: 'user' as const, content: 'And for pots?' },
     ]
-    const session = { id: 's', client: 't', tools: null, notes: null, writable: null, seen: new Set<string>() }
-    for await (const _ of run({ model: 'claude-code', system: 'S', messages: forCloud(turns, []), session, signal: new AbortController().signal })) void _
+    const session = { id: 's', client: 't', tools: null, notes: null, writable: null, seen: new Set<string>(), record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
+    for await (const _ of run({ model: 'claude-code', system: 'S', messages: forCloud(turns, [], () => null), session, signal: new AbortController().signal })) void _
     const { prompt } = JSON.parse(fs.readFileSync(log, 'utf8')) as { prompt: string }
     expect(prompt).toContain('Compost and loam (answered on this Mac).')
     expect(prompt).toContain('And for pots?')
@@ -207,7 +207,7 @@ describe('switching provider mid-conversation', () => {
       { role: 'assistant' as const, content: 'SECRET-DIARY-LINE', sources: [{ path: 'Private/Diary.md', heading: null }] },
       { role: 'user' as const, content: 'Thanks' },
     ]
-    const sent = forCloud(turns, ['Private'])
+    const sent = forCloud(turns, ['Private'], () => null)
     expect(JSON.stringify(sent)).not.toContain('SECRET-DIARY-LINE')
     expect(sent[2]).toEqual({ role: 'user', content: 'Thanks' })
   })

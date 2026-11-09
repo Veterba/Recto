@@ -154,7 +154,7 @@ export function TopicBlock({
               const message = topic.messages[index]!
               return (
                 <div key={index} className="msg-row">
-                  {message.steps !== undefined && <StepsCard steps={message.steps} running={false} />}
+                  {message.steps !== undefined && <StepsCard steps={message.steps} running={false} skimmed={message.record?.skimmed.length ?? 0} />}
                   <Bubble message={message} actions={actions} />
                   {message.sources !== undefined && <Sources sources={message.sources} onOpen={actions.onOpen} />}
                   {/* Stopped before its end: marked so, or left with the id of a job no longer running (the app was killed). */}

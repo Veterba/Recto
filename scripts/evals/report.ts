@@ -70,6 +70,8 @@ export type ResultLine = {
   forbidNotes?: string[]
   rubric?: string[]
   proposed?: boolean
+  /** A Quick ask conversation, turn by turn. */
+  turns?: Answered['turns']
   router: unknown
   steps: unknown
   preface?: string | null
@@ -111,6 +113,7 @@ export function resultLine(row: Scored): ResultLine {
     context: a.context,
     ...(a.contextText === undefined ? {} : { contextText: a.contextText }),
     answer: a.answer,
+    ...(a.turns === undefined ? {} : { turns: a.turns }),
     error: a.error,
     timings: {
       ttftMs: a.ttftMs,
@@ -280,6 +283,16 @@ function why(r: Scored): string {
         `ungrounded claim: ${(r.scores.ungrounded ?? []).map((t) => (/^(number|description) /.test(t) ? t : `named “${t}”`)).join(', ')}, not in what it was given`,
       )
     else if (reason === 'false claim') parts.push(`false claim: said what ${(r.scores.falseClaims ?? []).map((p) => `/${p}/`).join(', ')} catches`)
+    else if (reason === 'edit claimed, none made')
+      parts.push(`edit claimed, none made: turn ${(r.answered.turns ?? []).findIndex((t) => t.claimsEditWithout) + 1} says an edit waits, and it made none`)
+    else if (reason === 'count does not match reads')
+      parts.push(
+        `count does not match reads: ${(r.answered.turns ?? [])
+          .filter((t) => (t.shown ?? 0) !== t.reads.length)
+          .map((t) => `“Looked through ${t.shown ?? 0}”, read ${t.reads.length}`)
+          .join('; ')}`,
+      )
+    else if (reason === 'applied edit suggested again') parts.push('applied edit suggested again: a later turn suggests what was already applied')
     else if (reason === 'wrong route')
       parts.push(`wrong route: router said ${String((r.answered.router as { kind?: unknown } | null)?.kind)}`)
     else parts.push(`error: ${r.answered.error ?? ''}`)

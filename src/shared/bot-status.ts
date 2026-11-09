@@ -54,19 +54,26 @@ export function statusPhrases(job: Pick<BotJob, 'state' | 'steps' | 'text' | 'la
   return running === undefined ? THINKING[job.lang] : forStep(running, job.lang)
 }
 
-/** The folded steps card: "Looked through 12 notes", «Просмотрел 12 заметок», else the number of steps. */
-export function stepsSummary(steps: readonly BotStep[]): string {
+/**
+ * The folded steps card: "Looked through 12 notes", «Просмотрел 12 заметок» - notes opened in full
+ * only. With none opened, the notes it only saw summaries of (`skimmed`): "Skimmed 4 notes". Else the
+ * number of steps.
+ */
+export function stepsSummary(steps: readonly BotStep[], skimmed = 0): string {
   const ru = steps.some((s) => /\p{Script=Cyrillic}/u.test(s.action))
-  // "12 notes", «12 заметок», a scope read "31/31", a note opened.
+  // "12 notes", «12 заметок», a scope read "31/31"; and each note opened, once however often.
   const count = (step: BotStep): number =>
-    Number(/(\d+)\s+(?:notes?|заметк\p{L}*)/u.exec(step.result)?.[1] ?? /^\d+\/(\d+)$/.exec(step.result)?.[1]) ||
-    (step.kind === 'open' && step.state === 'done' ? 1 : 0)
-  const notes = steps.reduce((sum, step) => sum + count(step), 0)
+    Number(/(\d+)\s+(?:notes?|заметк\p{L}*)/u.exec(step.result)?.[1] ?? /^\d+\/(\d+)$/.exec(step.result)?.[1]) || 0
+  const opened = new Set(steps.filter((s) => s.kind === 'open' && s.state === 'done').map((s) => s.subject ?? s.result))
+  const notes = steps.filter((s) => s.kind !== 'open').reduce((sum, step) => sum + count(step), 0) + opened.size
   if (ru)
     return notes > 0
       ? `Просмотрел ${notes} ${plural(notes, 'заметку', 'заметки', 'заметок')}`
-      : `${steps.length} ${plural(steps.length, 'шаг', 'шага', 'шагов')}`
+      : skimmed > 0
+        ? `Пролистал ${skimmed} ${plural(skimmed, 'заметку', 'заметки', 'заметок')}`
+        : `${steps.length} ${plural(steps.length, 'шаг', 'шага', 'шагов')}`
   if (notes > 0) return `Looked through ${notes} ${notes === 1 ? 'note' : 'notes'}`
+  if (skimmed > 0) return `Skimmed ${skimmed} ${skimmed === 1 ? 'note' : 'notes'}`
   return `${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`
 }
 

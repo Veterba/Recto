@@ -317,9 +317,13 @@
   border-bottom: 1px solid var(--border);
   line-height: 1.55;
 }
-.quick-ask__thinking {
+.quick-ask__thinking,
+.quick-ask__no-edit {
   margin: 0;
   color: var(--text-muted);
+}
+.quick-ask__no-edit {
+  font-size: var(--font-size-12);
 }
 .quick-ask__turn {
   display: flex;

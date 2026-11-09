@@ -19,7 +19,8 @@ import type { BotHarness, BotModelStatus, BotSettings } from '../../shared/bots'
 import { AI_ACCESS_STATE, coerceAiAccess } from '../../shared/ai-access'
 import { isCloudModel, providerInfo, providerOf } from '../../shared/providers'
 import { readState } from '../state'
-import { closeSession, openSession } from '../vault-tools'
+import { closeSession, openSession, recordOf } from '../vault-tools'
+import { proposal } from '../vault-tools/proposals'
 import { run as runProvider } from '../providers'
 import { ProviderError } from '../providers/run'
 import { chatSystem, forCloud } from '../providers/prompts'
@@ -249,7 +250,7 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
     .slice(-2)
     .flatMap((m) => m.sources ?? [])
 
-  if (isCloudModel(job.model)) return runCloudJob(job, controls, d, bot, topic, forCloud(turns, excluded), started)
+  if (isCloudModel(job.model)) return runCloudJob(job, controls, d, bot, topic, forCloud(turns, excluded, (id) => proposal(id)?.status ?? null), started)
 
   const harness: BotHarness = d.settings().harness
   const provider = d.providerFor(job.model)
@@ -368,6 +369,7 @@ async function runCloudJob(
     model: job.model,
     sources: sources(),
     ...(steps.length > 0 ? { steps } : {}),
+    record: recordOf(session),
     ...(final ? {} : { job: job.id }),
     ...(final && first > 0 ? { ttftMs: Math.round(first - started) } : {}),
     ...(final ? { totalMs: Math.round(performance.now() - started) } : {}),

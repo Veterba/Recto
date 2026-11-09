@@ -249,7 +249,7 @@ describe('Sign in with ChatGPT', () => {
 const sse = (events: unknown[]): string => events.map((e) => `event: x\ndata: ${JSON.stringify(e)}\n\n`).join('')
 
 describe('the Responses API with Recto’s tools', () => {
-  const session = { id: 's', client: 't', tools: null, notes: null, writable: null, seen: new Set<string>() }
+  const session = { id: 's', client: 't', tools: null, notes: null, writable: null, seen: new Set<string>(), record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
   const run = (plan = true) =>
     toolLoop(responsesModel('gpt-test', { token: async () => 'tok', plan }, VAULT_TOOLS), {
       model: 'chatgpt:gpt-test',

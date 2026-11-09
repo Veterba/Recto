@@ -135,12 +135,33 @@ export async function callTool(name: string, rawArgs: unknown, client: string, s
   session?.onCall?.({ n, tool: name, args, phase: 'start' })
   const outcome = await run(def.write, name, args, who, session, entry)
   session?.onCall?.({ n, tool: name, args, phase: 'end', ok: outcome.ok, ...(outcome.ok ? {} : { error: outcome.error }) })
-  if (session !== null && outcome.ok)
+  if (session !== null && outcome.ok) {
     for (const b of outcome.blocks) if (b.kind === 'note' && b.part !== 'diff') session.seen.add(b.path)
+    noteInRecord(session, name, outcome.blocks)
+  }
   return outcome
 }
 
 let calls = 0
+
+/** The guide is not a note the answer is about. */
+const NOT_A_READ = new Set(['get_ai_guide'])
+/** Tools that give a file's or a canvas's content as data, with its path. */
+const FILE_READS = new Set(['read_file', 'canvas_read'])
+
+/**
+ * A call into the answer's record: a note's whole text (a block with no part), a file or a canvas
+ * is a read; a summary, snippet or excerpt is a skim; a write that made a proposal adds its id.
+ */
+function noteInRecord(session: ToolSession, name: string, blocks: ResultBlock[]): void {
+  for (const b of blocks) {
+    const data = b.kind === 'data' ? (b.data as { path?: unknown; proposal_id?: unknown } | null) : null
+    if (b.kind === 'note' && b.part === undefined && !NOT_A_READ.has(name)) session.record.read.add(b.path)
+    else if (b.kind === 'note' && b.part !== 'diff' && b.part !== undefined) session.record.skimmed.add(b.path)
+    else if (FILE_READS.has(name) && typeof data?.path === 'string') session.record.read.add(data.path)
+    else if (typeof data?.proposal_id === 'string') session.record.proposals.push(data.proposal_id)
+  }
+}
 
 async function run(
   isWrite: boolean,
@@ -169,4 +190,4 @@ async function run(
 }
 
 export { ToolError }
-export { openSession, closeSession, type ToolSession } from './sessions'
+export { openSession, closeSession, recordOf, type ToolSession } from './sessions'

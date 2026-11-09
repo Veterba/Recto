@@ -6,6 +6,7 @@
  */
 
 import type { AiMessage } from './ai'
+import type { AnswerRecord } from './answer-record'
 import type { ProviderProblem } from './providers'
 import type { BotLook, BotPersonality } from './bot-presets'
 import { CHATS_FOLDER } from './recto-paths'
@@ -69,6 +70,8 @@ export type MessageMeta = {
   sources?: BotSource[]
   /** What the bot did on the way to an answer. */
   steps?: BotStep[]
+  /** What it really read and suggested (shared/answer-record.ts): given back to a cloud model with later questions. */
+  record?: AnswerRecord
   /** Milliseconds to the first token, and to the end. */
   ttftMs?: number
   totalMs?: number

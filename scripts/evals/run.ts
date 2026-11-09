@@ -28,6 +28,7 @@ import {
 
 /**
  * npm run bots:eval [-- --vault <path>] [--cases <file>] [--only <kind>] [--model <tag>] [--label "<label>"] [--why "<reason>"]
+ * npm run bots:eval -- --quick-ask --model claude-code|codex [--label "<label>"]
  *
  * Puts every case to Recto through the app itself - the built app, started
  * with no window on a scratch copy of the vault, the same vault search, prompt
@@ -40,6 +41,9 @@ import {
  * ("Eval <run id>", store.ts), its raw data goes to the vault's hidden
  * .recto/evals/, and it is added to the index and the eval log there.
  * --evals-vault <path> writes them to another vault (tests, a copy).
+ *
+ * --quick-ask runs the quick-ask cases instead, through Quick ask with a cloud
+ * provider, turn by turn (main/providers/quick-ask-eval.ts): no Ollama.
  */
 
 const OLLAMA = 'http://127.0.0.1:11434'
@@ -234,7 +238,9 @@ async function main(): Promise<void> {
   const model = flag('--model') ?? 'qwen3.5:9b'
   const label = flag('--label') ?? 'run'
   const only = flag('--only') as Kind | undefined
-  const cases = loaded.cases.filter((c) => only === undefined || c.kind === only)
+  const quick = args.includes('--quick-ask')
+  // Quick ask cases need a conversation with a cloud provider: they run only with --quick-ask, and alone.
+  const cases = loaded.cases.filter((c) => (only === undefined || c.kind === only) && (c.kind === 'quick-ask') === quick)
   if (cases.length === 0) throw new Error(`No cases${only === undefined ? '' : ` of kind ${only}`}.`)
   if (!fixture && path.resolve(vaultArg).startsWith(path.resolve(ROOT))) throw new Error('--vault must be a vault outside the repo.')
 
@@ -245,12 +251,12 @@ async function main(): Promise<void> {
   if (battery !== null && !args.includes('--force')) throw new Error(`${battery} Timings would be wrong; charge first, or pass --force.`)
 
   // The model: installed, and alone in memory - every other model is unloaded first.
-  const version = (await ollama<{ version: string }>('/api/version'))?.version ?? null
-  if (version === null) throw new Error('Ollama is not running. Open the Ollama app, or run `ollama serve`.')
-  const tags = (await ollama<{ models: { name: string }[] }>('/api/tags'))?.models.map((m) => m.name) ?? []
-  if (!tags.includes(model.includes(':') ? model : `${model}:latest`))
+  const version = quick ? null : ((await ollama<{ version: string }>('/api/version'))?.version ?? null)
+  if (version === null && !quick) throw new Error('Ollama is not running. Open the Ollama app, or run `ollama serve`.')
+  const tags = quick ? [] : ((await ollama<{ models: { name: string }[] }>('/api/tags'))?.models.map((m) => m.name) ?? [])
+  if (!quick && !tags.includes(model.includes(':') ? model : `${model}:latest`))
     throw new Error(`${model} is not installed. Pull it first: ollama pull ${model}`)
-  const loadedNow = (await ollama<{ models: { name: string }[] }>('/api/ps'))?.models.map((m) => m.name) ?? []
+  const loadedNow = quick ? [] : ((await ollama<{ models: { name: string }[] }>('/api/ps'))?.models.map((m) => m.name) ?? [])
   for (const other of loadedNow.filter((n) => n !== model)) await ollama('/api/generate', { model: other, keep_alive: 0 })
   // The model itself too: one left loaded for hours under memory pressure is partly paged out and runs
   // at a third of its speed. Loaded fresh, the timings are the model's, not the swap's.
@@ -259,13 +265,15 @@ async function main(): Promise<void> {
   // A Mac that is throttling (a flat battery, heat) runs the model at a tenth
   // of its speed, and every timing in the report would be wrong. Measured
   // first, kept in the report, and too slow stops the run unless --force.
-  const bench = await ollama<{ eval_count: number; eval_duration: number }>('/api/generate', {
-    model,
-    prompt: 'Count from 1 to 40, comma separated.',
-    stream: false,
-    think: false,
-    options: { num_predict: 120 },
-  })
+  const bench = quick
+    ? null
+    : await ollama<{ eval_count: number; eval_duration: number }>('/api/generate', {
+        model,
+        prompt: 'Count from 1 to 40, comma separated.',
+        stream: false,
+        think: false,
+        options: { num_predict: 120 },
+      })
   const speed = bench === null || bench.eval_duration === 0 ? null : bench.eval_count / (bench.eval_duration / 1e9)
   console.log(`Speed check: ${speed?.toFixed(1) ?? '?'} tokens/s`)
   if (speed !== null && speed < MIN_SPEED && !args.includes('--force'))
@@ -289,18 +297,33 @@ async function main(): Promise<void> {
         return [k!.trim(), v!.trim() === 'on' || v!.trim() === 'true']
       }),
   )
+  const quickJob = {
+    vault,
+    model,
+    out,
+    quickAsk: true,
+    cases: cases.map((c) => ({
+      id: c.id,
+      note: c.note ?? '',
+      turns: [{ question: c.question, applyFirst: false }, ...(c.followUps ?? [])],
+    })),
+  }
   fs.writeFileSync(
     jobPath,
-    JSON.stringify({
-      vault,
-      model,
-      out,
-      ...(loaded.today === null ? {} : { today: loaded.today }),
-      harness,
-      // Cards and loose-task readings carried from run to run (by content hash and model), outside the repo and the vault.
-      cache: path.join(os.tmpdir(), 'recto-eval-cache', `${fixture ? 'fixture' : 'vault'}-${modelSlug(model)}.json`),
-      cases: cases.map((c) => ({ id: c.id, messages: conversationOf(c) })),
-    }),
+    JSON.stringify(
+      quick
+        ? quickJob
+        : {
+            vault,
+            model,
+            out,
+            ...(loaded.today === null ? {} : { today: loaded.today }),
+            harness,
+            // Cards and loose-task readings carried from run to run (by content hash and model), outside the repo and the vault.
+            cache: path.join(os.tmpdir(), 'recto-eval-cache', `${fixture ? 'fixture' : 'vault'}-${modelSlug(model)}.json`),
+            cases: cases.map((c) => ({ id: c.id, messages: conversationOf(c) })),
+          },
+    ),
   )
 
   fs.mkdirSync(path.join(os.tmpdir(), 'recto-eval-cache'), { recursive: true })

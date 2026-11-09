@@ -1,11 +1,12 @@
-import type { AiMessage } from '../../shared/ai'
+import { withRecords, type RecordedMessage } from '../../shared/answer-record'
 import type { QuickAskEvent } from '../../shared/quick-ask'
 import { parseNote } from '../../shared/parse'
 import { providerInfo, providerOf } from '../../shared/providers'
 import type { BotModelProvider } from '../bots/provider'
 import { ask } from '../vault-tools/read'
 import { buildScope, readNote, titleOf } from '../vault-tools/scope'
-import { closeSession, openSession } from '../vault-tools'
+import { closeSession, openSession, recordOf } from '../vault-tools'
+import { proposal } from '../vault-tools/proposals'
 import { run } from '.'
 import { canvasContext, canvasTitle } from '../vault-tools/canvas-context'
 import { quickAskCanvasSystem, quickAskSystem } from './prompts'
@@ -43,7 +44,11 @@ const CONTEXT_TOKENS = 3000
 const running = new Map<string, AbortController>()
 
 /** `note`: the open note, or the open canvas; `selection`: the canvas's selected node ids (none: the whole canvas). */
-export type QuickAskRequest = { thread: string; note: string; model: string; history: AiMessage[]; question: string; selection?: string[] }
+export type QuickAskRequest = { thread: string; note: string; model: string; history: RecordedMessage[]; question: string; selection?: string[] }
+
+/** The conversation with the question last (`asked`: as sent), each answer's record opening the message after it. */
+const conversationOf = (request: QuickAskRequest, asked: string) =>
+  withRecords([...request.history, { role: 'user', content: asked }], (id) => proposal(id)?.status ?? null)
 
 /** The note and its neighbours, as far as AI may see them; null when the note itself is excluded. */
 async function reach(note: string): Promise<{ path: string; notes: Set<string> } | null> {
@@ -85,13 +90,13 @@ export async function quickAsk(request: QuickAskRequest, local: BotModelProvider
     const question = `The open note and its links:\n\n${context}\n\n---\n\n${request.question}`
     const system = await quickAskSystem(session, titleOf(reached.path))
     for await (const event of run(
-      { model: request.model, system, messages: [...request.history, { role: 'user', content: question }], session, signal: controller.signal },
+      { model: request.model, system, messages: conversationOf(request, question), session, signal: controller.signal },
       local,
     ))
       emit(event.type === 'text' ? { thread: request.thread, type: 'text', text: event.text } : { thread: request.thread, type: 'steps', steps: event.steps })
-    emit({ thread: request.thread, type: controller.signal.aborted ? 'cancelled' : 'done', sources: [...session.seen] })
+    emit({ thread: request.thread, type: controller.signal.aborted ? 'cancelled' : 'done', sources: [...session.seen], record: recordOf(session) })
   } catch (err) {
-    if (controller.signal.aborted) emit({ thread: request.thread, type: 'cancelled', sources: [...session.seen] })
+    if (controller.signal.aborted) emit({ thread: request.thread, type: 'cancelled', sources: [...session.seen], record: recordOf(session) })
     else
       emit({
         thread: request.thread,
@@ -133,13 +138,13 @@ async function askAboutCanvas(
     const question = `${context.text}\n\n---\n\n${request.question}`
     const system = await quickAskCanvasSystem(session, canvasTitle(request.note))
     for await (const event of run(
-      { model: request.model, system, messages: [...request.history, { role: 'user', content: question }], session, signal: controller.signal },
+      { model: request.model, system, messages: conversationOf(request, question), session, signal: controller.signal },
       local,
     ))
       emit(event.type === 'text' ? { thread: request.thread, type: 'text', text: event.text } : { thread: request.thread, type: 'steps', steps: event.steps })
-    emit({ thread: request.thread, type: controller.signal.aborted ? 'cancelled' : 'done', sources: [...session.seen] })
+    emit({ thread: request.thread, type: controller.signal.aborted ? 'cancelled' : 'done', sources: [...session.seen], record: recordOf(session) })
   } catch (err) {
-    if (controller.signal.aborted) emit({ thread: request.thread, type: 'cancelled', sources: [...session.seen] })
+    if (controller.signal.aborted) emit({ thread: request.thread, type: 'cancelled', sources: [...session.seen], record: recordOf(session) })
     else
       emit({
         thread: request.thread,

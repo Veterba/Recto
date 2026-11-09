@@ -210,7 +210,8 @@ export async function noteContext(scope: Scope, a: Args): Promise<ResultBlock[]>
       related: shown,
       omitted: related.length - shown.length,
     }),
-    noteBlock(p, excerpt, 'excerpt'),
+    // The whole note when it fits: then it is a read, not an excerpt.
+    excerpt.length < content.length ? noteBlock(p, excerpt, 'excerpt') : noteBlock(p, excerpt),
     ...blocks,
   ]
 }

@@ -14,11 +14,14 @@ export function StepsCard({
   steps,
   running,
   fresh = false,
+  skimmed = 0,
 }: {
   steps: readonly BotStep[]
   running: boolean
   /** Just folded, on the answer's first words: the found beat. */
   fresh?: boolean
+  /** Notes it only saw a summary or an excerpt of: "Skimmed 4 notes" when it opened none. */
+  skimmed?: number
 }): React.ReactElement | null {
   // Open while the steps run; after that, the user's choice.
   const [open, setOpen] = useState(false)
@@ -26,7 +29,7 @@ export function StepsCard({
   if (!running && !open) {
     return (
       <button className={`bot-steps--folded${fresh ? ' is-fresh' : ''}`} onClick={() => setOpen(true)} aria-expanded="false">
-        {stepsSummary(steps)}
+        {stepsSummary(steps, skimmed)}
         <Icon name="chevron-right" size={12} />
       </button>
     )

@@ -9,6 +9,7 @@ const answer: BotMessage = {
   model: 'qwen3.5:9b',
   sources: [{ path: 'Garden/Soil.md', heading: 'Mix' }],
   steps: [{ action: 'Searching notes', result: '“Soil -- mix”', state: 'done' }],
+  record: { read: ['Garden/Soil.md'], skimmed: ['Garden/Beds.md'], proposals: ['a274352a'] },
   ttftMs: 812,
   totalMs: 2400,
 }

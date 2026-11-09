@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { claimsPendingEdit, type AnswerRecord } from '@shared/answer-record'
 import type { BotMessage, BotStep } from '@shared/bots'
 import { createdStamp } from '@shared/chat-topics'
 import { IPC, IPC_EVENT } from '@shared/ipc'
@@ -35,6 +36,8 @@ type Turn = {
   model?: string
   steps?: BotStep[]
   sources?: string[]
+  /** What the answer really read and suggested: goes back with later questions. */
+  record?: AnswerRecord
   problem?: ProviderProblem
   /** Still answering. */
   live?: boolean
@@ -126,7 +129,7 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
                 ? { ...last, steps: event.steps }
                 : event.type === 'error'
                   ? { ...last, problem: event.problem, live: false }
-                  : { ...last, sources: event.sources, live: false }
+                  : { ...last, sources: event.sources, record: event.record, live: false }
           return [...prev.slice(0, -1), next]
         })
       }),
@@ -148,8 +151,10 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
     (asked: string): boolean => {
       const question = asked.trim()
       if (question === '' || note === null || model === null || live || !ready) return false
-      // Earlier turns as said; only the new question carries the note's text (main adds it).
-      const history = turns.filter((t) => t.problem === undefined && t.content !== '').map(({ role, content }) => ({ role, content }))
+      // Earlier turns as said, each answer with its record; only the new question carries the note's text (main adds it).
+      const history = turns
+        .filter((t) => t.problem === undefined && t.content !== '')
+        .map(({ role, content, record }) => ({ role, content, ...(record === undefined ? {} : { record }) }))
       const at = createdStamp(new Date())
       setTurns((prev) => [
         ...prev,
@@ -184,6 +189,7 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
         ...(t.model === undefined ? {} : { model: t.model }),
         ...(t.steps === undefined || t.steps.length === 0 ? {} : { steps: t.steps }),
         ...(t.sources === undefined ? {} : { sources: t.sources.map((path) => ({ path, heading: null })) }),
+        ...(t.record === undefined ? {} : { record: t.record }),
       }))
     const saved = await api.invoke(IPC.botsSaveThread, { botId: 'recto', messages })
     if (!saved.ok) {
@@ -258,7 +264,7 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
                   <p className="quick-ask__q">{turn.content}</p>
                 ) : (
                   <div className="quick-ask__a">
-                    {turn.steps !== undefined && <StepsCard steps={turn.steps} running={turn.live === true && turn.content === ''} />}
+                    {turn.steps !== undefined && <StepsCard steps={turn.steps} running={turn.live === true && turn.content === ''} skimmed={turn.record?.skimmed.length ?? 0} />}
                     {turn.content !== '' && (
                       <Markdown
                         text={turn.content}
@@ -272,6 +278,9 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
                     )}
                     {turn.live === true && turn.content === '' && (turn.steps ?? []).length === 0 && (
                       <p className="quick-ask__thinking">Reading…</p>
+                    )}
+                    {turn.record !== undefined && turn.record.proposals.length === 0 && claimsPendingEdit(turn.content) && (
+                      <p className="quick-ask__no-edit">No edit was created</p>
                     )}
                     {turn.problem !== undefined && <ProblemLine problem={turn.problem} />}
                   </div>

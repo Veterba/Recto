@@ -22,6 +22,7 @@ export const KINDS = [
   'review',
   'advice',
   'edit-request',
+  'quick-ask',
   'private',
 ] as const
 
@@ -45,7 +46,23 @@ export type Case = {
   rubric?: string[]
   /** expectNotes proposed by Claude, waiting for the user to confirm: listed in the report. */
   proposed?: boolean
+  /** Quick ask (`--quick-ask`): the note it is asked about, and the questions after the first. */
+  note?: string
+  followUps?: FollowUp[]
 }
+
+/** A later question; `applyFirst`: the suggestions so far are applied before it is asked, as the person would. */
+export type FollowUp = { question: string; applyFirst: boolean }
+
+const followUps = (value: unknown): FollowUp[] =>
+  Array.isArray(value)
+    ? value.flatMap((v): FollowUp[] => {
+        if (typeof v === 'string') return v.trim() === '' ? [] : [{ question: v.trim(), applyFirst: false }]
+        const r = (typeof v === 'object' && v !== null ? v : {}) as Record<string, unknown>
+        const question = text(r['question'] ?? r['ask'])
+        return question === null ? [] : [{ question, applyFirst: r['applyFirst'] === true }]
+      })
+    : []
 
 /** `snapshot`: the frozen vault the cases were written against (a folder in ~/Recto-eval-vaults). */
 export type CaseFile = { today: string | null; snapshot: string | null; cases: Case[] }
@@ -105,6 +122,8 @@ function normalise(raw: unknown, index: number, prefix: string): Case | null {
     ...(Array.isArray(r['forbidClaims']) ? { forbidClaims: list(r['forbidClaims']) } : {}),
     ...(Array.isArray(r['rubric']) ? { rubric: list(r['rubric']) } : {}),
     ...(r['proposed'] === true ? { proposed: true } : {}),
+    ...(text(r['note']) === null ? {} : { note: text(r['note'])! }),
+    ...(Array.isArray(r['followUps']) ? { followUps: followUps(r['followUps']) } : {}),
   }
 }
 
