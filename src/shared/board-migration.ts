@@ -1,5 +1,5 @@
 import { parseFrontmatter, removeField } from './frontmatter'
-import { LEGACY_TASKS_FOLDER } from './recto-paths'
+import { boardFile, boardFolder, NEW_NOTE_FOLDER_KEY } from './recto-paths'
 import { addLane, boardText, insertItem, isKanban, parseKanban, rectoSettings, type NewLane } from './kanban'
 
 /**
@@ -16,11 +16,6 @@ import { addLane, boardText, insertItem, isKanban, parseKanban, rectoSettings, t
  * name is taken until the person has chosen another.
  */
 
-/**
- * Where migrated boards go: beside their cards in the old flat folder, which
- * the layout migration (main/layout-migration.ts) then moves into Recto/.
- */
-const BOARDS_FOLDER = LEGACY_TASKS_FOLDER
 /** The lane for cards whose status names no column, at the end of their board. */
 export const UNKNOWN_LANE = 'Unknown status'
 /** The keys a card no longer carries. */
@@ -210,9 +205,12 @@ export function planMigration(boardsJson: unknown, notes: readonly MigrationNote
       ...(Object.keys(laneLooks).length > 0 ? { lanes: laneLooks } : {}),
       ...(board.widgets === undefined ? {} : { widgets: board.widgets }),
     }
+    // Straight into its own folder in Recto/Boards, as a board made today is.
+    // It used to go to the old flat tasks/ for the layout migration to move;
+    // in a vault that migration had already run in, it stayed in the root.
     plan.creates.push({
-      path: `${BOARDS_FOLDER}/${name}.md`,
-      text: boardText(lanes, { 'metadata-keys': METADATA_KEYS, recto }),
+      path: boardFile(name),
+      text: boardText(lanes, { 'metadata-keys': METADATA_KEYS, recto, [NEW_NOTE_FOLDER_KEY]: boardFolder(name) }),
       board: board.id,
       cards: list.length,
     })

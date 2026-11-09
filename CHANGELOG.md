@@ -4,6 +4,12 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.59.4 — 2026-11-09
+### Fixed
+- A `tasks` folder no longer appears in the root of the vault. When the boards migration ran again in a vault already in today's layout - its record lost, or an old boards.json synced back - it made its board in `tasks/` and left it there. Boards it makes now go straight into `Recto/Boards/<Board>/`.
+- A migration's record that iCloud renamed to "… 2.json" still counts, so the migration does not run again and strip `board:` keys from notes.
+- A file Recto makes itself - a card, a chat, a note brought back by Undo - shows in the file tree at once.
+
 ## v0.59.3 — 2026-11-09
 ### Changed
 - Words written in the overview are how far the vault's words moved: everything that is in the vault counts, whoever wrote it - you, an AI, a paste - and deleting or archiving takes words off, so a day can show "−120 today".

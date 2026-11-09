@@ -700,6 +700,10 @@ If any target is taken it stops and writes nothing. Each move is announced to th
 `note-renamed` before the reindex, so history carries over. Links resolve by name and mostly need no
 change; only a link whose target would otherwise change, or that spells a path that no longer
 exists, is rewritten (`mapLinkTargets` in `link-rewrite.ts`). Boards it moves get `new-note-folder`.
+The boards migration, which runs before it, writes its boards straight into `Recto/Boards/<Board>/`
+(with `new-note-folder`), never into `tasks/`: in a vault whose layout migration is long done, a
+board made there stayed in the root. Both, and the chats migration, count an iCloud copy of their
+record (`boards-migration 2.json`) as the record (`main/migration-record.ts`), so none runs twice.
 
 ## On disk
 
