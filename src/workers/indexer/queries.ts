@@ -437,7 +437,8 @@ export function overview(days: readonly string[]): OverviewIndex {
 
   return {
     notes: one(`SELECT COUNT(*) AS n FROM notes WHERE ${NOT_RECTO_OWN('path')}`),
-    words: one(`SELECT COALESCE(SUM(words), 0) AS n FROM notes WHERE ${NOT_RECTO_OWN('path')}`),
+    // Every word in the vault: words written are how far this moves, whoever moved it.
+    words: one('SELECT COALESCE(SUM(words), 0) AS n FROM notes'),
     links: one(`SELECT COUNT(*) AS n FROM links WHERE ${NOT_RECTO_OWN('source_path')}`),
     tags: one(`SELECT COUNT(DISTINCT tag) AS n FROM tags WHERE ${NOT_RECTO_OWN('path')}`),
     oldest: (handle.prepare('SELECT MIN(note_date) AS d FROM notes').get() as { d: string | null }).d,

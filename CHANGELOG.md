@@ -4,6 +4,15 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.59.3 — 2026-11-09
+### Changed
+- Words written in the overview are how far the vault's words moved: everything that is in the vault counts, whoever wrote it - you, an AI, a paste - and deleting or archiving takes words off, so a day can show "−120 today".
+- The overview's Words total counts every note, boards and their cards and chats included. Obsidian's `%%comments%%` are left out, a board's settings among them. The index is rebuilt once to recount.
+- Time in Recto is counted per vault and kept in the vault: the installed app and a development build add to the same figure, and other vaults' time no longer shows. It starts again from today.
+
+### Fixed
+- The vault's word count for a day kept starting over with each count, so a day's change was always zero.
+
 ## v0.59.2 — 2026-11-08
 ### Changed
 - In a table cell, ⌥← ⌥→ move by word and ⌥⇧← ⌥⇧→ select by word, as in any Mac text. Moving a column is now ⌃⌥← ⌃⌥→ (⌥↑ ⌥↓ still move the row).

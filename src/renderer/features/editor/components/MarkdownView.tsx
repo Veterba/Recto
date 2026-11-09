@@ -175,8 +175,7 @@ function MarkdownEditor({
   const save = useCallback(
     async (next: string): Promise<boolean> => {
       setStatus('saving')
-      // What the file said before this save - read, or last written here - is
-      // what the save is measured against for the words it added.
+      // What the file said before this save, put back if the save fails.
       const before = lastWritten.current
       lastWritten.current = next
       saving.current++
@@ -189,7 +188,7 @@ function MarkdownEditor({
         // the graph. Self-writes are suppressed in the watcher, so nothing else
         // would ever tell it.
         noteIndexChanged()
-        noteEdited(path, before ?? undefined, next)
+        noteEdited(path)
         return true
       }
       // The text stays in the editor and stays unsaved, so the next keystroke,

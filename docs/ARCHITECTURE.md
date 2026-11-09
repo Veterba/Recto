@@ -721,7 +721,7 @@ In the vault:
 | `.obsidian/app.json` | Obsidian's own settings; Recto reads the link settings from it and writes only `alwaysUpdateLinks`, on "Always update" | Obsidian |
 | `.recto/link-settings.json` | the same three link settings for a vault with no `.obsidian/` folder | `main/link-context.ts` |
 | `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive`, `canvas` (folds), `canvas-links` (link previews), `canvas-notes` (last folder for "Make it a note") | `main/state.ts` |
-| `.recto/stats/edits.json`, `.recto/stats/words.json` | the vault overview's history: per day, the notes you edited (editor saves, card edits and moves you made; backfilled once from version history) and the words you wrote (`written`: per day and note, the words your saves brought in and kept, as `{ word: count }` - a save's deletions take back that day's words first, `shared/overview.ts applyWords`; read in once from version history); and the vault's total words, first and last count, with the counting rule (`rule`; a day counted under an older rule starts again). Every write reads, merges and replaces the file whole; an iCloud conflict copy (`edits 2.json`) is merged in and removed on the next read | `main/overview.ts` |
+| `.recto/stats/edits.json`, `.recto/stats/words.json`, `.recto/stats/active.json` | the vault overview's history, kept in the vault so every build and Mac that opens it adds to the same counts: per day, the notes you edited (editor saves, card edits and moves you made; backfilled once from version history); the vault's total words - every note, boards, cards and chats too, `%%comments%%` left out - first and last count, with the counting rule (`rule`; a day counted under an older rule starts again), and the last count taken again each time the overview reads, so words written are how far the total moved (`shared/overview.ts wordsChange`); and seconds active in Recto with this vault open, written once a minute and on a switch or quit. Every write reads, merges and replaces the file whole; an iCloud conflict copy (`edits 2.json`) is merged in and removed on the next read (time by the larger per day) | `main/overview.ts` |
 | `.recto/index.db` | SQLite (WAL): the index, tasks, version snapshots, usage events, topic vectors, the bots' piece vectors, note cards and tasks read from plain text, the files each canvas puts on it (`canvases`, `canvas_nodes`, `canvas_edges`), every other file with its creation time (`files`) | indexer, embedder |
 | `.recto/archive/` | archived files until retention runs out | `main/archive.ts` |
 | `.recto/.gitignore` | keeps `index.db`, `.trash/` and `archive/` out of git | written once |
@@ -730,7 +730,7 @@ Topics are written into notes as `topics: ["[[topics/Name]]"]`; a topic has no f
 
 Outside the vault, in the app-data folder (`~/Library/Application Support/Recto/`):
 `app-state.json` (last and recent vaults, where the vault overview was left), `overview-usage.json`
-(seconds active in Recto per day; per vault, when each note was last opened), `secrets.bin` (the API key, encrypted with Electron
+(per vault, when each note was last opened), `secrets.bin` (the API key, encrypted with Electron
 `safeStorage`), `obsidian-sync.json` and `obsidian-sync/` (pairings and sync manifests), `models/`
 (the embedding model).
 

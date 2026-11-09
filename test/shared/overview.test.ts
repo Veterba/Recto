@@ -20,15 +20,10 @@ import {
   streak,
   todayChange,
   weekStart,
-  applyWords,
-  mergeWritten,
-  wordDiff,
-  writtenBetween,
-  writtenFromSnapshots,
-  writtenOn,
+  wordsChange,
+  wordsSince,
   WORDS_RULE,
   type WordsDay,
-  type Written,
 } from '../../src/shared/overview'
 
 /** The vault overview's sums: what each figure on the page is made of. */
@@ -84,108 +79,6 @@ describe('notes touched', () => {
   })
 })
 
-describe('words written: the words you added that day and kept', () => {
-  const words = (n: number, from = 0): string => Array.from({ length: n }, (_, i) => `w${from + i}`).join(' ')
-  /** A note saved again and again on one day, as the editor does. */
-  function note(start: string, day = '2026-10-19') {
-    let written = {}
-    let text = start
-    return {
-      save(next: string): void {
-        written = applyWords(written, day, 'A.md', wordDiff(text, next))
-        text = next
-      },
-      count: (): number => writtenOn(written, day),
-    }
-  }
-
-  it('each word typed counts, and each of them deleted again comes off', () => {
-    const n = note('')
-    n.save('one two three four five six seven eight nine ten')
-    expect(n.count()).toBe(10)
-    n.save('one two three four five six seven')
-    expect(n.count()).toBe(7)
-    n.save('one two three four five six seven eight')
-    expect(n.count()).toBe(8)
-    n.save('')
-    expect(n.count()).toBe(0)
-  })
-
-  it('paste 500 and delete 800 that were there before: 500 written, never below zero', () => {
-    const old = words(800, 1000)
-    const n = note(old)
-    n.save(`${old} ${words(500)}`)
-    n.save(words(500))
-    expect(n.count()).toBe(500)
-    n.save('')
-    expect(n.count()).toBe(0)
-  })
-
-  it('a word changed counts one; text moved counts nothing', () => {
-    const changed = note('the cat sat')
-    changed.save('the dog sat')
-    expect(changed.count()).toBe(1)
-    const moved = note('one two\n\nthree four')
-    moved.save('three four\n\none two')
-    expect(moved.count()).toBe(0)
-  })
-
-  it('deleting older text and getting it back in a later save - undo, or the paste after a cut - writes nothing', () => {
-    const old = words(50)
-    const undone = note(old)
-    undone.save('')
-    undone.save(old)
-    expect(undone.count()).toBe(0)
-    const cut = note('one two\n\nthree four')
-    cut.save('three four')
-    cut.save('three four\n\none two')
-    expect(cut.count()).toBe(0)
-    // Typing after it still counts.
-    cut.save('three four\n\none two five')
-    expect(cut.count()).toBe(1)
-  })
-
-  it('a deletion of older words survives a merge of the two copies of the file', () => {
-    let written = applyWords({}, '2026-10-19', 'A.md', wordDiff('old words here', ''))
-    written = mergeWritten({}, written)
-    written = applyWords(written, '2026-10-19', 'A.md', wordDiff('', 'old words here'))
-    expect(writtenOn(written, '2026-10-19')).toBe(0)
-  })
-
-  it("Recto's own writes and other apps' never count: no words in, none out", () => {
-    // A board move, a completed stamp: noteEdited without texts sends an empty change.
-    expect(applyWords({}, '2026-10-19', 'tasks/Board.md', { added: [], removed: [] })).toEqual({})
-    expect(wordDiff('Body.', 'Body.')).toEqual({ added: [], removed: [] })
-  })
-
-  it('the week sums its days; two copies of the file merge word by word by the larger, never the sum', () => {
-    const written = {
-      '2026-10-12': { 'A.md': { a: 100 } },
-      '2026-10-14': { 'A.md': { a: 20 }, 'B.md': { b: 30 } },
-      '2026-10-20': { 'A.md': { a: 999 } },
-    }
-    expect(writtenBetween(written, '2026-10-12', '2026-10-18')).toBe(150)
-    expect(mergeWritten(written, { '2026-10-14': { 'A.md': { a: 25, c: 1 } } })['2026-10-14']).toEqual({ 'A.md': { a: 25, c: 1 }, 'B.md': { b: 30 } })
-    expect(mergeWritten(written, written)).toEqual(written)
-  })
-
-  it('read off version history: each version against the one before, only on days the note was yours', () => {
-    const at = (day: string, hour: number): number => new Date(`${day}T${String(hour).padStart(2, '0')}:00:00`).getTime()
-    const rows = [
-      { path: 'A.md', ts: at('2026-10-18', 9), body: 'first copy the index took' },
-      { path: 'A.md', ts: at('2026-10-18', 10), body: 'first copy the index took and five more words here' },
-      { path: 'A.md', ts: at('2026-10-18', 11), body: 'first copy the index took and five more' },
-      { path: 'A.md', ts: at('2026-10-19', 10), body: 'and five' },
-      { path: 'B.md', ts: at('2026-10-19', 9), body: 'other' },
-      { path: 'B.md', ts: at('2026-10-19', 11), body: 'other app wrote all of this' },
-    ]
-    // B changed that day, but not by you: not in edits. A: five typed, two taken back.
-    const written = writtenFromSnapshots(rows, { '2026-10-18': ['A.md'], '2026-10-19': ['A.md'] })
-    expect(writtenOn(written, '2026-10-18')).toBe(3)
-    expect(writtenOn(written, '2026-10-19')).toBe(0)
-  })
-})
-
 describe("the vault's total words, by rule", () => {
   const w = (start: number, end: number, rule?: number): WordsDay => ({ start, startAt: 1, end, endAt: 2, ...(rule === undefined ? {} : { rule }) })
 
@@ -204,6 +97,34 @@ describe("the vault's total words, by rule", () => {
 
   it('two copies under different rules: the newer rule stands alone', () => {
     expect(mergeWords({ '2026-10-19': w(100, 120) }, { '2026-10-19': w(90, 95, WORDS_RULE) })['2026-10-19']).toEqual(w(90, 95, WORDS_RULE))
+  })
+})
+
+describe('words written: how far the vault\'s words moved', () => {
+  const w = (start: number, end: number, rule = WORDS_RULE): WordsDay => ({ start, startAt: 1, end, endAt: 2, rule })
+
+  it('the week runs from the last count before Monday to the last count in it; today from yesterday\'s end', () => {
+    // Sunday ended at 1,000; Monday and Wednesday were counted; today, Thursday, stands at 1,240.
+    const words = { '2026-10-18': w(950, 1000), '2026-10-19': w(1010, 1100), '2026-10-21': w(1100, 1180), '2026-10-22': w(1180, 1240) }
+    expect(wordsChange(words, '2026-10-19', '2026-10-22')).toBe(240)
+    // Typed after Sunday's last count still lands in Monday.
+    expect(wordsChange(words, '2026-10-19', '2026-10-19')).toBe(100)
+    expect(wordsChange(words, '2026-10-22', '2026-10-22')).toBe(60)
+    // A day nothing was counted: no change to show.
+    expect(wordsChange(words, '2026-10-20', '2026-10-20')).toBeNull()
+  })
+
+  it('deleting, archiving or anyone else\'s words move it too: it can go below zero', () => {
+    const words = { '2026-10-21': w(500, 500), '2026-10-22': w(500, 380) }
+    expect(wordsChange(words, '2026-10-22', '2026-10-22')).toBe(-120)
+    expect(todayChange(wordsChange(words, '2026-10-22', '2026-10-22'))).toEqual({ text: '−120 today', tone: 'down' })
+  })
+
+  it('counting that began inside the range starts from its first count; days under an old rule are left out', () => {
+    const words = { '2026-10-17': w(9000, 9100, 2), '2026-10-21': w(16_700, 16_750), '2026-10-22': w(16_750, 16_800) }
+    expect(wordsChange(words, '2026-10-19', '2026-10-22')).toBe(100)
+    expect(wordsSince(words)).toBe('2026-10-21')
+    expect(wordsChange({}, '2026-10-19', '2026-10-22')).toBeNull()
   })
 })
 
@@ -312,6 +233,12 @@ describe('words in a note', () => {
     expect(noteWords('![[image.png]] https://example.com/a/b <!-- hidden words here -->')).toBe(0)
     expect(noteWords('- [ ] Задача на завтра\n| a | b |')).toBe(5)
   })
+
+  it("leaves Obsidian's %%comments%% out, a board's settings block among them; counts a board's lines", () => {
+    expect(noteWords('Seen %%not seen%% here\n%%\nnor this\n%%')).toBe(2)
+    const board = '## To do\n\n- [ ] [[Write the post]]\n\n%% kanban:settings\n```\n{"kanban-plugin":"board"}\n```\n%%'
+    expect(noteWords(board)).toBe(5)
+  })
 })
 
 describe('today’s change', () => {
@@ -325,11 +252,6 @@ describe('today’s change', () => {
   it('nothing today is no label at all, never "+0"', () => {
     expect(todayChange(0)).toBeNull()
     expect(todayChange(null)).toBeNull()
-  })
-  it('words today are what you added, so never below zero', () => {
-    const written = { '2026-10-18': { 'A.md': { '#': 1240 } } }
-    expect(todayChange(writtenOn(written, '2026-10-18'))).toEqual({ text: '+1,240 today', tone: 'up' })
-    expect(todayChange(writtenOn(written, '2026-10-19'))).toBeNull()
   })
 })
 
@@ -345,12 +267,3 @@ describe('display', () => {
   })
 })
 
-describe('words that are also names on every object', () => {
-  it('counts "constructor" like any other word', () => {
-    let written: Written = {}
-    written = applyWords(written, '2026-10-29', 'A.md', wordDiff('', 'The constructor builds it.'))
-    expect(written['2026-10-29']!['A.md']).toEqual({ the: 1, constructor: 1, builds: 1, it: 1 })
-    expect(writtenOn(written, '2026-10-29')).toBe(4)
-    expect(writtenOn(mergeWritten(written, written), '2026-10-29')).toBe(4)
-  })
-})

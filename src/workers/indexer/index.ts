@@ -92,8 +92,8 @@ export function writeNote(relative: string, content: string, mtime: number, size
   const date = noteDate(relative, parsed.frontmatter, mtime)
   handle
     .prepare('UPDATE notes SET note_date = ?, written = ?, words = ? WHERE path = ?')
-    // A board's lines are links to its cards, not writing: it adds nothing to the vault's words (WORDS_RULE 2).
-    .run(date, writtenDate(relative, parsed.frontmatter), isKanban(content) ? 0 : noteWords(parsed.body), relative)
+    // Every note's words, a board's too (WORDS_RULE 3); its settings block is a comment, and comments are not words.
+    .run(date, writtenDate(relative, parsed.frontmatter), noteWords(parsed.body), relative)
   writeTasks(relative, parsed, date, isKanban(content))
 
   // Child rows are rewritten wholesale rather than diffed: a note is small, and
@@ -583,13 +583,6 @@ function handle(request: IndexRequest): IndexResponse {
       return { kind: 'overview-result', overview: overview(request.days) }
     case 'words-total':
       return { kind: 'words-total-result', words: (requireDb().prepare('SELECT COALESCE(SUM(words), 0) AS n FROM notes').get() as { n: number }).n }
-    case 'snapshot-contents': {
-      const read = requireDb().prepare('SELECT path, ts, content FROM snapshots WHERE path = ? ORDER BY ts')
-      return {
-        kind: 'snapshot-contents-result',
-        rows: request.paths.flatMap((p) => read.all(p) as { path: string; ts: number; content: string }[]),
-      }
-    }
     case 'snapshot-times':
       return { kind: 'snapshot-times-result', rows: requireDb().prepare('SELECT path, ts FROM snapshots').all() as { path: string; ts: number }[] }
     case 'link-sources':

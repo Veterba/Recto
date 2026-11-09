@@ -417,6 +417,16 @@ export const MIGRATIONS: readonly Migration[] = [
       SELECT 1;
     `,
   },
+  {
+    version: 20,
+    name: 'every-note-words',
+    sql: `
+      -- No schema change. Every note's words count now, a board's too, and
+      -- %%comments%% do not (shared/overview.ts WORDS_RULE 3); the next open
+      -- recounts every note, so the vault's total is right at once.
+      SELECT 1;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

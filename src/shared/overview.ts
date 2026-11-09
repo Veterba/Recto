@@ -18,7 +18,7 @@ export type Day = string
 /** What the index answers, in one query (workers/indexer/queries.ts `overview`). */
 export type OverviewIndex = {
   notes: number
-  /** Words in every note, Markdown and frontmatter stripped (`noteWords`). */
+  /** Words in every note of the vault - boards, cards and chats too - Markdown, frontmatter and comments stripped (`noteWords`). */
   words: number
   links: number
   tags: number
@@ -54,13 +54,9 @@ export type OverviewData = {
   edits: Record<Day, string[]>
   /** The first day edits were counted from: the earliest backfilled day, or the day counting began. */
   editsSince: Day | null
-  /** The vault's total words per day, first and last count (`.recto/stats/words.json`). */
+  /** The vault's total words per day, first and last count (`.recto/stats/words.json`); today's last is now. */
   words: Record<Day, WordsDay>
-  /** Words you wrote per day, by note: what your saves added (`edits.json`). */
-  written: Written
-  /** The first day words written were counted from. */
-  writtenSince: Day | null
-  /** Seconds active in Recto, per day (userData). */
+  /** Seconds active in Recto in this vault, per day (`.recto/stats/active.json`), whichever build or Mac. */
   active: Record<Day, number>
   activeSince: Day | null
   /** When "last opened" started being recorded for this vault, epoch ms. */
@@ -128,6 +124,8 @@ export function monthsBack(day: Day, months: number): Day | null {
 // --- words --------------------------------------------------------------------
 
 const WIKILINK = /(!?)\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g
+/** Obsidian's `%%comment%%`, inline or over lines: not shown, so not words - a board's settings block is one. */
+const OBSIDIAN_COMMENT = /%%[\s\S]*?%%/g
 const MD_LINK = /(!?)\[([^\]]*)\]\([^)\n]*\)/g
 const URL = /\bhttps?:\/\/\S+/g
 
@@ -143,144 +141,52 @@ export function noteWords(body: string): number {
 export function wordTokens(body: string): string[] {
   const text = body
     .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(OBSIDIAN_COMMENT, ' ')
     .replace(WIKILINK, (_m, bang: string, target: string, alias?: string) => (bang === '!' ? ' ' : ` ${alias ?? target} `))
     .replace(MD_LINK, (_m, bang: string, label: string) => (bang === '!' ? ' ' : ` ${label} `))
     .replace(URL, ' ')
   return text.match(/[\p{L}\p{N}][\p{L}\p{N}'’_-]*/gu) ?? []
 }
 
-/** What a save changed in a note's words, as a multiset: words that came in, words that went. Lowercased. */
-export type WordDiff = { added: string[]; removed: string[] }
-
-/** The words of the new body the old did not have, and the other way round. Bodies only - the frontmatter is not writing. */
-export function wordDiff(beforeBody: string, afterBody: string): WordDiff {
-  const count = (body: string): Map<string, number> => {
-    const out = new Map<string, number>()
-    for (const word of wordTokens(body)) out.set(word.toLowerCase(), (out.get(word.toLowerCase()) ?? 0) + 1)
-    return out
-  }
-  const before = count(beforeBody)
-  const after = count(afterBody)
-  const added: string[] = []
-  const removed: string[] = []
-  for (const [word, n] of after) for (let i = (before.get(word) ?? 0); i < n; i++) added.push(word)
-  for (const [word, n] of before) for (let i = (after.get(word) ?? 0); i < n; i++) removed.push(word)
-  return { added, removed }
-}
-
-/**
- * The words you wrote, per day and note: the words your saves added that day
- * and that are still there - a multiset, `{ word: how many }`. A word you
- * typed and deleted again is taken back off; a word that was in the note
- * before you started that day can be deleted without taking anything off,
- * so the count is never below zero. Moving text changes nothing.
- *
- * A count below zero is a word that was there before today and has been
- * deleted today: it adds nothing to the day, and the same word coming back
- * - an undo, the paste after a cut, each in its own autosave - cancels it
- * instead of counting as written.
- * A day read in from older records, which knew only a number, keeps it under
- * `#` - no word can be `#`.
- */
-export type Written = Record<Day, Record<string, Record<string, number>>>
-const OLD_COUNT = '#'
-
-/**
- * A word's count, 0 when it has none. Own keys only: `constructor` is a word
- * too, and `words['constructor']` on a plain object is Object's constructor,
- * which turned the day's total into a string.
- */
-const countOf = (words: Record<string, number>, word: string): number => (Object.hasOwn(words, word) ? words[word]! : 0)
-
-/**
- * One save's change folded into its note's day: its deletions take back what
- * you wrote that day (or are kept below zero, for words from before), then its
- * additions count - or first cancel those.
- */
-export function applyWords(written: Written, day: Day, path: string, diff: WordDiff): Written {
-  if (diff.added.length === 0 && diff.removed.length === 0) return written
-  const words = { ...written[day]?.[path] }
-  for (const word of diff.removed) words[word] = countOf(words, word) - 1
-  for (const word of diff.added) words[word] = countOf(words, word) + 1
-  for (const word of Object.keys(words)) if (words[word] === 0) delete words[word]
-  const notes = { ...written[day] }
-  if (Object.keys(words).length === 0) delete notes[path]
-  else notes[path] = words
-  const out = { ...written }
-  if (Object.keys(notes).length === 0) delete out[day]
-  else out[day] = notes
-  return out
-}
-
-/** A count from before words were kept one by one, as a day's record. */
-export const oldCount = (n: number): Record<string, number> => ({ [OLD_COUNT]: n })
-
-/**
- * Two copies of the record, from two copies of the file: each word's count is
- * the larger, never the sum. A word only one copy has keeps its count, below
- * zero too.
- */
-export function mergeWritten(a: Written, b: Written): Written {
-  const out: Written = { ...a }
-  for (const [day, notes] of Object.entries(b)) {
-    const mergedNotes = { ...out[day] }
-    for (const [path, words] of Object.entries(notes)) {
-      const merged = { ...mergedNotes[path] }
-      for (const [word, n] of Object.entries(words)) merged[word] = Object.hasOwn(merged, word) ? Math.max(merged[word]!, n) : n
-      mergedNotes[path] = merged
-    }
-    out[day] = mergedNotes
-  }
-  return out
-}
-
-/** Words written in a note on a day: the words above zero (below zero are deletions of older words). */
-const noteCount = (words: Record<string, number>): number => Object.values(words).reduce((a, b) => a + Math.max(0, b), 0)
-
-/** Words you wrote on a day; 0 for a day with none. */
-export const writtenOn = (written: Written, day: Day): number => Object.values(written[day] ?? {}).reduce((sum, words) => sum + noteCount(words), 0)
-
-export function writtenBetween(written: Written, from: Day, to: Day): number {
-  let sum = 0
-  for (let day = from; day <= to; day = addDays(day, 1)) sum += writtenOn(written, day)
-  return sum
-}
-
-/**
- * Words written, read off version history: each version of a note you edited
- * that day against the one before it, folded in as a save would be. A note's
- * first version ever is where history began, not something written.
- */
-export function writtenFromSnapshots(
-  rows: readonly { path: string; ts: number; body: string }[],
-  edits: Readonly<Record<Day, readonly string[]>>,
-): Written {
-  const byPath = new Map<string, { ts: number; body: string }[]>()
-  for (const row of rows) byPath.set(row.path, [...(byPath.get(row.path) ?? []), row])
-  let out: Written = {}
-  for (const [path, versions] of byPath) {
-    versions.sort((a, b) => a.ts - b.ts)
-    for (let i = 1; i < versions.length; i++) {
-      const day = dayOf(new Date(versions[i]!.ts))
-      if (!(edits[day] ?? []).includes(path)) continue
-      out = applyWords(out, day, path, wordDiff(versions[i - 1]!.body, versions[i]!.body))
-    }
-  }
-  return out
-}
-
 /**
  * How the vault's total is counted. A day counted under another rule is not
  * compared with one counted under this: its count starts again.
  * 1: every note's words. 2: board notes left out (their lines are links, not writing).
+ * 3: every note again - boards, cards, chats - with `%%comments%%` left out.
  */
-export const WORDS_RULE = 2
+export const WORDS_RULE = 3
 
 /** Fold one count of the vault's words into the file's day. A day counted under another rule starts again from this count. */
 export function recordWords(words: Record<Day, WordsDay>, day: Day, total: number, at: number, rule = WORDS_RULE): Record<Day, WordsDay> {
   const old = words[day]
   const fresh = { start: total, startAt: at, end: total, endAt: at, rule }
   return { ...words, [day]: old === undefined || (old.rule ?? 1) !== rule ? fresh : { ...old, end: total, endAt: at } }
+}
+
+const counted = (words: Record<Day, WordsDay>): Day[] =>
+  Object.keys(words)
+    .filter((day) => (words[day]!.rule ?? 1) === WORDS_RULE)
+    .sort()
+
+/** The first day the vault's words were counted under the current rule, or null. */
+export function wordsSince(words: Record<Day, WordsDay>): Day | null {
+  return counted(words)[0] ?? null
+}
+
+/**
+ * Words written over `from`..`to`: how far the vault's total moved - whoever
+ * wrote it, you, an AI or a paste; deleting and archiving take words off, so
+ * it can be below zero. Measured from the last count before `from` (or, when
+ * counting began inside the range, the first count in it) to the last count
+ * up to `to`. Null when no day in the range was counted.
+ */
+export function wordsChange(words: Record<Day, WordsDay>, from: Day, to: Day): number | null {
+  const days = counted(words)
+  const inside = days.filter((day) => day >= from && day <= to)
+  if (inside.length === 0) return null
+  const before = days.filter((day) => day < from).at(-1)
+  const start = before !== undefined ? words[before]!.end : words[inside[0]!]!.start
+  return words[inside.at(-1)!]!.end - start
 }
 
 // --- edits --------------------------------------------------------------------
@@ -343,16 +249,6 @@ export function mergeWords(a: Record<Day, WordsDay>, b: Record<Day, WordsDay>): 
 export function moveEdits(edits: Record<Day, string[]>, from: string, to: string): Record<Day, string[]> {
   const out: Record<Day, string[]> = {}
   for (const [day, paths] of Object.entries(edits)) out[day] = [...new Set(paths.map((p) => movedPath(p, from, to)))].sort()
-  return out
-}
-
-export function moveWritten(written: Written, from: string, to: string): Written {
-  const out: Written = {}
-  for (const [day, notes] of Object.entries(written)) {
-    let moved: Written = { [day]: {} }
-    for (const [p, words] of Object.entries(notes)) moved = mergeWritten(moved, { [day]: { [movedPath(p, from, to)]: words } })
-    out[day] = moved[day]!
-  }
   return out
 }
 

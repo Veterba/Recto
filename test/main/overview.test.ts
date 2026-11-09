@@ -5,13 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * What the vault overview keeps: `.recto/stats/` in the vault (merged with any
- * iCloud conflict copy, written whole), and the usage file in userData.
+ * iCloud conflict copy, written whole) - edits, the vault's words, time spent -
+ * and "last opened" in userData.
  */
 
 let vault = ''
 let userData = ''
 let snapshotRows: { path: string; ts: number }[] = []
-let snapshotContents: { path: string; ts: number; content: string }[] = []
 let words = 0
 vi.mock('electron', () => ({ app: { on: () => undefined, getPath: () => userData } }))
 vi.mock('../../src/main/vault', () => ({ currentVault: () => (vault === '' ? null : { path: vault, name: 'v' }) }))
@@ -21,7 +21,6 @@ vi.mock('../../src/main/topics/service', () => ({ linkSources: async () => [] })
 vi.mock('../../src/main/index-client', () => ({
   send: async (request: { kind: string }) => {
     if (request.kind === 'snapshot-times') return { kind: 'snapshot-times-result', rows: snapshotRows }
-    if (request.kind === 'snapshot-contents') return { kind: 'snapshot-contents-result', rows: snapshotContents }
     if (request.kind === 'words-total') return { kind: 'words-total-result', words }
     if (request.kind === 'overview') return { kind: 'overview-result', overview: { words, written: [], linked: [] } }
     throw new Error(`unexpected ${request.kind}`)
@@ -42,11 +41,10 @@ beforeEach(() => {
   vault = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-overview-vault-'))
   userData = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-overview-user-'))
   snapshotRows = []
-  snapshotContents = []
   words = 0
 })
 afterEach(async () => {
-  await overview.flushEdits()
+  await overview.flushStats()
   for (const dir of [vault, userData]) fs.rmSync(dir, { recursive: true, force: true })
 })
 
@@ -69,9 +67,7 @@ describe('the vault stats files', () => {
     const data = await overview.overviewData('2026-10-18', 1000)
     expect(data?.editsSince).toBe('2026-10-18')
     expect(data?.words).toEqual({ '2026-10-18': { start: 321, startAt: 1000, end: 321, endAt: 1000, rule: WORDS_RULE } })
-    // Words written are counted from today: nothing yet, and no net change of any total.
-    expect(data?.written).toEqual({})
-    expect(data?.writtenSince).toBe('2026-10-18')
+    expect(data?.active).toEqual({})
     expect(data?.activeSince).toBe('2026-10-18')
   })
 
@@ -105,52 +101,50 @@ describe('the vault stats files', () => {
     fs.rmSync(first, { recursive: true, force: true })
   })
 
-  it('saves keep the words you added that day; deleting them takes them off; a save with none is still an edit', async () => {
-    overview.recordEdit('a.md', '2026-10-19', { added: ['one', 'two', 'three'], removed: [] })
-    overview.recordEdit('a.md', '2026-10-19', { added: [], removed: ['two'] })
-    overview.recordEdit('tasks/Board.md', '2026-10-19')
-    await overview.flushEdits()
-    overview.recordEdit('a.md', '2026-10-19', { added: ['four'], removed: ['old'] })
-    await overview.flushEdits()
-    const edits = readJson('edits.json')
-    expect(edits['days']).toEqual({ '2026-10-19': ['a.md', 'tasks/Board.md'] })
-    // `old` was there before the day: kept below zero, so it adds nothing yet cancels its own return.
-    expect(edits['written']).toEqual({ '2026-10-19': { 'a.md': { one: 1, three: 1, four: 1, old: -1 } } })
-    // Read back in, the deletion survives, and the old word coming back writes nothing.
-    overview.recordEdit('a.md', '2026-10-19', { added: ['old'], removed: [] })
-    await overview.flushEdits()
-    expect(readJson('edits.json')['written']).toEqual({ '2026-10-19': { 'a.md': { one: 1, three: 1, four: 1 } } })
+  it("each read takes the vault's words now as the day's last count: words written are how far it moved", async () => {
+    put('words.json', { days: { '2026-10-19': { start: 100, startAt: 1, end: 110, endAt: 2, rule: WORDS_RULE } } })
+    // An AI answer, a paste, a sync: no save of yours, and still words in the vault.
+    words = 130
+    const data = await overview.overviewData('2026-10-19', 3)
+    expect(data?.words['2026-10-19']).toEqual({ start: 100, startAt: 1, end: 130, endAt: 3, rule: WORDS_RULE })
+    expect((readJson('words.json')['days'] as Record<string, { end: number }>)['2026-10-19']?.end).toBe(130)
+    // Archived or deleted: the words leave the vault, and the day's count goes down with them.
+    words = 90
+    expect((await overview.overviewData('2026-10-19', 4))?.words['2026-10-19']?.end).toBe(90)
   })
 
-  it("backfills words written once from version history: your notes' versions only, boards left out, then counts from there", async () => {
-    const at = (h: number): number => new Date(`2026-10-19T${String(h).padStart(2, '0')}:00:00`).getTime()
-    put('edits.json', { since: '2026-10-19', backfilled: true, days: { '2026-10-19': ['a.md', 'tasks/B.md'] } })
-    snapshotContents = [
-      { path: 'a.md', ts: at(9), content: '---\nx: 1\n---\nhello' },
-      { path: 'a.md', ts: at(10), content: '---\nx: 2\n---\nhello there world' },
-      { path: 'tasks/B.md', ts: at(9), content: '---\nkanban-plugin: board\n---\n## A' },
-      { path: 'tasks/B.md', ts: at(10), content: '---\nkanban-plugin: board\n---\n## A\n- [ ] [[Lots of words here]]' },
-    ]
-    await overview.backfillWritten('2026-10-19')
-    expect(readJson('edits.json')).toMatchObject({
-      written: { '2026-10-19': { 'a.md': { there: 1, world: 1 } } },
-      writtenSince: '2026-10-19',
-      writtenBackfilled: true,
-    })
-    snapshotContents = [{ path: 'a.md', ts: at(11), content: 'many many more words that must not be read in twice' }]
-    await overview.backfillWritten('2026-10-19')
-    expect(readJson('edits.json')['written']).toEqual({ '2026-10-19': { 'a.md': { there: 1, world: 1 } } })
+  it('time in Recto is kept in the vault it was spent in, written in a batch', async () => {
+    overview.recordActive('2026-10-19', 30)
+    overview.recordActive('2026-10-19', 30)
+    // Not written yet, and still counted on the page.
+    expect(fs.existsSync(stats('active.json'))).toBe(false)
+    expect((await overview.overviewData('2026-10-19', 1))?.active).toEqual({ '2026-10-19': 60 })
+    const first = vault
+    vault = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-overview-other-'))
+    overview.recordActive('2026-10-19', 30)
+    // The switch wrote the first vault's time there; the other vault has only its own.
+    expect(JSON.parse(fs.readFileSync(path.join(first, '.recto', 'stats', 'active.json'), 'utf8'))).toEqual({ since: '2026-10-19', days: { '2026-10-19': 60 } })
+    overview.flushActive()
+    expect(readJson('active.json')).toEqual({ since: '2026-10-19', days: { '2026-10-19': 30 } })
+    fs.rmSync(first, { recursive: true, force: true })
   })
 
-  it("an earlier build's plain numbers are read in again, word by word, once", async () => {
-    const at = (h: number): number => new Date(`2026-10-19T${String(h).padStart(2, '0')}:00:00`).getTime()
-    put('edits.json', { since: '2026-10-19', backfilled: true, writtenBackfilled: true, days: { '2026-10-19': ['a.md'] }, written: { '2026-10-19': { 'a.md': 12 } } })
-    snapshotContents = [
-      { path: 'a.md', ts: at(9), content: 'hello' },
-      { path: 'a.md', ts: at(10), content: 'hello there' },
-    ]
-    await overview.backfillWritten('2026-10-19')
-    expect(readJson('edits.json')).toMatchObject({ written: { '2026-10-19': { 'a.md': { there: 1 } } }, writtenFormat: 2 })
+  it("two Macs' copies of the time merge day by day by the larger, never the sum", async () => {
+    put('active.json', { since: '2026-10-10', days: { '2026-10-17': 600, '2026-10-18': 60 } })
+    put('active 2.json', { since: '2026-10-12', days: { '2026-10-17': 300, '2026-10-19': 120 } })
+    const data = await overview.overviewData('2026-10-19', 1)
+    expect(data?.active).toEqual({ '2026-10-17': 600, '2026-10-18': 60, '2026-10-19': 120 })
+    expect(data?.activeSince).toBe('2026-10-10')
+  })
+
+  it("an older build's leftovers are not read: time kept for every vault at once, words kept per save", async () => {
+    fs.writeFileSync(path.join(userData, 'overview-usage.json'), JSON.stringify({ active: { '2026-10-18': 9999 }, activeSince: '2026-10-01', opened: {} }))
+    put('edits.json', { since: '2026-10-19', backfilled: true, days: {}, written: { '2026-10-19': { 'a.md': { hello: 1 } } }, writtenSince: '2026-10-19' })
+    const data = await overview.overviewData('2026-10-19', 1)
+    expect(data?.active).toEqual({})
+    overview.recordEdit('a.md', '2026-10-19')
+    await overview.flushEdits()
+    expect(readJson('edits.json')).toEqual({ since: '2026-10-19', backfilled: true, days: { '2026-10-19': ['a.md'] } })
   })
 
   it('a rename carries the note’s days and its last opening with it', async () => {

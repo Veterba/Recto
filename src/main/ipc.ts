@@ -119,7 +119,6 @@ function rewatch(): void {
       // Edits before counting began, from version history, once; and the
       // day's first word count, taken before anything is typed into it.
       await overview.backfillEdits().catch((err: unknown) => console.error('[overview]', err))
-      await overview.backfillWritten(overview.todayHere()).catch((err: unknown) => console.error('[overview]', err))
       await overview.countWords(overview.todayHere())
     })
     .then(() => topics.start())
@@ -160,7 +159,7 @@ function moveAuthorship(from: string, to: string): void {
 
 export function registerIpc(): void {
   // Edits still waiting for their batch are written before the app goes.
-  app.on('before-quit', () => void overview.flushEdits())
+  app.on('before-quit', () => void overview.flushStats())
   handle(IPC.appStartupState, () => {
     const state = startupState()
     if (state.kind === 'ready') rewatch()
@@ -185,6 +184,8 @@ export function registerIpc(): void {
     // Wind the open vault down first: its watcher, index and sync must not keep
     // running against a vault that is no longer on screen.
     const previous = currentVault()
+    // What the overview counted here is written to this vault, not the next.
+    void overview.flushStats()
     stopWatching()
     topics.stop()
     stopIndexer()
@@ -196,6 +197,7 @@ export function registerIpc(): void {
     return result
   })
   handle(IPC.vaultClose, () => {
+    void overview.flushStats()
     stopWatching()
     topics.stop()
     stopIndexer()
@@ -524,10 +526,8 @@ export function registerIpc(): void {
   })
   handle(IPC.overviewData, (today, now) => overview.overviewData(today, now).catch(() => null))
   handle(IPC.overviewTopics, () => overview.overviewTopics().catch(() => null))
-  handle(IPC.overviewEdited, (p, day, added, removed) => {
-    // From the renderer: kept to lists of words, whatever came.
-    const words = (list: unknown): string[] => (Array.isArray(list) ? list.filter((w): w is string => typeof w === 'string') : [])
-    overview.recordEdit(p, day, { added: words(added), removed: words(removed) })
+  handle(IPC.overviewEdited, (p, day) => {
+    overview.recordEdit(p, day)
     return { ok: true }
   })
   handle(IPC.overviewOpened, (p, at) => {

@@ -286,7 +286,7 @@ export function useBoardCards(path: string): {
         }
         noteIndexChanged()
         // A field or a stamp adds no words; text typed in the panel does.
-        noteEdited(cardPath, read.content, next)
+        noteEdited(cardPath)
         return true
       }
       // One at a time per card note: two edits close together (the notes

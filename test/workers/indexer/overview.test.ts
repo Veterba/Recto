@@ -69,12 +69,14 @@ describe('vault overview from the index', () => {
     expect(overview([])).toMatchObject({ notes: 2, words: 6 + 4, links: 1, tags: 2 })
   })
 
-  it("a board note's lines are links to its cards, not writing: it adds no words", () => {
+  it("every word in the vault counts, a board's lines too; its settings block is a comment, and is not", () => {
     vault({
       'A.md': '# A\n\nOne two three',
-      'tasks/Board.md': '---\nkanban-plugin: board\n---\n\n## To do\n\n- [ ] [[A]]\n- [ ] Buy stamps\n',
+      'tasks/Board.md':
+        '---\nkanban-plugin: board\n---\n\n## To do\n\n- [ ] [[A]]\n- [ ] Buy stamps\n\n%% kanban:settings\n```\n{"kanban-plugin":"board"}\n```\n%%\n',
     })
-    expect(overview([]).words).toBe(4)
+    // A: "A One two three"; the board: "To do", "A", "Buy stamps".
+    expect(overview([]).words).toBe(9)
   })
 
   it('lists cards with a due date, done when their board has them in its done lane', () => {
