@@ -4,6 +4,24 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.60.0 — 2026-11-10
+### Added
+- Each answer from a cloud provider - in Quick ask and in the chat - keeps a record of what it really did: the notes it read in full, the ones it only skimmed, and the edits it suggested. The model gets it back with every later question, so it no longer takes back a read or an edit that happened, and does not suggest an applied edit again.
+- Quick ask says when an answer claims an edit waits for Apply and none was made: "No edit was created".
+- An eval for Quick ask (`npm run bots:eval -- --quick-ask --model claude-code`): conversations about one note, turn by turn, with suggestions applied between turns as a person would.
+
+### Changed
+- "Looked through N notes" counts the notes the answer read in full, each once; with none, "Skimmed N notes". A note cut short, a summary, a search hit or a PDF page range is skimmed, not read.
+- An answer's sources are the notes it read in full, not every search hit it saw.
+- "Review the suggested edit" in Quick ask shows while one of the conversation's suggestions waits for Apply, and goes when it is applied or discarded.
+- A stopped Quick ask answer is marked "Stopped", is left out of the next question, and is saved as interrupted.
+- Eval results, fixture runs too, are written only to the vault set by `RECTO_EVALS_VAULT`, never to the repo.
+
+### Fixed
+- Quick ask no longer sends an earlier answer that used a note excluded since to a cloud provider.
+- The AI guide is no longer given to AI when its folder is excluded.
+- A Quick ask question that could not be sent ends with a message instead of answering forever.
+
 ## v0.59.4 — 2026-11-09
 ### Fixed
 - A `tasks` folder no longer appears in the root of the vault. When the boards migration ran again in a vault already in today's layout - its record lost, or an old boards.json synced back - it made its board in `tasks/` and left it there. Boards it makes now go straight into `Recto/Boards/<Board>/`.

@@ -20,6 +20,7 @@ import { AI_ACCESS_STATE, coerceAiAccess } from '../../shared/ai-access'
 import { isCloudModel, providerInfo, providerOf } from '../../shared/providers'
 import { readState } from '../state'
 import { closeSession, openSession, recordOf } from '../vault-tools'
+import { sourcesOf } from '../../shared/answer-record'
 import { proposal } from '../vault-tools/proposals'
 import { run as runProvider } from '../providers'
 import { ProviderError } from '../providers/run'
@@ -361,7 +362,7 @@ async function runCloudJob(
   let text = ''
   let steps: BotStep[] = []
   let first = 0
-  const sources = (): BotSource[] => [...session.seen].map((path) => ({ path, heading: null }))
+  const sources = (): BotSource[] => sourcesOf(recordOf(session)).map((path) => ({ path, heading: null }))
   const turn = (final: boolean, interrupted = false): BotMessage => ({
     role: 'assistant',
     content: text,

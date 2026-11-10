@@ -38,9 +38,7 @@ export type QuickTurn = {
   question: string
   answer: string
   appliedFirst: boolean
-  /** "Looked through N notes": N; null when the card says something else. */
-  shown: number | null
-  /** What the activity log shows it read in full. */
+  /** What it read in full, by its record (the steps card counts the same). */
   reads: string[]
   claimsEditWithout: boolean
   proposals: number
@@ -65,7 +63,6 @@ export const REASONS = [
   'claimed an action',
   'false claim',
   'edit claimed, none made',
-  'count does not match reads',
   'applied edit suggested again',
   'too slow',
   'error',
@@ -276,13 +273,18 @@ export function numberClaims(answer: string, contextText: string): string[] {
       const n = scale === 1 || !/^\d+(\.\d+)?$/.test(normal(m[0])) ? normal(m[0]) : String(Number(normal(m[0])) * scale)
       const counts = COUNTED.test(body.slice(m.index! + m[0].length))
       if (n.length < 2 && !counts) continue
-      if (given.has(n)) continue
-      // "2-3 notes a day", "1/2", "1:1": a range, a fraction or a ratio of its own making.
-      if (/^\d[-/:]\d$/.test(n)) continue
-      if (/^\d+(\.\d+)?$/.test(n) && derived(Number(n))) continue
       // "29 сентября", "23 September": a day in words, the context's 2026-09-29.
       const month = monthAround(body, m.index!, m[0].length)
-      if (month !== null && /^\d{1,2}$/.test(n) && isoDays.has(`${month}-${n.padStart(2, '0')}`)) continue
+      const grounded = (v: string): boolean =>
+        given.has(v) ||
+        (/^\d+(\.\d+)?$/.test(v) && derived(Number(v))) ||
+        (month !== null && /^\d{1,2}$/.test(v) && isoDays.has(`${month}-${v.padStart(2, '0')}`))
+      if (grounded(n)) continue
+      // "2-3 notes a day", "1/2", "1:1": a range, a fraction or a ratio of its own making.
+      if (/^\d[-/:]\d$/.test(n)) continue
+      // "26-29 Nov", "10-12 hours": a range is as grounded as its two ends.
+      const range = /^(\d+)-(\d+)$/.exec(n)
+      if (range !== null && grounded(range[1]!) && grounded(range[2]!)) continue
       out.add(m[0])
     }
   }
@@ -389,7 +391,6 @@ export function score(c: Case, a: Answered, vaultTitles: readonly string[] = [])
   if (falseClaims.length > 0) reasons.push('false claim')
   const turns = a.turns ?? []
   if (turns.some((t) => t.claimsEditWithout)) reasons.push('edit claimed, none made')
-  if (turns.some((t) => (t.shown ?? 0) !== t.reads.length)) reasons.push('count does not match reads')
   if (turns.some((t) => t.reproposed)) reasons.push('applied edit suggested again')
   const pass = reasons.length === 0
   if (a.totalMs > SLOW_MS && !reasons.includes('too slow')) reasons.push('too slow')

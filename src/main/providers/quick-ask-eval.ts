@@ -3,16 +3,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { AI_ACCESS_STATE, coerceAiAccess } from '../../shared/ai-access'
 import { claimsPendingEdit, type AnswerRecord, type RecordedMessage } from '../../shared/answer-record'
-import { stepsSummary } from '../../shared/bot-status'
+import { diffLines } from '../../shared/line-diff'
 import { parseNote } from '../../shared/parse'
-import type { BotStep } from '../../shared/bots'
-import { VAULT_STATE_DIR } from '../../shared/vault'
 import * as bots from '../bots'
 import { openIndexForVault, send as indexer } from '../index-client'
 import { readState, writeState } from '../state'
 import { openVault } from '../vault'
 import { writeLauncher } from '../vault-tools/launcher'
-import { apply, listProposals, proposal } from '../vault-tools/proposals'
+import { apply, proposal } from '../vault-tools/proposals'
 import { startMcpSocket, stopMcpSocket } from '../vault-tools/socket'
 import { readiness } from '.'
 import { cancelQuickAsk, quickAsk } from './quick-ask'
@@ -42,11 +40,9 @@ export type QuickTurn = {
   answer: string
   /** The earlier answers' suggestions were applied before this question. */
   appliedFirst: boolean
-  /** "Looked through N notes": N; null when the card says something else. */
-  shown: number | null
-  /** Notes and files the activity log shows it read in full (read_note, read_file). */
+  /** Notes and files it read in full, by its record (what the steps card counts). */
   reads: string[]
-  /** It says an edit waits for Apply, and it made none. */
+  /** It says an edit waits for Apply, it made none, and none of the case's waits either. */
   claimsEditWithout: boolean
   proposals: number
   /** It suggests again what an applied suggestion already added. */
@@ -57,37 +53,30 @@ export type QuickTurn = {
 
 const TURN_TIMEOUT_MS = 240_000
 
-/** The lines a suggestion adds. */
+/**
+ * The lines a suggestion adds, line by line against what it replaces (shared/line-diff.ts):
+ * a line added again beside one like it is added too - an applied edit suggested a second
+ * time is exactly that. Short lines (a blank, a "---") say nothing and are left out.
+ */
 const added = (id: string): Set<string> => {
-  const files = proposal(id)?.files ?? []
-  const lines = (text: string | null): string[] =>
-    (text ?? '')
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 3)
-  return new Set(files.flatMap((f) => lines(f.after).filter((l) => !new Set(lines(f.before)).has(l))))
-}
-
-/** Read calls in the activity log since `since`: the notes and files it really read, each once. */
-function readsSince(vault: string, since: number): string[] {
-  const file = path.join(vault, VAULT_STATE_DIR, 'ai-activity.jsonl')
-  if (!fs.existsSync(file)) return []
-  const names = fs
-    .readFileSync(file, 'utf8')
-    .split('\n')
-    .filter((l) => l.trim() !== '')
-    .map((l) => JSON.parse(l) as { at: number; tool: string; args: string; outcome: string })
-    .filter((e) => e.at >= since && e.outcome === 'ok' && (e.tool === 'read_note' || e.tool === 'read_file'))
-    .map((e) => /(?:note|file): ([^,]+)/.exec(e.args)?.[1]?.trim() ?? e.args)
-  return [...new Set(names)]
+  const lines = (text: string | null): string[] => (text ?? '').split('\n').map((l) => l.trim())
+  return new Set(
+    (proposal(id)?.files ?? []).flatMap((f) =>
+      diffLines(lines(f.before), lines(f.after))
+        .filter((d) => d.kind === 'added' && d.text.length > 3)
+        .map((d) => d.text),
+    ),
+  )
 }
 
 export async function runQuickAskEval(job: QuickAskEvalJob): Promise<void> {
+  // Cloud is turned on in the vault for the run: only ever a scratch copy (run.ts makes one in the temp folder).
+  if (!path.resolve(job.vault).startsWith(path.resolve(os.tmpdir()) + path.sep)) throw new Error(`Quick ask evals run on a scratch copy in the temp folder, not ${job.vault}.`)
   const opened = openVault(job.vault)
   if (!opened.ok) throw new Error(`Could not open the eval vault: ${'error' in opened ? opened.error : 'cancelled'}`)
   await openIndexForVault()
-  // The vault is a scratch copy: cloud providers are what this run is for.
-  writeState(AI_ACCESS_STATE, { ...coerceAiAccess(readState(AI_ACCESS_STATE)), cloud: true })
+  const access = readState(AI_ACCESS_STATE)
+  writeState(AI_ACCESS_STATE, { ...coerceAiAccess(access), cloud: true })
   // The CLIs reach Recto's tools through these, as when the app runs.
   writeLauncher()
   await startMcpSocket()
@@ -104,40 +93,40 @@ export async function runQuickAskEval(job: QuickAskEvalJob): Promise<void> {
       const turns: QuickTurn[] = []
       const applied: Set<string>[] = []
       const records: AnswerRecord[] = []
+      /** The case's own suggestions that wait for Apply now. */
+      const waiting = (): string[] => records.flatMap((r) => r.proposals).filter((id) => proposal(id)?.status === 'pending')
       const started = performance.now()
       for (const [i, t] of item.turns.entries()) {
+        // As the person would: this case's suggestions so far, applied - and counted only when they were.
         if (t.applyFirst)
-          for (const p of listProposals().filter((x) => x.status === 'pending')) {
-            applied.push(added(p.id))
-            await apply(p.id)
+          for (const id of waiting()) {
+            const lines = added(id)
+            if ((await apply(id)).ok) applied.push(lines)
           }
-        const at = Date.now()
         const begun = performance.now()
         let text = ''
-        let steps: BotStep[] = []
         let record: AnswerRecord = { read: [], skimmed: [], proposals: [] }
         let error: string | null = null
         const thread = `${item.id}-${i}`
         const timer = setTimeout(() => cancelQuickAsk(thread), TURN_TIMEOUT_MS)
         await quickAsk({ thread, note: item.note, model: job.model, history, question: t.question }, bots.localProvider(), (event) => {
           if (event.type === 'text') text += event.text
-          else if (event.type === 'steps') steps = event.steps
           else if (event.type === 'error') error = event.problem.message
-          else {
+          else if (event.type !== 'steps') {
             record = event.record
             if (event.type === 'cancelled') error = 'timeout'
           }
         })
         clearTimeout(timer)
-        const shown = /^Looked through (\d+)/.exec(stepsSummary(steps, record.skimmed.length))?.[1]
         const again = record.proposals.some((id) => [...added(id)].some((line) => applied.some((lines) => lines.has(line))))
+        // As Quick ask shows it: an edit claimed with none made, and none of the case's waiting.
+        const claimsEditWithout = record.proposals.length === 0 && waiting().length === 0 && claimsPendingEdit(text)
         turns.push({
           question: t.question,
           answer: text,
           appliedFirst: t.applyFirst,
-          shown: shown === undefined ? null : Number(shown),
-          reads: readsSince(job.vault, at),
-          claimsEditWithout: record.proposals.length === 0 && claimsPendingEdit(text),
+          reads: record.read,
+          claimsEditWithout,
           proposals: record.proposals.length,
           reproposed: again,
           error,
@@ -171,5 +160,7 @@ export async function runQuickAskEval(job: QuickAskEvalJob): Promise<void> {
     }
   } finally {
     stopMcpSocket()
+    // The vault's AI settings as they were.
+    writeState(AI_ACCESS_STATE, coerceAiAccess(access))
   }
 }

@@ -54,7 +54,9 @@ export function transcript(messages: AiMessage[]): string {
   const last = messages.at(-1)
   const earlier = messages.slice(0, -1)
   if (earlier.length === 0) return last?.content ?? ''
-  const turns = earlier.map((m) => `<${m.role === 'user' ? 'person' : 'you'}>\n${m.content}\n</${m.role === 'user' ? 'person' : 'you'}>`)
+  // A message that quotes the tags themselves (a note, an earlier answer) cannot open a turn or a record of its own.
+  const inert = (text: string): string => text.replace(/<(\/?)(person|you)>/gi, '‹$1$2›')
+  const turns = earlier.map((m) => `<${m.role === 'user' ? 'person' : 'you'}>\n${inert(m.content)}\n</${m.role === 'user' ? 'person' : 'you'}>`)
   return `The conversation so far:\n\n${turns.join('\n\n')}\n\nThe person now says:\n\n${last?.content ?? ''}`
 }
 

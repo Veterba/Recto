@@ -73,6 +73,7 @@ export async function canvasRead(scope: Scope, a: Args): Promise<ResultBlock[]> 
   return [
     data({
       path: p,
+      whole: true,
       nodes: doc.nodes.map((n) => described(scope, doc, n, ids)),
       edges: doc.edges.map((e) => ({ from: ids.get(e.fromNode), to: ids.get(e.toNode), ...(typeof e.label === 'string' ? { label: e.label } : {}) })),
     }),

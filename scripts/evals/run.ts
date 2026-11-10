@@ -8,8 +8,7 @@ import { conversationOf, readCases, type Case, type Kind } from './cases.ts'
 import { languageOf, score, summarise, type Answered, type Scored } from './metrics.ts'
 import { REPORT_VERSION, gb, pct, renderReport, resultLine, secs, type Harness, type Memory, type RunConfig } from './report.ts'
 import {
-  REAL_VAULT,
-  REPO_STORE,
+  realVault,
   allRuns,
   ROOT,
   appendEvalLog,
@@ -231,7 +230,8 @@ async function main(): Promise<void> {
     (isPrivate() || loaded.snapshot !== null ? (loaded.snapshot === null ? undefined : path.join(SNAPSHOTS, loaded.snapshot)) : undefined)
   if (isPrivate() && vaultArg === undefined)
     throw new Error('The private cases name no snapshot (`snapshot:` in the YAML); pass --vault <snapshot>.')
-  if (vaultArg !== undefined && path.resolve(vaultArg) === path.resolve(REAL_VAULT))
+  const live = process.env['RECTO_EVALS_VAULT']
+  if (vaultArg !== undefined && live !== undefined && path.resolve(vaultArg) === path.resolve(live))
     throw new Error(`Private runs use a frozen snapshot in ${SNAPSHOTS}, not the live vault.`)
   if (vaultArg !== undefined && !fs.existsSync(vaultArg)) throw new Error(`No snapshot at ${vaultArg}.`)
   const fixture = vaultArg === undefined
@@ -244,9 +244,9 @@ async function main(): Promise<void> {
   if (cases.length === 0) throw new Error(`No cases${only === undefined ? '' : ` of kind ${only}`}.`)
   if (!fixture && path.resolve(vaultArg).startsWith(path.resolve(ROOT))) throw new Error('--vault must be a vault outside the repo.')
 
-  // Fixture runs go to the repo (docs/evals); private runs, which hold the user's answers, only to the vault.
-  const evalsVault = path.resolve(flag('--evals-vault') ?? (fixture ? REPO_STORE : REAL_VAULT))
-  const evalsDir = evalsVault === REPO_STORE ? REPO_STORE : findEvalsFolder(evalsVault)
+  // Every run's results go to the vault, fixture runs too - never the repo.
+  const evalsVault = path.resolve(flag('--evals-vault') ?? realVault())
+  const evalsDir = findEvalsFolder(evalsVault)
   const battery = batteryTooLow()
   if (battery !== null && !args.includes('--force')) throw new Error(`${battery} Timings would be wrong; charge first, or pass --force.`)
 

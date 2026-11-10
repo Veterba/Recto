@@ -318,11 +318,11 @@
   line-height: 1.55;
 }
 .quick-ask__thinking,
-.quick-ask__no-edit {
+.quick-ask__aside {
   margin: 0;
   color: var(--text-muted);
 }
-.quick-ask__no-edit {
+.quick-ask__aside {
   font-size: var(--font-size-12);
 }
 .quick-ask__turn {

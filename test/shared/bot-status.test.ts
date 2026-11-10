@@ -38,14 +38,16 @@ describe('status text', () => {
     expect(stepsSummary([{ action: 'Ищу в заметках', result: 'ничего', state: 'done', kind: 'search' }])).toBe('1 шаг')
   })
 
-  it('counts only notes opened in full; with none, the ones it only saw summaries of are "skimmed"', () => {
+  it("with the answer's record, the card counts what it really read in full; with none read, what it skimmed", () => {
     const around = { action: 'Read around', result: '“Japan trip plan”', state: 'done', kind: 'read' } as const
     const opened = (subject: string) => ({ action: 'Opened', result: `“${subject}”`, state: 'done', kind: 'open', subject }) as const
-    expect(stepsSummary([around, opened('Itinerary'), opened('Budget')], 4)).toBe('Looked through 2 notes')
-    expect(stepsSummary([around, opened('Kyoto'), opened('Kyoto'), { ...opened('Budget'), state: 'failed' }], 4)).toBe('Looked through 1 note')
-    expect(stepsSummary([around], 4)).toBe('Skimmed 4 notes')
-    expect(stepsSummary([{ ...around, action: 'Читаю вокруг' }], 2)).toBe('Пролистал 2 заметки')
-    expect(stepsSummary([around])).toBe('1 step')
+    const record = (read: string[], skimmed: string[] = []) => ({ read, skimmed, proposals: [] })
+    // "Kyoto" and "Trips/Kyoto" are one note; a section read is a skim - the record knows, the steps do not.
+    const steps = [around, opened('Kyoto'), opened('Trips/Kyoto'), opened('Budget')]
+    expect(stepsSummary(steps, record(['Trips/Kyoto.md'], ['Budget.md']))).toBe('Looked through 1 note')
+    expect(stepsSummary([around], record([], ['A.md', 'B.md', 'C.md', 'D.md']))).toBe('Skimmed 4 notes')
+    expect(stepsSummary([{ ...around, action: 'Читаю вокруг' }], record([], ['A.md', 'B.md']))).toBe('Пролистал 2 заметки')
+    expect(stepsSummary([around], record([]))).toBe('1 step')
   })
 
   it('the language of a question', () => {

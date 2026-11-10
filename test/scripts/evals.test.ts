@@ -235,7 +235,6 @@ describe('the new checks', () => {
       question: 'q',
       answer: 'Two ideas.',
       appliedFirst: false,
-      shown: 2,
       reads: ['Itinerary', 'Kyoto'],
       claimsEditWithout: false,
       proposals: 0,
@@ -246,21 +245,28 @@ describe('the new checks', () => {
     const plan = ctx('Projects/Japan trip/Japan trip plan.md')
     const run = (turns: QuickTurn[], answer = 'Two ideas.') => score(c, answered({ context: plan, answer, turns })).reasons
     expect(run([turn])).not.toEqual(
-      expect.arrayContaining(['edit claimed, none made', 'count does not match reads', 'applied edit suggested again', 'false claim']),
+      expect.arrayContaining(['edit claimed, none made', 'applied edit suggested again', 'false claim']),
     )
     expect(run([{ ...turn, claimsEditWithout: true }])).toContain('edit claimed, none made')
-    expect(run([{ ...turn, shown: 4 }])).toContain('count does not match reads')
-    expect(run([{ ...turn, shown: null, reads: [] }])).not.toContain('count does not match reads')
     expect(run([{ ...turn, appliedFirst: true, reproposed: true }])).toContain('applied edit suggested again')
     expect(run([turn], 'My first answer had mistakes. I never proposed the edits I described.')).toContain('false claim')
     expect(run([turn], 'I only skimmed Budget, so I have not checked the prices.')).not.toContain('false claim')
     expect(run([turn], 'Hakone and Nara, all linked from [[Itinerary]], don’t exist as notes yet.')).not.toContain('false claim')
     expect(run([turn], 'The [[Kyoto]] note doesn’t exist.')).toContain('false claim')
     expect(run([turn], '[[Kyoto]] doesn’t exist yet.')).toContain('false claim')
-    // A link copied from a note it read is grounded; one it made up is not.
-    const given = { context: plan, contextText: '| 1 | [[Tokyo]] |', turns: [turn] }
+    // A link copied from a note it read is grounded; one it made up is not. The dates are the note's (Itinerary has them).
+    const given = { context: plan, contextText: '| Thu 26 Nov – Sun 29 Nov | [[Tokyo]] |', turns: [turn] }
     expect(score(c, answered({ ...given, answer: '- 26–29 Nov: [[Tokyo]]' }), ['Tokyo']).ungrounded).toEqual([])
-    expect(score(c, answered({ ...given, answer: '- 30 Nov: [[Hakone]]' }), ['Hakone']).ungrounded).toEqual(['Hakone'])
+    expect(score(c, answered({ ...given, answer: '- 30 Nov: [[Tokyo]] and [[Hakone]]' }), ['Tokyo', 'Hakone']).ungrounded).toEqual(['Hakone', 'number 30'])
+  })
+
+  it('a range is as grounded as its two ends, written with a hyphen or a dash', () => {
+    const c = caseOf({ kind: 'recent' })
+    const given = { context: ctx('Plan.md'), contextText: 'Train 26 Nov, back 29 Nov. Sleep 10 to 12 hours.' }
+    expect(score(c, answered({ ...given, answer: 'Away 26-29 Nov, sleeping 10-12 hours.' })).ungrounded).toEqual([])
+    expect(score(c, answered({ ...given, answer: 'Away 26–29 Nov.' })).ungrounded).toEqual([])
+    // One end made up: the range is a claim.
+    expect(score(c, answered({ ...given, answer: 'Away 26-31 Nov.' })).ungrounded).toEqual(['number 26-31'])
   })
 
   it('recall@4 is out of at most four expected notes', () => {

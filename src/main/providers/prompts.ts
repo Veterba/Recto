@@ -1,7 +1,7 @@
 import { isExcludedPath, type ProposalStatus } from '../../shared/ai-access'
 import type { AiMessage } from '../../shared/ai'
-import { withRecords } from '../../shared/answer-record'
-import type { BotMessage } from '../../shared/bots'
+import { withRecords, type RecordedMessage } from '../../shared/answer-record'
+import type { BotSource } from '../../shared/bots'
 import { SERVER_INSTRUCTIONS } from '../../shared/vault-tools'
 import { runCall } from './run'
 import type { ToolSession } from '../vault-tools'
@@ -74,16 +74,26 @@ export async function quickAskCanvasSystem(session: ToolSession, canvas: string)
 }
 
 /**
- * The conversation as a cloud provider receives it. An earlier answer that
- * read a note now excluded - a local model's, or one from before the folder
- * was excluded - is withheld: its text may quote that note. Every other
- * answer goes with its record (shared/answer-record.ts), each suggestion with
- * its state now (`status`).
+ * The conversation as a cloud provider receives it, the chats' and Quick
+ * ask's alike. An earlier answer that used a note now excluded - one from
+ * before the folder was excluded, or a local model's - is withheld: its text
+ * may quote that note. What it used is its sources and its record. Every
+ * other answer goes with its record (shared/answer-record.ts), each
+ * suggestion with its state now (`status`).
  */
-export function forCloud(turns: BotMessage[], excluded: readonly string[], status: (id: string) => ProposalStatus | null): AiMessage[] {
+export function forCloud(
+  turns: readonly (RecordedMessage & { sources?: BotSource[] })[],
+  excluded: readonly string[],
+  status: (id: string) => ProposalStatus | null,
+): AiMessage[] {
+  const used = (m: RecordedMessage & { sources?: BotSource[] }): string[] => [
+    ...(m.sources ?? []).map((s) => s.path),
+    ...(m.record?.read ?? []),
+    ...(m.record?.skimmed ?? []),
+  ]
   return withRecords(
     turns.map((m) =>
-      m.role === 'assistant' && (m.sources ?? []).some((s) => isExcludedPath(s.path, excluded))
+      m.role === 'assistant' && used(m).some((p) => isExcludedPath(p, excluded))
         ? { role: 'assistant', content: '(An earlier answer, withheld here: it used notes AI may not see.)' }
         : { role: m.role, content: m.content, ...(m.record === undefined ? {} : { record: m.record }) },
     ),

@@ -71,7 +71,11 @@ export async function getAiGuide(scope: Scope): Promise<ResultBlock[]> {
     return [
       data({ path: null, hint: 'The person has not chosen an AI guide (Recto: Settings → AI → AI guide). Follow the vault profile.' }),
     ]
-  return [data({ path: guide }), noteBlock(guide, await readNote(guide))]
+  // Excluded since it was chosen: no tool returns a note AI may not see, the guide neither.
+  if (scope.hidden(guide))
+    return [data({ path: null, hint: 'The AI guide is in a folder AI may not see (Settings → AI → Excluded). Follow the vault profile.' })]
+  // Not a note the answer is about: kept out of its record (vault-tools/index.ts).
+  return [data({ path: guide }), noteBlock(guide, await readNote(guide), 'guide')]
 }
 
 export async function searchNotes(scope: Scope, a: Args): Promise<ResultBlock[]> {
@@ -139,6 +143,8 @@ export async function readNoteTool(scope: Scope, a: Args): Promise<ResultBlock[]
   const offset = Number(a['offset'])
   const max = Number(a['max_chars'])
   const text = content.slice(offset, offset + max)
+  // All of it, or a part: what the answer's record calls a read in full.
+  const whole = offset <= 0 && offset + max >= content.length
   const { links } = await ask({ kind: 'backlinks', path: p }, 'backlinks-result')
   const stat = fs.statSync(path.join(scope.vault, p))
   return [
@@ -157,7 +163,7 @@ export async function readNoteTool(scope: Scope, a: Args): Promise<ResultBlock[]
       })),
       backlinks: links.filter((l) => !scope.hidden(l.path)).map((l) => ({ path: l.path, line: l.line })),
     }),
-    noteBlock(p, text),
+    noteBlock(p, text, whole ? undefined : 'excerpt'),
   ]
 }
 

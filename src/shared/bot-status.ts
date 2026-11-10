@@ -1,3 +1,4 @@
+import type { AnswerRecord } from './answer-record'
 import type { BotJob, BotStep } from './bots'
 
 /**
@@ -55,17 +56,20 @@ export function statusPhrases(job: Pick<BotJob, 'state' | 'steps' | 'text' | 'la
 }
 
 /**
- * The folded steps card: "Looked through 12 notes", «Просмотрел 12 заметок» - notes opened in full
- * only. With none opened, the notes it only saw summaries of (`skimmed`): "Skimmed 4 notes". Else the
- * number of steps.
+ * The folded steps card: "Looked through 12 notes", «Просмотрел 12 заметок»; with none read in full,
+ * "Skimmed 4 notes"; else the number of steps.
+ *
+ * With the answer's record (a cloud answer, Quick ask: shared/answer-record.ts) the counts are its own -
+ * notes read in full, notes only skimmed - so the card says what really happened. The local bot keeps
+ * no record: its steps say how many notes they went through ("12 notes", a scope read "31/31").
  */
-export function stepsSummary(steps: readonly BotStep[], skimmed = 0): string {
+export function stepsSummary(steps: readonly BotStep[], record?: AnswerRecord): string {
   const ru = steps.some((s) => /\p{Script=Cyrillic}/u.test(s.action))
-  // "12 notes", «12 заметок», a scope read "31/31"; and each note opened, once however often.
   const count = (step: BotStep): number =>
-    Number(/(\d+)\s+(?:notes?|заметк\p{L}*)/u.exec(step.result)?.[1] ?? /^\d+\/(\d+)$/.exec(step.result)?.[1]) || 0
-  const opened = new Set(steps.filter((s) => s.kind === 'open' && s.state === 'done').map((s) => s.subject ?? s.result))
-  const notes = steps.filter((s) => s.kind !== 'open').reduce((sum, step) => sum + count(step), 0) + opened.size
+    Number(/(\d+)\s+(?:notes?|заметк\p{L}*)/u.exec(step.result)?.[1] ?? /^\d+\/(\d+)$/.exec(step.result)?.[1]) ||
+    (step.kind === 'open' && step.state === 'done' ? 1 : 0)
+  const notes = record?.read.length ?? steps.reduce((sum, step) => sum + count(step), 0)
+  const skimmed = record?.skimmed.length ?? 0
   if (ru)
     return notes > 0
       ? `Просмотрел ${notes} ${plural(notes, 'заметку', 'заметки', 'заметок')}`

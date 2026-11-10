@@ -41,6 +41,23 @@ type Turn = {
   problem?: ProviderProblem
   /** Still answering. */
   live?: boolean
+  /** Stopped before its end: marked so, kept out of the next question, saved as interrupted. */
+  stopped?: boolean
+}
+
+/** The suggestions that wait for Apply now, by id: kept up to date as they are applied, discarded or go stale. */
+function usePendingProposals(): ReadonlySet<string> {
+  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set())
+  useEffect(() => {
+    const load = (): void =>
+      void api
+        .invoke(IPC.aiProposals)
+        .then((all) => setPending(new Set(all.filter((p) => p.status === 'pending').map((p) => p.id))))
+        .catch(() => undefined)
+    load()
+    return api.on(IPC_EVENT.aiProposalsChanged, load)
+  }, [])
+  return pending
 }
 
 const MODEL_KEY = 'recto.quickAskModel'
@@ -134,7 +151,7 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
                 ? { ...last, steps: event.steps }
                 : event.type === 'error'
                   ? { ...last, problem: event.problem, live: false }
-                  : { ...last, sources: event.sources, record: event.record, live: false }
+                  : { ...last, sources: event.sources, record: event.record, live: false, ...(event.type === 'cancelled' ? { stopped: true } : {}) }
           return [...prev.slice(0, -1), next]
         })
       }),
@@ -157,8 +174,11 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
       const question = asked.trim()
       if (question === '' || note === null || model === null || live || !ready) return false
       // Earlier turns as said, each answer with its record; only the new question carries the note's text (main adds it).
+      // A question goes with its answer or not at all: one that failed, or was stopped, is left out with it.
+      const answered = (answer: Turn | undefined): boolean =>
+        answer !== undefined && answer.role === 'assistant' && answer.problem === undefined && answer.content !== '' && answer.stopped !== true
       const history = turns
-        .filter((t) => t.problem === undefined && t.content !== '')
+        .filter((t, i) => answered(t.role === 'user' ? turns[i + 1] : t))
         .map(({ role, content, record }) => ({ role, content, ...(record === undefined ? {} : { record }) }))
       const at = createdStamp(new Date())
       setTurns((prev) => [
@@ -170,7 +190,14 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
       setSaveError(null)
       // On a canvas, what is selected there goes with the question (main reads the canvas).
       const selection = isCanvas(note) ? [...canvasSelection(note)] : []
-      void api.invoke(IPC.quickAskSend, { thread, note, model, history, question, ...(selection.length === 0 ? {} : { selection }) })
+      void api.invoke(IPC.quickAskSend, { thread, note, model, history, question, ...(selection.length === 0 ? {} : { selection }) }).catch(() =>
+        // Never sent, or main gave up on it: the turn ends here instead of answering forever.
+        setTurns((prev) => {
+          const last = prev.at(-1)
+          if (last === undefined || last.live !== true) return prev
+          return [...prev.slice(0, -1), { ...last, live: false, problem: { kind: 'failed', message: 'The question could not be sent. Try again.' } }]
+        }),
+      )
       return true
     },
     [note, model, live, ready, turns, thread],
@@ -195,6 +222,7 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
         ...(t.steps === undefined || t.steps.length === 0 ? {} : { steps: t.steps }),
         ...(t.sources === undefined ? {} : { sources: t.sources.map((path) => ({ path, heading: null })) }),
         ...(t.record === undefined ? {} : { record: t.record }),
+        ...(t.stopped === true ? { interrupted: true } : {}),
       }))
     const saved = await api.invoke(IPC.botsSaveThread, { botId: 'recto', messages })
     if (!saved.ok) {
@@ -208,7 +236,9 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
   }, [turns, onClose])
 
   const canSave = turns.some((t) => t.role === 'assistant' && t.live !== true && t.problem === undefined && t.content !== '')
-  const lastSuggested = turns.at(-1)?.steps?.some((s) => s.action.startsWith('Suggested') && s.state === 'done') === true
+  // A suggestion of this thread's that waits for Apply now - not one applied, discarded or gone stale.
+  const pending = usePendingProposals()
+  const waiting = turns.some((t) => (t.record?.proposals ?? []).some((id) => pending.has(id)))
   const lastAnswer = turns.findLast((t) => t.role === 'assistant' && t.live !== true && t.content !== '')
   const motion = useBotMotion()
   const { style, above, right } = bubbleAt(place, size, motion.drag)
@@ -269,7 +299,7 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
                   <p className="quick-ask__q">{turn.content}</p>
                 ) : (
                   <div className="quick-ask__a">
-                    {turn.steps !== undefined && <StepsCard steps={turn.steps} running={turn.live === true && turn.content === ''} skimmed={turn.record?.skimmed.length ?? 0} />}
+                    {turn.steps !== undefined && <StepsCard steps={turn.steps} running={turn.live === true && turn.content === ''} record={turn.record} />}
                     {turn.content !== '' && (
                       <Markdown
                         text={turn.content}
@@ -284,16 +314,21 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
                     {turn.live === true && turn.content === '' && (turn.steps ?? []).length === 0 && (
                       <p className="quick-ask__thinking">Reading…</p>
                     )}
-                    {turn.record !== undefined && turn.record.proposals.length === 0 && claimsPendingEdit(turn.content) && (
-                      <p className="quick-ask__no-edit">No edit was created</p>
-                    )}
+                    {turn.stopped === true && <p className="quick-ask__aside">Stopped</p>}
+                    {/* Says an edit waits, made none, and none of the thread's waits either. */}
+                    {turn.live !== true &&
+                      turn.stopped !== true &&
+                      turn.record !== undefined &&
+                      turn.record.proposals.length === 0 &&
+                      !waiting &&
+                      claimsPendingEdit(turn.content) && <p className="quick-ask__aside">No edit was created</p>}
                     {turn.problem !== undefined && <ProblemLine problem={turn.problem} />}
                   </div>
                 )}
               </div>
             )
           })}
-          {lastSuggested && (
+          {waiting && (
             <button className="quick-ask__review" onClick={openSuggestedEdits}>
               <Icon name="sparkles" size={13} /> Review the suggested edit
             </button>

@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let root = ''
 let saved: unknown = null
+/** The vault's AI settings (Settings → AI): the guide, the excluded folders. */
+let access: unknown = null
 vi.mock('electron', () => ({
   app: { on: () => undefined, getPath: () => os.tmpdir() },
   shell: {},
@@ -19,7 +21,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../../src/main/vault', () => ({ currentVault: () => ({ path: root, name: 'v' }) }))
 vi.mock('../../src/main/state', () => ({
-  readState: (name: string) => (name.includes('proposals') ? saved : null),
+  readState: (name: string) => (name.includes('proposals') ? saved : name.includes('ai-access') ? access : null),
   writeState: (name: string, value: unknown) => {
     if (name.includes('proposals')) saved = value
     return { ok: true }
@@ -39,12 +41,14 @@ const put = (relative: string, content: string): void => {
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-record-'))
   saved = null
+  access = null
   put(
     PLAN,
     '*A note about how the trip hangs together*\n\nThe middle stretch is in [[Kyoto]]; the day-by-day lives in [[Itinerary]].\n\n## Still open\n\n- Nara\n',
   )
   put(`${TRIP}/Kyoto.md`, '*A note about the heart of the trip*\n\n## Where to go\n\nFushimi Inari at dawn.\n')
   put(`${TRIP}/Itinerary.md`, '| Day | Base |\n| --- | --- |\n| 6 | [[Kyoto]] |\n')
+  put(`${TRIP}/Packing.txt`, 'Passport\nRail pass\nAdapter\n')
 })
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }))
 
@@ -52,7 +56,7 @@ const session = () =>
   openSession({
     client: 'quick-ask · Test',
     tools: null,
-    notes: new Set([PLAN, `${TRIP}/Kyoto.md`, `${TRIP}/Itinerary.md`]),
+    notes: new Set([PLAN, `${TRIP}/Kyoto.md`, `${TRIP}/Itinerary.md`, `${TRIP}/Packing.txt`]),
     writable: new Set([PLAN]),
   })
 
@@ -76,6 +80,38 @@ describe('the record of an answer', () => {
     expect(record.skimmed).toEqual([`${TRIP}/Itinerary.md`])
     expect(record.proposals).toHaveLength(1)
     closeSession(s.id)
+  })
+
+  it('a note given only in part - cut short, or from an offset - is a skim, not a read', async () => {
+    const s = session()
+    put(`${TRIP}/Kyoto.md`, `## Where to go\n\n${'Fushimi Inari at dawn. '.repeat(40)}`)
+    await callTool('read_note', { note: 'Kyoto', max_chars: 500 }, s.client, s.id)
+    await callTool('read_note', { note: 'Itinerary', offset: 5 }, s.client, s.id)
+    expect(recordOf(s)).toEqual({ read: [], skimmed: [`${TRIP}/Kyoto.md`, `${TRIP}/Itinerary.md`], proposals: [] })
+    closeSession(s.id)
+  })
+
+  it('a file says whether it was given whole: all of it is a read, from an offset a skim', async () => {
+    const whole = session()
+    await callTool('read_file', { file: `${TRIP}/Packing.txt` }, whole.client, whole.id)
+    expect(recordOf(whole).read).toEqual([`${TRIP}/Packing.txt`])
+    closeSession(whole.id)
+    const part = session()
+    await callTool('read_file', { file: `${TRIP}/Packing.txt`, offset: 9 }, part.client, part.id)
+    expect(recordOf(part)).toEqual({ read: [], skimmed: [`${TRIP}/Packing.txt`], proposals: [] })
+    closeSession(part.id)
+  })
+
+  it('the AI guide is not a note the answer read; one in an excluded folder is not given at all', async () => {
+    access = { guide: `${TRIP}/Kyoto.md`, excluded: [] }
+    const s = session()
+    const given = await callTool('get_ai_guide', {}, s.client, s.id)
+    expect(given.ok && given.blocks.some((b) => b.kind === 'note')).toBe(true)
+    expect(recordOf(s)).toEqual({ read: [], skimmed: [], proposals: [] })
+    closeSession(s.id)
+    access = { guide: `${TRIP}/Kyoto.md`, excluded: [TRIP] }
+    const hidden = await callTool('get_ai_guide', {}, 'claude-code')
+    expect(hidden.ok && hidden.blocks.some((b) => b.kind === 'note')).toBe(false)
   })
 
   it('a call that fails leaves nothing', async () => {

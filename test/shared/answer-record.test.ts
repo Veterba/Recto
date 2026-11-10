@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { claimsPendingEdit, recordLine, withRecords, type AnswerRecord } from '../../src/shared/answer-record'
+import { claimsPendingEdit, recordLine, sourcesOf, withRecords, type AnswerRecord } from '../../src/shared/answer-record'
 import type { ProposalStatus } from '../../src/shared/ai-access'
 
 /**
@@ -71,5 +71,21 @@ describe('an answer that says an edit is waiting', () => {
     expect(claimsPendingEdit('I never proposed the edits I described, so none are waiting for Apply.')).toBe(false)
     expect(claimsPendingEdit('Ничего не ждёт применения.')).toBe(false)
     expect(claimsPendingEdit('Nothing else to add. Suggestion, waiting for Apply: a Day by day section.')).toBe(true)
+  })
+
+  it('each clause on its own: a "not" in another clause does not take the claim back', () => {
+    expect(claimsPendingEdit("It is not applied yet and waits for Apply.")).toBe(true)
+    expect(claimsPendingEdit("I can't edit the note myself, but I've suggested the change.")).toBe(true)
+    expect(claimsPendingEdit('Правка не применена, но ждёт применения.')).toBe(true)
+    expect(claimsPendingEdit('Click Apply to add it.')).toBe(true)
+    expect(claimsPendingEdit('No edit waits for Apply now.')).toBe(false)
+  })
+})
+
+describe('the sources of an answer', () => {
+  it('are the notes it read in full; with none read, the ones it skimmed; never a search hit beside a read', () => {
+    expect(sourcesOf({ read: ['A.md'], skimmed: ['Hit.md'], proposals: [] })).toEqual(['A.md'])
+    expect(sourcesOf({ read: [], skimmed: ['B.md', 'C.md'], proposals: [] })).toEqual(['B.md', 'C.md'])
+    expect(sourcesOf({ read: [], skimmed: [], proposals: [] })).toEqual([])
   })
 })

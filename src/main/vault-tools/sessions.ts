@@ -22,11 +22,9 @@ export type ToolSession = {
   tools: ReadonlySet<string> | null
   notes: ReadonlySet<string> | null
   writable: ReadonlySet<string> | null
-  /** Notes its tools returned text from: the answer's sources. */
-  seen: Set<string>
   /** Every call, as it starts and as it ends: the steps card. */
   onCall?: (call: SessionCall) => void
-  /** What the answer read in full, only skimmed, and suggested (shared/answer-record.ts). */
+  /** What the answer read in full, only skimmed, and suggested (shared/answer-record.ts); its sources too. */
   record: { read: Set<string>; skimmed: Set<string>; proposals: string[] }
 }
 
@@ -34,11 +32,10 @@ export type SessionCall = { n: number; tool: string; args: Record<string, unknow
 
 const sessions = new Map<string, ToolSession>()
 
-export function openSession(s: Omit<ToolSession, 'id' | 'seen' | 'record'>): ToolSession {
+export function openSession(s: Omit<ToolSession, 'id' | 'record'>): ToolSession {
   const session: ToolSession = {
     ...s,
     id: randomBytes(12).toString('hex'),
-    seen: new Set(),
     record: { read: new Set(), skimmed: new Set(), proposals: [] },
   }
   sessions.set(session.id, session)

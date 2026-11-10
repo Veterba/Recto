@@ -36,7 +36,8 @@ function pagesOf(spec: unknown, count: number): { from: number; to: number } {
 }
 
 /** A PDF's text, page by page, as far as the budget goes. */
-async function pdfText(absolute: string, pages: unknown): Promise<string> {
+/** The text of a PDF's pages, as far as the budget goes; `whole`: every page, none cut. */
+async function pdfText(absolute: string, pages: unknown): Promise<{ text: string; whole: boolean }> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const bytes = new Uint8Array(await fsp.readFile(absolute))
   const task = pdfjs.getDocument({ data: bytes, verbosity: 0 })
@@ -46,6 +47,7 @@ async function pdfText(absolute: string, pages: unknown): Promise<string> {
     const parts: string[] = []
     let used = 0
     let last = from - 1
+    let cut = false
     for (let n = from; n <= to; n++) {
       const content = await (await doc.getPage(n)).getTextContent()
       const text = content.items
@@ -55,12 +57,16 @@ async function pdfText(absolute: string, pages: unknown): Promise<string> {
         .trim()
       const block = `--- page ${n} ---\n${text === '' ? '(no text on this page: it may be a scan or a picture)' : text}`
       if (used + block.length > BUDGET_CHARS && parts.length > 0) break
+      if (block.length > BUDGET_CHARS) cut = true
       parts.push(block.length > BUDGET_CHARS ? `${block.slice(0, BUDGET_CHARS)}…` : block)
       used += block.length
       last = n
     }
     const more = last < to ? `\n\n(Stopped at page ${last} of ${doc.numPages}: ask for pages "${last + 1}-${to}" to go on.)` : ''
-    return `PDF, ${doc.numPages} page${doc.numPages === 1 ? '' : 's'}; pages ${from}-${last}:\n\n${parts.join('\n\n')}${more}`
+    return {
+      text: `PDF, ${doc.numPages} page${doc.numPages === 1 ? '' : 's'}; pages ${from}-${last}:\n\n${parts.join('\n\n')}${more}`,
+      whole: from === 1 && last === doc.numPages && !cut,
+    }
   } finally {
     await task.destroy()
   }
@@ -123,21 +129,24 @@ export async function readAnyFile(scope: Scope, a: Args): Promise<ResultBlock[]>
   const kind = fileKind(p)
   const head = { path: p, name, kind, size: kb(size) }
 
+  // `whole`: all of it was given, or only a part - what the answer's record calls a read in full (vault-tools/index.ts).
   if (kind === 'note') {
     const text = await readNote(p)
-    return [data({ ...head, text: text.length > BUDGET_CHARS ? `${text.slice(0, BUDGET_CHARS)}…` : text })]
+    const whole = text.length <= BUDGET_CHARS
+    return [data({ ...head, whole, text: whole ? text : `${text.slice(0, BUDGET_CHARS)}…` })]
   }
   if (kind === 'canvas') {
     const context = await canvasContext(scope, p, [], BUDGET_CHARS / 4)
     if (context === null) throw new ToolError(`“${name}” could not be read.`)
-    return [data({ ...head, text: context.text })]
+    // The canvas itself is always mapped whole; the notes on it are other notes.
+    return [data({ ...head, whole: true, text: context.text })]
   }
   if (kind === 'pdf') {
-    const text = await pdfText(absolute, a['pages']).catch((err: unknown) => {
+    const { text, whole } = await pdfText(absolute, a['pages']).catch((err: unknown) => {
       if (err instanceof ToolError) throw err
       throw new ToolError(`“${name}” could not be read as a PDF: ${err instanceof Error ? err.message : String(err)}`)
     })
-    return [data({ ...head, text })]
+    return [data({ ...head, whole, text })]
   }
   if (kind === 'image' && !p.toLowerCase().endsWith('.svg')) {
     const bytes = await fsp.readFile(absolute)
@@ -146,6 +155,8 @@ export async function readAnyFile(scope: Scope, a: Args): Promise<ResultBlock[]>
     return [
       data({
         ...head,
+        // Seen only when the picture itself went with the answer.
+        whole: seen !== null,
         ...(dims === null ? {} : { pixels: `${dims.width} × ${dims.height}` }),
         text:
           seen === null
@@ -161,7 +172,7 @@ export async function readAnyFile(scope: Scope, a: Args): Promise<ResultBlock[]>
     const offset = Math.max(0, Number(a['offset'] ?? 0) || 0)
     const text = read.content.slice(offset, offset + BUDGET_CHARS)
     const next = offset + BUDGET_CHARS < read.content.length ? offset + BUDGET_CHARS : null
-    return [data({ ...head, text, ...(next === null ? {} : { next_offset: next }) })]
+    return [data({ ...head, whole: offset === 0 && next === null, text, ...(next === null ? {} : { next_offset: next }) })]
   }
   throw new ToolError(`“${name}” is a file Recto cannot read yet (${path.posix.extname(p).slice(1).toUpperCase() || 'binary'}, ${kb(size)}).`)
 }

@@ -17,11 +17,7 @@ import type { Scored } from './metrics.ts'
 /**
  * Where eval runs are kept, and the files kept beside them.
  *
- * Fixture runs live in the repo, `docs/evals/` (the fixture vault is
- * synthetic, so its answers may be committed): `docs/evals/<model>/Eval <run id>.md`,
- * raw data in `docs/evals/data/<run id>/`, and the folder's own index and log.
- *
- * Private runs are ONE note each in the vault's evals folder
+ * Every run, fixture or private, is ONE note in the vault's evals folder
  * ("Evals Qwen", found by name): `Evals Qwen/<model>/Eval <run id>.md`, a name
  * unique in the whole vault so it can be linked as [[Eval <run id>]]. Its raw
  * data (results.jsonl, config.json) goes to `<vault>/.recto/evals/<run id>/`:
@@ -30,15 +26,25 @@ import type { Scored } from './metrics.ts'
  * reading in Recto); graded.jsonl (every graded answer) is raw data too.
  *
  * Only those are ever written, an older run never. `guard` enforces it.
+ *
+ * `docs/evals/` in the repo holds fixture runs from before: read for
+ * comparisons, never written to by a new run.
  */
 
 export const ROOT = path.resolve(import.meta.dirname, '../..')
-/** The real vault, whose evals folder the runs go to. Only that folder and .recto/evals are written. */
-export const REAL_VAULT = process.env['RECTO_EVALS_VAULT'] ?? '/Users/veterba/Documents/Notes/Recto-vault'
+/**
+ * The vault whose evals folder the runs go to - only that folder and .recto/evals are written.
+ * From RECTO_EVALS_VAULT: it is one person's vault, never a path in the code.
+ */
+export function realVault(): string {
+  const vault = process.env['RECTO_EVALS_VAULT']?.trim()
+  if (vault === undefined || vault === '') throw new Error('Set RECTO_EVALS_VAULT to the vault the eval results go to (the one with the "Evals Qwen" folder).')
+  return vault
+}
 const EVALS_FOLDER_NAME = 'evals qwen'
 /** The raw data of every private run, inside the vault, hidden. */
 export const DATA_DIR = path.join('.recto', 'evals')
-/** The fixture runs' store: the repo's docs/evals, which is its own evals folder. */
+/** Fixture runs from before, in the repo: read, never written. */
 export const REPO_STORE = path.join(ROOT, 'docs', 'evals')
 /** Where a store keeps its runs' raw data: hidden in a vault, `data/` in the repo. */
 export const dataDirOf = (vault: string): string =>
@@ -47,7 +53,7 @@ export const INDEX_NOTE = 'Recto evals.md'
 export const LOG_NOTE = 'Eval log.md'
 
 /** The one folder named "Evals Qwen" (any case) outside .recto/. Throws unless there is exactly one. */
-export function findEvalsFolder(vault: string = REAL_VAULT): string {
+export function findEvalsFolder(vault: string = realVault()): string {
   const found: string[] = []
   const walk = (dir: string, depth: number): void => {
     if (depth > 8) return
@@ -192,7 +198,7 @@ export function previousRun(runs: readonly StoredRun[], model: string, vaultKind
 }
 
 /** Runs from both stores, oldest first: what a comparison can reach. */
-export const allRuns = (vault: string = REAL_VAULT): StoredRun[] =>
+export const allRuns = (vault: string = realVault()): StoredRun[] =>
   [...listRuns(REPO_STORE), ...listRuns(vault)].sort((a, b) => a.config.date.localeCompare(b.config.date))
 
 /** A link to a run's note: by its name, never its path. */

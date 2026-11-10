@@ -132,10 +132,13 @@ setting, off; the harness's own calls are always on.
 a frozen snapshot of the real vault (`~/Recto-eval-vaults/<snapshot>`, named by the private cases):
 recall@4, items, router accuracy, named notes, language, and grounding - a note, a number or a
 description of a note that the answer's context never had is an ungrounded claim. Each run is one
-note `Eval <time> — <label>`: fixture runs in the repo (`docs/evals/<model>/`, data in
-`docs/evals/data/<run id>/`), private runs only in the vault's evals folder (data in the hidden
-`.recto/evals/<run id>/`). Results keep the prompt, so `npm run bots:eval:rescore` can score a
-fixture run again after a fix to the checks.
+note `Eval <time> — <label>` in the vault's evals folder, fixture and private runs alike (data in
+the hidden `.recto/evals/<run id>/`); the vault is `RECTO_EVALS_VAULT`, never a path in the code.
+`docs/evals/` keeps the fixture runs from before, read by comparisons and never written by a new
+run. Results keep the prompt, so `npm run bots:eval:rescore` can score a run again after a fix to
+the checks. `--quick-ask` puts the quick-ask cases to Quick ask with a cloud provider, turn by turn
+(`main/providers/quick-ask-eval.ts`), on a scratch copy only: an edit claimed with none made, and an
+applied edit suggested again, fail a case.
 
 ## A note, from disk to screen
 
@@ -397,9 +400,17 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   and only Recto's chat and Quick ask can use cloud; the other bots stay local. Each answer stores
   the model string with a provider prefix (`codex`, `chatgpt:<slug>`); a provider switch is a
   "Switched to …" line in the chat.
-- **Exclusions.** Excluded folders hold for every provider: the tool layer hides them; when a cloud
-  provider is the target, earlier answers whose sources sit in excluded folders are withheld from the
-  history it receives; and the local pipeline now merges them into its own bot exclude list
+- **The answer's record** (`shared/answer-record.ts`). A session records, from its tool calls, the
+  notes an answer read in full, the ones it only skimmed and the suggestions it made - as the tools
+  mark them: a note block without a part, or a file given as data with `whole: true`, is a read; a
+  summary, snippet, excerpt, a note cut short or a PDF page range is a skim; the AI guide is neither.
+  The record is kept with the answer and given back to the model with every later question, each
+  suggestion with its state now, so it never takes back what it did. Sources and the steps card's
+  "Looked through N" come from it; Quick ask's "Review the suggested edit" and "No edit was created"
+  read the suggestions' state live.
+- **Exclusions.** Excluded folders hold for every provider: the tool layer hides them, the AI guide
+  too; earlier answers that used a note in an excluded folder - by their sources or their record -
+  are withheld from the history a model receives, the chats' and Quick ask's alike; and the local pipeline now merges them into its own bot exclude list
   (`bots/answers.ts`).
 - **Limits and usage** (`providers/limits.ts`, kept in `<userData>/provider-usage.json`). Codex's
   plan windows come from its app server's `account/rateLimits/read` - started, asked, stopped, no

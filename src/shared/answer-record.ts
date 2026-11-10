@@ -16,6 +16,12 @@ export type AnswerRecord = { read: string[]; skimmed: string[]; proposals: strin
 /** A message as kept by Quick ask and the chats: the record goes with an answer. */
 export type RecordedMessage = AiMessage & { record?: AnswerRecord }
 
+/**
+ * An answer's sources: the notes it read in full - or, when it opened none, the ones it
+ * skimmed, which are then all it went on. A search hit it never opened is not a source.
+ */
+export const sourcesOf = (record: AnswerRecord): string[] => (record.read.length > 0 ? record.read : record.skimmed)
+
 const title = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.(md|canvas)$/i, '')
 
 const STATE: Record<ProposalStatus | 'expired', string> = {
@@ -52,15 +58,21 @@ export const withRecords = (messages: readonly RecordedMessage[], status: (id: s
   })
 
 const CLAIM_EN =
-  /\b(?:wait(?:s|ing)? for (?:your )?apply|review the suggested edit|in suggested edits|i(?:'ve|’ve| have)? (?:proposed|suggested) (?:an? |the |some |these |those )?(?:edits?|changes?|addition))\b/i
+  /\b(?:wait(?:s|ing)? for (?:your )?apply|(?:click|press|tap) apply|review the suggested edit|in suggested edits|i(?:'ve|’ve| have)? (?:proposed|suggested) (?:an? |the |some |these |those )?(?:edits?|changes?|addition))\b/i
 const CLAIM_RU = /(?<!\p{L})(?:ждёт|ждет|ожида\p{L}*)\s+(?:твоего\s+|вашего\s+)?(?:apply|применени\p{L}*)/iu
-/** "Nothing is waiting for Apply", «ничего не ждёт»: a sentence that denies it. */
+/** "Nothing is waiting for Apply", «ничего не ждёт»: a clause that denies it. */
 const DENIES = /\b(?:no|not|nothing|none|never|isn['’]t|aren['’]t|couldn['’]t|can['’]t|didn['’]t|wasn['’]t)\b|(?<!\p{L})(?:не|ничего|нет)(?!\p{L})/iu
+/** Where one clause ends and the next begins: punctuation, and "and", "but", «и», «но», «а». */
+const CLAUSE = /[,;:—–()]|\s(?:and|but|while|и|но|а)\s/iu
 
 /**
  * Does the answer say an edit is waiting for Apply? Then one must exist: an
- * answer that only writes about a suggestion has made none. A sentence that
- * says none is waiting claims nothing.
+ * answer that only writes about a suggestion has made none. Each clause is
+ * read on its own: "Nothing waits for Apply" claims nothing, while "it is not
+ * applied yet and waits for Apply" does - the "not" is another clause's.
  */
 export const claimsPendingEdit = (text: string): boolean =>
-  text.split(/(?<=[.!?…])\s+|\n+/).some((s) => (CLAIM_EN.test(s) || CLAIM_RU.test(s)) && !DENIES.test(s))
+  text
+    .split(/(?<=[.!?…])\s+|\n+/)
+    .flatMap((sentence) => sentence.split(CLAUSE))
+    .some((clause) => (CLAIM_EN.test(clause) || CLAIM_RU.test(clause)) && !DENIES.test(clause))
