@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import type { AiMessage } from '../../shared/ai'
+import { MAX_ANSWER_TOKENS, type AiMessage } from '../../shared/ai'
 import { readKey } from '../secrets'
 import { DirectProvider, type AiProvider } from './provider'
 import { IPC_EVENT } from '../../shared/ipc'
@@ -66,8 +66,6 @@ export function cancel(id: string): { ok: boolean } {
   return { ok: true }
 }
 
-const MAX_TOKENS = 4096
-
 export function startStream(request: { id: string; model: string; system: string; messages: AiMessage[] }): {
   ok: boolean
   error?: string
@@ -86,7 +84,7 @@ export function startStream(request: { id: string; model: string; system: string
   // renderer's `invoke` hang for the length of the answer.
   void client
     .stream(
-      { model: request.model, system: request.system, messages: request.messages, maxTokens: MAX_TOKENS },
+      { model: request.model, system: request.system, messages: request.messages, maxTokens: MAX_ANSWER_TOKENS },
       {
         onDelta: (text) => send(IPC_EVENT.aiDelta, { id: request.id, text }),
         onDone: (info) => {

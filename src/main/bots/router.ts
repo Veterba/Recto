@@ -97,7 +97,8 @@ export function quickKind(message: string): RouteKind | null {
   if (
     words.length <= 6 &&
     SMALLTALK.test(t) &&
-    !/\b(what|how|where|when|which|who|why|что|как|где|когда|какой|какие|кто|почему|hva|hvor|når)\b/.test(t)
+    // Not `\b`: in JavaScript it knows only ASCII letters, so «что» or «når» never matched and a question went as small talk.
+    !/(?<![\p{L}\p{N}])(what|how|where|when|which|who|why|что|как|где|когда|какой|какие|кто|почему|hva|hvor|når)(?![\p{L}\p{N}])/u.test(t)
   )
     return 'smalltalk'
   if (words.length === 0) return 'smalltalk'

@@ -141,10 +141,11 @@ export function proposeNewNote(scope: Scope, a: Args): Draft {
   const folder = typed.replace(/^\/+|\/+$/g, '') === '' ? '' : normaliseFolder(typed)
   if (folder === null)
     throw new ToolError(`“${String(a['folder'])}” is not a folder Recto can use: no “..” and no folder starting with “.”.`)
-  freeName(scope, name, folder)
   if (inRecto(folder)) throw new ToolError('Recto/ holds boards and their cards. Use propose_task to add a card.')
   const p = folder === '' ? `${name}.md` : `${folder}/${name}.md`
+  // Before the name is checked: "already there" would tell what an excluded folder holds.
   if (scope.hidden(p)) throw new ToolError(`${folder}/ is excluded from AI in Recto's settings. Choose another folder.`)
+  freeName(scope, name, folder)
   let text = String(a['text'])
   const props = a['properties'] as Record<string, string | number | boolean | string[]> | undefined
   for (const [key, value] of Object.entries(props ?? {})) text = setField(text, key, value)
@@ -297,8 +298,10 @@ export async function proposeTask(scope: Scope, a: Args): Promise<Draft> {
   }
   // A card that is a note: the note in the board's folder, and its [[link]] on the board.
   const folder = cardFolderFor(board.path, board.text)
-  freeName(scope, title, folder)
   const p = `${folder}/${title}.md`
+  // The board's folder for new cards (its new-note-folder) may be one excluded from AI: no note goes there.
+  if (scope.hidden(p)) throw new ToolError(`New cards on this board go to ${folder}/, which is excluded from AI in Recto's settings. Add it as a line of text instead (as_note: false).`)
+  freeName(scope, title, folder)
   let text = ''
   if (typeof a['due'] === 'string') text = setCardField(text, 'due', a['due'])
   if (typeof a['priority'] === 'string') text = setCardField(text, 'priority', a['priority'])

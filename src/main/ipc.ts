@@ -4,6 +4,8 @@ import { IPC, IPC_EVENT, type IpcApi } from '../shared/ipc'
 import { sendEvent } from './events'
 import * as ai from './ai'
 import * as bots from './bots'
+import { stopBackground } from './bots/background'
+import { cancelAllQuickAsk } from './providers/quick-ask'
 import * as answers from './bots/answers'
 import { migrateChats } from './bots/migration'
 import { migrateBoards } from './board-migration'
@@ -68,6 +70,17 @@ function runBoardsMigration(vault: string, names: Record<string, string> = {}): 
 
 /** What the layout migration did when this vault opened, until the app has said so. */
 let layoutMigration: LayoutMigrationResult = { state: 'none' }
+
+/**
+ * The AI work of the vault going: answers in the chats and in Quick ask, and
+ * the background cards and vectors. Left running, an answer saved its topic
+ * into the next vault and its tools read the next vault's notes.
+ */
+function windDownAi(): void {
+  void bots.stopAnswers()
+  cancelAllQuickAsk()
+  stopBackground()
+}
 
 /** tasks/ and chats/ into Recto/, once (main/layout-migration.ts); a failure is said, and the vault opens anyway. */
 function runLayoutMigration(vault: string): LayoutMigrationResult {
@@ -186,6 +199,7 @@ export function registerIpc(): void {
     const previous = currentVault()
     // What the overview counted here is written to this vault, not the next.
     void overview.flushStats()
+    windDownAi()
     stopWatching()
     topics.stop()
     stopIndexer()
@@ -198,6 +212,7 @@ export function registerIpc(): void {
   })
   handle(IPC.vaultClose, () => {
     void overview.flushStats()
+    windDownAi()
     stopWatching()
     topics.stop()
     stopIndexer()

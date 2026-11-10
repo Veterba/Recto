@@ -1,7 +1,9 @@
 import { toolNamed, type ResultBlock, type ToolOutcome } from '../../shared/vault-tools'
 import { readAnyFile } from './files'
 import * as canvas from './canvas-tools'
-import type { ActivityEntry } from '../../shared/ai-access'
+import { AI_ACCESS_STATE, coerceAiAccess, type ActivityEntry } from '../../shared/ai-access'
+import { readState } from '../state'
+import { currentVault } from '../vault'
 import { logCall, summariseArgs } from './activity'
 import { applyNow, proposal, queue } from './proposals'
 import * as read from './read'
@@ -120,6 +122,12 @@ export async function callTool(name: string, rawArgs: unknown, client: string, s
     logCall({ ...entry, outcome: 'error', error: 'session ended' })
     return { ok: false, error: 'This conversation has ended in Recto; its tools are closed.' }
   }
+  // Checked at every call, not once per answer: the vault or the cloud switch can change while it runs.
+  const stopped = session === null ? null : sessionStopped(session)
+  if (stopped !== null) {
+    logCall({ ...entry, outcome: 'error', error: 'session stopped' })
+    return { ok: false, error: stopped }
+  }
   if (def === undefined || (session?.tools != null && !session.tools.has(name))) {
     logCall({ ...entry, outcome: 'error', error: 'unknown tool' })
     return { ok: false, error: `Recto has no tool “${name}”${def === undefined ? '' : ' here'}.` }
@@ -140,6 +148,13 @@ export async function callTool(name: string, rawArgs: unknown, client: string, s
 }
 
 let calls = 0
+
+/** Why a session may no longer call anything, or null while it may. */
+function sessionStopped(session: ToolSession): string | null {
+  if (session.vault !== (currentVault()?.path ?? null)) return 'Another vault is open in Recto now: this answer is stopped.'
+  if (session.cloud && !coerceAiAccess(readState(AI_ACCESS_STATE)).cloud) return 'Cloud providers were turned off for this vault: this answer is stopped.'
+  return null
+}
 
 /** Parts that are not about a note the answer read: a proposal's diff, the AI guide. */
 const NOT_READING = new Set(['diff', 'guide'])

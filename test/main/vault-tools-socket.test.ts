@@ -82,6 +82,11 @@ describe('the MCP socket', () => {
     ])
   })
 
+  it('a line that is JSON but no request - null, a number, a list - is passed over, and the connection goes on', async () => {
+    const replies = await talk([JSON.stringify({ token }), 'null', '42', '[1]', JSON.stringify({ id: 3, method: 'ping' })], 1)
+    expect(replies).toEqual([{ id: 3, pong: { vault: 'Test vault', version: '0.0.0-test' } }])
+  })
+
   it('the token is made once and kept', async () => {
     stopMcpSocket()
     await startMcpSocket(dir)

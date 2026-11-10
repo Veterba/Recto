@@ -405,7 +405,12 @@ export function renderReport(config: RunConfig, rows: readonly Scored[], previou
 
   out.push('## Setup')
   out.push('')
-  out.push(`- Model: ${config.model}, via Ollama ${config.ollama.version ?? '?'}; one model loaded: ${config.ollama.one_model_loaded}`)
+  // A cloud model (a Quick ask run) is not one Ollama loads: no version, nothing unloaded.
+  out.push(
+    config.ollama.version === null
+      ? `- Model: ${config.model}, a cloud provider`
+      : `- Model: ${config.model}, via Ollama ${config.ollama.version}; one model loaded: ${config.ollama.one_model_loaded}`,
+  )
   if (config.ollama.speed_check_tokens_per_sec != null)
     out.push(
       `- Speed check before the run: ${config.ollama.speed_check_tokens_per_sec.toFixed(1)} tokens/s (a throttling Mac shows under 5)`,

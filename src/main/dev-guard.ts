@@ -23,9 +23,20 @@ export const devGuarded = (): boolean => !app.isPackaged && !allowRealVault()
 export function isolateDevState(): void {
   if (!devGuarded() || app.commandLine.hasSwitch('user-data-dir')) return
   const shared = app.getPath('userData')
+  sharedFolder = shared
   defaultModelDir(path.join(shared, 'models'))
   app.setPath('userData', `${shared} (dev)`)
 }
+
+let sharedFolder: string | null = null
+
+/**
+ * The installed app's folder, a dev build's too: for what is about this Mac and
+ * its accounts rather than a build - a provider's plan limits and the tokens
+ * Recto spent, the same whichever build asked. A run with its own
+ * --user-data-dir (the tests) keeps everything to itself.
+ */
+export const sharedUserData = (): string => sharedFolder ?? app.getPath('userData')
 
 const copiesRoot = (): string => path.join(app.getPath('userData'), 'dev-vault-copies')
 

@@ -50,10 +50,11 @@ export async function chatSystem(session: ToolSession): Promise<string> {
   ].join('\n\n') + (await guide(session))
 }
 
-export async function quickAskSystem(session: ToolSession, note: string): Promise<string> {
+/** `day`: the day it takes as today - this Mac's, or the eval's fixture day. */
+export async function quickAskSystem(session: ToolSession, note: string, day = today()): Promise<string> {
   return [
     'You are Recto, answering quick questions about the note the person has open.',
-    `Today is ${today()}. The open note is “${note}”. Its text and short summaries of its linked notes are given with each question; read_note reads a linked note in full.`,
+    `Today is ${day}. The open note is “${note}”. Its text and short summaries of its linked notes are given with each question; read_note reads a linked note in full.`,
     'Answer only from that note, the notes it links to or that link to it, and the files it links or embeds (read_file reads PDFs, text files, canvases and pictures); the tools can read nothing else.',
     `Edits may only be suggested to “${note}”.`,
     LINKS_EXIST,
@@ -62,10 +63,10 @@ export async function quickAskSystem(session: ToolSession, note: string): Promis
   ].join('\n\n') + (await guide(session))
 }
 
-export async function quickAskCanvasSystem(session: ToolSession, canvas: string): Promise<string> {
+export async function quickAskCanvasSystem(session: ToolSession, canvas: string, day = today()): Promise<string> {
   return [
     'You are Recto, answering quick questions about the canvas the person has open.',
-    `Today is ${today()}. The open canvas is “${canvas}”. What is selected on it - or all of it - is given with each question: its cards, notes, files, links, groups and the arrows between them.`,
+    `Today is ${day}. The open canvas is “${canvas}”. What is selected on it - or all of it - is given with each question: its cards, notes, files, links, groups and the arrows between them.`,
     'Answer only from that, and from the notes and files on it, which the tools can read in full (read_note for notes, read_file for PDFs, text files, canvases and pictures); they can read nothing else.',
     'Each node is named by its id (n1, n2…). To change the canvas - new cards, notes or links near a node, arrows, groups, moves - use the canvas_propose tools: your changes show on the canvas as suggestions the person accepts or rejects; say in a line what you suggested. Positions are worked out for you. Notes cannot be changed from here.',
     COMMON,

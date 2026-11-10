@@ -4,6 +4,11 @@ import type { ProviderModel } from '../../shared/providers'
 import { ProviderError } from './run'
 import type { SecretStore } from './store'
 
+
+/** How long a request to OpenAI's sign-in or models may take before it counts as down. */
+const NETWORK_TIMEOUT_MS = 15_000
+const timed = (): AbortSignal => AbortSignal.timeout(NETWORK_TIMEOUT_MS)
+
 /**
  * Sign in with ChatGPT, the open-source path (OpenAI's "token sharing"
  * preview): OAuth with PKCE in the system browser, back to a listener on
@@ -258,9 +263,10 @@ export class ChatGptAuth {
     let revoked = r.refreshToken === null
     if (r.refreshToken !== null) {
       try {
-        const config = (await (await fetch(`${this.authBase}/.well-known/openid-configuration`)).json()) as { revocation_endpoint?: string }
+        const config = (await (await fetch(`${this.authBase}/.well-known/openid-configuration`, { signal: timed() })).json()) as { revocation_endpoint?: string }
         if (typeof config.revocation_endpoint === 'string') {
           const response = await fetch(config.revocation_endpoint, {
+            signal: timed(),
             method: 'POST',
             headers: { 'content-type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ token: r.refreshToken, token_type_hint: 'refresh_token', client_id: r.clientId }).toString(),
@@ -277,8 +283,10 @@ export class ChatGptAuth {
 
   /** The models this account may use, in OpenAI's order. */
   async models(): Promise<ProviderModel[]> {
-    const response = await fetch(`${this.apiBase}/models`, { headers: { authorization: `Bearer ${await this.token()}` } })
-    if (!response.ok) return []
+    const token = await this.token()
+    // Asked each time Settings or the model picker opens: a request that hangs must not hold them.
+    const response = await fetch(`${this.apiBase}/models`, { headers: { authorization: `Bearer ${token}` }, signal: timed() }).catch(() => null)
+    if (response === null || !response.ok) return []
     const body = (await response.json()) as { models?: { slug?: unknown; display_name?: unknown; visibility?: unknown }[] }
     return (body.models ?? [])
       .filter((m) => m.visibility === 'list' && typeof m.slug === 'string')
@@ -296,6 +304,7 @@ export class ChatGptAuth {
     let response: Response
     try {
       response = await fetch(`${this.authBase}/api/accounts/oauth/token`, {
+        signal: timed(),
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams(form).toString(),
@@ -306,9 +315,13 @@ export class ChatGptAuth {
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>
     if (!response.ok) {
       const code = String(body['error'] ?? '')
-      if (response.status >= 500) throw new ProviderError({ kind: 'down', message: 'OpenAI’s sign-in is not answering. Try again in a moment.' })
+      // Busy, slow or down: the sign-in stands, and the next try may work.
+      if (response.status >= 500 || response.status === 429 || response.status === 408)
+        throw new ProviderError({ kind: 'down', message: 'OpenAI’s sign-in is not answering. Try again in a moment.' })
       if (code === 'invalid_client') throw new ProviderError({ kind: 'failed', message: 'OpenAI no longer knows this Recto registration.' })
-      throw new ProviderError({ kind: 'expired', message: 'The ChatGPT sign-in expired. Sign in again.' })
+      // Only a refused grant means the sign-in itself is over (OAuth 2.0, RFC 6749 §5.2): the tokens go then, and only then.
+      if (code === 'invalid_grant') throw new ProviderError({ kind: 'expired', message: 'The ChatGPT sign-in expired. Sign in again.' })
+      throw new ProviderError({ kind: 'failed', message: `OpenAI’s sign-in refused the request (${code === '' ? response.status : code}). Try again.` })
     }
     const scope = typeof body['scope'] === 'string' ? body['scope'].split(' ').filter((s) => s !== '') : null
     return {
@@ -330,8 +343,8 @@ export class ChatGptAuth {
     const header = JSON.parse(Buffer.from(head, 'base64url').toString()) as { kid?: string; alg?: string }
     const claims = JSON.parse(Buffer.from(payload, 'base64url').toString()) as Record<string, unknown>
     if (header.alg !== 'RS256') return fail('unexpected signature type')
-    const config = (await (await fetch(`${this.authBase}/.well-known/openid-configuration`)).json()) as { jwks_uri?: string; issuer?: string }
-    const keys = ((await (await fetch(String(config.jwks_uri))).json()) as { keys?: (JsonWebKey & { kid?: string })[] }).keys ?? []
+    const config = (await (await fetch(`${this.authBase}/.well-known/openid-configuration`, { signal: timed() })).json()) as { jwks_uri?: string; issuer?: string }
+    const keys = ((await (await fetch(String(config.jwks_uri), { signal: timed() })).json()) as { keys?: (JsonWebKey & { kid?: string })[] }).keys ?? []
     const jwk = keys.find((k) => k.kid === header.kid)
     if (jwk === undefined) return fail('unknown key')
     const good = verify('RSA-SHA256', Buffer.from(`${head}.${payload}`), createPublicKey({ key: jwk, format: 'jwk' }), Buffer.from(signature, 'base64url'))

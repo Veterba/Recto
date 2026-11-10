@@ -20,6 +20,7 @@ describe.skipIf(!RUN)('Quick ask, honest about a stopped answer', { timeout: 60_
   let page: Page
   let base = ''
   let log = ''
+  let other = ''
   const prompt = (): string => (fs.existsSync(log) ? (JSON.parse(fs.readFileSync(log, 'utf8')) as { prompt: string }).prompt : '')
   const ask = async (question: string): Promise<void> => {
     await page.locator('.quick-ask__input').fill(question)
@@ -35,6 +36,9 @@ describe.skipIf(!RUN)('Quick ask, honest about a stopped answer', { timeout: 60_
     const bin = path.join(base, 'bin')
     log = path.join(base, 'cloud-log.json')
     fs.cpSync(path.join(ROOT, 'test/fixtures/snapshot-vault'), vault, { recursive: true })
+    other = path.join(base, 'other')
+    fs.mkdirSync(other)
+    fs.writeFileSync(path.join(other, 'Only here.md'), '# Only here\n')
     fs.writeFileSync(path.join(vault, '.recto/ai-access.json'), JSON.stringify({ excluded: [], writeMode: 'propose', cloud: true }))
     fs.mkdirSync(bin)
     fs.copyFileSync(path.join(ROOT, 'test/fixtures/fake-cli/fake-agent.mjs'), path.join(bin, 'codex'))
@@ -76,5 +80,21 @@ describe.skipIf(!RUN)('Quick ask, honest about a stopped answer', { timeout: 60_
     expect(prompt()).not.toContain('FIRST-QUESTION-7c1')
     await page.locator('.quick-ask').getByRole('button', { name: 'Stop' }).click()
     await expect.poll(() => page.locator('.quick-ask__aside', { hasText: 'Stopped' }).count()).toBe(2)
+  })
+
+  it('switching vaults mid-answer stops the answer, and the other vault opens as it should', async () => {
+    fs.rmSync(log, { force: true })
+    await ask('Still answering when the vault changes?')
+    await expect.poll(prompt, { timeout: 20_000 }).toContain('Still answering')
+    const switched = await page.evaluate(
+      (dir) => (window as unknown as { api: { invoke: (c: string, ...a: unknown[]) => Promise<{ ok: boolean }> } }).api.invoke('vault:switch', dir),
+      other,
+    )
+    expect(switched.ok).toBe(true)
+    // Switched from here, not through the vault menu: the window asks main which vault is open now.
+    await page.reload()
+    await page.getByRole('treeitem', { name: /Only here/ }).waitFor({ timeout: 20_000 })
+    // Its answer went with the vault it was asked in: no topic or note of it in the new one.
+    expect(fs.readdirSync(other).sort()).toEqual(['.recto', 'Only here.md'].filter((n) => fs.existsSync(path.join(other, n))).sort())
   })
 })

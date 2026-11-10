@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { currentAiModel, type AiMessage } from '../../shared/ai'
+import { currentAiModel, MAX_ANSWER_TOKENS, type AiMessage } from '../../shared/ai'
 import type { ProviderProblem } from '../../shared/providers'
 import type { VAULT_TOOLS } from '../../shared/vault-tools'
 import { ProviderError, toolSchema, type ToolModel } from './run'
@@ -7,8 +7,6 @@ import { ProviderError, toolSchema, type ToolModel } from './run'
 /** Anthropic's Messages API with tools, on the saved key: Recto's loop drives it (run.ts). */
 
 type State = { system: string; messages: Anthropic.MessageParam[]; tools: Anthropic.Tool[] }
-
-const MAX_TOKENS = 4096
 
 export function messagesModel(model: string, key: string, tools: typeof VAULT_TOOLS): ToolModel<State> {
   const client = new Anthropic({ apiKey: key, ...(process.env['RECTO_ANTHROPIC_BASE'] ? { baseURL: process.env['RECTO_ANTHROPIC_BASE'] } : {}) })
@@ -25,7 +23,7 @@ export function messagesModel(model: string, key: string, tools: typeof VAULT_TO
     async *turn(state, signal) {
       try {
         const stream = client.messages.stream(
-          { model: currentAiModel(model), max_tokens: MAX_TOKENS, system: state.system, messages: state.messages, tools: state.tools },
+          { model: currentAiModel(model), max_tokens: MAX_ANSWER_TOKENS, system: state.system, messages: state.messages, tools: state.tools },
           { signal },
         )
         for await (const event of stream)

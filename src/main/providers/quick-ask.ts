@@ -51,8 +51,19 @@ const ended = (session: ToolSession): { sources: string[]; record: AnswerRecord 
   return { sources: sourcesOf(record), record }
 }
 
-/** `note`: the open note, or the open canvas; `selection`: the canvas's selected node ids (none: the whole canvas). */
-export type QuickAskRequest = { thread: string; note: string; model: string; history: RecordedMessage[]; question: string; selection?: string[] }
+/**
+ * `note`: the open note, or the open canvas; `selection`: the canvas's selected node ids (none: the whole canvas);
+ * `today`: the day the answer takes as today, YYYY-MM-DD - the eval's fixture day; this Mac's when left out.
+ */
+export type QuickAskRequest = {
+  thread: string
+  note: string
+  model: string
+  history: RecordedMessage[]
+  question: string
+  selection?: string[]
+  today?: string
+}
 
 /**
  * The conversation with the question last (`asked`: as sent), as the chats send theirs: an earlier
@@ -94,12 +105,13 @@ export async function quickAsk(request: QuickAskRequest, local: BotModelProvider
     tools: new Set(QUICK_TOOLS),
     notes: reached.notes,
     writable: new Set([reached.path]),
+    cloud: providerOf(request.model) !== 'ollama',
   })
   try {
     // The note goes with every question, so a switch of note is a switch of context.
     const context = await runCall(session, 'get_note_context', { note: reached.path, budget_tokens: CONTEXT_TOKENS })
     const question = `The open note and its links:\n\n${context}\n\n---\n\n${request.question}`
-    const system = await quickAskSystem(session, titleOf(reached.path))
+    const system = await quickAskSystem(session, titleOf(reached.path), request.today)
     for await (const event of run(
       { model: request.model, system, messages: conversationOf(request, question), session, signal: controller.signal },
       local,
@@ -144,10 +156,11 @@ async function askAboutCanvas(
     // It may read the canvas itself too, and suggest changes to it - only to it.
     notes: new Set([...context.notes, request.note]),
     writable: new Set([request.note]),
+    cloud: providerOf(request.model) !== 'ollama',
   })
   try {
     const question = `${context.text}\n\n---\n\n${request.question}`
-    const system = await quickAskCanvasSystem(session, canvasTitle(request.note))
+    const system = await quickAskCanvasSystem(session, canvasTitle(request.note), request.today)
     for await (const event of run(
       { model: request.model, system, messages: conversationOf(request, question), session, signal: controller.signal },
       local,
@@ -170,4 +183,9 @@ async function askAboutCanvas(
 
 export function cancelQuickAsk(thread: string): void {
   running.get(thread)?.abort()
+}
+
+/** Every answer still running: the vault is switched or closed, and they belong to the one going. */
+export function cancelAllQuickAsk(): void {
+  for (const controller of running.values()) controller.abort()
 }

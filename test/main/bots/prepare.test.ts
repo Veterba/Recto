@@ -43,5 +43,11 @@ describe('today, said by the harness', () => {
     expect(asksDate("What's the date today?")).toBe(true)
     expect(asksDate('Какое сегодня число?')).toBe(true)
     expect(asksDate('What did I do today?')).toBe(false)
+    // A phrase inside a question about a note: that question goes to the vault.
+    expect(asksDate("What is today's plan?")).toBe(false)
+    expect(asksDate("What's the date of the half marathon?")).toBe(false)
+    expect(asksDate('Какая дата полумарафона?')).toBe(false)
+    expect(asksDate('what day is it')).toBe(true)
+    expect(asksDate('Какой сегодня день?')).toBe(true)
   })
 })

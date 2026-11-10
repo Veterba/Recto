@@ -32,6 +32,8 @@ export type QuickAskEvalJob = {
   model: string
   out: string
   quickAsk: true
+  /** The fixture's today, as the cases were written against it. */
+  today?: string
   cases: { id: string; note: string; turns: { question: string; applyFirst: boolean }[] }[]
 }
 
@@ -109,7 +111,7 @@ export async function runQuickAskEval(job: QuickAskEvalJob): Promise<void> {
         let error: string | null = null
         const thread = `${item.id}-${i}`
         const timer = setTimeout(() => cancelQuickAsk(thread), TURN_TIMEOUT_MS)
-        await quickAsk({ thread, note: item.note, model: job.model, history, question: t.question }, bots.localProvider(), (event) => {
+        await quickAsk({ thread, note: item.note, model: job.model, history, question: t.question, ...(job.today === undefined ? {} : { today: job.today }) }, bots.localProvider(), (event) => {
           if (event.type === 'text') text += event.text
           else if (event.type === 'error') error = event.problem.message
           else if (event.type !== 'steps') {
@@ -138,7 +140,9 @@ export async function runQuickAskEval(job: QuickAskEvalJob): Promise<void> {
       // What it was given: the note, every note its answers read or skimmed, and the note's links (found or not, they were listed).
       const seen = [...new Set([item.note, ...records.flatMap((r) => [...r.read, ...r.skimmed])])]
       const text = (p: string): string => (fs.existsSync(path.join(job.vault, p)) ? fs.readFileSync(path.join(job.vault, p), 'utf8') : '')
-      const links = parseNote(text(item.note)).links.map((l) => l.target)
+      // A link by its name, unless it is one of those notes already: listed once, not as a path and again as a name.
+      const titles = new Set(seen.map((p) => p.replace(/^.*\//, '').replace(/\.md$/i, '').toLowerCase()))
+      const links = parseNote(text(item.note)).links.map((l) => l.target).filter((t) => !titles.has(t.toLowerCase()))
       const given = [...new Set([...seen, ...links])]
       fs.appendFileSync(
         job.out,

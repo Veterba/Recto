@@ -68,6 +68,8 @@ function serve(socket: net.Socket, token: string): void {
       } catch {
         continue
       }
+      // `null`, a number, a list: valid JSON, but no request - reading `.method` off it threw in main.
+      if (typeof request !== 'object' || request === null || Array.isArray(request)) continue
       if (request.method === 'ping') reply({ id: request.id, pong: { vault: currentVault()?.name ?? null, version: app.getVersion() } })
       else
         void callTool(

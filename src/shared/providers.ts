@@ -133,16 +133,28 @@ export type ProviderStatus = {
   usage: ProviderUsage
 }
 
-/** "38% of 5 hours · resets 14:20" - the tightest window first. */
-export function limitsLine(limits: ProviderLimits, now = Date.now()): string {
-  const windows = [...limits.windows].sort((a, b) => b.usedPercent - a.usedPercent)
-  return windows
+/** A reading older than this says when it was taken: Claude Code reports its limits only with an answer. */
+const STALE_MS = 3600_000
+
+/**
+ * "38% of 5 hours · resets 14:20" - the tightest window first; null when nothing is left to say.
+ * A window that has reset since the reading is left out: its old share is not what is used now.
+ * An old reading says when it was taken: "(as of 7 Nov, 23:24)".
+ */
+export function limitsLine(limits: ProviderLimits, now = Date.now()): string | null {
+  const windows = limits.windows.filter((w) => w.resetsAt === null || w.resetsAt > now).sort((a, b) => b.usedPercent - a.usedPercent)
+  if (windows.length === 0) return null
+  const line = windows
     .map((w) => {
       const reset = w.resetsAt === null ? '' : ` · resets ${resetLabel(w.resetsAt, now)}`
       return `${Math.round(w.usedPercent)}% of ${w.label} used${reset}`
     })
     .join('; ')
+  return now - limits.at > STALE_MS ? `${line} (as of ${readAt(limits.at)})` : line
 }
+
+const readAt = (at: number): string =>
+  `${new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
 
 function resetLabel(at: number, now: number): string {
   const date = new Date(at)

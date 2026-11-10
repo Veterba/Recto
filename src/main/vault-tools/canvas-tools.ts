@@ -234,6 +234,8 @@ export async function proposeCanvasNew(scope: Scope, a: Args): Promise<Draft> {
   const name = String(a['name'] ?? '').trim().replace(/\.canvas$/i, '')
   if (name === '' || /[\\/:]/.test(name)) throw new ToolError('A canvas needs a name without \\ / or :.')
   const p = `${CANVAS_FOLDER}/${name}.canvas`
+  // Recto/Canvas excluded from AI: no new canvas there - and, checked first, nothing said about the ones it holds.
+  if (scope.fileHidden(p)) throw new ToolError(`${CANVAS_FOLDER}/ is excluded from AI in Recto's settings, so a new canvas cannot be made there.`)
   if (vaultFs.vaultFiles().some((f) => f.toLowerCase() === p.toLowerCase())) throw new ToolError(`A canvas “${name}” is already in ${CANVAS_FOLDER}/. Choose another name.`)
   const empty: CanvasDoc = { nodes: [], edges: [], rest: {}, order: ['nodes', 'edges'] }
   const specs = ((a['nodes'] as NewNode[] | undefined) ?? []).map(({ near: _near, ...rest }) => rest)

@@ -43,9 +43,10 @@ export function coerceAiAccess(value: unknown): AiAccessSettings {
 
 /** Is `path` one of `excluded`, or inside one of them? Case-insensitive, like the file system. */
 export function isExcludedPath(path: string, excluded: readonly string[]): boolean {
-  const lower = path.toLowerCase()
+  // Any case and any Unicode form, as the disk compares names: a folder typed "Café" is the one the Mac wrote decomposed.
+  const lower = path.normalize('NFC').toLowerCase()
   return excluded.some((entry) => {
-    const e = entry.toLowerCase().replace(/^\/+|\/+$/g, '')
+    const e = entry.normalize('NFC').toLowerCase().replace(/^\/+|\/+$/g, '')
     return e !== '' && (lower === e || lower === `${e}.md` || lower.startsWith(`${e}/`))
   })
 }

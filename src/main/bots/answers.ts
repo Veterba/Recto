@@ -357,7 +357,7 @@ async function runCloudJob(
   messages: AiMessage[],
   started: number,
 ): Promise<void> {
-  const session = openSession({ client: `recto-chat · ${providerInfo(providerOf(job.model)).name}`, tools: null, notes: null, writable: null })
+  const session = openSession({ client: `recto-chat · ${providerInfo(providerOf(job.model)).name}`, tools: null, notes: null, writable: null, cloud: true })
   const base = topic.body
   let text = ''
   let steps: BotStep[] = []

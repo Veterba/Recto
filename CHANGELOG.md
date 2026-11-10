@@ -4,6 +4,19 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.60.1 — 2026-11-10
+### Fixed
+- Plan limits no longer show an old reading as current: a window that has reset since is left out, and a reading more than an hour old says when it was taken. Claude Code reports its limits only with an answer, so "27% of 5 hours · resets 02:10" could stay for days after that window had reset.
+- The installed app and a development build show the same plan limits and the same tokens: both keep them in one file.
+- "Recto used … this week" counts since Monday, as the overview does, not the last seven days.
+- A busy or slow moment at OpenAI no longer signs you out of ChatGPT. Only a sign-in OpenAI has ended asks you to sign in again. Settings and the model picker no longer wait forever on a request that hangs.
+- A greeting with a question in Russian or Norwegian («Привет, что нового?», «Takk, når er løpet?») is answered from your notes, not as small talk.
+- "What is today's plan?" or "What's the date of the race?" are answered from your notes; only a question about today's date itself gets the date.
+- An answer stops when you switch vaults or turn cloud providers off while it runs, and nothing it finds after that is sent anywhere.
+- AI can no longer make a note or a canvas in a folder excluded from AI, or learn from the refusal what that folder holds. Recto's own folders and excluded folders are matched in any case and any Unicode form, as the Mac matches names.
+- A malformed message to Recto's MCP server is passed over instead of stopping the app.
+- Quick ask evals use the cases' own date, and their report lists each note once.
+
 ## v0.60.0 — 2026-11-10
 ### Added
 - Each answer from a cloud provider - in Quick ask and in the chat - keeps a record of what it really did: the notes it read in full, the ones it only skimmed, and the edits it suggested. The model gets it back with every later question, so it no longer takes back a read or an edit that happened, and does not suggest an applied edit again.

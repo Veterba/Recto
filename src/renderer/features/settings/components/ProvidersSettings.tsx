@@ -41,10 +41,12 @@ export function ProvidersGroup({ settings, save }: Props): React.ReactElement {
   }
 
   /** Its plan's limits when the provider reports them, and what Recto used: under the row's own line. */
-  const meter = (p: ProviderStatus): string =>
-    [p.limits !== null && p.limits.windows.length > 0 ? `${p.limits.plan === null ? '' : `${p.limits.plan} plan: `}${limitsLine(p.limits)}` : null, usageLine(p.usage)]
+  const meter = (p: ProviderStatus): string => {
+    const limits = p.limits === null ? null : limitsLine(p.limits)
+    return [p.limits !== null && limits !== null ? `${p.limits.plan === null ? '' : `${p.limits.plan} plan: `}${limits}` : null, usageLine(p.usage)]
       .filter((x): x is string => x !== null)
       .join('. ')
+  }
 
   const row = (p: ProviderStatus): React.ReactElement => {
     const info = providerInfo(p.id)

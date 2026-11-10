@@ -28,6 +28,9 @@ export const currentAiModel = (id: string): string => LEGACY_MODELS[id] ?? id
 /** What the app asks the API for on its own - a note's summary, the key test: small jobs, the cheapest model. */
 export const UTILITY_MODEL: AiModelId = 'claude-haiku-5-5'
 
+/** The longest answer asked of an API model (Anthropic's `max_tokens`): one number for every call. */
+export const MAX_ANSWER_TOKENS = 4096
+
 export const isAiModel = (value: unknown): value is AiModelId =>
   typeof value === 'string' && AI_MODELS.some((model) => model.id === currentAiModel(value))
 

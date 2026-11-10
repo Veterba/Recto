@@ -194,9 +194,13 @@ export function dateText(today: Date, lang: 'ru' | 'en' | null): string {
 }
 
 /** "What's the date today?", «Какое сегодня число?»: answered by the harness, never by the model. */
+/**
+ * The whole question, not a phrase in it: "What's the date of the race?" or «Какая дата полумарафона?»
+ * is about a note, and goes to the vault like any other.
+ */
 export const asksDate = (question: string): boolean =>
-  /\b(what('?s| is) (the )?(date|day)|today'?s date|what day is (it|today)|which day is (it|today)|what is today)\b/i.test(question) ||
-  /(как(ое|ой|ая) (сегодня )?(число|день|дата)|сегодня как(ое|ой|ая)|какой сегодня день)/i.test(question)
+  /^\s*(?:what(?:'?s| is) (?:the )?(?:date|day)(?: (?:today|is it|it is))?|what(?:'?s| is) today(?:'?s date)?|today'?s date|(?:what|which) day is (?:it|today))\s*[?.!]*\s*$/i.test(question) ||
+  /^\s*(?:как(?:ое|ой|ая) (?:сегодня )?(?:число|день|дата)(?: сегодня)?|сегодня как(?:ое|ой|ая) (?:число|день|дата)|какой сегодня день)\s*[?.!]*\s*$/iu.test(question)
 
 /** A period as the status text names it: "Going through last week…", «Листаю прошлую неделю…». */
 export function periodLabel(p: Period, today: Date, ru: boolean): string {

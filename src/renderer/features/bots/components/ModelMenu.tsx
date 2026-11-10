@@ -212,8 +212,8 @@ function cloudEntries(
       page.push({ kind: 'item', key: `setup-${p.id}`, label: p.problem?.message ?? 'Not set up', right: 'Settings…', rightAction: true, run: settings })
       continue
     }
-    if (p.limits !== null && p.limits.windows.length > 0)
-      page.push({ kind: 'note', text: limitsLine(p.limits), ...(p.limits.blocked ? { tone: 'warn' as const } : {}) })
+    const limits = p.limits === null ? null : limitsLine(p.limits)
+    if (p.limits !== null && limits !== null) page.push({ kind: 'note', text: limits, ...(p.limits.blocked ? { tone: 'warn' as const } : {}) })
     page.push({ kind: 'note', text: usageLine(p.usage) })
     const choices = p.models.length > 0 ? p.models : [{ id: '', label: 'Default model' }]
     for (const m of choices) {

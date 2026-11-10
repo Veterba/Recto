@@ -3,7 +3,9 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { weekStart as mondayOf } from '../../shared/overview'
 import type { LimitWindow, ProviderId, ProviderLimits, ProviderUsage } from '../../shared/providers'
+import { sharedUserData } from '../dev-guard'
 
 /**
  * How much of a plan is left, where a provider says, and how much Recto
@@ -16,12 +18,13 @@ import type { LimitWindow, ProviderId, ProviderLimits, ProviderUsage } from '../
  * - ChatGPT plan, API keys: no provider says what is left. What Recto used
  *   (each answer's token count) is all that can be shown.
  *
- * Kept in the app's folder (`provider-usage.json`), never the vault.
+ * Kept in the installed app's folder (`provider-usage.json`), never the vault -
+ * shared with a dev build, which spends from the same accounts (dev-guard.ts).
  */
 
 type Saved = { usage: Record<string, Record<string, number>>; limits: Record<string, ProviderLimits> }
 
-const FILE = (): string => path.join(app.getPath('userData'), 'provider-usage.json')
+const FILE = (): string => path.join(sharedUserData(), 'provider-usage.json')
 /** Days of usage kept: a week shows, a little more is slack. */
 const KEEP_DAYS = 10
 
@@ -58,10 +61,11 @@ export function recordUsage(id: ProviderId, tokens: number, now = Date.now()): v
   store()
 }
 
+/** "This week" as the overview counts it: since Monday (shared/overview.ts weekStart). */
 export function usageOf(id: ProviderId, now = Date.now()): ProviderUsage {
   const days = load().usage[id] ?? {}
   const today = dayOf(now)
-  const weekStart = dayOf(now - 6 * 86_400_000)
+  const weekStart = mondayOf(today)
   let week = 0
   for (const [day, n] of Object.entries(days)) if (day >= weekStart && day <= today) week += n
   return { today: days[today] ?? 0, week }

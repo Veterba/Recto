@@ -83,11 +83,12 @@ describe('Claude Code', () => {
 })
 
 describe('what Recto used', () => {
-  it('counts tokens per provider per day, today and the last seven days', () => {
+  it('counts tokens per provider per day, today and this week since Monday - as the overview counts a week', () => {
     const day = 86_400_000
-    const now = new Date('2026-11-02T12:00:00').getTime()
-    recordUsage('chatgpt', 1000, now - 8 * day)
-    recordUsage('chatgpt', 2000, now - 3 * day)
+    // Thursday 5 November: the week began on Monday the 2nd.
+    const now = new Date('2026-11-05T12:00:00').getTime()
+    recordUsage('chatgpt', 1000, now - 4 * day) // Sunday the 1st: last week
+    recordUsage('chatgpt', 2000, now - 3 * day) // Monday the 2nd
     recordUsage('chatgpt', 500, now)
     recordUsage('chatgpt', 0, now)
     expect(usageOf('chatgpt', now)).toEqual({ today: 500, week: 2500 })
@@ -98,7 +99,28 @@ describe('what Recto used', () => {
     expect(usageLine({ today: 500, week: 12_400 })).toBe('Recto used 500 tokens today · 12k this week')
     expect(usageLine({ today: 0, week: 0 })).toBe('Not used by Recto yet')
     expect(windowLabel(300)).toBe('5 hours')
-    const line = limitsLine({ plan: null, at: 0, blocked: false, windows: [{ label: 'week', usedPercent: 12, resetsAt: null }, { label: '5 hours', usedPercent: 38.4, resetsAt: null }] })
+    const now = Date.now()
+    const line = limitsLine({ plan: null, at: now, blocked: false, windows: [{ label: 'week', usedPercent: 12, resetsAt: null }, { label: '5 hours', usedPercent: 38.4, resetsAt: null }] }, now)
     expect(line).toBe('38% of 5 hours used; 12% of week used')
+  })
+
+  it("an old reading: a window that has reset since is left out, and the rest says when it was read", () => {
+    // Read on 7 November at 23:24 (Claude Code reports only with an answer); looked at on the 9th at 12:28.
+    const at = new Date('2026-11-07T23:24:00').getTime()
+    const now = new Date('2026-11-09T12:28:00').getTime()
+    const stale = {
+      plan: null,
+      at,
+      blocked: false,
+      windows: [
+        { label: '5 hours', usedPercent: 27, resetsAt: new Date('2026-11-08T02:10:00').getTime() },
+        { label: 'week', usedPercent: 56, resetsAt: new Date('2026-11-12T19:00:00').getTime() },
+      ],
+    }
+    const line = limitsLine(stale, now)!
+    expect(line).not.toContain('5 hours')
+    expect(line).toMatch(/^56% of week used · resets .*\(as of .*\)$/)
+    // Every window reset since: nothing left to say.
+    expect(limitsLine({ ...stale, windows: [stale.windows[0]!] }, now)).toBeNull()
   })
 })

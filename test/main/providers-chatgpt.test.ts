@@ -31,6 +31,8 @@ let server: http.Server
 /** What the mocked servers do next. */
 const mock = {
   tokenStatus: 200,
+  /** The OAuth error code a failed token request answers with. */
+  tokenError: 'invalid_grant',
   issued: 'oaiapp_test123',
   nonce: '',
   refreshes: 0,
@@ -74,7 +76,7 @@ beforeAll(async () => {
     }
     if (url.pathname === '/api/accounts/oauth/token') {
       const form = new URLSearchParams(body)
-      if (mock.tokenStatus !== 200) return json(mock.tokenStatus, { error: 'invalid_grant' })
+      if (mock.tokenStatus !== 200) return json(mock.tokenStatus, { error: mock.tokenError })
       if (form.get('grant_type') === 'refresh_token') mock.refreshes++
       expect(form.get('resource')).toBe('https://api.openai.com/v1')
       expect(form.get('client_id')).toBe(mock.issued)
@@ -106,6 +108,7 @@ afterAll(() => {
 })
 afterEach(() => {
   mock.tokenStatus = 200
+  mock.tokenError = 'invalid_grant'
   mock.scope = 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct'
   mock.responses = []
   mock.requests = []
@@ -229,10 +232,23 @@ describe('Sign in with ChatGPT', () => {
     expect(mock.refreshes).toBe(1)
 
     now += 60 * 60_000
+    // Busy or slow is not over: the sign-in stands for the next try.
+    for (const [status, error] of [
+      [429, 'rate_limit_exceeded'],
+      [408, 'timeout'],
+      [400, 'invalid_request'],
+    ] as const) {
+      mock.tokenStatus = status
+      mock.tokenError = error
+      await expect(auth.token()).rejects.toMatchObject({ problem: { kind: status === 400 ? 'failed' : 'down' } })
+      expect(auth.signedIn()).toBe(true)
+    }
     mock.tokenStatus = 400
+    mock.tokenError = 'invalid_grant'
     await expect(auth.token()).rejects.toMatchObject({ problem: { kind: 'expired' } })
     expect(auth.signedIn()).toBe(false)
     expect(auth.record()?.clientId).toBe('oaiapp_test123')
+    mock.tokenStatus = 200
   })
 
   it('signs out by revoking the refresh token, and keeps the registration', async () => {
@@ -249,7 +265,7 @@ describe('Sign in with ChatGPT', () => {
 const sse = (events: unknown[]): string => events.map((e) => `event: x\ndata: ${JSON.stringify(e)}\n\n`).join('')
 
 describe('the Responses API with Recto’s tools', () => {
-  const session = { id: 's', client: 't', tools: null, notes: null, writable: null, seen: new Set<string>(), record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
+  const session = { id: 's', client: 't', tools: null, notes: null, writable: null, vault: null, cloud: true, record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
   const run = (plan = true) =>
     toolLoop(responsesModel('gpt-test', { token: async () => 'tok', plan }, VAULT_TOOLS), {
       model: 'chatgpt:gpt-test',

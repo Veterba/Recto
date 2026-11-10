@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { AnswerRecord } from '../../shared/answer-record'
+import { currentVault } from '../vault'
 
 /**
  * A session: one run of one of Recto's own providers, with what it may do.
@@ -12,7 +13,9 @@ import type { AnswerRecord } from '../../shared/answer-record'
  * - `notes`: the only notes it may see (Quick ask: the open note and its links);
  * - `writable`: the only notes it may change (Quick ask: the open note);
  * - writes always wait for Apply, whatever the write mode says - a chat
- *   inside Recto suggests, it never writes on its own.
+ *   inside Recto suggests, it never writes on its own;
+ * - `vault`, `cloud`: the vault it was opened in, and whether a cloud model
+ *   asks - its calls stop when the vault changes or cloud is turned off.
  */
 
 export type ToolSession = {
@@ -22,6 +25,10 @@ export type ToolSession = {
   tools: ReadonlySet<string> | null
   notes: ReadonlySet<string> | null
   writable: ReadonlySet<string> | null
+  /** The vault the session was opened in: a call after a switch would read another vault's notes. */
+  vault: string | null
+  /** A cloud model asks: its calls stop once cloud is turned off for the vault. */
+  cloud: boolean
   /** Every call, as it starts and as it ends: the steps card. */
   onCall?: (call: SessionCall) => void
   /** What the answer read in full, only skimmed, and suggested (shared/answer-record.ts); its sources too. */
@@ -32,10 +39,11 @@ export type SessionCall = { n: number; tool: string; args: Record<string, unknow
 
 const sessions = new Map<string, ToolSession>()
 
-export function openSession(s: Omit<ToolSession, 'id' | 'record'>): ToolSession {
+export function openSession(s: Omit<ToolSession, 'id' | 'record' | 'vault'>): ToolSession {
   const session: ToolSession = {
     ...s,
     id: randomBytes(12).toString('hex'),
+    vault: currentVault()?.path ?? null,
     record: { read: new Set(), skimmed: new Set(), proposals: [] },
   }
   sessions.set(session.id, session)

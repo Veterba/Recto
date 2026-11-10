@@ -35,7 +35,12 @@ export const LEGACY_CHATS_FOLDER = 'chats'
 /** The Obsidian Kanban key for the folder new notes made from a board's cards go in. */
 export const NEW_NOTE_FOLDER_KEY = 'new-note-folder'
 
-const within = (path: string, folder: string): boolean => path === folder || path.startsWith(`${folder}/`)
+/** A path as the Mac's disk compares it: any case, any Unicode form ("recto/chats" is Recto/Chats). */
+const fold = (path: string): string => path.normalize('NFC').toLowerCase()
+const within = (path: string, folder: string): boolean => {
+  const [p, f] = [fold(path), fold(folder)]
+  return p === f || p.startsWith(`${f}/`)
+}
 
 export const inRecto = (path: string): boolean => within(path, RECTO_FOLDER)
 /** The note that says what the folder is: Recto's, not one of yours, so the graph and the overview leave it out. */

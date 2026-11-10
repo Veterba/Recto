@@ -58,6 +58,7 @@ const session = () =>
     tools: null,
     notes: new Set([PLAN, `${TRIP}/Kyoto.md`, `${TRIP}/Itinerary.md`, `${TRIP}/Packing.txt`]),
     writable: new Set([PLAN]),
+    cloud: false,
   })
 
 describe('the record of an answer', () => {
@@ -112,6 +113,35 @@ describe('the record of an answer', () => {
     access = { guide: `${TRIP}/Kyoto.md`, excluded: [TRIP] }
     const hidden = await callTool('get_ai_guide', {}, 'claude-code')
     expect(hidden.ok && hidden.blocks.some((b) => b.kind === 'note')).toBe(false)
+  })
+
+  it('a session stops calling once cloud is turned off, or another vault is open', async () => {
+    access = { excluded: [], cloud: true }
+    const cloud = openSession({ client: 'quick-ask · Codex', tools: null, notes: null, writable: null, cloud: true })
+    expect((await callTool('read_note', { note: 'Kyoto' }, cloud.client, cloud.id)).ok).toBe(true)
+    access = { excluded: [], cloud: false }
+    const off = await callTool('read_note', { note: 'Kyoto' }, cloud.client, cloud.id)
+    expect(off).toMatchObject({ ok: false, error: expect.stringMatching(/turned off/) })
+    closeSession(cloud.id)
+    // A local model's session is not held by the cloud switch - but by the vault, it is.
+    const local = session()
+    const before = root
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-record-other-'))
+    const moved = await callTool('read_note', { note: 'Kyoto' }, local.client, local.id)
+    expect(moved).toMatchObject({ ok: false, error: expect.stringMatching(/Another vault/) })
+    fs.rmSync(root, { recursive: true, force: true })
+    root = before
+    closeSession(local.id)
+  })
+
+  it("an excluded folder takes no new note or canvas, and the refusal says nothing about what it holds", async () => {
+    put('Private/Diary.md', '# Diary\n')
+    access = { excluded: ['Private', 'Recto/Canvas'], cloud: true }
+    const note = await callTool('propose_new_note', { name: 'Diary', folder: 'Private', text: 'x' }, 'claude-code')
+    expect(note).toMatchObject({ ok: false, error: expect.stringMatching(/excluded/) })
+    expect(note.ok ? '' : note.error).not.toMatch(/already/)
+    const canvas = await callTool('canvas_propose_new', { name: 'Ideas', nodes: [{ text: 'A card' }] }, 'claude-code')
+    expect(canvas).toMatchObject({ ok: false, error: expect.stringMatching(/excluded/) })
   })
 
   it('a call that fails leaves nothing', async () => {

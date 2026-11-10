@@ -382,8 +382,11 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   vault scope on every call, and `--session` rides on each socket request from `src/mcp/index.ts`.
   Trust is therefore in Recto, not in each provider's own sandbox. In-app chats always *suggest*
   (Suggested edits), even in Write directly mode. Quick ask's session makes only the open note
-  writable; its reach includes the files the note links or embeds. The session's tool calls become the answer's steps card, and the notes they returned its
-  sources.
+  writable; its reach includes the files the note links or embeds. The session's tool calls become the answer's steps card, and its record
+  (see below) the sources. A session keeps the vault it was opened in and whether a cloud model
+  asks: every call checks both, so an answer stops when the vault changes or cloud is turned off
+  mid-answer; a vault switch or close also stops running answers, Quick ask runs and the background
+  jobs (`windDownAi` in `ipc.ts`).
 - **Detection** (`providers/detect.ts`). A Mac app does not inherit the shell PATH, so the CLI is
   looked for through the login shell's PATH (asked once), the app PATH, Homebrew, npm, bun, volta,
   pnpm, `~/.local/bin`, `~/.claude/local`, nvm Node bins and inside ChatGPT.app (which ships the
@@ -412,12 +415,15 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   too; earlier answers that used a note in an excluded folder - by their sources or their record -
   are withheld from the history a model receives, the chats' and Quick ask's alike; and the local pipeline now merges them into its own bot exclude list
   (`bots/answers.ts`).
-- **Limits and usage** (`providers/limits.ts`, kept in `<userData>/provider-usage.json`). Codex's
-  plan windows come from its app server's `account/rateLimits/read` - started, asked, stopped, no
-  model call; Claude Code's from the `rate_limit_event` in its stream, so they appear after its first
-  answer and are kept. ChatGPT plan and API keys report no remaining quota. Every run's token count
-  (the providers' usage fields) is added per provider per day; the picker's maker pages and
-  Settings show the limits and "Recto used … today · … this week". The picker groups the cloud ways
+- **Limits and usage** (`providers/limits.ts`, kept in the installed app's folder,
+  `provider-usage.json` - a dev build shares it, `sharedUserData` in `dev-guard.ts`: the accounts are
+  the same). Codex's plan windows come from its app server's `account/rateLimits/read` - started,
+  asked, stopped, no model call; Claude Code's from the `rate_limit_event` in its stream, so they
+  appear after its first answer and are kept. A window whose reset has passed is not shown, and a
+  reading older than an hour says when it was taken (`limitsLine`). ChatGPT plan and API keys report
+  no remaining quota. Every run's token count (the providers' usage fields) is added per provider per
+  day; the picker's maker pages and Settings show the limits and "Recto used … today · … this week"
+  (since Monday, as the overview counts a week). The picker groups the cloud ways
   in by maker (`Vendor` in `shared/providers.ts`): Anthropic (Claude Code, API key) and OpenAI
   (Codex, ChatGPT plan, API key).
 - **Failures** become `ProblemLine` states (`renderer/features/bots/components/ProblemLine.tsx`): CLI

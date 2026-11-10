@@ -302,6 +302,7 @@ async function main(): Promise<void> {
     model,
     out,
     quickAsk: true,
+    ...(loaded.today === null ? {} : { today: loaded.today }),
     cases: cases.map((c) => ({
       id: c.id,
       note: c.note ?? '',

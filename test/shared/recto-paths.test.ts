@@ -1,6 +1,7 @@
+import { isExcludedPath } from '../../src/shared/ai-access'
 import { describe, expect, it } from 'vitest'
 import { boardText } from '../../src/shared/kanban'
-import { cardFolderFor, isPlacedCard, ownFolderOf, placeFor } from '../../src/shared/recto-paths'
+import { cardFolderFor, inRecto, isChatPath, isPlacedCard, ownFolderOf, placeFor } from '../../src/shared/recto-paths'
 
 /**
  * Where Recto's own notes live: a board in its folder, cards beside the board
@@ -71,5 +72,20 @@ describe('where a new card goes', () => {
     expect(cardFolderFor(OUTSIDE, plain)).toBe('Recto/Unsorted')
     expect(cardFolderFor(OUTSIDE, boardText([{ title: 'To do', items: [] }], { 'new-note-folder': 'Projects/Cards' }))).toBe('Projects/Cards')
     expect(cardFolderFor(A, null)).toBe('Recto/Boards/A')
+  })
+})
+
+describe("Recto's own folders and excluded folders, as the Mac's disk compares names", () => {
+  it('in any case: "recto/chats/x" is in Recto/Chats - the tools refused the one spelling and wrote the other', () => {
+    expect(inRecto('recto/Boards/Plan/Plan.md')).toBe(true)
+    expect(isChatPath('RECTO/chats/recto/2026-11-10.md')).toBe(true)
+    expect(inRecto('Rectory/Plan.md')).toBe(false)
+  })
+
+  it('in any Unicode form: a folder typed composed is the one the disk wrote decomposed', () => {
+    const typed = 'Café'.normalize('NFC')
+    const onDisk = `${'Café'.normalize('NFD')}/Menu.md`
+    expect(isExcludedPath(onDisk, [typed])).toBe(true)
+    expect(isExcludedPath('cafe/Menu.md', [typed])).toBe(false)
   })
 })

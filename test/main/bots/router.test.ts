@@ -61,6 +61,10 @@ describe('the obvious cases, by rules', () => {
       ['Спасибо, очень помог!', 'smalltalk'],
       ['haha nice', 'smalltalk'],
       ['thanks, and what did I decide about streaks?', null],
+      // A greeting that asks something is a question, in Russian and Norwegian too (`\b` knew only ASCII).
+      ['Привет, что нового?', null],
+      ['Спасибо, а где мой план?', null],
+      ['Takk, når er løpet?', null],
       ['What model are you?', 'self'],
       ['Из какого года твои знания?', 'self'],
       ['Are my notes sent anywhere?', 'self'],

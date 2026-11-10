@@ -16,7 +16,7 @@ vi.mock('../../src/main/vault-tools', () => ({ callTool: async () => ({ ok: true
 const { findCli, searchDirs } = await import('../../src/main/providers/detect')
 const { cliArgs, cliRunner, forgetAuth, parseLine, problemFrom, transcript } = await import('../../src/main/providers/cli')
 const { ProviderError } = await import('../../src/main/providers/run')
-const { forCloud } = await import('../../src/main/providers/prompts')
+const { forCloud, quickAskCanvasSystem, quickAskSystem } = await import('../../src/main/providers/prompts')
 
 const FAKE = path.resolve('test/fixtures/fake-cli/fake-agent.mjs')
 /** The PATH a Finder-launched app gets: no Homebrew, no npm, no nvm. */
@@ -129,7 +129,7 @@ describe('reading their streams', () => {
 })
 
 describe('an answer from a fake CLI', () => {
-  const session = { id: 's1', client: 'test', tools: null, notes: null, writable: null, seen: new Set<string>(), record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
+  const session = { id: 's1', client: 'test', tools: null, notes: null, writable: null, vault: null, cloud: true, record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
   const ask = async (name: 'codex' | 'claude', signal = new AbortController().signal, messages = [{ role: 'user' as const, content: 'Soil?' }]) => {
     const file = install('opt/homebrew/bin', name)
     const run = cliRunner(name, { find: async () => file, path: async () => process.env['PATH'] ?? '', launcher: () => '/x/recto-mcp' })
@@ -193,12 +193,19 @@ describe('switching provider mid-conversation', () => {
       { role: 'assistant' as const, content: 'Compost and loam (answered on this Mac).', model: 'qwen3.5:9b', sources: [{ path: 'Garden/Soil.md', heading: null }] },
       { role: 'user' as const, content: 'And for pots?' },
     ]
-    const session = { id: 's', client: 't', tools: null, notes: null, writable: null, seen: new Set<string>(), record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
+    const session = { id: 's', client: 't', tools: null, notes: null, writable: null, vault: null, cloud: true, record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
     for await (const _ of run({ model: 'claude-code', system: 'S', messages: forCloud(turns, [], () => null), session, signal: new AbortController().signal })) void _
     const { prompt } = JSON.parse(fs.readFileSync(log, 'utf8')) as { prompt: string }
     expect(prompt).toContain('Compost and loam (answered on this Mac).')
     expect(prompt).toContain('And for pots?')
     expect(transcript([{ role: 'user', content: 'only' }])).toBe('only')
+  })
+
+  it("Quick ask takes the day it is given as today - the eval's fixture day - and this Mac's day without one", async () => {
+    const session = { id: 'q', client: 't', tools: new Set<string>(), notes: null, writable: null, vault: null, cloud: false, record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
+    expect(await quickAskSystem(session, 'Plan', '2026-09-30')).toContain('Today is 2026-09-30.')
+    expect(await quickAskCanvasSystem(session, 'Board', '2026-09-30')).toContain('Today is 2026-09-30.')
+    expect(await quickAskSystem(session, 'Plan')).toContain(`Today is ${new Date().toLocaleDateString('en-CA')}.`)
   })
 
   it("a message quoting the turn tags cannot open a turn - or Recto's record - of its own", () => {

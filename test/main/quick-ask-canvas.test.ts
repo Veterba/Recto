@@ -46,7 +46,7 @@ afterEach(() => fs.rmSync(root, { recursive: true, force: true }))
 describe('Quick ask on a canvas', () => {
   it('suggests cards on its canvas, as ghosts to accept; the canvas file is untouched until then; it changes no note', async () => {
     const before = fs.readFileSync(path.join(root, CANVAS), 'utf8')
-    const session = openSession({ client: 'quick-ask · Codex', tools: new Set(QUICK_CANVAS_TOOLS), notes: new Set([CANVAS]), writable: new Set([CANVAS]) })
+    const session = openSession({ client: 'quick-ask · Codex', tools: new Set(QUICK_CANVAS_TOOLS), notes: new Set([CANVAS]), writable: new Set([CANVAS]), cloud: false })
     try {
       const made = await callTool('canvas_propose_nodes', { canvas: CANVAS, nodes: [{ text: 'Compost', near: 'n1' }] }, 'recto', session.id)
       expect(made).toMatchObject({ ok: true })
