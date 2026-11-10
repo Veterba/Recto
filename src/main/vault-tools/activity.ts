@@ -12,8 +12,26 @@ import { currentVault } from '../vault'
 
 /** Past this size the log keeps its newer half. */
 const MAX_BYTES = 2_000_000
-/** Arguments that carry note text, logged as a length only. */
-const CONTENT = new Set(['text', 'changes', 'properties', 'find', 'replace', 'after_text', 'title'])
+/**
+ * Arguments that carry note text, logged as a length only: a write's text and properties, a card's,
+ * a canvas's nodes, arrows and groups, a heading to write under, links made, what was searched for.
+ */
+const CONTENT = new Set([
+  'text',
+  'changes',
+  'properties',
+  'find',
+  'replace',
+  'after_text',
+  'title',
+  'card',
+  'nodes',
+  'edges',
+  'groups',
+  'new_links',
+  'under_heading',
+  'query',
+])
 
 const file = (): string | null => {
   const vault = currentVault()

@@ -1,4 +1,4 @@
-/* ---------- suggested edits ---------- */
+/* ---------- suggested edits: the status bar's count, the panel, and one suggestion ---------- */
 
 .edits__badge {
   gap: 4px;
@@ -6,89 +6,158 @@
   font-variant-numeric: tabular-nums;
 }
 
-.dialog.edits {
-  width: min(760px, calc(100vw - 2 * var(--size-6)));
-  max-height: calc(100vh - 2 * var(--size-6));
-  display: flex;
-  flex-direction: column;
+/* The panel is Settings' glass (settings.css .settings-panel); only its insides are its own. */
+.edits-panel__head {
+  cursor: default;
 }
-
-.edits__list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--size-4);
-  margin-top: var(--size-3);
+.edits-panel__count {
+  margin-left: var(--size-2);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.edits-panel__body {
+  min-height: 0;
   overflow-y: auto;
+  padding: var(--size-4);
+}
+.edits-panel__empty {
+  margin: var(--size-4) 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+/* Suggestions as rows of one card, divided by hairlines - as a settings group's rows are. */
+.edits-panel__list > .suggestion + .suggestion {
+  border-top: 1px solid var(--glass-border);
 }
 
-.edits__item {
-  padding: var(--size-3);
+/* ---------- one suggestion ---------- */
+
+.suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+  padding: var(--size-3) var(--size-4);
+}
+/* In a chat: its own small card under the answer. */
+.suggestion--chat {
+  padding: var(--size-2) var(--size-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+}
+.suggestion.is-settled {
+  gap: var(--size-1);
 }
 
-.edits__itemhead {
+.suggestion__head {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
 }
-
-.edits__meta,
-.edits__path {
+.suggestion__kind {
+  color: var(--text-secondary);
+}
+.suggestion__note,
+.suggestion__filename {
+  all: unset;
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+.suggestion__note:hover,
+.suggestion__filename:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.suggestion__meta {
+  margin-left: auto;
   color: var(--text-muted);
-  font-size: var(--font-size-11-5);
+  font-size: var(--font-size-12);
 }
-
-.edits__path {
-  margin-top: var(--size-2);
-  font-family: var(--font-mono);
-}
-
-.edits__diff {
-  margin: var(--size-1) 0 0;
-  padding: var(--size-2) 0;
-  overflow-x: auto;
-  border-radius: var(--radius-s);
-  background: var(--bg-secondary);
-  font-family: var(--font-mono);
+.suggestion__filename {
+  display: block;
+  margin-bottom: var(--size-1);
   font-size: var(--font-size-12-5);
-  line-height: 1.5;
 }
 
-.edits__line {
-  padding: 0 var(--size-2) 0 calc(var(--size-2) + 1.5ch);
-  text-indent: -1.5ch;
+/* The change in the note's own font: added lines with a green bar, removed ones red and struck. */
+.suggestion__diff {
+  padding: var(--size-1) 0;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+  font-family: var(--font-editor);
+  font-size: var(--font-size-13);
+  line-height: 1.55;
+}
+.suggestion__line {
+  padding: 1px var(--size-3) 1px calc(var(--size-3) - 3px);
+  border-left: 3px solid transparent;
   /* Notes are prose: long lines wrap rather than run off the edge. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  color: var(--text-secondary);
 }
-.edits__line span {
-  display: inline-block;
-  width: 1.5ch;
-  color: var(--text-muted);
+.suggestion__line--added {
+  border-left-color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--text-primary);
 }
-.edits__line--added {
-  background: color-mix(in srgb, var(--success) 14%, transparent);
-}
-.edits__line--removed {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+.suggestion__line--removed {
+  border-left-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
   text-decoration: line-through;
-  text-decoration-color: color-mix(in srgb, var(--danger) 50%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--danger) 55%, transparent);
 }
-.edits__fold {
-  padding: 0 var(--size-2);
+.suggestion__fold {
+  padding: 1px var(--size-3);
   color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-11-5);
 }
 
-.edits__error {
-  margin: var(--size-2) 0 0;
+.suggestion__canvas {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
+}
+.suggestion__error {
+  margin: 0;
   color: var(--danger);
   font-size: var(--font-size-12-5);
 }
 
-.edits__buttons {
+.suggestion__foot {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: var(--size-1);
-  margin-top: var(--size-2);
+}
+.suggestion__spacer {
+  flex: 1;
+}
+.suggestion__more {
+  all: unset;
+  color: var(--accent);
+  font-size: var(--font-size-12-5);
+  cursor: pointer;
+}
+.suggestion__settled {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: var(--font-size-12-5);
+}
+.suggestion__settled--applied {
+  color: var(--success);
+}
+.suggestion__settled--stale {
+  color: var(--warning, var(--danger));
 }

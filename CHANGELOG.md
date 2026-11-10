@@ -4,6 +4,23 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.60.2 — 2026-11-10
+### Changed
+- An edit AI suggests in a chat shows right under the answer that made it, in the chat panel and in Quick ask, with Apply and Discard there - and, once settled, whether it was applied, discarded or went out of date.
+- Suggested edits looks like the rest of Recto: a glass panel like Settings, without a backdrop, each suggestion with its note's name, what kind of change it is, who suggested it and how long ago, and the change in the note's own font with added and removed lines marked. Apply all and Discard all when several wait; a suggestion settled there stays with what became of it until the panel is closed.
+- "What do I have on Friday?", "tomorrow" and "next week" look ahead; a past question still means the day before.
+
+### Fixed
+- While a next question is typed during an answer, Stop stays beside Send, and Esc stops the answer.
+- An error from one chat topic no longer shows under another.
+- AI settings can no longer be saved before they have loaded, which could reset the excluded folders.
+- A Claude Code or Codex that stops early no longer crashes Recto. Quitting Recto also stops Quick ask's answers.
+- Claude Code gets Recto's instructions and your AI guide from a file, not the command line, and runs without your own Claude Code hooks and plugins.
+- AI edits keep a note's Windows line endings, and an edit copied without them still finds its place.
+- The AI activity log no longer keeps the text of canvas cards, headings or searches. Write directly's backups are kept 30 days.
+- "Late" no longer matches "template"; a task topic nothing mentions is said so; «в среду с Колей» is one day, not a range.
+- The eval's checks: "not in the vault" no longer passes on «Интернет» or on a "not found, but…" that answers anyway, and a small number must be in the notes to count as grounded.
+
 ## v0.60.1 — 2026-11-10
 ### Fixed
 - Plan limits no longer show an old reading as current: a window that has reset since is left out, and a reading more than an hour old says when it was taken. Claude Code reports its limits only with an answer, so "27% of 5 hours · resets 02:10" could stay for days after that window had reset.

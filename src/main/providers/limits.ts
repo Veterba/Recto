@@ -172,6 +172,8 @@ export function readCodexLimits(file: string, env: NodeJS.ProcessEnv, timeoutMs 
     const timer = setTimeout(() => finish(null), timeoutMs)
     child.on('error', () => finish(null))
     child.on('close', () => finish(null))
+    // Started on each Settings open: an app server gone before it read the request must not take main down (EPIPE).
+    child.stdin.on('error', () => undefined)
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => {
       pending += chunk

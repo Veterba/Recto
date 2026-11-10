@@ -125,10 +125,16 @@ const NOT_FOUND = [
   /\b(doesn't|does not|don't|do not|didn't)\s+(contain|have|mention|cover)\b/i,
   /\b(found|see|is) nothing\b/i,
   /\b(couldn't|could not|can't|cannot|didn't|did not|don't|do not)\s+(find|see|locate)\b/i,
-  /(нет|ничего|не нашёл|не нашел|не нашла|не упомина|отсутству|не нашлось|нет информации|нет заметки|нет данных)/i,
+  // Whole words: «нет» is not the end of «Интернет».
+  /(?<!\p{L})(нет|ничего|не нашёл|не нашел|не нашла|не упомина\p{L}*|отсутству\p{L}*|не нашлось|нет информации|нет заметки|нет данных)(?!\p{L})/iu,
   /\b(ingen|ikke|finner ikke|fant ikke)\b/i,
 ]
-export const saysNotFound = (answer: string): boolean => NOT_FOUND.some((re) => re.test(answer))
+/** "…, but your race is on June 5": a "not found" that goes on to answer anyway is not one. */
+const BUT = /\b(but|however|though)\b|(?<!\p{L})(но|однако|зато)(?!\p{L})|\b(men|likevel)\b/iu
+export const saysNotFound = (answer: string): boolean =>
+  answer
+    .split(/(?<=[.!?…])\s+|\n+/)
+    .some((sentence) => NOT_FOUND.some((re) => re.test(sentence)) && !BUT.test(sentence))
 
 /** The distinct notes read, in the order they came. */
 export function notesRead(context: readonly ContextNote[]): string[] {
@@ -258,7 +264,11 @@ export function numberClaims(answer: string, contextText: string): string[] {
         .map(Number),
     ),
   ].slice(0, 400)
-  const derived = (n: number): boolean => values.some((a) => values.some((b) => a + b === n || a - b === n))
+  // Worked out from two of the context's amounts: for amounts only (three digits or more, the money and
+  // word counts the rule is for). A small number - days, a count - must be in the context itself: among
+  // a page of dates and numbers nearly any two-digit number is some sum or difference ("16" = 26 - 10).
+  const amounts = values.filter((v) => v >= 100)
+  const derived = (n: number): boolean => n >= 100 && amounts.some((a) => amounts.some((b) => a + b === n || a - b === n))
   const isoDays = new Set([...contextText.matchAll(/\d{4}-(\d{2})-(\d{2})/g)].map((m) => `${m[1]}-${m[2]}`))
   const out = new Set<string>()
   for (const line of joinThousands(answer).split('\n')) {

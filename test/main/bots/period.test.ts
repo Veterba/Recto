@@ -28,6 +28,24 @@ describe('time words to a period', () => {
     expect(p('со среды')).toBe('2026-09-23..2026-09-30')
   })
 
+  it('looking ahead: tomorrow, the day after, next week, and a weekday still to come', () => {
+    // Wednesday 30 September.
+    expect(p('what do I have tomorrow')).toBe('2026-10-01..2026-10-01')
+    expect(p('что у меня послезавтра')).toBe('2026-10-02..2026-10-02')
+    expect(p('tasks for next week')).toBe('2026-10-05..2026-10-11')
+    expect(p('что запланировано на следующей неделе')).toBe('2026-10-05..2026-10-11')
+    expect(p('What do I have on Friday?')).toBe('2026-10-02..2026-10-02')
+    expect(p('what is planned for Monday')).toBe('2026-10-05..2026-10-05')
+    expect(p('hva skal jeg gjøre på fredag')).toBe('2026-10-02..2026-10-02')
+    // Asked about what was: still the one before today.
+    expect(p('what did I have on Friday')).toBe('2026-09-25..2026-09-25')
+  })
+
+  it('«с» is "since" only right before the day: «в среду с Колей» is one Wednesday', () => {
+    expect(p('что я обсуждал в среду с Колей')).toBe('2026-09-23..2026-09-23')
+    expect(p('что нового с понедельника')).toBe('2026-09-28..2026-09-30')
+  })
+
   it('yesterday, today, last N days, explicit dates', () => {
     expect(p('yesterday')).toBe('2026-09-29..2026-09-29')
     expect(p('что я делал вчера')).toBe('2026-09-29..2026-09-29')

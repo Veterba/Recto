@@ -1,3 +1,4 @@
+import { isCrlf, toLf, withEndings } from '../../shared/line-endings'
 import fs from 'node:fs'
 import type { CanvasOp } from '../../shared/canvas-ops'
 import path from 'node:path'
@@ -100,9 +101,13 @@ function noteChange(
   after: string,
   newLinks: readonly string[],
 ): { change: FileChange; formatted: string[] } {
-  checkLinks(scope, p, before ?? '', after, newLinks)
-  const result = formatChanged(before, after, scope.settings.formatting, formatCtx(scope, p))
-  return { change: { path: p, before, after: result.text }, formatted: result.applied }
+  // Worked on with \n line ends; a note written with \r\n (from Windows) gets them back, every line - not a mix.
+  const crlf = before !== null && isCrlf(before)
+  const lfBefore = before === null ? null : toLf(before)
+  const lfAfter = toLf(after)
+  checkLinks(scope, p, lfBefore ?? '', lfAfter, newLinks)
+  const result = formatChanged(lfBefore, lfAfter, scope.settings.formatting, formatCtx(scope, p))
+  return { change: { path: p, before, after: withEndings(result.text, crlf) }, formatted: result.applied }
 }
 
 const links = (a: Args): string[] => (Array.isArray(a['new_links']) ? (a['new_links'] as string[]) : [])
@@ -155,8 +160,10 @@ export function proposeNewNote(scope: Scope, a: Args): Draft {
 
 export async function proposeEdit(scope: Scope, a: Args): Promise<Draft> {
   const note = await editable(scope, String(a['note']))
-  let after = note.text
-  for (const [i, c] of (a['changes'] as { find: string; replace: string }[]).entries()) {
+  // Matched on \n line ends: a model copies a passage without the \r of a note from Windows.
+  let after = toLf(note.text)
+  for (const [i, raw] of (a['changes'] as { find: string; replace: string }[]).entries()) {
+    const c = { find: toLf(raw.find), replace: toLf(raw.replace) }
     const at = after.indexOf(c.find)
     if (at === -1) throw new ToolError(`Change ${i + 1}: its find text is not in “${titleOf(note.path)}”. Copy it exactly from read_note.`)
     if (after.indexOf(c.find, at + 1) !== -1)
@@ -247,15 +254,16 @@ export async function proposeLink(scope: Scope, a: Args): Promise<Draft> {
   const to = scope.need(String(a['to']))
   const link = `[[${scope.linkTo(to, from.path)}]]`
   let after: string
+  const text = toLf(from.text)
   if (typeof a['after_text'] === 'string') {
-    const find = a['after_text']
-    const at = from.text.indexOf(find)
-    if (at === -1 || from.text.indexOf(find, at + 1) !== -1)
+    const find = toLf(a['after_text'])
+    const at = text.indexOf(find)
+    if (at === -1 || text.indexOf(find, at + 1) !== -1)
       throw new ToolError(
         `after_text must match exactly one place in “${titleOf(from.path)}”${at === -1 ? '; it matches none' : '; it matches more than one'}.`,
       )
-    after = `${from.text.slice(0, at + find.length)} ${link}${from.text.slice(at + find.length)}`
-  } else after = appendTo(from.text, link, undefined, titleOf(from.path))
+    after = `${text.slice(0, at + find.length)} ${link}${text.slice(at + find.length)}`
+  } else after = appendTo(text, link, undefined, titleOf(from.path))
   const { change, formatted } = noteChange(scope, from.path, from.text, after, [])
   return { summary: `Link ${titleOf(from.path)} → ${titleOf(to)}`, files: [change], formatted }
 }

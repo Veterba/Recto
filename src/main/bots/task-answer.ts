@@ -20,7 +20,8 @@ export const langOf = (text: string): Lang =>
 /** What the question asks for: what is still open (the default), what got done, or what is overdue. */
 export function intentOf(question: string): Intent {
   const t = question.toLowerCase()
-  if (/overdue|past due|late\b|просроч|forfalt|over fristen/.test(t)) return 'overdue'
+  // "late" as a word: not the end of "template" or "translate".
+  if (/overdue|past due|(?<![\p{L}\p{N}])late(?![\p{L}\p{N}])|просроч|forfalt|over fristen/u.test(t)) return 'overdue'
   const done = /\b(finish(ed)?|done|complete(d)?|closed)\b|сделал|выполнил|закрыл|завершил|закончил|ferdig|fullført/.test(t)
   const open =
     /\b(open|unfinished|left|not done|haven't|didn't|still|to-?do)\b|не доделал|не сделал|осталось|открыт|недоделан|ikke gjort|gjenstår/.test(
@@ -45,6 +46,7 @@ const L = {
     noneOverdue: 'Nothing is overdue.',
     overdueList: (n: number) => `Overdue (${n}):`,
     about: (t: string) => ` about “${t}”`,
+    noTopic: (t: string) => `Nothing open mentions “${t}”.`,
     status: (s: string) => ({ todo: 'to do', doing: 'in progress', done: 'done' })[s] ?? s,
   },
   ru: {
@@ -62,6 +64,7 @@ const L = {
     noneOverdue: 'Просроченного нет.',
     overdueList: (n: number) => `Просрочено (${n}):`,
     about: (t: string) => ` про «${t}»`,
+    noTopic: (t: string) => `Про «${t}» ничего открытого нет.`,
     status: (s: string) => ({ todo: 'не начато', doing: 'в работе', done: 'готово' })[s] ?? s,
   },
   no: {
@@ -79,6 +82,7 @@ const L = {
     noneOverdue: 'Ingenting er forfalt.',
     overdueList: (n: number) => `Forfalt (${n}):`,
     about: (t: string) => ` om «${t}»`,
+    noTopic: (t: string) => `Ingenting åpent nevner «${t}».`,
     status: (s: string) => ({ todo: 'ikke startet', doing: 'pågår', done: 'ferdig' })[s] ?? s,
   },
 } as const
@@ -164,9 +168,13 @@ export function topicWords(terms: readonly string[]): string[] {
 const wordFor = (stem: string, question: string): string =>
   question.match(/[\p{L}\p{N}]+/gu)?.find((w) => w.toLowerCase().startsWith(stem)) ?? stem
 
+/** A topic word's stem at the start of a word of the text: "export" finds "exporting", "art" does not find "smart". */
 const matches = (text: string, words: readonly string[]): boolean => {
-  const t = text.toLowerCase()
-  return words.some((w) => t.includes(w.slice(0, Math.max(4, w.length - 2))))
+  const own = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+  return words.some((w) => {
+    const stem = w.slice(0, Math.max(4, w.length - 2))
+    return own.some((word) => word.startsWith(stem))
+  })
 }
 
 /** The answer, and the notes it names, in the order it names them (the answer's sources). */
@@ -232,6 +240,8 @@ export function renderTaskAnswer(found: Found, question: string, terms: readonly
   const total = openItems.length + cards.length + loose
   if (total === 0) lines.push(s.noneOpen)
   else {
+    // Asked about something nothing open mentions: said, before the whole list - never passed off as the answer.
+    if (topic.length > 0 && !hasTopic) lines.push(s.noTopic(wordFor(topic[0]!, question)))
     lines.push(hasTopic ? s.open(total).replace(' (', `${s.about(wordFor(topic[0]!, question))} (`) : s.open(total))
     // Grouped by the note each came from, in order.
     const byNote = new Map<string, { label: string; items: string[] }>()

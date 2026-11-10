@@ -55,7 +55,11 @@ let prompt = ''
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => (prompt += chunk))
 process.stdin.on('end', async () => {
-  if (process.env.FAKE_LOG) fs.writeFileSync(process.env.FAKE_LOG, JSON.stringify({ name, args, prompt, cwd: process.cwd() }))
+  // A system prompt given as a file (Claude Code's --system-prompt-file): its text and who may read it.
+  const fileAt = args.indexOf('--system-prompt-file')
+  const systemFile =
+    fileAt === -1 ? null : { text: fs.readFileSync(args[fileAt + 1], 'utf8'), mode: (fs.statSync(args[fileAt + 1]).mode & 0o777).toString(8) }
+  if (process.env.FAKE_LOG) fs.writeFileSync(process.env.FAKE_LOG, JSON.stringify({ name, args, prompt, cwd: process.cwd(), systemFile }))
   if (scenario === 'limit') {
     if (name === 'codex') out({ type: 'turn.failed', error: { message: 'You have hit your usage limit. Try again later.' } })
     else out({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'Claude usage limit reached' })

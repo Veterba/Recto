@@ -178,6 +178,12 @@ function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage])
 
+  // Another topic open: an error said about the last one is not this one's.
+  useEffect(() => {
+    setError(null)
+    setProblem(null)
+  }, [model.current])
+
   const ready = status?.state === 'ready'
 
   // A topic left untitled - the app closed before its title came back - is
@@ -498,6 +504,7 @@ function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps)
         }}
         placeholder={`Ask ${bot.name}…`}
         busy={pending !== null && draft.trim() === ''}
+        answering={pending !== null}
         canSend={ready}
         onSend={() => void send()}
         onStop={stop}

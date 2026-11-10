@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { BrowserWindow, Notification } from 'electron'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
@@ -87,15 +88,42 @@ async function current(p: string): Promise<string | null> {
   return read.content
 }
 
-/** The files' current text, before writing: what Write directly keeps a copy of. */
-function backup(files: Draft['files'], stamp: string): void {
+/** How long Write directly's copies are kept: as long as version history keeps a note's (workers/indexer/snapshots.ts). */
+const KEEP_BACKUP_DAYS = 30
+
+/**
+ * The files' current text, before writing: what Write directly keeps a copy of, in a folder of its
+ * own - the time, and a few random letters, so two writes in one millisecond keep both. Copies older
+ * than KEEP_BACKUP_DAYS go as a new one is made.
+ */
+function backup(files: Draft['files'], now = new Date()): void {
   const vault = currentVault()
   if (vault === null) return
+  const root = path.join(vault.path, VAULT_STATE_DIR, 'backup', 'ai')
+  const stamp = `${now.toISOString().replace(/[:.]/g, '-')}-${randomBytes(3).toString('hex')}`
   for (const f of files) {
     if (f.before === null) continue
-    const to = path.join(vault.path, VAULT_STATE_DIR, 'backup', 'ai', stamp, f.path)
+    const to = path.join(root, stamp, f.path)
     fs.mkdirSync(path.dirname(to), { recursive: true })
     fs.writeFileSync(to, f.before)
+  }
+  pruneBackups(root, now.getTime() - KEEP_BACKUP_DAYS * 86_400_000)
+}
+
+/** Folders in `root` made before `cutoff` (epoch ms), by their own time: removed. */
+export function pruneBackups(root: string, cutoff: number): void {
+  let names: string[] = []
+  try {
+    names = fs.readdirSync(root)
+  } catch {
+    return
+  }
+  for (const name of names) {
+    // `2026-11-10T09-46-19-123Z-a1b2c3`: the ISO time with - for : and .
+    const iso = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/.exec(name)
+    if (iso === null) continue
+    const at = Date.parse(`${iso[1]}T${iso[2]}:${iso[3]}:${iso[4]}.${iso[5]}Z`)
+    if (at < cutoff) fs.rmSync(path.join(root, name), { recursive: true, force: true })
   }
 }
 
@@ -134,7 +162,7 @@ async function applyCanvas(proposal: CanvasProposal): Promise<{ states: CanvasOp
 
 /** Write directly: a backup of every file it changes, then the write. */
 export async function applyNow(draft: Draft): Promise<{ ok: true } | { ok: false; error: string }> {
-  backup(draft.files, new Date().toISOString().replace(/[:.]/g, '-'))
+  backup(draft.files)
   if (draft.canvas !== undefined) {
     const done = await applyCanvas({ ...draft.canvas, states: draft.canvas.ops.map(() => 'pending'), refs: {} })
     return 'error' in done ? { ok: false, error: done.error } : { ok: true }

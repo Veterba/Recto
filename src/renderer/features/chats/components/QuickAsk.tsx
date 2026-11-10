@@ -10,7 +10,7 @@ import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { Markdown, ModelChip, ModelMenu, ProblemLine, requestTopic, StepsCard } from '../../bots'
 import { useBotStatus } from '../../bots/hooks/use-bots'
-import { openSuggestedEdits } from '../../suggested-edits'
+import { SuggestionCard, useProposals } from '../../suggested-edits'
 import { openChats } from '../chats-store'
 import { BOT_SIZE, pointOf, useBotArea, type BotArea } from './FloatingBot'
 import { useBotMotion } from '../bot-motion'
@@ -45,20 +45,6 @@ type Turn = {
   stopped?: boolean
 }
 
-/** The suggestions that wait for Apply now, by id: kept up to date as they are applied, discarded or go stale. */
-function usePendingProposals(): ReadonlySet<string> {
-  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set())
-  useEffect(() => {
-    const load = (): void =>
-      void api
-        .invoke(IPC.aiProposals)
-        .then((all) => setPending(new Set(all.filter((p) => p.status === 'pending').map((p) => p.id))))
-        .catch(() => undefined)
-    load()
-    return api.on(IPC_EVENT.aiProposalsChanged, load)
-  }, [])
-  return pending
-}
 
 const MODEL_KEY = 'recto.quickAskModel'
 const lastModel = (): string | null => {
@@ -236,9 +222,9 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
   }, [turns, onClose])
 
   const canSave = turns.some((t) => t.role === 'assistant' && t.live !== true && t.problem === undefined && t.content !== '')
-  // A suggestion of this thread's that waits for Apply now - not one applied, discarded or gone stale.
-  const pending = usePendingProposals()
-  const waiting = turns.some((t) => (t.record?.proposals ?? []).some((id) => pending.has(id)))
+  // The thread's suggestions as they stand now; one that waits for Apply - not applied, discarded or gone stale - counts.
+  const proposals = useProposals()
+  const waiting = turns.some((t) => (t.record?.proposals ?? []).some((id) => proposals.get(id)?.status === 'pending'))
   const lastAnswer = turns.findLast((t) => t.role === 'assistant' && t.live !== true && t.content !== '')
   const motion = useBotMotion()
   const { style, above, right } = bubbleAt(place, size, motion.drag)
@@ -314,6 +300,11 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
                     {turn.live === true && turn.content === '' && (turn.steps ?? []).length === 0 && (
                       <p className="quick-ask__thinking">Reading…</p>
                     )}
+                    {/* Each edit it suggested, to apply or discard right here. */}
+                    {(turn.record?.proposals ?? []).map((id) => {
+                      const proposal = proposals.get(id)
+                      return proposal === undefined ? null : <SuggestionCard key={id} proposal={proposal} inChat />
+                    })}
                     {turn.stopped === true && <p className="quick-ask__aside">Stopped</p>}
                     {/* Says an edit waits, made none, and none of the thread's waits either. */}
                     {turn.live !== true &&
@@ -328,11 +319,6 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
               </div>
             )
           })}
-          {waiting && (
-            <button className="quick-ask__review" onClick={openSuggestedEdits}>
-              <Icon name="sparkles" size={13} /> Review the suggested edit
-            </button>
-          )}
           {saveError !== null && <p className="quick-ask__error">{saveError}</p>}
         </div>
       )}

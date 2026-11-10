@@ -1,3 +1,4 @@
+import { cancelAllQuickAsk } from './providers/quick-ask'
 import { app, BrowserWindow } from 'electron'
 import { runEvalJob } from './bots/eval-mode'
 import * as bots from './bots'
@@ -68,6 +69,8 @@ if (job !== undefined) {
     if (unloaded) return
     event.preventDefault()
     unloaded = true
+    // Quick ask's runs too: a CLI left running after the app has gone goes on answering, and spending, to no one.
+    cancelAllQuickAsk()
     void bots
       .stopAnswers()
       .then(() => Promise.race([bots.unloadOnQuit(), new Promise((resolve) => setTimeout(resolve, 1500))]))

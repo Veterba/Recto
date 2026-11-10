@@ -333,7 +333,13 @@ main: vault-tools/socket.ts  (first line must carry the token)
   templates, boards (changed only through the board tools) and excluded folders are checked in
   `write.ts`; a note given by a name several notes share is answered with the list, to be given by path.
   `shared/line-diff.ts` makes the diff shown in Suggested edits
-  (`renderer/features/suggested-edits/`).
+  (`renderer/features/suggested-edits/`). One card shows a suggestion everywhere
+  (`SuggestionCard.tsx`): which note, what kind of change, who and when, the change in the note's
+  own font, Apply and Discard or what became of it. Recto's chats (the panel and Quick ask) show
+  each answer's suggestions under it, by the ids in its record, live from `useProposals`; the
+  status bar's count opens a glass panel of everything waiting (Settings' panel classes), where a
+  suggestion settled stays with its outcome until the panel closes. AI edits keep a note's line
+  ends (`noteChange` works in LF and writes CRLF back); Write directly's backups go after 30 days.
 - **Indexer.** Reads that need the whole vault's notes, tags and properties (profile, folders) use the
   `vault-meta` request, answered with `VaultMeta` (`shared/indexer-protocol.ts`).
 - **Settings.** `renderer/features/settings/components/AiAccessSettings.tsx` edits the write mode,

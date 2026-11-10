@@ -70,7 +70,7 @@ describe.skipIf(!RUN)('Quick ask, honest about a stopped answer', { timeout: 60_
     await page.locator('.quick-ask').getByRole('button', { name: 'Stop' }).click()
     await page.locator('.quick-ask__aside', { hasText: 'Stopped' }).waitFor({ timeout: 10_000 })
     // Nothing was suggested, and nothing claims to have been.
-    expect(await page.locator('.quick-ask__review').count()).toBe(0)
+    expect(await page.locator('.quick-ask .suggestion').count()).toBe(0)
     expect(await page.locator('.quick-ask__aside', { hasText: 'No edit was created' }).count()).toBe(0)
 
     fs.rmSync(log)

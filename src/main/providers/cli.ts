@@ -62,6 +62,13 @@ export function transcript(messages: AiMessage[]): string {
 
 const toml = (s: string): string => JSON.stringify(s)
 
+/**
+ * Where Claude Code finds its system prompt: a file in the run's own temp folder, not the command line.
+ * The prompt holds the person's AI guide - their words - and a command line can be read by any process
+ * (`ps`), and is capped in length.
+ */
+export const SYSTEM_FILE = 'recto-system.md'
+
 /** The command line for one answer. */
 export function cliArgs(
   name: CliName,
@@ -84,8 +91,12 @@ export function cliArgs(
       '--permission-mode',
       'dontAsk',
       '--no-session-persistence',
-      '--system-prompt',
-      o.system,
+      // Only settings from the run's empty temp folder: not the person's own (~/.claude) hooks, plugins
+      // and permissions, which would run their commands on Recto's answers. Sign-in is not a setting.
+      '--setting-sources',
+      'project,local',
+      '--system-prompt-file',
+      path.join(o.cwd, SYSTEM_FILE),
       ...(o.model === '' ? [] : ['--model', o.model]),
     ]
   return [
@@ -203,6 +214,8 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
       const prompt = name === 'claude' ? transcript(request.messages) : `${request.system}\n\n---\n\n${transcript(request.messages)}`
       try {
         await new Promise<void>((resolve, reject) => {
+          // This user's only (0600), in a folder of the run's own, gone when the run is.
+          if (name === 'claude') fs.writeFileSync(path.join(cwd, SYSTEM_FILE), request.system, { mode: 0o600 })
           const child = spawn(file, cliArgs(name, { model, system: request.system, cwd, server }), { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
           let stderr = ''
           let failure = ''
@@ -238,6 +251,9 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
             else if (failure !== '' || code !== 0) reject(new ProviderError(problemFrom(name, `${failure}\n${stderr}`)))
             else resolve()
           })
+          // A CLI that exits before it has read the whole prompt (a flag it no longer knows, a sign-in gone) closes the
+          // pipe under a long write: EPIPE on stdin, unhandled, was an uncaught exception in main. The exit says why.
+          child.stdin.on('error', () => undefined)
           child.stdin.end(prompt)
         })
       } finally {

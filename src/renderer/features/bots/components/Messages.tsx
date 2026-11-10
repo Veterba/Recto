@@ -9,6 +9,7 @@ import { Markdown } from './Markdown'
 import { modelLabel } from './ModelMenu'
 import { StatusText } from './BotStatus'
 import { StepsCard } from './StepsCard'
+import { SuggestionCard, useProposals } from '../../suggested-edits'
 
 /**
  * A topic's messages, the way a messenger shows them: mine on the right, the
@@ -137,6 +138,8 @@ export function TopicBlock({
   face: BotState
 }): React.ReactElement {
   const groups = groupMessages(topic.messages)
+  // The edits an answer suggested, as they stand now: shown under it, to apply right there.
+  const proposals = useProposals()
   // The face goes beside the latest answer: the one coming, or else the last one written.
   const lastBot = pending !== null ? -1 : groups.findLastIndex((g) => g.role === 'assistant')
   return (
@@ -156,6 +159,10 @@ export function TopicBlock({
                 <div key={index} className="msg-row">
                   {message.steps !== undefined && <StepsCard steps={message.steps} running={false} record={message.record} />}
                   <Bubble message={message} actions={actions} />
+                  {(message.record?.proposals ?? []).map((id) => {
+                    const proposal = proposals.get(id)
+                    return proposal === undefined ? null : <SuggestionCard key={id} proposal={proposal} inChat />
+                  })}
                   {message.sources !== undefined && <Sources sources={message.sources} onOpen={actions.onOpen} />}
                   {/* Stopped before its end: marked so, or left with the id of a job no longer running (the app was killed). */}
                   {(message.interrupted === true || message.job !== undefined) && (

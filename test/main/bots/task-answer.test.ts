@@ -81,4 +81,16 @@ describe('the answer to a tasks question', () => {
     expect(topicWords(queryTerms('Что мне ещё осталось доделать по экспорту?'))).toEqual(['экспор'])
     expect(topicWords(queryTerms('Which Lark tasks are done?'))).toEqual(['lark'])
   })
+
+  it('"late" as a word only: a template or a translation is not overdue', () => {
+    expect(intentOf('What tasks are late?')).toBe('overdue')
+    expect(intentOf('what tasks are left on the email template')).toBe('open')
+    expect(intentOf('Which translate jobs are still open?')).toBe('open')
+  })
+
+  it('a topic nothing open mentions is said so, before the whole list; a word inside another word is not a match', () => {
+    const text = answer('Что мне ещё осталось доделать по кварталу?', '2026-09-17', '2026-09-30')
+    expect(text.split('\n')[0]).toBe('Про «кварталу» ничего открытого нет.')
+    expect(text.split('\n')[1]).toMatch(/^Не доделано \(\d+\):$/)
+  })
 })

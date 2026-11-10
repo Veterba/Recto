@@ -100,6 +100,15 @@ describe('the command line', () => {
     expect(args.join(' ')).not.toMatch(/bypass|skip-permissions/i)
   })
 
+  it("keeps Claude Code's system prompt - the person's AI guide in it - off the command line, and their own settings out", () => {
+    const guide = 'MY PRIVATE GUIDE: how I keep my diary'
+    const args = cliArgs('claude', { model: '', system: guide, cwd: '/tmp/run', server })
+    expect(args.join(' ')).not.toContain('MY PRIVATE GUIDE')
+    expect(args).not.toContain('--system-prompt')
+    expect(args[args.indexOf('--system-prompt-file') + 1]).toBe('/tmp/run/recto-system.md')
+    expect(args[args.indexOf('--setting-sources') + 1]).toBe('project,local')
+  })
+
   it('gives Codex a read-only sandbox, its shell off, none of the person’s config, and Recto’s server', () => {
     const args = cliArgs('codex', { model: 'gpt-x', system: 'S', cwd: '/tmp/x', server })
     expect(args).toEqual(expect.arrayContaining(['exec', '--json', '--ephemeral', '--ignore-user-config', '--ignore-rules']))
@@ -128,6 +137,24 @@ describe('reading their streams', () => {
   })
 })
 
+describe('a CLI that dies early', () => {
+  it('a long prompt into a CLI that exits without reading it is an error for the answer, not a crash of the app', async () => {
+    const dir = path.join(root, 'bin')
+    fs.mkdirSync(dir, { recursive: true })
+    const file = path.join(dir, 'codex')
+    // Exits at once with a message, never reading stdin: the write of a long prompt hits a closed pipe (EPIPE).
+    fs.writeFileSync(file, '#!/bin/sh\necho "error: unexpected argument" >&2\nexit 2\n')
+    fs.chmodSync(file, 0o755)
+    const session = { id: 's9', client: 'test', tools: null, notes: null, writable: null, vault: null, cloud: true, record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
+    const run = cliRunner('codex', { find: async () => file, path: async () => process.env['PATH'] ?? '', launcher: () => '/x/recto-mcp' })
+    const long = [{ role: 'user' as const, content: 'x'.repeat(2_000_000) }]
+    const drain = async (): Promise<void> => {
+      for await (const _ of run({ model: 'codex', system: 'S', messages: long, session, signal: new AbortController().signal })) void _
+    }
+    await expect(drain()).rejects.toBeInstanceOf(ProviderError)
+  })
+})
+
 describe('an answer from a fake CLI', () => {
   const session = { id: 's1', client: 'test', tools: null, notes: null, writable: null, vault: null, cloud: true, record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
   const ask = async (name: 'codex' | 'claude', signal = new AbortController().signal, messages = [{ role: 'user' as const, content: 'Soil?' }]) => {
@@ -148,6 +175,16 @@ describe('an answer from a fake CLI', () => {
       expect(fs.existsSync(seen.cwd)).toBe(false)
       expect(seen.prompt).toContain('Soil?')
     })
+
+    if (name === 'claude')
+      it('claude: the system prompt comes as a file only this user may read, in the run\'s folder', async () => {
+        const log = path.join(root, 'log.json')
+        process.env['FAKE_LOG'] = log
+        await ask(name)
+        const seen = JSON.parse(fs.readFileSync(log, 'utf8')) as { args: string[]; systemFile: { text: string; mode: string } | null }
+        expect(seen.systemFile).toEqual({ text: 'You are Recto.', mode: '600' })
+        expect(seen.args.join(' ')).not.toContain('You are Recto.')
+      })
 
     it(`${name}: not signed in, limit reached, service down - each as its own problem`, async () => {
       for (const [scenario, kind] of [

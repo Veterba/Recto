@@ -30,6 +30,7 @@ vi.mock('../../src/main/state', () => ({
 vi.mock('../../src/main/index-client', () => ({ send: async () => ({ kind: 'backlinks-result', links: [] }) }))
 
 const { callTool, openSession, closeSession, recordOf } = await import('../../src/main/vault-tools')
+const { pruneBackups } = await import('../../src/main/vault-tools/proposals')
 
 const TRIP = 'Projects/Japan trip'
 const PLAN = `${TRIP}/Japan trip plan.md`
@@ -142,6 +143,26 @@ describe('the record of an answer', () => {
     expect(note.ok ? '' : note.error).not.toMatch(/already/)
     const canvas = await callTool('canvas_propose_new', { name: 'Ideas', nodes: [{ text: 'A card' }] }, 'claude-code')
     expect(canvas).toMatchObject({ ok: false, error: expect.stringMatching(/excluded/) })
+  })
+
+  it("a note from Windows (\\r\\n) keeps its line ends through an AI's edit, and a find copied without \\r still matches", async () => {
+    put('Garden/Windows.md', '# Windows\r\n\r\nFirst line.\r\nSecond line.\r\n')
+    access = { excluded: [], cloud: true }
+    const after = (tool = 'propose_append'): string =>
+      (saved as { proposals: { tool: string; files: { after: string }[] }[] }).proposals.find((p) => p.tool === tool)!.files[0]!.after
+    expect((await callTool('propose_append', { note: 'Windows', text: 'Third line.' }, 'claude-code')).ok).toBe(true)
+    expect(after()).toMatch(/Third line\.\r\n$/)
+    expect(after()).not.toMatch(/(?<!\r)\n/)
+    const edit = await callTool('propose_edit', { note: 'Windows', changes: [{ find: 'First line.\nSecond line.', replace: 'One line.' }] }, 'claude-code')
+    expect(edit.ok).toBe(true)
+    expect(after('propose_edit')).toBe('# Windows\r\n\r\nOne line.\r\n')
+  })
+
+  it("Write directly's copies older than 30 days go; newer ones, and folders that are not copies, stay", () => {
+    const dir = path.join(root, '.recto/backup/ai')
+    for (const name of ['2026-09-01T10-00-00-000Z-aaaaaa', '2026-11-01T10-00-00-000Z-bbbbbb', 'kept by hand']) fs.mkdirSync(path.join(dir, name), { recursive: true })
+    pruneBackups(dir, new Date('2026-11-10T00:00:00Z').getTime() - 30 * 86_400_000)
+    expect(fs.readdirSync(dir).sort()).toEqual(['2026-11-01T10-00-00-000Z-bbbbbb', 'kept by hand'])
   })
 
   it('a call that fails leaves nothing', async () => {

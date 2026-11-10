@@ -1,130 +1,26 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Proposal } from '@shared/ai-access'
 import { IPC, IPC_EVENT } from '@shared/ipc'
-import { diffLines } from '@shared/line-diff'
 import { api } from '../../../app/api'
-import { openFileFromAnywhere } from '../../../app/open-file'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
+import { useProposals } from '../use-proposals'
+import { SuggestionCard } from './SuggestionCard'
 
 /**
  * Suggested edits: what AI clients proposed, waiting for Apply or Discard.
  *
  * A count in the status bar while any wait - the small inbox, there whenever
- * Recto is; main also sends a notification when one arrives while Recto is
- * not in front, and clicking it opens this list. Each suggestion shows its
- * diff exactly as it will be written, formatting already applied.
+ * Recto is, for what Claude Code, Codex or Cursor suggest from outside; main
+ * also sends a notification when one arrives while Recto is not in front,
+ * and clicking it opens this panel. Recto's own chats show their suggestions
+ * under the answer that made them as well (SuggestionCard).
+ *
+ * The panel is glass over the app, as Settings is - no backdrop. A suggestion
+ * settled here stays in the list with what became of it until the panel is
+ * closed, so "out of date" is read rather than a card just vanishing.
  */
-
-const CLIENTS: Record<string, string> = {
-  'claude-code': 'Claude Code',
-  codex: 'Codex',
-  'claude-desktop': 'Claude Desktop',
-  cursor: 'Cursor',
-}
-
-/** The changed lines with two lines of context, unchanged runs folded. */
-function Diff({ before, after }: { before: string | null; after: string }): React.ReactElement {
-  const lines = diffLines(before === null ? [] : before.split('\n'), after.split('\n'))
-  const near = new Set<number>()
-  lines.forEach((l, i) => {
-    if (l.kind !== 'same') for (let k = i - 2; k <= i + 2; k++) near.add(k)
-  })
-  const out: React.ReactNode[] = []
-  let folded = false
-  lines.forEach((l, i) => {
-    if (!near.has(i)) {
-      if (!folded)
-        out.push(
-          <div key={`f${i}`} className="edits__fold">
-            ⋯
-          </div>,
-        )
-      folded = true
-      return
-    }
-    folded = false
-    out.push(
-      <div key={i} className={`edits__line edits__line--${l.kind}`}>
-        <span aria-hidden="true">{l.kind === 'added' ? '+' : l.kind === 'removed' ? '−' : ' '}</span>
-        {l.text === '' ? ' ' : l.text}
-      </div>,
-    )
-  })
-  return <pre className="edits__diff">{out}</pre>
-}
-
-function ProposalCard({ proposal, onDone, onClose }: { proposal: Proposal; onDone: () => void; onClose: () => void }): React.ReactElement {
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  return (
-    <article className="edits__item" aria-label={proposal.summary}>
-      <header className="edits__itemhead">
-        <strong>{proposal.summary}</strong>
-        <span className="edits__meta">
-          {CLIENTS[proposal.client] ?? proposal.client} · {new Date(proposal.created).toLocaleString()}
-          {proposal.formatted.length > 0 && ` · formatted to your profile`}
-        </span>
-      </header>
-      {proposal.canvas !== undefined ? (
-        // A canvas's changes are reviewed on the canvas, one by one, as ghosts.
-        <section>
-          <div className="edits__path">{proposal.canvas.path}</div>
-          <p className="edits__canvas">
-            {proposal.canvas.states.filter((s) => s === 'pending').length} changes to review on the canvas.{' '}
-            <button
-              className="btn btn--sm"
-              onClick={() => {
-                openFileFromAnywhere(proposal.canvas!.path)
-                onClose()
-              }}
-            >
-              Open to review
-            </button>
-          </p>
-        </section>
-      ) : (
-        proposal.files.map((f) => (
-          <section key={f.path}>
-            <div className="edits__path">
-              {f.before === null ? 'New: ' : ''}
-              {f.path}
-            </div>
-            <Diff before={f.before} after={f.after} />
-          </section>
-        ))
-      )}
-      {error !== null && <p className="edits__error">{error}</p>}
-      <div className="edits__buttons">
-        <button
-          className="btn btn--ghost btn--sm"
-          disabled={busy}
-          onClick={() => {
-            setBusy(true)
-            void api.invoke(IPC.aiProposalDiscard, proposal.id).then(onDone)
-          }}
-        >
-          Discard
-        </button>
-        <button
-          className="btn btn--primary btn--sm"
-          disabled={busy}
-          onClick={() => {
-            setBusy(true)
-            void api.invoke(IPC.aiProposalApply, proposal.id).then((result) => {
-              setBusy(false)
-              if (result.ok) onDone()
-              else setError(result.error ?? 'It could not be applied.')
-            })
-          }}
-        >
-          Apply
-        </button>
-      </div>
-    </article>
-  )
-}
 
 /** Open the review dialog from anywhere in the app: Quick ask's "Review" after an edit was suggested. */
 const openers = new Set<() => void>()
@@ -132,79 +28,133 @@ export function openSuggestedEdits(): void {
   for (const open of openers) open()
 }
 
+/** Where the panel sits: centred, a little below the tabs as Settings opens, as wide as it reads well. */
+function placeOf(): { left: number; top: number; width: number; maxHeight: number } {
+  const width = Math.min(720, window.innerWidth - 80)
+  const top = Math.max(96, Math.round(window.innerHeight * 0.12))
+  return { left: Math.round((window.innerWidth - width) / 2), top, width, maxHeight: window.innerHeight - top - 48 }
+}
+
 export function SuggestedEditsNotice(): React.ReactElement | null {
-  const [pending, setPending] = useState<Proposal[]>([])
+  const proposals = useProposals()
   const [open, setOpen] = useState(false)
-  const refresh = useCallback(
-    () => void api.invoke(IPC.aiProposals).then((all) => setPending(all.filter((p) => p.status === 'pending'))),
-    [],
-  )
+  /** Settled while the panel was open: kept in it, with their outcome, until it closes. */
+  const [seen, setSeen] = useState<ReadonlySet<string>>(() => new Set())
+  const pending = [...proposals.values()].filter((p) => p.status === 'pending').sort((a, b) => b.created - a.created)
 
   useEffect(() => {
-    refresh()
-    const offChanged = api.on(IPC_EVENT.aiProposalsChanged, refresh)
-    // Opened once the list is in: opened first, the empty list it had would shut it again at once.
-    const show = (): void =>
-      void api.invoke(IPC.aiProposals).then((all) => {
-        setPending(all.filter((p) => p.status === 'pending'))
-        setOpen(true)
-      })
+    // Opened from a notification or a chat: with the list as it is now.
+    const show = (): void => setOpen(true)
     const offOpen = api.on(IPC_EVENT.aiProposalsOpen, show)
     openers.add(show)
     return () => {
-      offChanged()
       offOpen()
       openers.delete(show)
     }
-  }, [refresh])
+  }, [])
 
+  // Everything pending while it is open is what it shows, settled or not, until it closes.
+  const waitingIds = pending.map((p) => p.id).join('\n')
   useEffect(() => {
-    if (open && pending.length === 0) setOpen(false)
-  }, [open, pending.length])
+    if (!open) setSeen(new Set())
+    else if (waitingIds !== '') setSeen((before) => new Set([...before, ...waitingIds.split('\n')]))
+  }, [open, waitingIds])
 
-  if (pending.length === 0) return null
+  const close = useCallback(() => setOpen(false), [])
+  if (pending.length === 0 && !open) return null
+  // What waits now, and what was settled while it has been open - from the first frame, never an empty flash.
+  const shown = [...new Set([...pending.map((p) => p.id), ...seen])]
+    .map((id) => proposals.get(id))
+    .filter((p): p is Proposal => p !== undefined)
+    .sort((a, b) => b.created - a.created)
   return (
     <>
-      <Tip label="Suggested edits" hint="Changes AI clients proposed, waiting for you" placement="top">
-        <button className="status__btn edits__badge" onClick={() => setOpen(true)} aria-label={`Suggested edits: ${pending.length}`}>
-          <Icon name="sparkles" size={13} />
-          {pending.length}
-        </button>
-      </Tip>
-      {open &&
-        createPortal(
-          <div
-            className="dialog__backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) setOpen(false)
-            }}
-          >
-            <div
-              className="dialog edits"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Suggested edits"
-              onKeyDown={(e) => {
-                e.stopPropagation()
-                if (e.key === 'Escape') setOpen(false)
-              }}
-            >
-              <header className="dialog__head">
-                <h2 className="dialog__title">Suggested edits</h2>
-                <button className="dialog__close" onClick={() => setOpen(false)} aria-label="Close" autoFocus>
-                  <Icon name="x" size={16} />
-                </button>
-              </header>
-              <div className="edits__list">
-                {pending.map((p) => (
-                  <ProposalCard key={p.id} proposal={p} onDone={refresh} onClose={() => setOpen(false)} />
-                ))}
-              </div>
+      {pending.length > 0 && (
+        <Tip label="Suggested edits" hint="Changes AI suggested, waiting for you" placement="top">
+          <button className="status__btn edits__badge" onClick={() => setOpen(true)} aria-label={`Suggested edits: ${pending.length}`}>
+            <Icon name="sparkles" size={13} />
+            {pending.length}
+          </button>
+        </Tip>
+      )}
+      {open && createPortal(<Panel shown={shown} waiting={pending} onClose={close} />, document.body)}
+    </>
+  )
+}
+
+function Panel({ shown, waiting, onClose }: { shown: Proposal[]; waiting: Proposal[]; onClose: () => void }): React.ReactElement {
+  const panel = useRef<HTMLDivElement | null>(null)
+  const [place, setPlace] = useState(placeOf)
+  const [height, setHeight] = useState(0)
+  useEffect(() => {
+    const resize = (): void => setPlace(placeOf())
+    // Esc closes it when focus is in it or nowhere: a button it removed (Apply all, once nothing is left)
+    // takes the focus with it. Esc in the editor or a field stays theirs.
+    const escape = (e: KeyboardEvent): void => {
+      const at = document.activeElement
+      if (e.key === 'Escape' && (at === null || at === document.body || panel.current?.contains(at) === true)) {
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    window.addEventListener('resize', resize)
+    window.addEventListener('keydown', escape, true)
+    return () => {
+      window.removeEventListener('resize', resize)
+      window.removeEventListener('keydown', escape, true)
+    }
+  }, [onClose])
+  // The blur's opaque base follows the panel's height (settings.css .settings-panel__base).
+  useLayoutEffect(() => {
+    const element = panel.current
+    if (element === null) return
+    const observer = new ResizeObserver(() => setHeight(element.offsetHeight))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  const every = (channel: typeof IPC.aiProposalApply | typeof IPC.aiProposalDiscard): void => {
+    for (const p of waiting) if (p.canvas === undefined) void api.invoke(channel, p.id).catch(() => undefined)
+  }
+  return (
+    <>
+      <div className="settings-panel__base" style={{ left: place.left, top: place.top, width: place.width, height }} />
+      <div
+        ref={panel}
+        className="settings-panel glass-surface edits-panel"
+        role="dialog"
+        aria-label="Suggested edits"
+        style={{ left: place.left, top: place.top, width: place.width, maxHeight: place.maxHeight }}
+      >
+        <header className="settings-panel__head edits-panel__head">
+          <h2 className="settings-panel__title">
+            Suggested edits{waiting.length > 0 && <span className="edits-panel__count">{waiting.length}</span>}
+          </h2>
+          {waiting.filter((p) => p.canvas === undefined).length > 1 && (
+            <>
+              <button className="btn btn--ghost btn--sm" onClick={() => every(IPC.aiProposalDiscard)}>
+                Discard all
+              </button>
+              <button className="btn btn--sm" onClick={() => every(IPC.aiProposalApply)}>
+                Apply all
+              </button>
+            </>
+          )}
+          <button className="dialog__close" onClick={onClose} aria-label="Close" autoFocus>
+            <Icon name="x" size={16} />
+          </button>
+        </header>
+        <div className="edits-panel__body">
+          {shown.length === 0 ? (
+            <p className="edits-panel__empty">Nothing waits for you.</p>
+          ) : (
+            <div className="settings__card edits-panel__list">
+              {shown.map((p) => (
+                <SuggestionCard key={p.id} proposal={p} onOpen={onClose} />
+              ))}
             </div>
-          </div>,
-          document.body,
-        )}
+          )}
+        </div>
+      </div>
     </>
   )
 }

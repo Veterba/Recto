@@ -260,6 +260,19 @@ describe('the new checks', () => {
     expect(score(c, answered({ ...given, answer: '- 30 Nov: [[Tokyo]] and [[Hakone]]' }), ['Tokyo', 'Hakone']).ungrounded).toEqual(['Hakone', 'number 30'])
   })
 
+  it('"not in the vault" means it: a word that only contains «нет», or a "not found" that answers anyway, is not', () => {
+    expect(saysNotFound('Я не нашёл заметку об этом.')).toBe(true)
+    expect(saysNotFound("Your notes don't mention it.")).toBe(true)
+    expect(saysNotFound('Интернет пишет, что забег 5 июня.')).toBe(false)
+    expect(saysNotFound('I did not find the exact note, but your race is on June 5.')).toBe(false)
+  })
+
+  it('a small number is a claim unless the context has it; only amounts may be worked out from two of its numbers', () => {
+    const context = 'Kyoto from Tue 1 Dec. Flight on 26 Nov, 10 nights. Saved 310 000 of 540 000.'
+    expect(numberClaims('The trip starts in 16 days.', context)).toEqual(['16'])
+    expect(numberClaims('You still need 230 000.', context)).toEqual([])
+  })
+
   it('a range is as grounded as its two ends, written with a hyphen or a dash', () => {
     const c = caseOf({ kind: 'recent' })
     const given = { context: ctx('Plan.md'), contextText: 'Train 26 Nov, back 29 Nov. Sleep 10 to 12 hours.' }

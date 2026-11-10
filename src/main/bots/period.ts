@@ -5,9 +5,13 @@
  * not to be trusted.
  *
  * Weeks run Monday to Sunday. A weekday means the most recent one before
- * today ("on Wednesday", said on a Wednesday, is a week ago); "from
- * Wednesday" is that day too (what came from it), while "since Wednesday" /
- * «со среды» runs from it to today.
+ * today ("on Wednesday", said on a Wednesday, is a week ago) - most questions
+ * are about what was done - unless the question looks ahead ("next Friday",
+ * "what do I have on Friday", «что запланировано на пятницу»): then it is the
+ * coming one. "From Wednesday" is that day too (what came from it), while
+ * "since Wednesday" / «со среды» runs from it to today - «с» only right
+ * before the day: «в среду с Колей» is Wednesday with Kolya. Tomorrow, the
+ * day after, and next week count forward.
  */
 
 export type Period = { from: string; to: string }
@@ -42,6 +46,9 @@ const MONTHS: readonly [RegExp, number][] = [
   [/\bnov(ember)?\b|ноябр/i, 10],
   [/\bdec(ember)?\b|декабр|\bdesember/i, 11],
 ]
+
+/** A question about what is to come: "next", "will", "do I have", «будет», «запланировано», "skal". */
+const FUTURE = /\b(next|coming|upcoming|will|going to|planned|scheduled|do i have|due on)\b|следующ|будет|буду|запланир|предстоит|\b(neste|kommende|skal)\b/i
 
 export function periodFrom(text: string, today: Date): Period | null {
   const t = text.toLowerCase()
@@ -88,15 +95,22 @@ export function periodFrom(text: string, today: Date): Period | null {
   if (/\bday before yesterday\b|позавчера|\bi forgårs/i.test(t)) return { from: iso(addDays(day, -2)), to: iso(addDays(day, -2)) }
   if (/\byesterday\b|вчера|\bi går\b/i.test(t)) return { from: iso(addDays(day, -1)), to: iso(addDays(day, -1)) }
   if (/\btoday\b|сегодня|\bi dag\b/i.test(t)) return { from: iso(day), to: iso(day) }
+  if (/\bday after tomorrow\b|послезавтра|\bi overmorgen/i.test(t)) return { from: iso(addDays(day, 2)), to: iso(addDays(day, 2)) }
+  if (/\btomorrow\b|завтра|\bi morgen\b/i.test(t)) return { from: iso(addDays(day, 1)), to: iso(addDays(day, 1)) }
+  if (/\bnext week\b|следующ\S* недел|\bneste uke/i.test(t)) {
+    const start = addDays(monday(day), 7)
+    return { from: iso(start), to: iso(addDays(start, 6)) }
+  }
 
-  // A weekday: "since Monday" runs to today; otherwise that one day, the most recent before today.
+  // A weekday: "since Monday" runs to today; one that looks ahead is the coming one; else the most recent before today.
+  const ahead = FUTURE.test(t)
   for (const [re, weekday] of WEEKDAYS) {
     if (!re.test(t)) continue
     const back = ((day.getDay() + 6) % 7) - weekday
-    const since = /\bsince\b|(?:^|\s)(с|со)\s|\bsiden\b/i.test(t)
+    const since = /\bsince\b|\bsiden\b/i.test(t) || new RegExp(`(?:^|\\s)(?:с|со)\\s+(?:${re.source})`, 'iu').test(t)
     const back1 = back > 0 ? -back : -(back + 7)
     if (since) return { from: iso(addDays(day, back1)), to: iso(day) }
-    const d = addDays(day, back1)
+    const d = ahead ? addDays(day, back < 0 ? -back : 7 - back) : addDays(day, back1)
     return { from: iso(d), to: iso(d) }
   }
   return null

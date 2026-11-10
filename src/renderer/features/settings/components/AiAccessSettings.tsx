@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-  DEFAULT_AI_ACCESS,
   type ActivityEntry,
   type AiAccessSettings,
   type ClientId,
@@ -49,12 +48,19 @@ const WRITE_MODES: { value: WriteMode; label: string; hint: string }[] = [
   { value: 'write', label: 'Write directly', hint: 'Changes are written at once, after a backup in .recto/backup/ai/.' },
 ]
 
-export function AiAccessSettings({ notes, folders }: SettingsDeps): React.ReactElement {
-  const [settings, setSettings] = useState<AiAccessSettings>(DEFAULT_AI_ACCESS)
-  useEffect(() => void api.invoke(IPC.aiAccessSettings).then(setSettings), [])
+export function AiAccessSettings({ notes, folders }: SettingsDeps): React.ReactElement | null {
+  // Null until the vault's own settings are in: every control saves the whole object, and one used
+  // before they loaded wrote the defaults over the vault's excluded folders and cloud switch.
+  const [settings, setSettings] = useState<AiAccessSettings | null>(null)
+  const load = (): void => void api.invoke(IPC.aiAccessSettings).then(setSettings)
+  useEffect(load, [])
+  if (settings === null) return null
   const save = (next: AiAccessSettings): void => {
     setSettings(next)
-    void api.invoke(IPC.aiAccessSetSettings, next)
+    // Not written: the vault's settings as they really are, not as the screen hoped.
+    void api.invoke(IPC.aiAccessSetSettings, next).then((result) => {
+      if (!result.ok) load()
+    })
   }
 
   return (

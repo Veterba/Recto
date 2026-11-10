@@ -32,6 +32,8 @@ type Props = {
   placeholder: string
   /** An answer is coming: Send is Stop. */
   busy: boolean
+  /** An answer is coming: Esc stops it, and so does a Stop beside Send while a next question is typed. */
+  answering?: boolean
   /** The model can answer: Send works. */
   canSend: boolean
   onSend: () => void
@@ -210,11 +212,21 @@ export function Composer(props: Props): React.ReactElement {
                 event.preventDefault()
                 if (!busy) send()
               }
-              if (event.key === 'Escape' && busy) props.onStop()
+              if (event.key === 'Escape' && (busy || props.answering === true)) props.onStop()
             }}
             onSelect={(event) => checkLink(event.currentTarget)}
           />
           <ModelChip model={props.model} open={menu === 'model'} onToggle={() => setMenu((m) => (m === 'model' ? null : 'model'))} />
+          {props.answering === true && !busy && (
+            // Typing the next question while an answer comes: Send queues it, and the answer can still be stopped.
+            <Tip label="Stop" hint="Esc" placement="top">
+              <button className="composer__send is-stop" aria-label="Stop" onClick={props.onStop}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <rect x="5" y="5" width="14" height="14" rx="2.5" />
+                </svg>
+              </button>
+            </Tip>
+          )}
           <Tip label={busy ? 'Stop' : 'Send'} hint={busy ? 'Esc' : 'Enter · Shift+Enter for a new line'} placement="top">
             <button
               className={`composer__send${busy ? ' is-stop' : ''}`}
