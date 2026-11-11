@@ -308,3 +308,17 @@ describe('replacing the body', () => {
     expect(withBody('No frontmatter.', 'Other.')).toBe('Other.')
   })
 })
+
+describe('a note that starts with a byte order mark', () => {
+  const bom = '\uFEFF'
+  it('its properties are read, and setting one changes them - no second block above', () => {
+    const text = `${bom}---\nstatus: draft\n---\n# Note\n`
+    expect(parseFrontmatter(text).fields.map((f) => [f.key, f.value])).toEqual([['status', 'draft']])
+    const after = setField(text, 'status', 'done')
+    // One block: its opening fence (the BOM kept before it) and its closing one - no second block above.
+    expect(after.match(/^\uFEFF?---$/gm)).toHaveLength(2)
+    expect(after.startsWith(`${bom}---\n`)).toBe(true)
+    expect(after).toContain('status: done')
+    expect(after).not.toContain('draft')
+  })
+})

@@ -152,4 +152,22 @@ describe.skipIf(!RUN)('links by Obsidian’s rules, in the app', { timeout: 60_0
     expect(await page.locator('[role=alertdialog][aria-label="Update links"]').count()).toBe(0)
     expect(read('C/Source C.md')).toContain('[[Idea C]]')
   })
+
+  it("Undo of a rename brings the note's history back with it, under its own name", async () => {
+    const call = <T,>(channel: string, ...args: unknown[]): Promise<T> =>
+      page.evaluate(([c, a]) => (window as unknown as { api: { invoke: (c: string, ...a: unknown[]) => Promise<unknown> } }).api.invoke(c as string, ...(a as unknown[])), [channel, args] as const) as Promise<T>
+    write('Points at kept.md', 'See [[Kept]].\n')
+    write('Kept.md', '# Kept\n\nFirst.\n')
+    await expect.poll(async () => (await call<unknown[]>('history:list', 'Kept.md')).length, { timeout: 15_000 }).toBeGreaterThan(0)
+    write('Kept.md', '# Kept\n\nFirst.\n\nSecond.\n')
+    await expect.poll(async () => (await call<unknown[]>('history:list', 'Kept.md')).length, { timeout: 15_000 }).toBeGreaterThan(1)
+    const versions = (await call<unknown[]>('history:list', 'Kept.md')).length
+    const renamed = await call<{ ok: boolean; undoId?: string }>('fs:rename', 'Kept.md', 'Kept for now.md')
+    expect(renamed.undoId).toBeDefined()
+    expect(await call<{ ok: boolean }>('links:undo-rename', renamed.undoId)).toMatchObject({ ok: true })
+    expect(read('Points at kept.md')).toBe('See [[Kept]].\n')
+    // Long enough for the watcher's events about the moves to have come and gone.
+    await new Promise((r) => setTimeout(r, 1500))
+    expect((await call<unknown[]>('history:list', 'Kept.md')).length).toBe(versions)
+  })
 })

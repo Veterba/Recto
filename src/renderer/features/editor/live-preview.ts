@@ -1,3 +1,4 @@
+import { codeRanges, inCode } from './code-ranges'
 import { highlightsIn } from './highlights'
 import { syntaxTree } from '@codemirror/language'
 import { writingConfig } from './writing'
@@ -192,10 +193,12 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
     // --- wikilinks and tasks, which the grammar does not know ------------
     const startLine = view.state.doc.lineAt(from).number
     const endLine = view.state.doc.lineAt(to).number
+    const code = codeRanges(view.state, from, to)
 
     for (let n = startLine; n <= endLine; n++) {
       if (active.has(n)) continue
       const line = view.state.doc.line(n)
+      const lineStart = ranges.length
 
       const task = TASK.exec(line.text)
       if (task?.[1] !== undefined && task[2] !== undefined) {
@@ -283,6 +286,9 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
           }),
         })
       }
+
+      // Nothing of this line's drawn over code: a fence's `- [ ]`, an inline `[[x]]`, stay as written.
+      for (let i = ranges.length - 1; i >= lineStart; i--) if (inCode(code, ranges[i]!.from, ranges[i]!.to)) ranges.splice(i, 1)
     }
   }
 

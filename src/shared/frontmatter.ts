@@ -52,6 +52,8 @@ type Frontmatter = {
 }
 
 const FENCE = /^---\s*$/
+/** A text with the byte order mark some editors put first taken off. */
+export const withoutBom = (text: string): string => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text)
 /**
  * A frontmatter key. Unicode-aware on purpose: an ASCII-only key pattern makes
  * `название: заметка` unrecognisable, so it would be shown as un-editable
@@ -142,7 +144,9 @@ function classify(raw: string): { value: Field['value']; type: FieldType } {
  * `lines`, or -1 when there is none: no opening fence, or one that never closes.
  */
 export function frontmatterClose(lines: readonly string[]): number {
-  if (lines.length === 0 || !FENCE.test(lines[0] ?? '')) return -1
+  // A BOM before the first fence (files from Windows tools) is not text: without this the block was read
+  // as body - no properties - and setting one put a second block above it.
+  if (lines.length === 0 || !FENCE.test(withoutBom(lines[0] ?? ''))) return -1
   for (let i = 1; i < lines.length; i++) if (FENCE.test(lines[i] ?? '')) return i
   return -1
 }

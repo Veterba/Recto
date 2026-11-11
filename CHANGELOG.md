@@ -4,6 +4,17 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.60.3 — 2026-11-11
+### Fixed
+- When Obsidian or a sync app writes a note while you are typing in it, both changes are kept if they touch different lines. If they touch the same line, your typing stays, the note says so, and the other version is in History. Before, the other app's version replaced what you had typed.
+- Text typed in a canvas card is saved when its tab is closed while you are still editing it.
+- With a Japanese, Chinese or other input method, Enter and Escape while composing no longer send, close or jump; they finish the composition.
+- Checkboxes, links, highlights and maths are no longer drawn inside code; code shows as written.
+- Links and tags inside inline code, and in a code block whose fence is longer than three backticks, are no longer counted as links and tags. The index is rebuilt once to drop the old ones.
+- A note starting with a byte order mark (from some Windows apps) has its frontmatter read; boards and cards saved that way work.
+- Undoing a rename keeps the note's version history, authorship and canvas layout.
+- A note archived while another was being restored or purged no longer disappears from the archive list.
+
 ## v0.60.2 — 2026-11-10
 ### Changed
 - An edit AI suggests in a chat shows right under the answer that made it, in the chat panel and in Quick ask, with Apply and Discard there - and, once settled, whether it was applied, discarded or went out of date.

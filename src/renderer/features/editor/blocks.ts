@@ -1,3 +1,4 @@
+import { codeRanges, inCode } from './code-ranges'
 import { highlightsIn } from './highlights'
 import { syntaxTree } from '@codemirror/language'
 import { CALLOUT_HEAD } from './live-preview'
@@ -268,7 +269,9 @@ function build(view: EditorView): DecorationSet {
       // marks inside the coloured span split it into pieces, and the piece
       // around them drew the background off the text (in dark especially).
       for (const h of highlightsIn(line.text, line.from)) {
-        if (h.textFrom < h.textTo) entries.push({ from: h.textFrom, to: h.textTo, deco: highlightMark(h.colour), sort: SORT.mark })
+        // `a == b` in code is code, not a highlight.
+        if (h.textFrom < h.textTo && !inCode(codeRanges(view.state, line.from, line.to), h.from, h.to))
+          entries.push({ from: h.textFrom, to: h.textTo, deco: highlightMark(h.colour), sort: SORT.mark })
       }
     }
   }

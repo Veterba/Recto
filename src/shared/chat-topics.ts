@@ -1,6 +1,6 @@
 import type { BotMessage, BotSource, MessageMeta } from './bots'
 import { frontmatterClose } from './frontmatter'
-import { CODE_FENCE } from './parse'
+import { nextFence, type Fence } from './parse'
 
 /**
  * A conversation with a bot is split into chat topics, and each topic is a
@@ -148,7 +148,7 @@ export function parseTopic(text: string, assistants: readonly string[]): ParsedT
   ])
   const messages: TopicMessage[] = []
   let current: { role: TopicMessage['role']; label: string; lines: string[] } | null = null
-  let inFence = false
+  let fence: Fence = null
   const flush = (): void => {
     if (current === null) return
     let content = current.lines.join('\n').trim()
@@ -168,8 +168,10 @@ export function parseTopic(text: string, assistants: readonly string[]): ParsedT
     }
   }
   for (const line of body.split('\n')) {
-    if (CODE_FENCE.test(line)) inFence = !inFence
-    const role = inFence ? undefined : headings.get(line.trim())
+    const next = nextFence(line, fence)
+    const fenceLine = next !== fence
+    fence = next
+    const role = fence !== null || fenceLine ? undefined : headings.get(line.trim())
     if (role !== undefined) {
       flush()
       current = { role, label: line.trim().slice(3), lines: [] }

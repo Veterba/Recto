@@ -14,7 +14,7 @@
  *    indexer ignores them: that is code, not a reference.
  */
 
-import { CODE_FENCE } from '../shared/parse'
+import { nextFence, type Fence } from '../shared/parse'
 import { isCrlf } from '../shared/line-endings'
 
 const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
@@ -99,14 +99,15 @@ type RewriteResult = { text: string; count: number }
 export function rewriteWikiLinks(text: string, oldPath: string, newPath: string, exact = false): RewriteResult {
   const lines = text.split(/\r?\n/)
   let count = 0
-  let inCode = false
+  let fence: Fence = null
 
   const out = lines.map((line) => {
-    if (CODE_FENCE.test(line)) {
-      inCode = !inCode
+    const next = nextFence(line, fence)
+    if (next !== fence) {
+      fence = next
       return line
     }
-    if (inCode) return line
+    if (fence !== null) return line
 
     const wiki = line.replace(WIKILINK, (whole, target: string, heading = '', alias = '') => {
       if (!pointsAt(target, oldPath, exact)) return whole
@@ -146,13 +147,14 @@ export function mapLinkTargets(
   map: (target: string, kind: 'wiki' | 'markdown') => string | null,
 ): { text: string; changes: { from: string; to: string }[] } {
   const changes: { from: string; to: string }[] = []
-  let inCode = false
+  let fence: Fence = null
   const out = text.split(/\r?\n/).map((line) => {
-    if (CODE_FENCE.test(line)) {
-      inCode = !inCode
+    const next = nextFence(line, fence)
+    if (next !== fence) {
+      fence = next
       return line
     }
-    if (inCode) return line
+    if (fence !== null) return line
     const wiki = line.replace(WIKILINK, (whole, target: string, heading = '', alias = '') => {
       const next = map(target.trim(), 'wiki')
       if (next === null) return whole

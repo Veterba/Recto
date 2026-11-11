@@ -1,4 +1,4 @@
-import { parseFrontmatter, removeField } from './frontmatter'
+import { parseFrontmatter, removeField, withoutBom } from './frontmatter'
 import { boardFile, boardFolder, NEW_NOTE_FOLDER_KEY } from './recto-paths'
 import { addLane, boardText, insertItem, isKanban, parseKanban, rectoSettings, type NewLane } from './kanban'
 
@@ -117,7 +117,7 @@ function field(text: string, key: string): string | number | null {
  * whose own was taken.
  */
 export function planMigration(boardsJson: unknown, notes: readonly MigrationNote[], names: Readonly<Record<string, string>> = {}): MigrationPlan {
-  const cards = notes.filter((n) => n.text.startsWith('---') && field(n.text, 'board') !== null)
+  const cards = notes.filter((n) => withoutBom(n.text).startsWith('---') && field(n.text, 'board') !== null)
   const plan: MigrationPlan = { creates: [], edits: [], conflicts: [], done: false }
   if (boardsJson === undefined && cards.length === 0) return { ...plan, done: true }
 

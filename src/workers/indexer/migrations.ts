@@ -427,6 +427,17 @@ export const MIGRATIONS: readonly Migration[] = [
       SELECT 1;
     `,
   },
+  {
+    version: 21,
+    name: 'code-is-not-links',
+    sql: `
+      -- No schema change. A [[link]] or #tag in inline code is no longer one,
+      -- and a fence closes only on its own kind (shared/parse.ts nextFence);
+      -- a note starting with a BOM has its properties read. The next open
+      -- reindexes every note, so backlinks, tags and properties are right at once.
+      SELECT 1;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database): { from: number; to: number } {

@@ -39,7 +39,31 @@ type ParsedNote = {
 
 const HEADING = /^(#{1,6})\s+(.*)$/
 /** The opening or closing line of a fenced code block. */
-export const CODE_FENCE = /^\s*(```|~~~)/
+/** An open fenced code block: the character its fence is made of, and how many. */
+export type Fence = { char: '`' | '~'; size: number } | null
+
+const FENCE_LINE = /^\s*(`{3,}|~{3,})(.*)$/
+
+/**
+ * The fence state after `line`, by Markdown's rule (CommonMark): three or more ` or ~ open a block;
+ * only a run of the same character, at least as long, with nothing after it, closes it. A shorter or
+ * other run inside - the ``` in a ```` block that shows a fence - is code. Returns `fence` itself when
+ * the line changes nothing, so `next !== fence` says "this line is a fence".
+ */
+export function nextFence(line: string, fence: Fence): Fence {
+  const m = FENCE_LINE.exec(line)
+  if (m === null) return fence
+  const run = m[1]!
+  const char = run[0] as '`' | '~'
+  // A backtick fence's info string may not hold a backtick: "``` a `b` ```" is inline code.
+  if (fence === null) return char === '`' && m[2]!.includes('`') ? null : { char, size: run.length }
+  return char === fence.char && run.length >= fence.size && m[2]!.trim() === '' ? null : fence
+}
+
+/** A line with its inline code spans (`` `x` ``, ``` ``x`` ```) blanked out, every other character where it was. */
+export function withoutInlineCode(line: string): string {
+  return line.replace(/(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g, (span) => ' '.repeat(span.length))
+}
 /** `[[target#heading|alias]]`, all parts optional but the target. */
 const WIKILINK = /\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g
 /**
@@ -197,19 +221,20 @@ export function parseNote(content: string): ParsedNote {
     }
   })
 
-  let inCode = false
+  let fence: Fence = null
   let inComment = false
 
   for (let i = bodyStart; i < lines.length; i++) {
     const raw = lines[i] ?? ''
 
-    if (!inComment && CODE_FENCE.test(raw)) {
+    const next: Fence = inComment ? fence : nextFence(raw, fence)
+    if (next !== fence) {
       bodyLines.push(raw)
-      inCode = !inCode
+      fence = next
       continue
     }
     // Links and tags inside a fenced block are code, not references.
-    if (inCode) {
+    if (fence !== null) {
       bodyLines.push(raw)
       continue
     }
@@ -224,11 +249,12 @@ export function parseNote(content: string): ParsedNote {
     bodyLines.push(line)
 
     const heading = HEADING.exec(line)
-    let scannable = line
+    // Inline code is code too: `[[x]]` and `#include` there are no link and no tag. Blanked, not cut, so positions stay.
+    let scannable = withoutInlineCode(line)
     if (heading?.[1] !== undefined && heading[2] !== undefined) {
       headings.push({ text: heading[2].trim(), level: heading[1].length, line: i })
       // Scan the heading's text for links, but not its leading '#' marks.
-      scannable = heading[2]
+      scannable = withoutInlineCode(heading[2])
     }
 
     for (const match of scannable.matchAll(WIKILINK)) {
@@ -295,15 +321,16 @@ export const normalizeName = (value: string): string => value.normalize('NFC').t
  */
 export function extractTargets(text: string): string[] {
   const found = new Set<string>()
-  let inCode = false
+  let fence: Fence = null
 
   for (const line of text.split(/\r?\n/)) {
-    if (CODE_FENCE.test(line)) {
-      inCode = !inCode
+    const next = nextFence(line, fence)
+    if (next !== fence) {
+      fence = next
       continue
     }
-    if (inCode) continue
-    for (const match of line.matchAll(WIKILINK)) {
+    if (fence !== null) continue
+    for (const match of withoutInlineCode(line).matchAll(WIKILINK)) {
       const target = match[1]?.trim()
       if (target !== undefined && target !== '') found.add(target)
     }

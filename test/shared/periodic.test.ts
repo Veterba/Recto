@@ -169,9 +169,6 @@ describe('preview tree', () => {
   })
 })
 
-describe('unique names', () => {
-})
-
 describe("today's note", () => {
   it('is the shortest period that is on, for every combination', () => {
     const all: Period[] = ['daily', 'weekly', 'monthly', 'yearly']

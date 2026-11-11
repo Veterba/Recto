@@ -151,7 +151,9 @@ applied edit suggested again, fail a case.
    open note takes a `written` file only when it has nothing unsaved and no save on its way, so a card
    changed on a board shows in its open note while the note's own saves never come back into it.
 3. **Index.** Each batch goes to the indexer as `note-changed`. It parses the note
-   (`shared/parse.ts`: frontmatter, headings, wikilinks, tags - inline and in the `tags` property - properties), updates `notes`, `links`,
+   (`shared/parse.ts`: frontmatter, headings, wikilinks, tags - inline and in the `tags` property - properties; text
+   in inline code and in fenced code is not links or tags, and a BOM before the frontmatter is ignored,
+   `withoutBom` in `shared/frontmatter.ts`), updates `notes`, `links`,
    `tags`, `properties`, `headings` and the FTS table, stores a version snapshot, and re-resolves the
    links that could now point somewhere (each read from the note it is in; see Names and links).
 4. **Renderer.** The same batch is pushed as `vault:changed`. The tree applies it to its copy
@@ -160,8 +162,15 @@ applied edit suggested again, fail a case.
 5. **Editor.** A note opens with `fs:read` into CodeMirror (`features/editor/codemirror.ts`). Typing
    is saved with `fs:write` after 500 ms of quiet, and on close. A save that fails leaves the text in
    the editor, unsaved, and is tried again. A change on disk from elsewhere is reloaded into the
-   editor. CodeMirror keeps `\n` inside; a CRLF note is handed back CRLF (`shared/line-endings.ts`,
-   which the frontmatter edits and the link rewrite use too).
+   editor; when it comes while something typed is not saved yet, the two are merged by lines
+   (`shared/line-merge.ts`, a three-way merge on the line diff, with the last text written as the base).
+   Changes to different lines are both kept; on the same lines the typing stays, the note says so, and
+   the other version is in History. CodeMirror keeps `\n` inside; a CRLF note is handed back CRLF (`shared/line-endings.ts`,
+   which the frontmatter edits and the link rewrite use too). Live preview draws nothing (checkboxes,
+   links, highlights, maths) inside code: `features/editor/code-ranges.ts` gives the code ranges from
+   the syntax tree. While an IME is composing, Enter, Escape, Tab and the arrows belong to it: a
+   capture-phase guard (`ui/ime-guard.ts`, installed in `app/main.tsx`) keeps them from the app's own
+   shortcuts.
 6. **Topics.** On a timer and when the window regains focus, the topics service in main reads the
    index's graph (`topics-graph`), has the embedder turn changed notes into vectors, clusters them,
    and writes `topics: [[topics/…]]` into the notes' frontmatter - through the same `vault-fs` path,
@@ -210,7 +219,11 @@ Several files may share a name; a folder holds one file of a name, in any case.
   question (`links:ask`, `app/components/UpdateLinksDialog.tsx`; answers `links:answer`). A run of moves
   such as a board rename shares one answer object; Recto's own tidying moves pass `{update: true}`.
   Rewrites keep alias, `#heading` and `!`, keep a moved note's own relative links pointing where they
-  did, skip fenced code and keep CRLF. The undo stays one step.
+  did, skip fenced code and keep CRLF. The undo stays one step. A move, and its undo, both go through
+  `followMove`, which moves the note's version history, authorship, canvas state, overview and topic
+  commands with it. Fences are read one way everywhere (`nextFence` in `shared/parse.ts`: the same
+  character, at least as long, nothing after the closer), and index schema v21 reindexes once so code
+  already indexed as links goes away.
 - **Removed.** `shared/parse.ts` `resolveLink`, `shortestLink` and `pathsByName`; `nameTakenElsewhere`
   and the strict name rule in `shared/vault.ts` (which re-exports `nameProblem`); `fs:name-taken` and
   `fs:link-target`.
@@ -750,7 +763,7 @@ In the vault:
 | `.recto/<feature>.json` | one JSON file per feature: `appearance`, `workspace`, `graph`, `writing`, `templates`, `hotkeys`, `tree-order`, `authors`, `topics`, `topics-settings`, `archive`, `canvas` (folds), `canvas-links` (link previews), `canvas-notes` (last folder for "Make it a note") | `main/state.ts` |
 | `.recto/stats/edits.json`, `.recto/stats/words.json`, `.recto/stats/active.json` | the vault overview's history, kept in the vault so every build and Mac that opens it adds to the same counts: per day, the notes you edited (editor saves, card edits and moves you made; backfilled once from version history); the vault's total words - every note, boards, cards and chats too, `%%comments%%` left out - first and last count, with the counting rule (`rule`; a day counted under an older rule starts again), and the last count taken again each time the overview reads, so words written are how far the total moved (`shared/overview.ts wordsChange`); and seconds active in Recto with this vault open, written once a minute and on a switch or quit. Every write reads, merges and replaces the file whole; an iCloud conflict copy (`edits 2.json`) is merged in and removed on the next read (time by the larger per day) | `main/overview.ts` |
 | `.recto/index.db` | SQLite (WAL): the index, tasks, version snapshots, usage events, topic vectors, the bots' piece vectors, note cards and tasks read from plain text, the files each canvas puts on it (`canvases`, `canvas_nodes`, `canvas_edges`), every other file with its creation time (`files`) | indexer, embedder |
-| `.recto/archive/` | archived files until retention runs out | `main/archive.ts` |
+| `.recto/archive/` | archived files until retention runs out; the manifest is re-read right before each write, so a restore or purge that waits on the disk never drops what was archived meanwhile | `main/archive.ts` |
 | `.recto/.gitignore` | keeps `index.db`, `.trash/` and `archive/` out of git | written once |
 
 Topics are written into notes as `topics: ["[[topics/Name]]"]`; a topic has no file of its own.

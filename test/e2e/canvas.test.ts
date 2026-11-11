@@ -208,10 +208,11 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     expect(proposal.files[0]!.after).toContain('[[Soil]]')
     // Nothing is written before Apply.
     expect(read('Garden/Basil.md')).not.toContain('[[Soil]]')
-    // The Suggested edits dialog opens once the proposal is in; shut it.
-    await page.waitForSelector('.dialog__backdrop')
+    // The Suggested edits panel opens once the proposal is in; shut it.
+    const panel = page.getByRole('dialog', { name: 'Suggested edits' })
+    await panel.waitFor()
     await page.keyboard.press('Escape')
-    await page.waitForSelector('.dialog__backdrop', { state: 'detached' })
+    await panel.waitFor({ state: 'detached' })
   })
 
   it('a note says which canvases it is on, in its Linked mentions', async () => {
@@ -963,7 +964,8 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await nodeOf(boardNode).click({ button: 'right', position: { x: 30, y: 12 } })
     await page.locator('.menu__item', { hasText: 'Show board as canvas' }).click()
     const shown = 'Recto/Canvas/Shopping board.canvas'
-    await expect.poll(() => fs.existsSync(path.join(vault, shown)), { timeout: 8000 }).toBe(true)
+    // Made empty, then written: waited for until it has its nodes.
+    await expect.poll(() => (fs.existsSync(path.join(vault, shown)) ? read(shown) : ''), { timeout: 8000 }).toContain('"nodes"')
     const doc = JSON.parse(read(shown)) as { nodes: { type: string; label?: string; text?: string; file?: string }[] }
     expect(doc.nodes.filter((n) => n.type === 'group').map((n) => n.label)).toEqual(expect.arrayContaining(['To do']))
     expect(doc.nodes.some((n) => n.file === 'Garden/Basil.md')).toBe(true)

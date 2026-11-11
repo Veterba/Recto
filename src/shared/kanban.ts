@@ -1,4 +1,4 @@
-import { parseFrontmatter } from './frontmatter'
+import { parseFrontmatter, withoutBom } from './frontmatter'
 
 /**
  * Boards as notes, in the file format of the Obsidian Kanban plugin
@@ -94,7 +94,7 @@ const blank = (line: string): boolean => line.trim() === ''
 
 /** Whether a note is a board: its frontmatter names the plugin. */
 export function isKanban(text: string): boolean {
-  if (!text.startsWith('---')) return false
+  if (!withoutBom(text).startsWith('---')) return false
   const value = parseFrontmatter(text).fields.find((f) => f.key === KANBAN_KEY)?.value
   return value !== null && value !== undefined && value !== '' && value !== false
 }
@@ -190,7 +190,7 @@ function readList(lines: readonly string[], from: number, to: number): { items: 
 
 export function parseKanban(text: string): KanbanBoard {
   const lines = linesOf(text)
-  const bodyStart = text.startsWith('---') ? parseFrontmatter(text).bodyStart : 0
+  const bodyStart = withoutBom(text).startsWith('---') ? parseFrontmatter(text).bodyStart : 0
   const block = findSettings(lines)
   const limit = block?.start ?? lines.length
 

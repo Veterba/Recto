@@ -8,6 +8,8 @@
  * (`formatLink`).
  */
 
+import { nextFence, type Fence } from './parse'
+
 /** A file as the rules see it: its vault path, and when it was made (Obsidian's order among equals). */
 export type LinkFile = { path: string; ctime: number }
 
@@ -225,21 +227,19 @@ export function takenInFolder(folder: string, name: string, paths: Iterable<stri
   return null
 }
 
-/** A fence line (```` ``` ```` or `~~~`): links between two are code, not links. */
-const FENCE = /^\s*(```|~~~)/
-
-/** `text` with `edit` applied to every line outside fenced code, line endings kept. */
+/** `text` with `edit` applied to every line outside fenced code (parse.ts nextFence), line endings kept. */
 function outsideCode(text: string, edit: (line: string) => string): string {
-  let inFence = false
+  let fence: Fence = null
   return text
     .split(/(\r?\n)/)
     .map((part, i) => {
       if (i % 2 === 1) return part
-      if (FENCE.test(part)) {
-        inFence = !inFence
+      const next = nextFence(part, fence)
+      if (next !== fence) {
+        fence = next
         return part
       }
-      return inFence ? part : edit(part)
+      return fence !== null ? part : edit(part)
     })
     .join('')
 }

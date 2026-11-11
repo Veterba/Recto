@@ -273,6 +273,20 @@ export function registerIpc(): void {
    * this, so dragging a file into a folder silently broke its links while
    * renaming it fixed them.
    */
+  /**
+   * What a note (or folder) carries when it moves, moved with it: its version history in the index, who
+   * wrote which lines, a canvas's folded nodes, the overview's days, its topics. A rename and its Undo
+   * both go through here - an Undo that moved only the file left the history at the other path, where
+   * the next index pass deleted it.
+   */
+  function followMove(from: string, to: string): void {
+    void send({ kind: 'note-renamed', from, to }, 15_000).catch(() => undefined)
+    moveAuthorship(from, to)
+    moveCanvasState(from, to)
+    overview.moved(from, to)
+    void topicCommands.moved(from, to).catch((err: unknown) => console.error('[topics]', err))
+  }
+
   async function relocate(
     from: string,
     apply: () => Promise<{ ok: true; path: string } | { ok: false; error: string }>,
@@ -304,11 +318,7 @@ export function registerIpc(): void {
      * wins by a wide margin rather than by luck. If it ever lost, the cost is
      * losing history for a renamed note, not losing the note.
      */
-    void send({ kind: 'note-renamed', from, to: moved.path }, 15_000).catch(() => undefined)
-    moveAuthorship(from, moved.path)
-    moveCanvasState(from, moved.path)
-    overview.moved(from, moved.path)
-    void topicCommands.moved(from, moved.path).catch((err: unknown) => console.error('[topics]', err))
+    followMove(from, moved.path)
 
     // Every file that moved: this one, or everything in a folder.
     const moves = new Map<string, string>()
@@ -374,8 +384,8 @@ export function registerIpc(): void {
       if (moved.ok) current = moved.path
     }
     const back = await vaultFs.rename(current, entry.to.slice(entry.to.lastIndexOf('/') + 1))
-    // A canvas's folded nodes go back with it.
-    if (back.ok) moveCanvasState(entry.from, entry.to)
+    // Its history, authorship, folded nodes, overview days and topics go back with it, as they came.
+    if (back.ok) followMove(entry.from, back.path)
     const { restored } = await vaultFs.restoreContents(entry.entries)
     return { ok: back.ok, restored }
   })

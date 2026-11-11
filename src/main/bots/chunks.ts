@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { CODE_FENCE } from '../../shared/parse'
+import { nextFence, type Fence } from '../../shared/parse'
 import { frontmatterClose } from '../../shared/frontmatter'
 
 /**
@@ -56,7 +56,7 @@ export function chunkNote(title: string, markdown: string): NoteChunk[] {
   const sections: { path: string[]; text: string }[] = []
   const stack: { level: number; text: string }[] = []
   let buffer: string[] = []
-  let inFence = false
+  let fence: Fence = null
   const flush = (): void => {
     const text = buffer.join('\n').trim()
     buffer = []
@@ -68,7 +68,10 @@ export function chunkNote(title: string, markdown: string): NoteChunk[] {
     stack.push({ level, text })
   }
   for (const line of body) {
-    if (CODE_FENCE.test(line)) inFence = !inFence
+    const next = nextFence(line, fence)
+    const fenceLine = next !== fence
+    fence = next
+    const inFence = fence !== null || fenceLine
     const h = inFence ? null : HEADING.exec(line)
     if (h !== null) {
       enter(h[1]!.length, h[2]!.trim())

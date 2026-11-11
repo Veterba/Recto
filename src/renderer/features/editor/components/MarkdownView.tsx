@@ -21,6 +21,7 @@ import type { LinkCandidate } from '../link-complete'
 import type { Format } from '../active-formats'
 import { noteIndexChanged } from '../../../app/note-bus'
 import { noteEdited } from '../../../app/usage'
+import { mergeLines } from '@shared/line-merge'
 import { registerView } from '../../../app/view-registry'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { NoteTitle } from './NoteTitle'
@@ -272,16 +273,16 @@ function MarkdownEditor({
   // Flush on unmount so closing a tab never drops the last keystrokes.
   useEffect(() => () => flush(), [flush])
 
-  const [renameNotice, setRenameNotice] = useState<string | null>(() => {
+  const [notice, setNotice] = useState<string | null>(() => {
     const waiting = pendingRenameNotice.get(path) ?? null
     pendingRenameNotice.delete(path)
     return waiting
   })
   useEffect(() => {
-    if (renameNotice === null) return
-    const timer = window.setTimeout(() => setRenameNotice(null), 5000)
+    if (notice === null) return
+    const timer = window.setTimeout(() => setNotice(null), 5000)
     return () => window.clearTimeout(timer)
-  }, [renameNotice])
+  }, [notice])
 
   /** Rename from the title. Returns an error sentence, or null on success. */
   const renameTo = useCallback(
@@ -338,9 +339,23 @@ function MarkdownEditor({
         }
         void api.invoke(IPC.fsRead, path).then((result) => {
           if (!result.ok || result.content === lastWritten.current) return
+          const typed = handle.current?.getValue() ?? lastWritten.current ?? ''
+          const unsaved = saving.current > 0 || typed !== lastWritten.current
           // Recto's own write is taken only into a note with nothing unsaved:
           // typing not yet written wins, as it always did.
-          if (written && (saving.current > 0 || handle.current?.getValue() !== lastWritten.current)) return
+          if (written && unsaved) return
+          if (touched && unsaved) {
+            // Another app wrote while this was being typed (sync, Obsidian). Both kept when they
+            // changed different lines; when the same, the typing stays and theirs is in History.
+            const base = lastWritten.current ?? ''
+            const merged = mergeLines(base, typed, result.content)
+            lastWritten.current = result.content
+            const keep = merged ?? typed
+            if (keep !== typed) handle.current?.setValue(keep)
+            onChange(keep)
+            if (merged === null) setNotice('This note changed in another app while you typed. Your text is kept; the other version is in History.')
+            return
+          }
           lastWritten.current = result.content
           setText(result.content)
           handle.current?.setValue(result.content)
@@ -432,7 +447,7 @@ function MarkdownEditor({
         </span>
       </div>
       {showTitle && <NoteTitle path={path} onRename={renameTo} />}
-      {renameNotice !== null && <p className="note-title__notice">{renameNotice}</p>}
+      {notice !== null && <p className="note-title__notice">{notice}</p>}
       <Editor
         docKey={path}
         propertiesSlot={propertiesSlot}

@@ -31,6 +31,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { installTitleTips } from '../ui/title-tips'
+import { installImeGuard } from '../ui/ime-guard'
 // These two override rules in the features' own stylesheets (transitions, the
 // status bar's colour), so they must come after them - after App, which pulls
 // every feature in.
@@ -52,6 +53,7 @@ if (import.meta.env.DEV && location.pathname === '/dev/recto-bot') {
   )
 } else {
   installTitleTips()
+  installImeGuard()
   createRoot(root).render(
     <StrictMode>
       <App />

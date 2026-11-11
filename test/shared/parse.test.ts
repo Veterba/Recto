@@ -208,3 +208,16 @@ describe('HTML comments', () => {
   })
 })
 
+
+describe('code is not links or tags', () => {
+  it('inline code: `[[x]]` and `#include` there are neither a link nor a tag', () => {
+    const note = parseNote('Write `[[not a link]]` and `#include <x>` - but [[Real]] and #real.\n')
+    expect(note.links.map((l) => l.target)).toEqual(['Real'])
+    expect(note.tags.map((t) => t.tag)).toEqual(['real'])
+  })
+
+  it('a fence closes only on its own kind, at least as long: a ``` shown inside a ```` block is code', () => {
+    const note = parseNote(['````md', '```', '[[Inside the example]]', '```', '````', '[[After]]', '~~~', '[[In tildes]]', '```', '[[Still in tildes]]', '~~~'].join('\n'))
+    expect(note.links.map((l) => l.target)).toEqual(['After'])
+  })
+})

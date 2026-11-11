@@ -60,6 +60,16 @@ function writeManifest(state: ArchiveState): void {
 const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 /** Move a note or folder into the archive. */
+/**
+ * One entry off the manifest, read and written with nothing awaited between: a list read before an await and
+ * written after it put back a list without what was archived meanwhile - a note in the archive no one could
+ * see, restore or purge.
+ */
+function dropEntry(id: string): void {
+  const now = readManifest()
+  writeManifest({ ...now, entries: now.entries.filter((e) => e.id !== id) })
+}
+
 export async function archive(relative: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   try {
     const vault = currentVault()
@@ -105,7 +115,7 @@ export async function restore(id: string): Promise<{ ok: true; path: string } | 
     const stored = path.join(archiveDir(), id)
     if (!fs.existsSync(stored)) {
       // Manifest and disk disagreed; drop the row rather than leave a ghost.
-      writeManifest({ ...state, entries: state.entries.filter((e) => e.id !== id) })
+      dropEntry(id)
       return { ok: false, error: 'The archived file is missing from disk.' }
     }
 
@@ -120,7 +130,7 @@ export async function restore(id: string): Promise<{ ok: true; path: string } | 
 
     await fsp.mkdir(path.dirname(target), { recursive: true })
     await fsp.rename(stored, target)
-    writeManifest({ ...state, entries: state.entries.filter((e) => e.id !== id) })
+    dropEntry(id)
 
     return { ok: true, path: path.relative(vault.path, target).split(path.sep).join('/') }
   } catch (err) {
@@ -143,7 +153,7 @@ export async function purge(id: string): Promise<{ ok: boolean; error?: string }
     if (!state.entries.some((e) => e.id === id)) return { ok: false, error: 'That item is no longer in the archive.' }
     const stored = path.join(archiveDir(), id)
     if (fs.existsSync(stored)) await shell.trashItem(stored)
-    writeManifest({ ...state, entries: state.entries.filter((e) => e.id !== id) })
+    dropEntry(id)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

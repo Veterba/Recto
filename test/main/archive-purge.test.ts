@@ -10,7 +10,7 @@ const trashItem = vi.fn(async (p: string) => fs.rmSync(p, { recursive: true, for
 vi.mock('electron', () => ({ shell: { trashItem: (p: string) => trashItem(p) } }))
 vi.mock('../../src/main/vault', () => ({ currentVault: () => ({ path: root, name: 'v' }) }))
 
-const { archive, purge } = await import('../../src/main/archive')
+const { archive, list, purge } = await import('../../src/main/archive')
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-archive-'))
@@ -33,5 +33,20 @@ describe('purging from the archive', () => {
     if (!archived.ok) return
     expect(await purge(archived.id)).toEqual({ ok: true })
     expect(trashItem).toHaveBeenCalledTimes(1)
+  })
+
+  it('a note archived while a purge waits on the Trash stays listed', async () => {
+    fs.writeFileSync(path.join(root, 'Old.md'), '# Old')
+    fs.writeFileSync(path.join(root, 'New.md'), '# New')
+    const old = await archive('Old.md')
+    if (!old.ok) throw new Error(old.error)
+    let release = (): void => undefined
+    trashItem.mockImplementationOnce((p: string) => new Promise((done) => (release = () => done(fs.rmSync(p, { recursive: true, force: true })))))
+    const purging = purge(old.id)
+    const added = await archive('New.md')
+    release()
+    expect(await purging).toEqual({ ok: true })
+    expect(added.ok).toBe(true)
+    expect(list().entries.map((e) => e.originalPath)).toEqual(['New.md'])
   })
 })

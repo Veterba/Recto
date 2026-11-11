@@ -399,10 +399,10 @@ function removeNote(relative: string): void {
 /**
  * Carry a note's history across a rename.
  *
- * Main sends this BEFORE it touches the disk. The watcher then reports an
- * unlink of the old path and an add of the new one, in whatever order it likes
- * - and by then the snapshots have already moved, so the unlink finds nothing
- * to delete. Doing it afterwards would be a race with `removeNote`.
+ * The watcher reports an unlink of the old path and an add of the new one, in
+ * whatever order it likes and possibly after this. An unlink of a path whose
+ * snapshots moved away finds nothing to delete, and one for a path that is on
+ * disk again (a rename undone at once) is skipped.
  */
 function renameNote(from: string, to: string): void {
   requireDb().prepare('UPDATE snapshots SET path = ? WHERE path = ?').run(to, from)
@@ -698,7 +698,9 @@ process.parentPort?.on('message', (event) => {
           continue
         }
         if (change.type === 'removed') {
-          handleDb.transaction(() => removeNote(change.path))()
+          // A removal that comes after the file is back - a rename undone at once - is old news: deleting
+          // now would take the history the undo just moved back.
+          if (!fs.existsSync(path.join(vaultRoot, change.path))) handleDb.transaction(() => removeNote(change.path))()
           continue
         }
         try {

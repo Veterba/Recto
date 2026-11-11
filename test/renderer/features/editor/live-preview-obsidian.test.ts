@@ -37,6 +37,17 @@ describe('Live Preview, as Obsidian draws it', () => {
     v.destroy()
   })
 
+  it('code is shown as written: no checkbox, link or embed in a fence, no link or maths in inline code', () => {
+    const v = view('```md\n- [ ] not a task\n[[not a link]] ![[nor an embed]]\n```\nInline `[[x]]` and `$y$` here.\nA real [[Link]].\n')
+    const text = v.contentDOM
+    expect(text.querySelectorAll('.cm-task-checkbox')).toHaveLength(0)
+    // The one link drawn is the real one, outside the code.
+    expect([...text.querySelectorAll('.cm-wikilink')].map((l) => l.textContent)).toEqual(['Link'])
+    expect(text.querySelector('.cm-embed')).toBeNull()
+    expect(line(v, 4).querySelector('.cm-math')).toBeNull()
+    v.destroy()
+  })
+
   it('`$$…$$` alone on its line is a centred formula; inside a sentence it stays in the line', () => {
     const v = view('$$e^{i\\pi} + 1 = 0$$\nSo $$a^2$$ holds.\n')
     expect(line(v, 0).querySelector('.cm-math-block')).not.toBeNull()

@@ -354,6 +354,12 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
     }))
   }, [run])
 
+  // Leaving with a card still being typed in - another tab, ⌘W, a note opened in this one - keeps the text:
+  // it lived only in `draft` until Esc or a click, and went with the view.
+  const stopOnLeave = useRef(stopEditing)
+  stopOnLeave.current = stopEditing
+  useEffect(() => () => stopOnLeave.current(), [])
+
   /** A new node at a point on the canvas, its corner on the grid; selected, and its text being typed. */
   const addNode = useCallback(
     (at: { x: number; y: number }, kind: 'text' | 'plain' | 'group' | Shape, link?: { from: string }): void => {
