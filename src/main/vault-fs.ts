@@ -11,6 +11,7 @@ import { currentVault } from './vault'
 import { notTextMessage, notTextReason } from './text-file'
 import { isHidden, nameOf, nameProblem, sortNodes } from '../shared/vault'
 import { parseCanvas, renameInCanvas, serializeCanvas } from '../shared/canvas'
+import { movedPath } from '../shared/overview'
 import { rewriteForRename, type LinkSettings, type LinkVault } from '../shared/obsidian-links'
 
 /**
@@ -151,10 +152,35 @@ const tempPath = (absolute: string): string => `${absolute}.tmp-${process.pid}-$
 export const isTempWrite = (name: string): boolean => /\.tmp-\d+-\d+$/.test(name)
 
 /**
- * Write-then-rename, so a crash mid-write cannot truncate a note. Callers are
+ * A new file is written whole and renamed into place; an existing one is
+ * written in place after a full temp copy (see writeNow). Callers are
  * expected to have registered the path as a self-write first (see watcher).
  */
-export async function writeFile(relative: string, content: string): Promise<{ ok: boolean; error?: string }> {
+export function writeFile(relative: string, content: string): Promise<{ ok: boolean; error?: string }> {
+  // One write per file at a time: an existing file is written in place, and two at once would interleave.
+  const before = lastWrite.get(relative) ?? Promise.resolve()
+  const write = before.then(() => writeNow(relative, content))
+  lastWrite.set(relative, write)
+  inFlight.add(write)
+  void write.finally(() => {
+    inFlight.delete(write)
+    if (lastWrite.get(relative) === write) lastWrite.delete(relative)
+  })
+  return write
+}
+
+/** The last write queued for each file. */
+const lastWrite = new Map<string, Promise<unknown>>()
+
+/** Writes started and not done yet. */
+const inFlight = new Set<Promise<unknown>>()
+
+/** Once every write started so far is on disk (or has failed): what quitting waits for. */
+export async function writesSettled(): Promise<void> {
+  await Promise.allSettled([...inFlight])
+}
+
+async function writeNow(relative: string, content: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const absolute = resolveInVault(requireVault(), relative)
     const existing = await fsp.readFile(absolute).catch(() => null)
@@ -177,12 +203,21 @@ export async function writeFile(relative: string, content: string): Promise<{ ok
         bytes.length,
         new Error().stack?.split('\n').slice(2, 6).join(' <- '),
       )
-    // Unique per write: two writes to one note in flight (an autosave and a
-    // board edit) shared one temp file, and one could rename the other's half.
+    // The whole new text goes to a temp file first, beside the note.
     const tmp = tempPath(absolute)
     await fsp.mkdir(path.dirname(absolute), { recursive: true })
     await fsp.writeFile(tmp, bytes)
-    await fsp.rename(tmp, absolute)
+    if (existing === null) {
+      await fsp.rename(tmp, absolute)
+      return { ok: true }
+    }
+    // A note that is there already is written in place, so it stays the same
+    // file: its creation date, Finder tags and permissions are kept, and a
+    // symlink stays a symlink (a rename put a new file in its place and lost
+    // them all). The temp copy goes only after, so a crash halfway leaves the
+    // whole new text beside the note.
+    await fsp.writeFile(absolute, bytes)
+    await fsp.rm(tmp, { force: true })
     return { ok: true }
   } catch (err) {
     return { ok: false, error: message(err) }
@@ -489,9 +524,10 @@ export async function applyLinkPlan(plan: LinkPlan): Promise<{ changed: Rewritte
  * path: only their file nodes' paths change, every other byte stays. Returns
  * what changed, for the same undo as link rewrites.
  */
-export async function rewriteCanvasesTo(canvases: readonly string[], oldPath: string, newPath: string): Promise<RewrittenFile[]> {
+export async function rewriteCanvasesTo(referrers: readonly string[], oldPath: string, newPath: string): Promise<RewrittenFile[]> {
   const changed: RewrittenFile[] = []
-  for (const canvas of canvases) {
+  // Found before the move, under their old paths: a canvas inside a moved folder is read where it is now.
+  for (const canvas of referrers.map((p) => movedPath(p, oldPath, newPath))) {
     const read = await readFile(canvas)
     if (!read.ok) continue
     let next: string
@@ -507,6 +543,29 @@ export async function rewriteCanvasesTo(canvases: readonly string[], oldPath: st
     changed.push({ path: canvas, before: read.content, after: next })
   }
   return changed
+}
+
+/**
+ * Undo a rename or move: the files it rewrote get their text back, then the
+ * note or folder goes back to `to`. In that order - a rewritten file inside a
+ * moved folder is restored where it is, before it moves away from that path.
+ */
+export async function undoRelocate(entry: {
+  from: string
+  to: string
+  entries: readonly RewrittenFile[]
+}): Promise<{ ok: true; path: string; restored: number } | { ok: false; restored: number }> {
+  const { restored } = await restoreContents(entry.entries)
+  // `to` is the original full path: a move needs the folder back as well as the name.
+  const originalParent = entry.to.slice(0, Math.max(0, entry.to.lastIndexOf('/')))
+  const currentParent = entry.from.slice(0, Math.max(0, entry.from.lastIndexOf('/')))
+  let current = entry.from
+  if (originalParent !== currentParent) {
+    const moved = await move(current, originalParent)
+    if (moved.ok) current = moved.path
+  }
+  const back = await rename(current, entry.to.slice(entry.to.lastIndexOf('/') + 1))
+  return back.ok ? { ok: true, path: back.path, restored } : { ok: false, restored }
 }
 
 /**

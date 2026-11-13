@@ -41,6 +41,20 @@ describe('reading a table', () => {
     expect(model.rows[3]![2]).toBe('line<br>two')
   })
 
+  it('a lone $ or backtick is text, not the start of maths or code: no cell is lost', () => {
+    expect(splitRawRow('| a | $5 | b |')).toEqual(['a', '$5', 'b'])
+    expect(splitRawRow('| `x | b | c |')).toEqual(['`x', 'b', 'c'])
+    expect(splitRawRow('| $5 | $6 | c |')).toEqual(['$5', '$6', 'c'])
+    expect(splitRawRow('| $a|b$ | `c|d` |')).toEqual(['$a|b$', '`c|d`'])
+    const table = '| h1 | h2 | h3 |\n| --- | --- | --- |\n| a | $5 | b |\n| x | y | z |'
+    expect(formatTable(parseTableSource(table)!)).toContain('| a   | $5  | b   |')
+  })
+
+  it('a lone $ or backtick typed into a cell does not swallow its pipes', () => {
+    expect(cellFromInput('cost $5 | tax')).toBe('cost $5 \\| tax')
+    expect(cellFromInput('`x | y')).toBe('`x \\| y')
+  })
+
   it('pads short rows and needs a delimiter row', () => {
     expect(parseTableSource('| a | b |\n|---|---|\n| 1 |')!.rows[1]).toEqual(['1', ''])
     expect(parseTableSource('| a | b |\n| 1 | 2 |')).toBeNull()

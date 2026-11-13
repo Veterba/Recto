@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import type { StartupState } from '@shared/vault'
 import { api } from './api'
 import { FirstRun } from './components/FirstRun'
 import { VaultShell } from './components/VaultShell'
-import { IPC } from '@shared/ipc'
+import { IPC, IPC_EVENT } from '@shared/ipc'
 
 export function App(): React.ReactElement {
   const [state, setState] = useState<StartupState | null>(null)
@@ -11,6 +12,20 @@ export function App(): React.ReactElement {
   useEffect(() => {
     void api.invoke(IPC.appStartupState).then(setState)
   }, [])
+
+  /**
+   * The window is closing or the app quitting: the vault view lets go at once,
+   * so every open note, canvas card and setting saves itself as it does when
+   * its tab closes (flush.ts in main), and main is told once all of it is sent.
+   */
+  useEffect(
+    () =>
+      api.on(IPC_EVENT.appFlush, () => {
+        flushSync(() => setState(null))
+        void api.invoke(IPC.appFlushed)
+      }),
+    [],
+  )
 
   /** Unmount first, like `switchVault`: open notes flush on unmount, and main must still have the vault open. */
   const closeVault = useCallback(() => {

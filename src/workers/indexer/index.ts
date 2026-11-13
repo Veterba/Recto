@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { getSnapshot, listSnapshots, pruneSnapshots, takeSnapshot } from './snapshots'
+import { getSnapshot, listSnapshots, moveSnapshots, pruneSnapshots, takeSnapshot } from './snapshots'
 import { parseNote } from '../../shared/parse'
 import { resolveLinkpath, resolveLinkpathDetail } from '../../shared/obsidian-links'
 import { extractTasks, normaliseTask, noteDate, writtenDate } from '../../shared/tasks'
@@ -397,7 +397,7 @@ function removeNote(relative: string): void {
 }
 
 /**
- * Carry a note's history across a rename.
+ * Carry a note's history across a rename - for a folder, every note's in it.
  *
  * The watcher reports an unlink of the old path and an add of the new one, in
  * whatever order it likes and possibly after this. An unlink of a path whose
@@ -405,7 +405,7 @@ function removeNote(relative: string): void {
  * disk again (a rename undone at once) is skipped.
  */
 function renameNote(from: string, to: string): void {
-  requireDb().prepare('UPDATE snapshots SET path = ? WHERE path = ?').run(to, from)
+  moveSnapshots(requireDb(), from, to)
 }
 
 /**

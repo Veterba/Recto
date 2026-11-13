@@ -40,6 +40,13 @@ export function useCanvas(path: string): {
   const base = useRef<string | null>(null)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const pending = useRef(0)
+  /**
+   * A write made the change to a file someone else had changed: the file now
+   * holds more than the screen. Until the screen is read again, every write
+   * makes its change to the file as it is - a write of the screen's canvas
+   * would drop what the other app added.
+   */
+  const merged = useRef(false)
   const undos = useRef<{ undo: CanvasChange; redo: CanvasChange }[]>([])
   const redos = useRef<{ undo: CanvasChange; redo: CanvasChange }[]>([])
   const [, setSteps] = useState(0)
@@ -86,7 +93,7 @@ export function useCanvas(path: string): {
         try {
           const got = await api.invoke(IPC.fsRead, path)
           let target = serializeCanvas(next)
-          if (got.ok && got.content !== base.current) {
+          if (got.ok && (got.content !== base.current || merged.current)) {
             try {
               target = serializeCanvas(change(parseCanvas(got.content)))
             } catch (err) {
@@ -108,12 +115,18 @@ export function useCanvas(path: string): {
             setNotice(`Couldn't save the canvas, so the change was undone. ${written.error ?? ''}`.trim())
             return false
           }
+          if (target !== serializeCanvas(next)) merged.current = true
           base.current = target
           noteIndexChanged()
           return true
         } finally {
           pending.current--
-          if (pending.current === 0) read()
+          if (pending.current === 0) {
+            // Show the merged file: the read skips text it has seen, and it has seen this.
+            if (merged.current) base.current = null
+            merged.current = false
+            read()
+          }
         }
       }
       const result = queue.current.then(run, run)

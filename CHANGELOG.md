@@ -4,6 +4,21 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.60.4 — 2026-11-12
+### Fixed
+- Text typed just before quitting Recto or closing its window is saved. A note saves half a second after the last key, and ⌘Q in that moment lost the last words.
+- A table row with a single `$` or backtick (a price, say) keeps all its cells when another row is edited. Before, the cells after it were merged or deleted.
+- A property written over several lines (`description: |` and the lines under it) is kept as it is, and editing or removing another property no longer breaks it.
+- Property values such as `C# notes`, `#idea`, `- item` or text in quotes are written so Obsidian reads them the same, and backslashes and quotes inside a value survive a save.
+- Saving a note keeps its creation date, Finder tags and permissions, and a note that is a symlink stays one.
+- Renaming or moving a folder keeps the version history of every note in it, and a canvas in that folder keeps the notes on it. Undoing the move puts the canvas back as it was. Changing only the case of a board's name keeps its cards' history too.
+- A board that another app has moved or locked is no longer written again from the screen; Recto says it couldn't read the board.
+- A canvas changed in Obsidian while you edit it in Recto keeps the other app's changes through your next edits, and shows them.
+- Applying an AI suggestion twice at once (a double click, or Apply next to Apply all) writes it once and shows it as applied, not out of date. A suggestion that changes two files writes both or neither.
+- Accepting AI ghosts on a canvas that could not be saved leaves them waiting instead of marking them applied.
+- An archive list edited by hand can no longer make Recto move files outside the archive to the Trash.
+- Plan limits and usage shown for AI providers are no longer erased when the installed app and a test build run on the same Mac, and Codex's meter no longer disappears for a minute after one failed reading.
+
 ## v0.60.3 — 2026-11-11
 ### Fixed
 - When Obsidian or a sync app writes a note while you are typing in it, both changes are kept if they touch different lines. If they touch the same line, your typing stays, the note says so, and the other version is in History. Before, the other app's version replaced what you had typed.

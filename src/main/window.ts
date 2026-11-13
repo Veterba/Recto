@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isAppUrl } from './navigation'
 import { IPC_EVENT } from '../shared/ipc'
 import { sendEvent } from './events'
+import { flushOnClose } from './flush'
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -104,6 +105,7 @@ export function createWindow(): BrowserWindow {
   win.on('leave-full-screen', pushFullScreen)
 
   win.once('ready-to-show', () => win.show())
+  flushOnClose(win)
 
   void win.loadURL(appEntry())
 

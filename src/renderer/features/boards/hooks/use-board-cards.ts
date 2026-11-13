@@ -221,26 +221,31 @@ export function useBoardCards(path: string): {
       const run = async (): Promise<boolean> => {
         try {
           const read = await api.invoke(IPC.fsRead, path)
-          let target = next
-          if (read.ok) {
-            // Always made again to what is there now, not only when the file
-            // changed under us: `next` was computed on the screen's text, which
-            // assumes every earlier queued write landed. One that failed or was
-            // refused left the file different, and writing `next` then brought
-            // its change back or wrote over an edit made meanwhile.
-            try {
-              target = change(read.content)
-            } catch (err) {
-              base.current = read.content
-              setText(read.content)
-              setNotice(`The board changed meanwhile, so that was not saved. ${err instanceof Error ? err.message : ''}`.trim())
-              return false
-            }
+          // Not readable now - moved, renamed or locked by another app: nothing
+          // is written. Writing the screen's text made a moved board again and
+          // put back what was there before an edit made meanwhile.
+          if (!read.ok) {
+            if (base.current !== null) setText(base.current)
+            setNotice(`Couldn't read the board, so the change was not saved. ${read.error}`.trim())
+            return false
+          }
+          // Always made again to what is there now, not only when the file
+          // changed under us: `next` was computed on the screen's text, which
+          // assumes every earlier queued write landed. One that failed or was
+          // refused left the file different, and writing `next` then brought
+          // its change back or wrote over an edit made meanwhile.
+          let target: string
+          try {
+            target = change(read.content)
+          } catch (err) {
+            base.current = read.content
+            setText(read.content)
+            setNotice(`The board changed meanwhile, so that was not saved. ${err instanceof Error ? err.message : ''}`.trim())
+            return false
           }
           const written = await api.invoke(IPC.fsWrite, path, target)
           if (!written.ok) {
-            const back = read.ok ? read.content : base.current
-            if (back !== null) setText(back)
+            setText(read.content)
             setNotice(`Couldn't save the board, so the change was undone. ${written.error ?? ''}`.trim())
             return false
           }

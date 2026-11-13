@@ -127,14 +127,25 @@ export function pruneBackups(root: string, cutoff: number): void {
   }
 }
 
-/** Write the files, if all are still as they were. */
+/**
+ * Write the files, if all are still as they were - all of them or none: when
+ * one cannot be written, those written before it are put back, so a board is
+ * never left with its card line but no card note, and Apply can be tried again.
+ */
 async function write(
   files: Draft['files'],
 ): Promise<{ ok: true } | { ok: false; stale: true; path: string } | { ok: false; stale: false; error: string }> {
   for (const f of files) if ((await current(f.path)) !== f.before) return { ok: false, stale: true, path: f.path }
+  const done: Draft['files'] = []
   for (const f of files) {
     const written = await vaultFs.writeFile(f.path, f.after)
-    if (!written.ok) return { ok: false, stale: false, error: written.error ?? `Could not write ${f.path}.` }
+    if (!written.ok) {
+      for (const back of done.reverse())
+        if (back.before === null) await vaultFs.trash(back.path)
+        else await vaultFs.writeFile(back.path, back.before)
+      return { ok: false, stale: false, error: written.error ?? `Could not write ${f.path}.` }
+    }
+    done.push(f)
   }
   return { ok: true }
 }
@@ -172,11 +183,25 @@ export async function applyNow(draft: Draft): Promise<{ ok: true } | { ok: false
   return { ok: false, error: result.stale ? `${result.path} changed while this was being made. Read it again and retry.` : result.error }
 }
 
+/** Settled from pending only: a late answer never turns an applied proposal into another state. */
 function settle(id: string, status: ProposalStatus): void {
-  save(load().map((p) => (p.id === id ? { ...p, status } : p)))
+  save(load().map((p) => (p.id === id && p.status === 'pending' ? { ...p, status } : p)))
 }
 
+/** Proposals being applied now: a second Apply of one (a double click, Apply all beside it) waits for nothing and does nothing. */
+const applying = new Set<string>()
+
 export async function apply(id: string): Promise<{ ok: true } | { ok: false; error: string; stale?: boolean }> {
+  if (applying.has(id)) return { ok: false, error: 'This suggestion is being applied.' }
+  applying.add(id)
+  try {
+    return await applyOnce(id)
+  } finally {
+    applying.delete(id)
+  }
+}
+
+async function applyOnce(id: string): Promise<{ ok: true } | { ok: false; error: string; stale?: boolean }> {
   const found = proposal(id)
   if (found === null || found.status !== 'pending') return { ok: false, error: 'This suggestion is no longer pending.' }
   if (found.canvas !== undefined) {

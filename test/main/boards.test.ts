@@ -113,6 +113,20 @@ describe('renaming a board', () => {
     expect(exists(A)).toBe(true)
   })
 
+  it('a change of case only renames the folder through relocate, so its notes keep their history and links', async () => {
+    const moved: string[] = []
+    const watched = createBoardOps({
+      relocate: async (from, apply) => {
+        moved.push(from)
+        const done = await apply()
+        return done.ok ? { ok: true, path: done.path, rewrittenFiles: 0, rewrittenLinks: 0 } : done
+      },
+      listBoards: async () => [A, B].filter(exists),
+    })
+    expect(await watched.renameBoard(A, 'a')).toEqual({ ok: true, path: 'Recto/Boards/a/a.md' })
+    expect(moved).toEqual([A, 'Recto/Boards/A'])
+  })
+
   it('allows a name a note has in another folder, as Obsidian does', async () => {
     expect(await ops.renameBoard(A, 'Basil')).toEqual({ ok: true, path: 'Recto/Boards/Basil/Basil.md' })
     expect(read('Garden/Basil.md')).toBe('basil')

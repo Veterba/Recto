@@ -67,9 +67,29 @@ const ONLY_LINKS = /^\[\[[^[\]]+\]\](?:\s*,?\s*\[\[[^[\]]+\]\])*$/
 
 function unquote(raw: string): string {
   const value = raw.trim()
-  if (value.length > 1 && value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1)
-  if (value.length > 1 && value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1)
+  // The two escapes `quote` writes, undone - other backslashes are kept as they are.
+  if (value.length > 1 && value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1).replace(/\\(["\\])/g, '$1')
+  if (value.length > 1 && value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1).replace(/''/g, "'")
   return value
+}
+
+/** Text in double quotes, with what YAML reads as escapes escaped. */
+const quote = (text: string): string => `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+
+/**
+ * Plain text YAML (and Obsidian) would read as something else: a comment
+ * (` #`, a leading `#`), a list item or key (`- `, `? `, `: `), a quoted or
+ * flow value, a tag or anchor. Inside a flow list `,` and `]` end the item.
+ */
+function needsQuotes(text: string, inList: boolean): boolean {
+  return (
+    /^[[\]{}>|*&!%@`"'#,]/.test(text) ||
+    /^[-?:](\s|$)/.test(text) ||
+    /\s#/.test(text) ||
+    text.includes(': ') ||
+    text.endsWith(':') ||
+    (inList && /[,\]]/.test(text))
+  )
 }
 
 /**
@@ -214,6 +234,17 @@ export function parseFrontmatter(text: string): Frontmatter {
       while (index + 1 < block.length && /^\s/.test(block[index + 1]!)) opaque.push(block[++index]!)
       continue
     }
+    // A value that goes on below - `description: |`, `>`, a flow list or
+    // plain text across lines - is one we do not model: kept whole and
+    // read-only. Read as the text "|" with its lines left behind, an edit
+    // replaced only the first line and broke the block.
+    if (next !== undefined && /^\s+\S/.test(next)) {
+      opaque.push(line)
+      // Blank lines inside a block scalar belong to it; one before the next key does not.
+      const goesOn = (i: number): boolean => i < block.length && (/^\s+\S/.test(block[i]!) || (block[i]!.trim() === '' && goesOn(i + 1)))
+      while (goesOn(index + 1)) opaque.push(block[++index]!)
+      continue
+    }
     const { value, type } = classify(raw)
     fields.push({ key, raw: raw.trim(), value, type, line: index, span: 1 })
   }
@@ -231,7 +262,7 @@ export function serialize(value: Field['value']): string {
     // list is a nested list to every YAML reader, including the one in
     // Obsidian - so a list of links must come out as `["[[a]]", "[[b]]"]`.
     const items = value.map((item) => item.trim()).filter((item) => item !== '')
-    return `[${items.map((item) => (/^[[{>|*&!%@`"']/.test(item) || item.includes(',') ? `"${item.replace(/"/g, '\\"')}"` : item)).join(', ')}]`
+    return `[${items.map((item) => (needsQuotes(item, true) ? quote(item) : item)).join(', ')}]`
   }
 
   const text = value.trim()
@@ -239,10 +270,7 @@ export function serialize(value: Field['value']): string {
   if (text === '') return '""'
   if (text === 'true' || text === 'false') return `"${text}"`
   if (/^-?\d+(\.\d+)?$/.test(text)) return `"${text}"`
-  if (/^[[{>|*&!%@`]/.test(text) || text.includes(': ') || text.endsWith(':')) {
-    return `"${text.replace(/"/g, '\\"')}"`
-  }
-  return text
+  return needsQuotes(text, false) ? quote(text) : text
 }
 
 /** `key:` and one `- item` line per value, at the indentation the file used. */
@@ -284,6 +312,9 @@ function setFieldLf(text: string, key: string, value: Field['value']): string {
     lines.splice(existing.line + 1, existing.span, ...replacement)
     return lines.join('\n')
   }
+
+  // A key kept as written (multi-line, nested): never a second one beside it.
+  if (parsed.opaque.some((line) => KEY_VALUE.exec(line)?.[1]?.trim() === key)) return text
 
   // Append inside the block, just before the closing fence.
   const closeIndex = parsed.bodyStart - 1

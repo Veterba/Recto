@@ -7,6 +7,7 @@ import { isolateDevState } from './dev-guard'
 import { registerIpc } from './ipc'
 import { handleVaultScheme, registerVaultScheme } from './vault-protocol'
 import { createWindow } from './window'
+import { flushWindows, markQuitting } from './flush'
 import { writeLauncher } from './vault-tools/launcher'
 import { startMcpSocket, stopMcpSocket } from './vault-tools/socket'
 
@@ -71,8 +72,10 @@ if (job !== undefined) {
     unloaded = true
     // Quick ask's runs too: a CLI left running after the app has gone goes on answering, and spending, to no one.
     cancelAllQuickAsk()
-    void bots
-      .stopAnswers()
+    markQuitting()
+    // What is typed and not saved yet is written first (flush.ts).
+    void flushWindows()
+      .then(() => bots.stopAnswers())
       .then(() => Promise.race([bots.unloadOnQuit(), new Promise((resolve) => setTimeout(resolve, 1500))]))
       .finally(() => app.quit())
   })

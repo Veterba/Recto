@@ -59,6 +59,19 @@ function writeManifest(state: ArchiveState): void {
 
 const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
+/**
+ * Where an archived item is kept, or null for an id Recto could not have
+ * made. The manifest lives inside the vault, so anyone who can write the
+ * vault can plant an id like '../../Documents': joined unchecked, opening the
+ * vault sent that folder to the Trash.
+ */
+function storedPath(id: string): string | null {
+  if (!/^[a-z0-9]+-[a-z0-9]+$/.test(id)) return null
+  const dir = archiveDir()
+  const stored = path.join(dir, id)
+  return path.dirname(stored) === dir ? stored : null
+}
+
 /** Move a note or folder into the archive. */
 /**
  * One entry off the manifest, read and written with nothing awaited between: a list read before an await and
@@ -112,8 +125,8 @@ export async function restore(id: string): Promise<{ ok: true; path: string } | 
     const entry = state.entries.find((e) => e.id === id)
     if (!entry) return { ok: false, error: 'That item is no longer in the archive.' }
 
-    const stored = path.join(archiveDir(), id)
-    if (!fs.existsSync(stored)) {
+    const stored = storedPath(id)
+    if (stored === null || !fs.existsSync(stored)) {
       // Manifest and disk disagreed; drop the row rather than leave a ghost.
       dropEntry(id)
       return { ok: false, error: 'The archived file is missing from disk.' }
@@ -151,8 +164,8 @@ export async function purge(id: string): Promise<{ ok: boolean; error?: string }
     // joined unchecked, '../x' or '' named a file outside the archive (or the
     // archive itself) for the trash.
     if (!state.entries.some((e) => e.id === id)) return { ok: false, error: 'That item is no longer in the archive.' }
-    const stored = path.join(archiveDir(), id)
-    if (fs.existsSync(stored)) await shell.trashItem(stored)
+    const stored = storedPath(id)
+    if (stored !== null && fs.existsSync(stored)) await shell.trashItem(stored)
     dropEntry(id)
     return { ok: true }
   } catch (err) {
@@ -180,13 +193,11 @@ export function setRetention(days: number): ArchiveState {
 /** Manifest rows whose file has gone missing are dropped, not shown. */
 export function list(): ArchiveState {
   const state = readManifest()
-  let dir: string
-  try {
-    dir = archiveDir()
-  } catch {
-    return state
-  }
-  const present = state.entries.filter((entry) => fs.existsSync(path.join(dir, entry.id)))
+  if (currentVault() === null) return state
+  const present = state.entries.filter((entry) => {
+    const stored = storedPath(entry.id)
+    return stored !== null && fs.existsSync(stored)
+  })
   if (present.length !== state.entries.length) writeManifest({ ...state, entries: present })
   return { ...state, entries: present }
 }

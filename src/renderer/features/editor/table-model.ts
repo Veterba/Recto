@@ -20,6 +20,22 @@ export type TableModel = {
 export type CellRect = { top: number; left: number; bottom: number; right: number }
 
 /**
+ * Whether `char` at `from` opens a span: only when an unescaped `char` closes
+ * it later on the same text. A lone `$5` or backtick is plain text - taken
+ * as an opener, it hid every pipe after it and the row's cells were merged
+ * or dropped on the next write.
+ */
+function opens(text: string, from: number, char: string): boolean {
+  // Maths as Obsidian reads it: `$` then no space, and a closing `$` with no space before it - `$5 | $6` is prices.
+  if (char === '$' && /\s/.test(text[from + 1] ?? ' ')) return false
+  for (let i = from + 1; i < text.length; i++) {
+    if (text[i] === '\\') i++
+    else if (text[i] === char && (char !== '$' || !/\s/.test(text[i - 1]!))) return true
+  }
+  return false
+}
+
+/**
  * Split a row into its cells as written: escapes kept, pipes inside `[[…]]`,
  * code and maths are not separators. Outer pipes are optional in GFM.
  */
@@ -39,8 +55,8 @@ export function splitRawRow(line: string, links = true): string[] {
     }
     if (links && !inMath && !inCode && char === '[' && text[i + 1] === '[') inLink = true
     if (inLink && char === ']' && text[i + 1] === ']') inLink = false
-    if (char === '`' && !inMath && !inLink) inCode = !inCode
-    if (char === '$' && !inCode && !inLink) inMath = !inMath
+    if (char === '`' && !inMath && !inLink && (inCode || opens(text, i, '`'))) inCode = !inCode
+    if (char === '$' && !inCode && !inLink && (inMath ? !/\s/.test(text[i - 1]!) : opens(text, i, '$'))) inMath = !inMath
     if (char === '|' && !inMath && !inCode && !inLink) {
       cells.push(current)
       current = ''
@@ -126,8 +142,8 @@ export function cellFromInput(text: string): string {
     }
     if (!inMath && !inCode && char === '[' && flat[i + 1] === '[') inLink = true
     if (inLink && char === ']' && flat[i + 1] === ']') inLink = false
-    if (char === '`' && !inMath && !inLink) inCode = !inCode
-    if (char === '$' && !inCode && !inLink) inMath = !inMath
+    if (char === '`' && !inMath && !inLink && (inCode || opens(flat, i, '`'))) inCode = !inCode
+    if (char === '$' && !inCode && !inLink && (inMath ? !/\s/.test(flat[i - 1]!) : opens(flat, i, '$'))) inMath = !inMath
     out += char === '|' && !inMath && !inCode && !inLink ? '\\|' : char
   }
   return out

@@ -14,7 +14,7 @@ const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-limits-'))
 vi.mock('electron', () => ({ app: { getPath: () => userData, getVersion: () => '0.0.0-test' } }))
 vi.mock('../../src/main/vault-tools', () => ({ callTool: async () => ({ ok: true, blocks: [] }) }))
 
-const { claudeLimits, codexLimits, limitsOf, readCodexLimits, recordUsage, usageOf, windowLabel } = await import('../../src/main/providers/limits')
+const { claudeLimits, codexLimits, forgetCodexLimits, limitsOf, readCodexLimits, recordLimits, recordUsage, usageOf, windowLabel } = await import('../../src/main/providers/limits')
 const { parseLine } = await import('../../src/main/providers/cli')
 const { limitsLine, usageLine } = await import('../../src/shared/providers')
 
@@ -54,6 +54,33 @@ describe('Codex', () => {
     expect(limits).toMatchObject({ plan: 'free', windows: [{ usedPercent: 6, label: '30 days' }] })
     expect(limitsOf('codex')).toMatchObject({ plan: 'free' })
     fs.rmSync(bin, { recursive: true, force: true })
+  })
+})
+
+describe('one file for the installed app and a dev build', () => {
+  const file = (): string => path.join(userData, 'provider-usage.json')
+
+  it('what the other build wrote meanwhile is kept, not overwritten from memory', () => {
+    recordUsage('codex', 100)
+    // The other build records Claude's usage and limits in the same file.
+    const other = JSON.parse(fs.readFileSync(file(), 'utf8')) as { usage: Record<string, Record<string, number>>; limits: Record<string, unknown> }
+    const today = new Date().toLocaleDateString('en-CA')
+    other.usage['claude-code'] = { [today]: 70 }
+    other.limits['claude-code'] = { plan: 'max', windows: [], at: Date.now(), blocked: false }
+    fs.writeFileSync(file(), JSON.stringify(other))
+    recordUsage('codex', 50)
+    expect(usageOf('claude-code').today).toBe(70)
+    expect(limitsOf('claude-code')).toMatchObject({ plan: 'max' })
+    expect(usageOf('codex').today).toBeGreaterThanOrEqual(150)
+    expect(fs.readdirSync(userData).filter((f) => f.startsWith('provider-usage') && f !== 'provider-usage.json')).toEqual([])
+  })
+
+  it('a Codex read that fails keeps showing the last reading, also from the cache', async () => {
+    recordLimits('codex', { plan: 'plus', windows: [], at: Date.now(), blocked: false })
+    forgetCodexLimits()
+    const missing = path.join(userData, 'no-codex-here')
+    expect(await readCodexLimits(missing, process.env)).toMatchObject({ plan: 'plus' })
+    expect(await readCodexLimits(missing, process.env)).toMatchObject({ plan: 'plus' })
   })
 })
 

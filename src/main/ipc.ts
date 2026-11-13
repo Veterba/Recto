@@ -33,6 +33,7 @@ import { registerAiAccessIpc } from './vault-tools/ipc'
 import { moveCanvasState, registerCanvasIpc, registerLinkPreviews } from './canvas'
 import { registerPlayer } from './player'
 import { registerProvidersIpc } from './providers/ipc'
+import { flushed } from './flush'
 
 /** Typed handler registration - the channel name and its signature stay in sync. */
 function handle<C extends keyof IpcApi>(
@@ -173,6 +174,7 @@ function moveAuthorship(from: string, to: string): void {
 export function registerIpc(): void {
   // Edits still waiting for their batch are written before the app goes.
   app.on('before-quit', () => void overview.flushStats())
+  handle(IPC.appFlushed, () => flushed())
   handle(IPC.appStartupState, () => {
     const state = startupState()
     if (state.kind === 'ready') rewatch()
@@ -373,21 +375,10 @@ export function registerIpc(): void {
     const entry = renameUndo.get(undoId)
     if (!entry) return { ok: false, restored: 0, error: 'That undo is no longer available.' }
     renameUndo.delete(undoId)
-    // Put the note name back too, or the restored links would point at nothing.
-    // `to` is the original full path: a move needs the folder back as well as
-    // the name, so undo it as a move followed by a rename.
-    const originalParent = entry.to.slice(0, Math.max(0, entry.to.lastIndexOf('/')))
-    const currentParent = entry.from.slice(0, Math.max(0, entry.from.lastIndexOf('/')))
-    let current = entry.from
-    if (originalParent !== currentParent) {
-      const moved = await vaultFs.move(current, originalParent)
-      if (moved.ok) current = moved.path
-    }
-    const back = await vaultFs.rename(current, entry.to.slice(entry.to.lastIndexOf('/') + 1))
+    const back = await vaultFs.undoRelocate(entry)
     // Its history, authorship, folded nodes, overview days and topics go back with it, as they came.
     if (back.ok) followMove(entry.from, back.path)
-    const { restored } = await vaultFs.restoreContents(entry.entries)
-    return { ok: back.ok, restored }
+    return { ok: back.ok, restored: back.restored }
   })
   // Deleting from the UI archives; `fs:trash` remains for a real, immediate delete.
   handle(IPC.fsTrash, (p) => vaultFs.trash(p))

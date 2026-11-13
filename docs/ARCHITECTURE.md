@@ -142,9 +142,16 @@ applied edit suggested again, fail a case.
 
 ## A note, from disk to screen
 
-1. **Disk.** A note is a `.md` file in the vault. Main's `vault-fs.ts` is the only writer: it writes
-   to a temp file and renames it over the original, so a crash cannot truncate a note, and it skips
-   writes of identical bytes so the mtime means something.
+1. **Disk.** A note is a `.md` file in the vault. Main's `vault-fs.ts` is the only writer, one write
+   per file at a time. The whole new text goes to a temp file first; a new file is renamed into place,
+   an existing one is written in place and the temp file removed after, so it stays the same file
+   (creation date, Finder tags, permissions, a symlink kept) and a crash halfway leaves the new text
+   beside it. Writes of identical bytes are skipped so the mtime means something. `writesSettled()`
+   waits for every write in flight.
+   **Quit and close.** Before the window closes or the app quits (`main/flush.ts`), the renderer is
+   sent `app:flush`: it lets go of the vault view at once (`App.tsx`), so every open note, canvas card
+   and setting saves as it does when its tab closes, then answers `app:flushed`; main waits for those
+   writes, at most 2 s, then lets the window go.
 2. **Watcher.** `watcher.ts` (chokidar) sees every change, including other apps'. Changes are batched
    for 60 ms. The app's own writes are marked just before they happen (`markSelfWrite`), so they are
    indexed but not echoed back as an external edit (`change`); they go out as `written` instead. An

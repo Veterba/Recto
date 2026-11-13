@@ -64,6 +64,7 @@ export type PlayerItem =
 
 export const IPC = {
   appStartupState: 'app:startup-state',
+  appFlushed: 'app:flushed',
   appPlatform: 'app:platform',
   appSetVibrancy: 'app:set-vibrancy',
   appSetThemeSource: 'app:set-theme-source',
@@ -213,6 +214,7 @@ export const IPC_EVENT = {
   vaultChanged: 'vault:changed',
   linksAsk: 'links:ask',
   appFullscreen: 'app:fullscreen',
+  appFlush: 'app:flush',
   obsidianStatus: 'obsidian:status',
   aiDelta: 'ai:delta',
   aiDone: 'ai:done',
@@ -250,6 +252,8 @@ export type IpcEvents = Exhaustive<
     [IPC_EVENT.linksAsk]: (ask: { id: string; links: number; files: number }) => void
     /** The window entered or left macOS full screen. */
     [IPC_EVENT.appFullscreen]: (on: boolean) => void
+    /** The window is about to close or the app to quit: save everything unsaved now, then say `appFlushed`. */
+    [IPC_EVENT.appFlush]: () => void
     /** Sync state changed: a pass started, finished, or stopped for a reason. */
     [IPC_EVENT.obsidianStatus]: (status: ObsidianSyncStatus) => void
     /**
@@ -295,6 +299,8 @@ export type IpcApi = Exhaustive<
   IpcChannel,
   {
     [IPC.appStartupState]: () => StartupState
+    /** Everything unsaved was sent to be written; answered once it is on disk. */
+    [IPC.appFlushed]: () => void
     [IPC.appPlatform]: () => { platform: NodeJS.Platform; version: string }
     /** macOS vibrancy material; null takes the blur off the window entirely. */
     [IPC.appSetVibrancy]: (material: VibrancyMaterial | null) => { ok: boolean }

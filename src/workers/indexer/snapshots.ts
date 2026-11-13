@@ -59,6 +59,22 @@ export function takeSnapshot(db: Database, path: string, content: string, now: N
   ).run(path, path, SNAPSHOT_KEEP_PER_NOTE)
 }
 
+/**
+ * A note's history to its new path - or, for a folder, the history of every
+ * note in it. Matched by the exact path or the `from/` prefix (a range, so
+ * `_` and `%` in names are not wildcards); `from old.md` beside it is not touched.
+ */
+export function moveSnapshots(db: Database, from: string, to: string): void {
+  // substr counts characters, not UTF-16 units: an emoji in the name is one.
+  db.prepare('UPDATE snapshots SET path = ? || substr(path, ?) WHERE path = ? OR (path >= ? AND path < ?)').run(
+    to,
+    [...from].length + 1,
+    from,
+    `${from}/`,
+    `${from}0`,
+  )
+}
+
 /** Content is omitted: listing 30 versions of a long note would be megabytes. */
 export function listSnapshots(db: Database, path: string): Snapshot[] {
   return db.prepare('SELECT id, path, ts, bytes FROM snapshots WHERE path = ? ORDER BY ts DESC').all(path) as Snapshot[]

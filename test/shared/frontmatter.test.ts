@@ -322,3 +322,49 @@ describe('a note that starts with a byte order mark', () => {
     expect(after).not.toContain('draft')
   })
 })
+
+describe('multi-line values', () => {
+  const note = doc('---', 'title: Plan', 'description: |', '  First line', '  second line', 'status: draft', '---', '# Body')
+
+  it('a block scalar is kept whole and read-only, not read as the text "|"', () => {
+    const fm = parseFrontmatter(note)
+    expect(fm.fields.map((f) => f.key)).toEqual(['title', 'status'])
+    expect(fm.opaque).toEqual(['description: |', '  First line', '  second line'])
+  })
+
+  it('editing or removing a neighbour leaves it intact', () => {
+    expect(setField(note, 'status', 'done')).toBe(note.replace('status: draft', 'status: done'))
+    expect(removeField(note, 'title')).toBe(note.replace('title: Plan\n', ''))
+  })
+
+  it('setting its key does not add a second one', () => {
+    expect(setField(note, 'description', 'short')).toBe(note)
+    const folded = doc('---', 'summary: >', '  long text', '---', '')
+    expect(setField(folded, 'summary', 'x')).toBe(folded)
+  })
+
+  it('a flow list across lines is kept whole too', () => {
+    const flow = doc('---', 'tags: [a,', '  b]', 'n: 1', '---', '')
+    expect(parseFrontmatter(flow).fields.map((f) => f.key)).toEqual(['n'])
+    expect(setField(flow, 'n', 2)).toBe(flow.replace('n: 1', 'n: 2'))
+  })
+})
+
+describe('values Obsidian would read differently unless quoted', () => {
+  const back = (value: string): unknown => parseFrontmatter(setField('', 'p', value)).fields[0]?.value
+
+  it('quotes a comment, a leading # or -, ? and quote marks, and reads them back the same', () => {
+    for (const value of ['C# notes', 'a #tag', '#idea', '- item', '? why', ': x', '"quoted"', "'single'", ',lead'])
+      expect(back(value), value).toBe(value)
+    expect(setField('', 'p', 'a #tag')).toContain('p: "a #tag"')
+  })
+
+  it('escapes backslashes and quotes, and unescapes them on read', () => {
+    for (const value of ['C:\\Users\\me', 'say "hi"', 'end\\']) expect(back(value), value).toBe(value)
+  })
+
+  it('quotes list items with ] or #', () => {
+    const list = parseFrontmatter(setField('', 'p', ['a]b', '#x', 'plain'])).fields[0]
+    expect(list?.value).toEqual(['a]b', '#x', 'plain'])
+  })
+})

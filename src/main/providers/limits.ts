@@ -28,22 +28,28 @@ const FILE = (): string => path.join(sharedUserData(), 'provider-usage.json')
 /** Days of usage kept: a week shows, a little more is slack. */
 const KEEP_DAYS = 10
 
-let saved: Saved | null = null
-
+/**
+ * Read from the file each time, never kept in memory: the installed app and a
+ * dev build both write it, and a copy held from the start overwrote what the
+ * other had written since - usage and limit readings went missing.
+ */
 function load(): Saved {
-  if (saved !== null) return saved
   try {
     const raw = JSON.parse(fs.readFileSync(FILE(), 'utf8')) as Partial<Saved>
-    saved = { usage: raw.usage ?? {}, limits: raw.limits ?? {} }
+    return { usage: raw.usage ?? {}, limits: raw.limits ?? {} }
   } catch {
-    saved = { usage: {}, limits: {} }
+    return { usage: {}, limits: {} }
   }
-  return saved
 }
 
-function store(): void {
+/** Read, changed, written back at once - through a temp file, so the other build never reads half of it. */
+function update(change: (saved: Saved) => void): void {
+  const saved = load()
+  change(saved)
   try {
-    fs.writeFileSync(FILE(), JSON.stringify(load()))
+    const tmp = `${FILE()}.${process.pid}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(saved))
+    fs.renameSync(tmp, FILE())
   } catch (err) {
     console.error('[providers] usage', err)
   }
@@ -53,12 +59,13 @@ const dayOf = (at: number): string => new Date(at).toLocaleDateString('en-CA')
 
 export function recordUsage(id: ProviderId, tokens: number, now = Date.now()): void {
   if (!(tokens > 0)) return
-  const days = (load().usage[id] ??= {})
-  const today = dayOf(now)
-  days[today] = (days[today] ?? 0) + Math.round(tokens)
-  const cutoff = dayOf(now - KEEP_DAYS * 86_400_000)
-  for (const day of Object.keys(days)) if (day < cutoff) delete days[day]
-  store()
+  update((saved) => {
+    const days = (saved.usage[id] ??= {})
+    const today = dayOf(now)
+    days[today] = (days[today] ?? 0) + Math.round(tokens)
+    const cutoff = dayOf(now - KEEP_DAYS * 86_400_000)
+    for (const day of Object.keys(days)) if (day < cutoff) delete days[day]
+  })
 }
 
 /** "This week" as the overview counts it: since Monday (shared/overview.ts weekStart). */
@@ -72,8 +79,9 @@ export function usageOf(id: ProviderId, now = Date.now()): ProviderUsage {
 }
 
 export function recordLimits(id: ProviderId, limits: ProviderLimits): void {
-  load().limits[id] = limits
-  store()
+  update((saved) => {
+    saved.limits[id] = limits
+  })
 }
 
 export const limitsOf = (id: ProviderId): ProviderLimits | null => load().limits[id] ?? null
@@ -153,7 +161,8 @@ let codexCache: { at: number; value: ProviderLimits | null } | null = null
  * no model call. Remembered for a minute; null when it cannot say.
  */
 export function readCodexLimits(file: string, env: NodeJS.ProcessEnv, timeoutMs = 10_000): Promise<ProviderLimits | null> {
-  if (codexCache !== null && Date.now() - codexCache.at < 60_000) return Promise.resolve(codexCache.value)
+  // A failed read remembered: the last reading still shows, as it did the first time.
+  if (codexCache !== null && Date.now() - codexCache.at < 60_000) return Promise.resolve(codexCache.value ?? limitsOf('codex'))
   return new Promise((resolve) => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-limits-'))
     const child = spawn(file, ['app-server'], { cwd, env, stdio: ['pipe', 'pipe', 'ignore'] })

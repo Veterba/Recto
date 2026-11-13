@@ -237,6 +237,17 @@ describe('moving cards', () => {
     expect(files.get('Recto/Boards/Launch/Ship it.md')).not.toContain('completed')
   })
 
+  it('a board that cannot be read again before the write is not written: a moved board is not made again', async () => {
+    const hook = await mount()
+    // Another app moved the board away after it was opened.
+    files.delete(BOARD)
+    await act(async () => hook.current.move('Recto/Boards/Launch/Ship it.md', { column: '1', index: 0 }))
+    expect(files.has(BOARD)).toBe(false)
+    expect(calls.some((c) => c.channel === IPC.fsWrite && c.args[0] === BOARD)).toBe(false)
+    expect(card(hook, 'Ship it')?.column).toBe('0')
+    expect(hook.current.notice).toMatch(/Couldn't read the board/)
+  })
+
   it('when the board changed under it (Obsidian, sync), the same move is made to what is there now', async () => {
     const hook = await mount()
     files.set(BOARD, boardText.replace('- [ ] Buy stamps', '- [ ] Added in Obsidian\n- [ ] Buy stamps'))

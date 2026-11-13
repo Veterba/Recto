@@ -7,6 +7,7 @@ import {
   SNAPSHOT_MIN_INTERVAL_MS,
   getSnapshot,
   listSnapshots,
+  moveSnapshots,
   pruneSnapshots,
   takeSnapshot,
 } from '../../../src/workers/indexer/snapshots'
@@ -130,5 +131,25 @@ describe('version history retention', () => {
   it('prunes nothing when everything is recent', () => {
     takeSnapshot(db, 'a.md', 'v0', now)
     expect(pruneSnapshots(db, now)).toBe(0)
+  })
+})
+
+describe('moving history with a rename', () => {
+  it('a renamed folder takes every note’s history with it, and nothing else', () => {
+    takeSnapshot(db, 'Trip 🗻/Plan.md', 'plan', now)
+    takeSnapshot(db, 'Trip 🗻/Days/One.md', 'one', now)
+    takeSnapshot(db, 'Trip 🗻 old.md', 'other', now)
+    takeSnapshot(db, 'Trip 🗻.md', 'same name, a note', now)
+    moveSnapshots(db, 'Trip 🗻', 'Japan')
+    expect(contents('Japan/Plan.md')).toEqual(['plan'])
+    expect(contents('Japan/Days/One.md')).toEqual(['one'])
+    expect(contents('Trip 🗻 old.md')).toEqual(['other'])
+    expect(contents('Trip 🗻.md')).toEqual(['same name, a note'])
+  })
+
+  it('a renamed note takes its own', () => {
+    takeSnapshot(db, 'A.md', 'a', now)
+    moveSnapshots(db, 'A.md', 'B.md')
+    expect(contents('B.md')).toEqual(['a'])
   })
 })

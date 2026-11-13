@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GhostLayer, useCanvasProposals, type GhostAccept } from './GhostLayer'
-import { acceptOps, rejectOps } from '@shared/canvas-ops'
-import type { Proposal } from '@shared/ai-access'
+import { GhostLayer } from './GhostLayer'
+import { useGhosts } from '../use-ghosts'
 import { DrawingEditor } from './DrawingEditor'
 import { setCanvasSelection } from '../../../app/canvas-selection'
 import {
@@ -291,41 +290,7 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
   const run = useCallback((change: CanvasChange) => void edit(change), [edit])
 
   // An AI's suggested changes to this canvas, as ghosts until accepted.
-  const proposals = useCanvasProposals(path)
-  const acceptGhosts = useCallback(
-    (accepted: readonly GhostAccept[]) => {
-      const shown = docRef.current
-      if (shown === null) return
-      const plan = accepted.flatMap(({ proposal, indexes }) => {
-        const c = proposal.canvas
-        if (c === undefined) return []
-        return [{ id: proposal.id, c, which: indexes ?? c.states.flatMap((s, i) => (s === 'pending' ? [i] : [])) }]
-      })
-      // Every proposal one after the other in ONE edit. An edit each, in the
-      // same moment, built each from the same canvas: Accept all kept only the last.
-      const acceptAll = (d: CanvasDoc): { doc: CanvasDoc; done: ReturnType<typeof acceptOps>[] } => {
-        const done: ReturnType<typeof acceptOps>[] = []
-        let doc = d
-        for (const { c, which } of plan) {
-          const one = acceptOps(doc, c, which)
-          done.push(one)
-          doc = one.doc
-        }
-        return { doc, done }
-      }
-      const result = acceptAll(shown)
-      // Undone with ⌘Z like any other edit; applied to the canvas as it is when it is written.
-      void edit((d) => (d === shown ? result.doc : acceptAll(d).doc))
-      plan.forEach(({ id }, k) => void api.invoke(IPC.aiProposalCanvas, id, result.done[k]!.states, result.done[k]!.refs))
-    },
-    [edit],
-  )
-  const rejectGhosts = useCallback((p: Proposal, indexes: number[] | null) => {
-    const c = p.canvas
-    if (c === undefined) return
-    const which = indexes ?? c.states.flatMap((s, i) => (s === 'pending' ? [i] : []))
-    void api.invoke(IPC.aiProposalCanvas, p.id, rejectOps(c, which), c.refs)
-  }, [])
+  const { proposals, accept: acceptGhosts, reject: rejectGhosts } = useGhosts(path, docRef, edit)
 
   const stopEditing = useCallback(() => {
     const typed = draft.current
@@ -1421,7 +1386,7 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
           opening={picking}
           setOpening={setPicking}
         />
-        {doc !== null && <GhostLayer proposals={proposals} doc={doc} transform={transform} onAccept={acceptGhosts} onReject={rejectGhosts} />}
+        {doc !== null && <GhostLayer proposals={proposals} doc={doc} transform={transform} onAccept={(a) => void acceptGhosts(a)} onReject={rejectGhosts} />}
         {editingDrawing !== null && (
           <DrawingEditor
             key={editingDrawing.id}

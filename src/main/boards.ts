@@ -176,8 +176,8 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
       }
       removeIfEmpty(own)
     } else if (own !== folder) {
-      // Only the case changed: the folder is renamed in place.
-      const renamedFolder = await vaultFs.rename(own, clean)
+      // Only the case changed: the folder is renamed in place, its notes' history and links with it.
+      const renamedFolder = await relocate(own, () => vaultFs.rename(own, clean), asked)
       if (renamedFolder.ok) board = `${folder}/${nameOf(board)}`
     }
     setNewNoteFolder(board, folder)
