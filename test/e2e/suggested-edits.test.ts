@@ -86,6 +86,8 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
   }, 30_000)
 
   it("a chat answer shows the edit it suggested under it; Discard there leaves the note as it was", async () => {
+    // The status bar counts only the two from outside: the chat's own waits in its chat.
+    await expect.poll(() => page.locator('.edits__badge').textContent()).toBe('2')
     await page.keyboard.press('Meta+Shift+C')
     const card = page.locator('.chat-topic .suggestion--chat')
     await card.waitFor({ timeout: 15_000 })

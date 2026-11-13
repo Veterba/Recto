@@ -275,3 +275,14 @@ export function spanLabel(span: { from: string; to: string }, today: string): st
 }
 
 export { dueState }
+
+/** Where a drop at slot `at` of what the column shows lands in the column's file order, the moved card left out. */
+export function fileIndex(shown: readonly CardView[], at: number, moving: CardView | undefined, column: string): number {
+  const others = shown.filter((card) => card.key !== moving?.key)
+  const before = shown.slice(0, at).filter((card) => card.key !== moving?.key)
+  const sameLane = moving !== undefined && moving.column === column
+  const shift = (index: number): number => (sameLane && moving.index < index ? index - 1 : index)
+  if (before.length < others.length) return shift(others[before.length]!.index)
+  const last = others.at(-1)
+  return last === undefined ? 0 : shift(last.index) + 1
+}

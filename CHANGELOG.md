@@ -4,6 +4,13 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.60.5 — 2026-11-13
+### Changed
+- Suggested edits made in a chat or Quick ask are no longer counted in the status bar; they wait under the answer that made them. The status bar keeps the ones from outside apps and the canvas.
+- A board on the canvas no longer has a tick circle on each card: a card is marked done by dragging it into Done.
+### Fixed
+- Cards in a board on the canvas can be dragged to another lane or to another place in their lane, as on the board; dragged into Done they are ticked.
+
 ## v0.60.4 — 2026-11-12
 ### Fixed
 - Text typed just before quitting Recto or closing its window is saved. A note saves half a second after the last key, and ⌘Q in that moment lost the last words.

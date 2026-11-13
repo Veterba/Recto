@@ -365,12 +365,15 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await page.keyboard.press('Enter')
     await expect.poll(() => read(PLAN)).toContain('"file":"Recto/Boards/Launch/Launch.md"')
     const id = (JSON.parse(read(PLAN)) as { nodes: { id: string; file?: string }[] }).nodes.find((n) => n.file === 'Recto/Boards/Launch/Launch.md')!.id
-    // A board shows as its preview: lanes and their cards; a card's circle marks it done on the board.
+    // A board shows as its preview: lanes and their cards; a card dragged into Done is done on the board, with no circle to tick.
     await nodeOf(id).click({ button: 'right' })
     await page.locator('.menu__item', { hasText: 'Zoom to selection' }).click()
     await expect.poll(() => nodeOf(id).locator('.canvas-board__lane').count()).toBe(3)
     await expect.poll(() => nodeOf(id).locator('.canvas-board').textContent()).toContain('Write the announcement')
-    await nodeOf(id).locator('[aria-label="Mark “Write the announcement” done"]').click()
+    expect(await nodeOf(id).locator('.canvas-board__check').count()).toBe(0)
+    await nodeOf(id)
+      .locator('.canvas-board__card', { hasText: 'Write the announcement' })
+      .dragTo(nodeOf(id).locator('.canvas-board__lane', { hasText: 'Done' }).locator('.canvas-board__head'))
     await expect
       .poll(() => {
         const board = read('Recto/Boards/Launch/Launch.md')
@@ -383,6 +386,22 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await page.keyboard.press('Enter')
     await expect.poll(() => read('Recto/Boards/Launch/Launch.md')).toContain('[[Plant garlic]]')
     await expect.poll(() => nodeOf(id).locator('.canvas-board__title', { hasText: 'Plant garlic' }).count()).toBe(1)
+    // A chip dragged to another lane moves there on the board; dropped on a chip, it lands above it. The node stays put.
+    const lane = (name: string): string => {
+      const board = read('Recto/Boards/Launch/Launch.md')
+      const from = board.indexOf(`## ${name}`)
+      return board.slice(from, board.indexOf('\n## ', from + 1))
+    }
+    const chip = (title: string) => nodeOf(id).locator('.canvas-board__card', { hasText: title })
+    const where = await nodeOf(id).boundingBox()
+    await chip('Plant garlic').dragTo(nodeOf(id).locator('.canvas-board__lane', { hasText: 'Doing' }).locator('.canvas-board__head'))
+    await expect.poll(() => lane('Doing')).toContain('[[Plant garlic]]')
+    expect(lane('To do')).not.toContain('[[Plant garlic]]')
+    await chip('Record the demo').dragTo(chip('Fix the export bug'))
+    await expect
+      .poll(() => lane('Doing').split('\n').filter((l) => l.startsWith('- [')))
+      .toEqual(['- [ ] [[Record the demo]]', '- [ ] [[Fix the export bug]]', '- [ ] [[Plant garlic]]'])
+    expect(await nodeOf(id).boundingBox()).toEqual(where)
     // A name a note has in another folder: said where; a new card here, or that note put here if asked.
     await nodeOf(id).locator('[aria-label="Add a task to To do"]').click()
     fs.writeFileSync(path.join(vault, 'Garden/Garlic notes.md'), 'Cloves in October.\n')

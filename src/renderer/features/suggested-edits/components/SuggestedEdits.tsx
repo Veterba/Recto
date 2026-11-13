@@ -12,10 +12,11 @@ import { SuggestionCard } from './SuggestionCard'
  * Suggested edits: what AI clients proposed, waiting for Apply or Discard.
  *
  * A count in the status bar while any wait - the small inbox, there whenever
- * Recto is, for what Claude Code, Codex or Cursor suggest from outside; main
- * also sends a notification when one arrives while Recto is not in front,
- * and clicking it opens this panel. Recto's own chats show their suggestions
- * under the answer that made them as well (SuggestionCard).
+ * Recto is, for what Claude Code, Codex or Cursor suggest from outside and
+ * the canvas's links; main also sends a notification when one arrives while
+ * Recto is not in front, and clicking it opens this panel. What Recto's own
+ * chats suggest is not here: it is under the answer that made them
+ * (SuggestionCard), and counted twice it was the same edit in two places.
  *
  * The panel is glass over the app, as Settings is - no backdrop. A suggestion
  * settled here stays in the list with what became of it until the panel is
@@ -27,6 +28,9 @@ const openers = new Set<() => void>()
 export function openSuggestedEdits(): void {
   for (const open of openers) open()
 }
+
+/** Made in a chat or Quick ask: shown and settled under its answer, not here. */
+const inAChat = (p: Proposal): boolean => p.client.startsWith('recto-chat') || p.client.startsWith('quick-ask')
 
 /** Where the panel sits: centred, a little below the tabs as Settings opens, as wide as it reads well. */
 function placeOf(): { left: number; top: number; width: number; maxHeight: number } {
@@ -40,7 +44,7 @@ export function SuggestedEditsNotice(): React.ReactElement | null {
   const [open, setOpen] = useState(false)
   /** Settled while the panel was open: kept in it, with their outcome, until it closes. */
   const [seen, setSeen] = useState<ReadonlySet<string>>(() => new Set())
-  const pending = [...proposals.values()].filter((p) => p.status === 'pending').sort((a, b) => b.created - a.created)
+  const pending = [...proposals.values()].filter((p) => p.status === 'pending' && !inAChat(p)).sort((a, b) => b.created - a.created)
 
   useEffect(() => {
     // Opened from a notification or a chat: with the list as it is now.
