@@ -4,7 +4,7 @@ import { IPC } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { openFileFromAnywhere } from '../../../app/open-file'
 import { Icon } from '../../../ui/Icon'
-import { headingOf, itemsOf, outcomeOf, previewFile, titleOf, type ChangeItem, type DiffRow } from '../suggestion-model'
+import { briefOf, headingOf, itemsOf, outcomeOf, previewTarget, titleOf, type ChangeItem, type DiffRow } from '../suggestion-model'
 import { SuggestionPreview } from './SuggestionPreview'
 
 /**
@@ -80,6 +80,8 @@ export function SuggestionCard({
   const [error, setError] = useState<string | null>(null)
   const [all, setAll] = useState(!inChat)
   const [previewing, setPreviewing] = useState(false)
+  // In a chat a suggestion is one line under its answer until Show: a whole card under every answer took the room.
+  const [expanded, setExpanded] = useState(!inChat)
   const heading = headingOf(proposal)
   const items = itemsOf(proposal)
   const pending = items.filter((i) => i.state === 'pending')
@@ -140,61 +142,77 @@ export function SuggestionCard({
         </span>
       </header>
 
-      <ol className="suggestion__changes">
-        {shown.map((item, k) => (
-          <li key={item.index ?? item.file ?? k} className={`suggestion__change is-${item.state}`}>
-            {(each || item.file !== undefined || item.label !== undefined) && (
-              <div className="suggestion__change-head">
-                {item.label !== undefined ? (
-                  <span className="suggestion__label">
-                    <Icon name={item.icon ?? 'shapes'} size={12} /> {item.label}
-                  </span>
-                ) : item.file !== undefined ? (
-                  <button className="suggestion__filename" onClick={() => open(item.file!)}>
-                    {titleOf(item.file)}
-                  </button>
-                ) : (
-                  <span className="suggestion__label">Change {k + 1}</span>
-                )}
-                <span className="suggestion__spacer" />
-                {item.state === 'pending' ? (
-                  each && (
-                    <span className="suggestion__picks">
-                      <button
-                        className="suggestion__pick is-yes"
-                        aria-label={`Accept change ${k + 1}`}
-                        title="Accept"
-                        disabled={busy}
-                        onClick={() => settle(IPC.aiProposalApply, [item.index!])}
-                      >
-                        <Icon name="check" size={13} />
-                      </button>
-                      <button
-                        className="suggestion__pick"
-                        aria-label={`Reject change ${k + 1}`}
-                        title="Reject"
-                        disabled={busy}
-                        onClick={() => settle(IPC.aiProposalDiscard, [item.index!])}
-                      >
-                        <Icon name="x" size={13} />
-                      </button>
+      {!expanded && outcome === null && <p className="suggestion__brief">{briefOf(proposal)}</p>}
+      {expanded && (
+        <ol className="suggestion__changes">
+          {shown.map((item, k) => (
+            <li key={item.index ?? item.file ?? k} className={`suggestion__change is-${item.state}`}>
+              {(each || item.file !== undefined || item.label !== undefined) && (
+                <div className="suggestion__change-head">
+                  {item.label !== undefined ? (
+                    <span className="suggestion__label">
+                      <Icon name={item.icon ?? 'shapes'} size={12} /> {item.label}
                     </span>
-                  )
-                ) : (
-                  <span className={`suggestion__state is-${item.state}`}>
-                    <Icon name={STATE[item.state].icon} size={12} /> {STATE[item.state].text}
-                  </span>
-                )}
-              </div>
-            )}
-            {item.rows.length > 0 && (item.state === 'pending' || !inChat) && <Rows rows={item.rows} label={`Change ${k + 1}`} />}
-          </li>
-        ))}
-      </ol>
+                  ) : item.file !== undefined ? (
+                    <button className="suggestion__filename" onClick={() => open(item.file!)}>
+                      {titleOf(item.file)}
+                    </button>
+                  ) : (
+                    <span className="suggestion__label">Change {k + 1}</span>
+                  )}
+                  <span className="suggestion__spacer" />
+                  {item.state === 'pending' ? (
+                    each && (
+                      <span className="suggestion__picks">
+                        <button
+                          className="suggestion__pick is-yes"
+                          aria-label={`Accept change ${k + 1}`}
+                          title="Accept"
+                          disabled={busy}
+                          onClick={() => settle(IPC.aiProposalApply, [item.index!])}
+                        >
+                          <Icon name="check" size={13} />
+                        </button>
+                        <button
+                          className="suggestion__pick"
+                          aria-label={`Reject change ${k + 1}`}
+                          title="Reject"
+                          disabled={busy}
+                          onClick={() => settle(IPC.aiProposalDiscard, [item.index!])}
+                        >
+                          <Icon name="x" size={13} />
+                        </button>
+                      </span>
+                    )
+                  ) : (
+                    <span className={`suggestion__state is-${item.state}`}>
+                      <Icon name={STATE[item.state].icon} size={12} /> {STATE[item.state].text}
+                    </span>
+                  )}
+                </div>
+              )}
+              {item.rows.length > 0 && (item.state === 'pending' || !inChat) && <Rows rows={item.rows} label={`Change ${k + 1}`} />}
+            </li>
+          ))}
+        </ol>
+      )}
 
       {error !== null && <p className="suggestion__error">{error}</p>}
       <footer className="suggestion__foot">
-        {shown.length < items.length && (
+        {/* A rename, move or archive is its one line already: nothing more to show. */}
+        {inChat && proposal.file === undefined && (
+          <button
+            className="btn btn--ghost btn--sm suggestion__minor"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Hide' : 'Show'}
+            title={expanded ? 'Hide the changes' : 'Show the changes here'}
+          >
+            <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={13} />
+            <span className="suggestion__minor-label">{expanded ? 'Hide' : 'Show'}</span>
+          </button>
+        )}
+        {expanded && shown.length < items.length && (
           <button className="suggestion__more" onClick={() => setAll(true)}>
             Show all {items.length}
           </button>
@@ -216,24 +234,25 @@ export function SuggestionCard({
           </>
         ) : (
           <>
-            {/* Seen whole before it is taken: a note as it will read, or the canvas with its ghosts. */}
-            {previewFile(proposal) !== null ? (
-              <button className="btn btn--ghost btn--sm" onClick={() => setPreviewing(true)}>
-                <Icon name="eye" size={13} /> Preview
+            {/* Seen whole before it is taken: the note, the board or the canvas as it will look. */}
+            {previewTarget(proposal) !== null && (
+              <button
+                className="btn btn--ghost btn--sm suggestion__minor"
+                onClick={() => setPreviewing(true)}
+                aria-label="Preview"
+                title="Preview: how it will look once accepted"
+              >
+                <Icon name="eye" size={13} />
+                <span className="suggestion__minor-label">Preview</span>
               </button>
-            ) : (
-              proposal.canvas !== undefined && (
-                <button className="btn btn--ghost btn--sm" onClick={() => open(proposal.canvas!.path)}>
-                  <Icon name="eye" size={13} /> Preview on the canvas
-                </button>
-              )
             )}
             <span className="suggestion__spacer" />
             <button className="btn btn--ghost btn--sm" disabled={busy} onClick={() => settle(IPC.aiProposalDiscard)}>
-              {pending.length > 1 ? 'Reject all' : 'Reject'}
+              {/* "All" only where the changes are shown one by one beside it. */}
+              {pending.length > 1 && expanded ? 'Reject all' : 'Reject'}
             </button>
             <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => settle(IPC.aiProposalApply)}>
-              {pending.length > 1 ? 'Accept all' : 'Accept'}
+              {pending.length > 1 && expanded ? 'Accept all' : 'Accept'}
             </button>
           </>
         )}

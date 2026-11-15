@@ -43,8 +43,12 @@
   gap: var(--size-2);
   padding: var(--size-3) var(--size-4);
 }
-/* In a chat: its own small card under the answer. */
+/* In a chat: its own small card under the answer, laid out by its own width (the panel is resized). */
 .suggestion--chat {
+  container-type: inline-size;
+  /* Measured by its own width, it takes no width from what is in it: the chat's whole width, as it had. */
+  box-sizing: border-box;
+  width: 100%;
   padding: var(--size-2) var(--size-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
@@ -213,8 +217,16 @@
 
 .suggestion__foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--size-1);
+}
+/* A narrow chat: each button its icon and word on one line; the row wraps before a button does. */
+.suggestion__foot .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 .suggestion__spacer {
   flex: 1;
@@ -299,4 +311,41 @@
 .cm-suggested-line {
   background: color-mix(in srgb, var(--success) 12%, transparent);
   box-shadow: inset 3px 0 0 var(--success);
+}
+
+/* A canvas or a board in a preview: the view itself, edge to edge; what is there to change things, hidden. */
+.suggestion-preview.is-canvas .suggestion-preview__body,
+.suggestion-preview.is-board .suggestion-preview__body {
+  display: flex;
+  padding: 0;
+}
+.suggestion-preview.is-canvas .canvas-view,
+.suggestion-preview.is-board .board {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.suggestion-preview .canvas-view__bar,
+.suggestion-preview .canvas-tools,
+.suggestion-preview .canvas-ghosts,
+.suggestion-preview .react-flow__handle {
+  display: none;
+}
+
+/* In a chat, until Show: what it is in one line. */
+.suggestion__brief {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12-5);
+}
+
+/* A narrow card - the chat panel at its usual width: Show and Preview are their icons (named on hover), so
+   Reject and Accept stay on the same row. */
+@container (max-width: 400px) {
+  .suggestion__minor-label {
+    display: none;
+  }
+  .suggestion__minor {
+    padding-inline: 8px;
+  }
 }

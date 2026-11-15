@@ -48,7 +48,8 @@ const lower = (s: string): string => s.normalize('NFC').toLowerCase()
  * not by where it was - so nobody's edit is written over. A write that fails is
  * undone on screen and said in a notice. Writes go one at a time.
  */
-export function useBoardCards(path: string): {
+/** `preview`: a board's text to show instead of its file - a suggestion's preview: nothing is read or written. */
+export function useBoardCards(path: string, preview?: string): {
   text: string | null
   board: Board | null
   cards: CardView[] | null
@@ -109,6 +110,10 @@ export function useBoardCards(path: string): {
   // The board note itself: read on open and whenever the vault changes - our
   // own write's echo included, which then reads what we wrote.
   const readBoard = useCallback(() => {
+    if (preview !== undefined) {
+      setText(preview)
+      return
+    }
     void api.invoke(IPC.fsRead, path).then((read) => {
       if (!read.ok) {
         setError(read.error)
@@ -120,7 +125,7 @@ export function useBoardCards(path: string): {
       base.current = read.content
       setText(read.content)
     })
-  }, [path])
+  }, [path, preview])
 
   useEffect(readBoard, [readBoard, revision, tick])
 
@@ -209,7 +214,8 @@ export function useBoardCards(path: string): {
   const editBoard = useCallback(
     (change: (text: string) => string): Promise<boolean> => {
       const shown = textRef.current
-      if (shown === null) return Promise.resolve(false)
+      // A preview is looked at, never changed.
+      if (shown === null || preview !== undefined) return Promise.resolve(false)
       let next: string
       try {
         next = change(shown)
@@ -264,7 +270,7 @@ export function useBoardCards(path: string): {
       queue.current = result
       return result
     },
-    [path],
+    [path, preview],
   )
 
   /**

@@ -130,6 +130,10 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
     await card.waitFor({ timeout: 15_000 })
     expect(await card.locator('.suggestion__title').textContent()).toMatch(/Edit\s*Basil/)
     expect(await card.locator('.suggestion__meta').textContent()).toMatch(/Chat · Claude Code/)
+    // In a chat: one line, not the whole card, until Show.
+    expect(await card.locator('.suggestion__brief').textContent()).toBe('2 changes · 3 lines added, 1 line removed')
+    expect(await card.locator('.suggestion__change').count()).toBe(0)
+    await card.getByRole('button', { name: 'Show' }).click()
     expect(await card.locator('.suggestion__change').count()).toBe(2)
     // The second change only: the first stays as it was in the note.
     await card.getByRole('button', { name: 'Accept change 2' }).click()
@@ -152,7 +156,20 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
 
   it('a canvas’s edits: ghosts on the canvas, accepted and rejected in the chat; main writes the canvas and the ghosts follow', async () => {
     const card = cardTitled('Beds')
+    expect(await card.locator('.suggestion__brief').textContent()).toBe('1 card, 1 arrow')
+    await card.getByRole('button', { name: 'Show' }).click()
     expect(await card.locator('.suggestion__label').allTextContents()).toEqual([expect.stringMatching(/Card “Compost”/), expect.stringMatching(/Arrow “Soil” → “Compost”, “feeds”/)])
+    // Previewed: the canvas itself, as it will look with both edits - its cards drawn, not its JSON - and nothing written.
+    const before = read('Recto/Canvas/Beds.canvas')
+    await card.getByRole('button', { name: 'Preview' }).click()
+    const preview = page.getByRole('dialog', { name: 'Preview of the suggestion' })
+    await expect.poll(() => preview.locator('.react-flow__node').allTextContents()).toEqual([expect.stringContaining('Soil'), expect.stringContaining('Compost')])
+    expect(await preview.locator('.react-flow__edge').count()).toBe(1)
+    expect(await preview.locator('.suggestion-preview__notes').textContent()).toBe('1 card added · 1 arrow added')
+    expect(await preview.textContent()).not.toContain('"nodes"')
+    await preview.getByRole('button', { name: 'Close', exact: true }).click()
+    await preview.waitFor({ state: 'detached' })
+    expect(read('Recto/Canvas/Beds.canvas')).toBe(before)
     // The canvas, open beside the chat: both edits as ghosts, reviewed in the chat.
     await card.locator('.suggestion__note').click()
     const ghosts = page.locator('.canvas-ghosts')
@@ -181,7 +198,7 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
       await dialog.getByRole('button', { name: 'Just once' }).click()
     }
     const card = cardTitled('Soil')
-    expect(await card.locator('.suggestion__label').textContent()).toMatch(/“Soil” → “Garden soil”/)
+    expect(await card.locator('.suggestion__brief').textContent()).toMatch(/“Soil” → “Garden soil”/)
     await card.getByRole('button', { name: 'Accept', exact: true }).click()
     await linksAsked()
     await expect.poll(() => fs.existsSync(path.join(vault, 'Garden/Garden soil.md'))).toBe(true)

@@ -6,7 +6,8 @@ merges, tooling, README and CLAUDE.md edits) are left out.
 
 ## v0.65.0 — 2026-11-15
 ### Added
-- Preview on every AI suggestion: the note as it will read once accepted - rendered as the note itself, the lines added or changed marked, how many go and which changes no longer fit - with Accept all and Reject all right there. A canvas suggestion's Preview opens the canvas, where it shows as ghosts.
+- Preview on every AI suggestion: the screen as it will look once accepted, in the view Recto draws it in - a note rendered with its added and changed lines marked, a canvas as the canvas, a new card on its board - what is new outlined and brought into sight, with Accept all and Reject all right there. Nothing is written until accepted.
+- In a chat, a suggestion under its answer is one line - what it does and to which note, "2 changes · 3 lines added, 1 line removed", "1 card, 1 arrow" - with Show, Preview, Reject and Accept; Show opens the whole suggestion in the chat, change by change.
 
 ## v0.64.0 — 2026-11-15
 ### Added

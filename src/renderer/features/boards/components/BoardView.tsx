@@ -41,6 +41,8 @@ const LEVEL_LABEL = { high: 'High', medium: 'Medium', low: 'Low', none: 'No prio
 type Props = {
   /** The board note. */
   path: string
+  /** The board's text to draw instead of its file, never written - a suggestion's preview. */
+  preview?: string
   /** A card to open beside the board on arrival (from the graph). */
   card?: string | null
   onOpenNote: (path: string) => void
@@ -59,9 +61,10 @@ export function BoardView({
   onShowMarkdown,
   onCardChange,
   leafId,
+  preview,
 }: Props): React.ReactElement {
   const { board, cards, error, notice, clearNotice, editBoard, editCard, move, addCard, addExisting, makeNote, removeCard, renameCard } =
-    useBoardCards(path)
+    useBoardCards(path, preview)
   const [dragging, setDragging] = useState<string | null>(null)
   const [drop, setDrop] = useState<{ column: string; at: number } | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)

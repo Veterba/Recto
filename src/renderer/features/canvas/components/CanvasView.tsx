@@ -150,16 +150,17 @@ async function naturalSize(file: string): Promise<{ width: number; height: numbe
     : { width: Math.round((MEDIA_MAX_HEIGHT * found.w) / found.h), height: MEDIA_MAX_HEIGHT }
 }
 
-export function CanvasView({ path, leafId, shell }: { path: string; leafId: string; shell: CanvasShell }): React.ReactElement {
+/** `preview`: a canvas's text to draw instead of its file, never written - a suggestion's preview. */
+export function CanvasView({ path, leafId, shell, preview }: { path: string; leafId: string; shell: CanvasShell; preview?: string }): React.ReactElement {
   return (
     <ReactFlowProvider>
-      <CanvasBoard path={path} leafId={leafId} shell={shell} />
+      <CanvasBoard path={path} leafId={leafId} shell={shell} {...(preview === undefined ? {} : { preview })} />
     </ReactFlowProvider>
   )
 }
 
-function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; shell: CanvasShell }): React.ReactElement {
-  const canvas = useCanvas(path)
+function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: string; shell: CanvasShell; preview?: string }): React.ReactElement {
+  const canvas = useCanvas(path, preview)
   const { doc, edit } = canvas
   const { collapsed, toggle: toggleFold } = useCollapsed(path)
   const { raw: rawBoards, toggle: toggleRaw } = useRawBoards(path)

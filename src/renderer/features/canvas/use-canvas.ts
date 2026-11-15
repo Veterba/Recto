@@ -19,7 +19,8 @@ const UNDO_LIMIT = 200
  * Undo and redo are changes too - the inverse of each one, made to the
  * canvas as it is when you press ⌘Z.
  */
-export function useCanvas(path: string): {
+/** `preview`: a canvas's text to show instead of its file - a suggestion's preview: nothing is read or written. */
+export function useCanvas(path: string, preview?: string): {
   doc: CanvasDoc | null
   error: string | null
   notice: string | null
@@ -52,6 +53,14 @@ export function useCanvas(path: string): {
   const [, setSteps] = useState(0)
 
   const read = useCallback(() => {
+    if (preview !== undefined) {
+      try {
+        setDoc(parseCanvas(preview))
+      } catch (err) {
+        setError(err instanceof CanvasParseError ? err.message : String(err))
+      }
+      return
+    }
     void api.invoke(IPC.fsRead, path).then((got) => {
       if (!got.ok) {
         setError(got.error)
@@ -68,7 +77,7 @@ export function useCanvas(path: string): {
         setError(err instanceof CanvasParseError ? err.message : String(err))
       }
     })
-  }, [path])
+  }, [path, preview])
 
   useEffect(read, [read, revision])
 
@@ -82,7 +91,8 @@ export function useCanvas(path: string): {
   const apply = useCallback(
     (change: CanvasChange, made?: { from: CanvasDoc; to: CanvasDoc }): Promise<boolean> => {
       const shown = docRef.current
-      if (shown === null) return Promise.resolve(false)
+      // A preview is looked at, never changed.
+      if (shown === null || preview !== undefined) return Promise.resolve(false)
       const next = made !== undefined && made.from === shown ? made.to : change(shown)
       if (next === shown) return Promise.resolve(true)
       setDoc(next)
@@ -133,7 +143,7 @@ export function useCanvas(path: string): {
       queue.current = result
       return result
     },
-    [path, read],
+    [path, read, preview],
   )
 
   const edit = useCallback(

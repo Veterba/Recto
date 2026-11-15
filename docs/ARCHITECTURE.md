@@ -398,11 +398,18 @@ main: vault-tools/socket.ts  (first line must carry the token)
   edit in words - with ✓/✕ when there is more than one; Accept all / Reject all; then each change's
   and the whole's outcome ("Partly applied: 2 of 3", "Out of date: …"). `use-proposals.ts` is one store
   for the window (one subscription to main), read by the cards, the panel and a canvas's ghosts.
-  Preview (`SuggestionPreview.tsx`) shows a note as it will read once its waiting changes are accepted -
-  worked out from the note as it is now, as Accept will (`previewOf`, `applyChanges`) - in the note
-  window's read-only editor, the added and changed lines marked (`editor/marked-lines.ts`), with Accept all
-  and Reject all; a card and its board preview the card's note; a canvas's Preview opens the canvas.
-  Recto's chats (the panel and Quick ask) show each answer's suggestions under it, by the ids in its record; the
+  Preview (`SuggestionPreview.tsx`) shows the screen as it will look once the waiting changes are
+  accepted, worked out from the file as it is now as Accept will (`previewOf`: `applyChanges`, or
+  `acceptOps` for a canvas), in the view Recto draws it in: a note in the note window's read-only editor,
+  the added and changed lines marked (`editor/marked-lines.ts`); a canvas in `CanvasView` and a board in
+  `BoardView`, each given the text as `preview` (`useCanvas` / `useBoardCards` then draw it and never read
+  or write the file). A card and its board preview the board. What is new or moved is outlined and
+  scrolled into sight; the view takes no clicks, menus or keys (only the wheel, and dragging a canvas's
+  plane). A new card's details (priority, dates) show once its note exists, as the board reads them from
+  the index.
+  Recto's chats (the panel and Quick ask) show each answer's suggestions under it, by the ids in its record,
+  each one line until Show (`briefOf`: a note's changes and lines, a canvas's cards and arrows, a rename's
+  line) with Show, Preview, Reject and Accept; the
   status bar's count opens a glass panel of everything waiting (Settings' panel classes), where a
   suggestion settled stays with its outcome until the panel closes. AI edits keep a note's line
   ends (`noteChange` works in LF and writes CRLF back); Write directly's backups go after 30 days.
