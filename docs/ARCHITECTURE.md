@@ -380,7 +380,14 @@ main: vault-tools/socket.ts  (first line must carry the token)
   whose own lines are gone is stale, and the rest still go in. A proposal that writes several files (a
   card and its board) goes whole or not at all. Applies run one at a time (`turn` in `proposals.ts`), so
   two suggestions on one note or canvas never write over each other; `statusOf` makes the proposal's
-  status from its changes (pending while any is; applied when any went in; discarded; stale). Names (free in their folder), links (resolved
+  status from its changes (pending while any is; applied when any went in; discarded; stale).
+  `propose_rename`, `propose_move` and `propose_delete` make a proposal with no text but an operation
+  (`file: { kind, from, to }`, `FileOp` in `shared/ai-access.ts`); boards and their cards stay with the
+  board tools. Accepting one runs the file tree's own `relocate` (`main/ipc.ts`, handed to
+  `proposals.ts` by `setRelocate`), so links (as Obsidian updates them), canvases and version history
+  follow; an archive goes to Recto's archive and keeps its id. `undo` takes an applied one back the
+  same way - moved back through `relocate`, or restored from the archive - once; the card then says
+  "Undone". A note gone from where it was, or a name taken since, makes it stale. Names (free in their folder), links (resolved
   as Obsidian does; an ambiguous `[[name]]` is refused with the exact links to write), periodic-note
   templates, boards (changed only through the board tools) and excluded folders are checked in
   `write.ts`; a note given by a name several notes share is answered with the list, to be given by path.

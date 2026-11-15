@@ -133,6 +133,27 @@ export const VAULT_TOOLS: readonly ToolDef[] = [
     true,
   ),
   tool(
+    'propose_rename',
+    'Propose renaming a note',
+    'A new name for a note, in its folder. Every link to it is updated as Obsidian updates them, and the person can undo it. Not for boards or cards.',
+    z.object({ note, name: z.string().min(1).describe('The new name, without .md and without a folder.') }),
+    true,
+  ),
+  tool(
+    'propose_move',
+    'Propose moving a note',
+    'Move a note to another folder ("" for the top of the vault), keeping its name. Links are updated, and the person can undo it. Not for boards or cards.',
+    z.object({ note, folder: z.string().describe('The folder it goes to, as a vault path: "Projects/2026".') }),
+    true,
+  ),
+  tool(
+    'propose_delete',
+    'Propose deleting a note',
+    "Put a note in Recto's archive, where it is kept and can be restored for a while; links to it are left as they are. The person can undo it. Not for boards or cards.",
+    z.object({ note }),
+    true,
+  ),
+  tool(
     'propose_edit',
     'Propose an edit',
     'Replace text in a note. Each find must match exactly once. Boards change through propose_task and propose_task_update only.',

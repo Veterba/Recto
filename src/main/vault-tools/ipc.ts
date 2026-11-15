@@ -93,6 +93,7 @@ export function registerAiAccessIpc(handle: Handle): void {
   handle(IPC.aiProposals, () => proposals.listProposals())
   handle(IPC.aiProposalApply, (id, picks) => proposals.apply(id, picks))
   handle(IPC.aiProposalDiscard, (id, picks) => proposals.discard(id, picks))
+  handle(IPC.aiProposalUndo, (id) => proposals.undo(id))
   handle(IPC.aiClients, () => allStatuses(clientEnv()))
   handle(IPC.aiClientPlan, (id, action) => clientPlan(id, action, clientEnv()))
   handle(IPC.aiClientConnect, (id) => connectClient(id, clientEnv()))

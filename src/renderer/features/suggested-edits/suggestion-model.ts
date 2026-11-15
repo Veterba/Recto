@@ -38,12 +38,25 @@ const KINDS: Readonly<Record<string, { verb: string; icon: string }>> = {
 }
 
 /** The card's title: what it does, and to which note or canvas. */
-export function headingOf(p: Proposal): { verb: string; icon: string; target: string } {
-  if (p.canvas !== undefined) return { verb: 'Canvas', icon: 'shapes', target: p.canvas.path }
+/** `target`: the note or canvas to open from the title ('' when there is none to open); `name`: what the title calls it. */
+export function headingOf(p: Proposal): { verb: string; icon: string; target: string; name: string } {
+  if (p.canvas !== undefined) return { verb: 'Canvas', icon: 'shapes', target: p.canvas.path, name: titleOf(p.canvas.path) }
+  if (p.file !== undefined) {
+    const op = p.file
+    // The note where it is now: at its new place once moved, nowhere to open once archived.
+    const moved = p.status === 'applied' && op.undone !== true
+    const target = moved ? (op.to ?? '') : op.from
+    return {
+      verb: op.kind === 'rename' ? 'Rename' : op.kind === 'move' ? 'Move' : 'Archive',
+      icon: op.kind === 'delete' ? 'archive' : op.kind === 'move' ? 'folder' : 'pencil',
+      target,
+      name: titleOf(op.from),
+    }
+  }
   const kind = KINDS[p.tool]
   // A new card is about its board, the last file it writes; anything else about its first.
   const target = p.tool === 'propose_task' ? (p.files.at(-1)?.path ?? '') : (p.files[0]?.path ?? '')
-  return { verb: kind?.verb ?? p.summary, icon: kind?.icon ?? 'sparkles', target }
+  return { verb: kind?.verb ?? p.summary, icon: kind?.icon ?? 'sparkles', target, name: target === '' ? '' : titleOf(target) }
 }
 
 /** The lines of a change, with one unchanged line above and below to place it. */
@@ -132,6 +145,7 @@ function canvasLabel(op: CanvasOp, names: ReadonlyMap<string, string>): { label:
  * writes several files at once (a card and its board), each file, taken or left together.
  */
 export function itemsOf(p: Proposal): ChangeItem[] {
+  if (p.file !== undefined) return [fileItem(p)]
   if (p.canvas !== undefined) {
     const names = nodeNames(p)
     return p.canvas.ops.map((op, i) => ({ index: i, state: p.canvas!.states[i] ?? 'pending', ...canvasLabel(op, names), rows: [] }))
@@ -151,12 +165,31 @@ export function itemsOf(p: Proposal): ChangeItem[] {
   }))
 }
 
+const folderName = (p: string): string => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : 'the top of the vault')
+
+/** A rename, move or archive as one line: "“Basil” → “Basil (Genovese)”", "“Basil”: Garden → Kitchen", "“Basil” → the archive". */
+function fileItem(p: Proposal): ChangeItem {
+  const op = p.file!
+  const state: ChangeState = p.status === 'pending' ? 'pending' : p.status === 'applied' ? 'accepted' : p.status === 'discarded' ? 'rejected' : 'stale'
+  const name = `“${titleOf(op.from)}”`
+  const label =
+    op.to === null
+      ? `${name} → the archive, where it can be restored`
+      : op.kind === 'rename'
+        ? `${name} → “${titleOf(op.to)}”`
+        : `${name}: ${folderName(op.from)} → ${folderName(op.to)}`
+  return { index: 0, state, label, icon: op.kind === 'delete' ? 'archive' : op.kind === 'move' ? 'folder' : 'pencil', rows: [] }
+}
+
 /** Once nothing waits: what became of it, in a few words. */
 export function outcomeOf(
   items: readonly ChangeItem[],
   on: 'note' | 'canvas' = 'note',
+  /** A rename, move or archive taken back since. */
+  undone = false,
 ): { text: string; tone: 'applied' | 'partial' | 'rejected' | 'stale' } | null {
   if (items.some((i) => i.state === 'pending')) return null
+  if (undone) return { text: 'Undone', tone: 'rejected' }
   const accepted = items.filter((i) => i.state === 'accepted').length
   const stale = items.filter((i) => i.state === 'stale').length
   if (accepted === items.length) return { text: items.length === 1 ? 'Applied' : `Applied all ${items.length}`, tone: 'applied' }

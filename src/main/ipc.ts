@@ -30,6 +30,7 @@ import { chooseVaultFolder, closeVault, currentVault, forgetRecentVault, openVau
 import { clearKey, keyStatus, writeKey } from './secrets'
 import { markSelfWrite, startWatching, stopWatching } from './watcher'
 import { registerAiAccessIpc } from './vault-tools/ipc'
+import { setRelocate } from './vault-tools/proposals'
 import { moveCanvasState, registerCanvasIpc, registerLinkPreviews } from './canvas'
 import { registerPlayer } from './player'
 import { registerProvidersIpc } from './providers/ipc'
@@ -370,6 +371,21 @@ export function registerIpc(): void {
   handle(IPC.boardsDelete, (p, choice) => boardOps.deleteBoard(p, choice))
   handle(IPC.boardsUndoDelete, (undoId) => boardOps.undoDelete(undoId))
   handle(IPC.fsMove, (p, newParent) => relocate(p, () => vaultFs.move(p, newParent)))
+  // An AI's suggested rename or move, accepted (or undone): the file tree's own, so links and history follow.
+  setRelocate((from, to) =>
+    relocate(from, async () => {
+      const slash = (p: string): number => p.lastIndexOf('/')
+      const folderOf = (p: string): string => (slash(p) === -1 ? '' : p.slice(0, slash(p)))
+      let at = from
+      if (folderOf(from) !== folderOf(to)) {
+        const moved = await vaultFs.move(at, folderOf(to))
+        if (!moved.ok) return moved
+        at = moved.path
+      }
+      const name = to.slice(slash(to) + 1)
+      return at.slice(slash(at) + 1) === name ? { ok: true as const, path: at } : vaultFs.rename(at, name)
+    }),
+  )
 
   handle(IPC.linksUndoRename, async (undoId) => {
     const entry = renameUndo.get(undoId)

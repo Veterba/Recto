@@ -4,6 +4,10 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.64.0 — 2026-11-15
+### Added
+- AI can suggest renaming, moving or deleting a note (to Recto's archive). Each is a suggestion like any other - "“Soil” → “Garden soil”", "“Basil”: Garden → Kitchen", "“Ideas” → the archive" - and once accepted, Undo on the card takes it back. A rename or move updates links as Obsidian does, and keeps the note's history and its places on canvases. Boards and their cards are left to the board tools.
+
 ## v0.63.0 — 2026-11-15
 ### Added
 - AI suggestions are reviewed change by change: each change has ✓ and ✕, with Accept all and Reject all, and the card says what became of each and of the whole ("Partly applied: 2 of 3", "Out of date"). The same card in the chat, Quick ask and Suggested edits, in light and dark.

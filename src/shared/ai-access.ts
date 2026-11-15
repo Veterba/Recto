@@ -60,6 +60,13 @@ export type FileChange = { path: string; before: string | null; after: string; s
 
 export type ProposalStatus = 'pending' | 'applied' | 'discarded' | 'stale'
 
+/**
+ * A note renamed, moved, or put in Recto's archive, as a suggestion: no text, an operation. `to` is the
+ * path it goes to (null for the archive); once applied, `archive` is its id there, and `undone` says it
+ * was taken back.
+ */
+export type FileOp = { kind: 'rename' | 'move' | 'delete'; from: string; to: string | null; archive?: string; undone?: boolean }
+
 export type Proposal = {
   id: string
   /** Who asked: the client's id, as its config names it. */
@@ -78,6 +85,8 @@ export type Proposal = {
    * applied, for the list.
    */
   canvas?: CanvasProposal
+  /** A note renamed, moved or archived (FileOp): `files` is then empty. */
+  file?: FileOp
 }
 
 export type ActivityEntry = {

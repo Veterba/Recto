@@ -78,7 +78,11 @@
   font-weight: 600;
   cursor: pointer;
 }
-.suggestion__note:hover,
+/* A note there is nothing to open of (archived): named, not a link. */
+.suggestion__note.is-gone {
+  cursor: default;
+}
+.suggestion__note:not(.is-gone):hover,
 .suggestion__filename:hover {
   text-decoration: underline;
   text-underline-offset: 2px;

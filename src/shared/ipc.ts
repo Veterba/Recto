@@ -190,6 +190,7 @@ export const IPC = {
   aiProposals: 'ai-proposals:list',
   aiProposalApply: 'ai-proposals:apply',
   aiProposalDiscard: 'ai-proposals:discard',
+  aiProposalUndo: 'ai-proposals:undo',
   aiClients: 'ai-clients:list',
   aiClientPlan: 'ai-clients:plan',
   aiClientConnect: 'ai-clients:connect',
@@ -531,6 +532,8 @@ export type IpcApi = Exhaustive<
     /** `picks`: which of its changes (or a canvas's edits) to apply; all pending ones when left out. */
     [IPC.aiProposalApply]: (id: string, picks?: number[]) => { ok: boolean; error?: string; stale?: boolean }
     [IPC.aiProposalDiscard]: (id: string, picks?: number[]) => { ok: boolean }
+    /** An applied rename, move or archive taken back. */
+    [IPC.aiProposalUndo]: (id: string) => { ok: boolean; error?: string }
     [IPC.aiClients]: () => ClientStatus[]
     [IPC.aiClientPlan]: (id: ClientId, action: 'connect' | 'disconnect') => ClientPlan
     [IPC.aiClientConnect]: (id: ClientId) => { ok: boolean; error?: string }

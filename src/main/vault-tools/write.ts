@@ -2,7 +2,7 @@ import { isCrlf, toLf, withEndings } from '../../shared/line-endings'
 import fs from 'node:fs'
 import type { CanvasOp } from '../../shared/canvas-ops'
 import path from 'node:path'
-import type { FileChange } from '../../shared/ai-access'
+import type { FileChange, FileOp } from '../../shared/ai-access'
 import { setCardField } from '../../shared/card-fields'
 import { formatChanged, type FormatContext } from '../../shared/formatting'
 import { setField } from '../../shared/frontmatter'
@@ -13,7 +13,7 @@ import { cardFolderFor, inRecto } from '../../shared/recto-paths'
 import { normaliseFolder, type Period } from '../../shared/templates'
 import { nameProblem } from '../../shared/vault'
 import { dateArg, findBoard, periodicPlace } from './read'
-import { readNote, titleOf, ToolError, type Scope } from './scope'
+import { folderOf, readNote, titleOf, ToolError, type Scope } from './scope'
 
 /**
  * The write tools build proposals: the files a call would change, before and
@@ -28,7 +28,7 @@ import { readNote, titleOf, ToolError, type Scope } from './scope'
 
 type Args = Record<string, unknown>
 /** What a write tool proposes; `canvas`: a canvas's edits (shared/canvas-ops.ts), `files` the canvas with all of them. */
-export type Draft = { summary: string; files: FileChange[]; formatted: string[]; canvas?: { path: string; ops: CanvasOp[] } }
+export type Draft = { summary: string; files: FileChange[]; formatted: string[]; canvas?: { path: string; ops: CanvasOp[] }; file?: FileOp }
 
 const WIKI = /(?<!!)\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|[^\]\n]*)?\]\]/g
 const MD_NOTE = /(?<!!)\[[^\]\n]*\]\(([^()\s]+\.md)(?:#[^)\s]*)?\)/g
@@ -391,4 +391,50 @@ export async function proposeTaskUpdate(scope: Scope, a: Args): Promise<Draft> {
   }
   if (files.length === 0) throw new ToolError('That changes nothing: the card is already like that.')
   return { summary: `Update “${titleOf(item.link ?? item.text)}” on ${titleOf(board.path)}`, files, formatted: [] }
+}
+
+/**
+ * A note to rename, move or archive: visible, a note, not a board or one of its cards - those change
+ * through the board tools, which keep a board and its cards' folder together - and not in Recto's folder.
+ */
+async function relocatable(scope: Scope, target: string): Promise<string> {
+  const p = scope.need(target)
+  if (inRecto(p) || isKanban(await readNote(p)))
+    throw new ToolError(`“${titleOf(p)}” is a board or one of its cards. Boards and cards change through propose_task and propose_task_update only.`)
+  return p
+}
+
+/** The note's new path, checked: a name it may have, not taken in that folder, not in a folder AI may not see or Recto's own. */
+function freePath(scope: Scope, name: string, folder: string, from: string): string {
+  if (inRecto(folder)) throw new ToolError('Recto/ holds boards and their cards; a note is not moved there.')
+  const p = folder === '' ? `${name}.md` : `${folder}/${name}.md`
+  if (p === from) throw new ToolError(`“${titleOf(from)}” is already there, by that name.`)
+  // Before the name is checked: "already there" would tell what an excluded folder holds.
+  if (scope.hidden(p)) throw new ToolError(`${folder}/ is excluded from AI in Recto's settings. Choose another folder.`)
+  // A different case of its own name is the same note on this Mac's disk, not another one.
+  if (p.toLowerCase() !== from.toLowerCase()) freeName(scope, name, folder)
+  else if (nameProblem(name) !== null) throw new ToolError(`${nameProblem(name)}. Choose another name.`)
+  return p
+}
+
+export async function proposeRename(scope: Scope, a: Args): Promise<Draft> {
+  const from = await relocatable(scope, String(a['note']))
+  const name = String(a['name']).trim().replace(/\.md$/i, '')
+  if (name.includes('/')) throw new ToolError('A name has no “/”. To put the note in another folder, use propose_move.')
+  const to = freePath(scope, name, folderOf(from), from)
+  return { summary: `Rename ${titleOf(from)} to ${name}`, files: [], formatted: [], file: { kind: 'rename', from, to } }
+}
+
+export async function proposeMove(scope: Scope, a: Args): Promise<Draft> {
+  const from = await relocatable(scope, String(a['note']))
+  const typed = String(a['folder'] ?? '').trim()
+  const folder = typed.replace(/^\/+|\/+$/g, '') === '' ? '' : normaliseFolder(typed)
+  if (folder === null) throw new ToolError(`“${typed}” is not a folder Recto can use: no “..” and no folder starting with “.”.`)
+  const to = freePath(scope, titleOf(from), folder, from)
+  return { summary: `Move ${titleOf(from)} to ${folder === '' ? 'the top of the vault' : `${folder}/`}`, files: [], formatted: [], file: { kind: 'move', from, to } }
+}
+
+export async function proposeDelete(scope: Scope, a: Args): Promise<Draft> {
+  const from = await relocatable(scope, String(a['note']))
+  return { summary: `Move ${titleOf(from)} to the archive`, files: [], formatted: [], file: { kind: 'delete', from, to: null } }
 }

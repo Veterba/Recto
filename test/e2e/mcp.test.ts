@@ -130,9 +130,10 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
 
   it('lists every tool, read tools marked read-only and write tools not', async () => {
     const { tools } = (await client.request('tools/list')).result as { tools: { name: string; annotations?: { readOnlyHint?: boolean } }[] }
-    expect(tools).toHaveLength(27)
+    expect(tools).toHaveLength(30)
     expect(tools.find((t) => t.name === 'read_note')?.annotations?.readOnlyHint).toBe(true)
-    expect(tools.find((t) => t.name === 'propose_edit')?.annotations?.readOnlyHint).toBe(false)
+    for (const name of ['propose_edit', 'propose_rename', 'propose_move', 'propose_delete'])
+      expect(tools.find((t) => t.name === name)?.annotations?.readOnlyHint, name).toBe(false)
   })
 
   it('the guide and the profile', async () => {

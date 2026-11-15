@@ -44,7 +44,11 @@ const READERS: Record<string, Run> = {
   get_proposal: (scope, a) => {
     const found = proposal(String(a['id']))
     // One about a note now excluded is "no proposal": even its summary says something about that note.
-    const hidden = found !== null && (found.files.some((f) => scope.fileHidden(f.path)) || (found.canvas !== undefined && scope.fileHidden(found.canvas.path)))
+    const hidden =
+      found !== null &&
+      (found.files.some((f) => scope.fileHidden(f.path)) ||
+        (found.canvas !== undefined && scope.fileHidden(found.canvas.path)) ||
+        (found.file !== undefined && [found.file.from, found.file.to].some((p) => p !== null && scope.fileHidden(p))))
     if (found === null || hidden) throw new ToolError(`No proposal “${String(a['id'])}”. Settled proposals are kept for a while, then forgotten.`)
     return [{ kind: 'data', data: { id: found.id, status: found.status, summary: found.summary } }]
   },
@@ -62,6 +66,9 @@ const WRITERS: Record<string, (scope: Scope, args: Args) => write.Draft | Promis
   propose_link: write.proposeLink,
   propose_task: write.proposeTask,
   propose_task_update: write.proposeTaskUpdate,
+  propose_rename: write.proposeRename,
+  propose_move: write.proposeMove,
+  propose_delete: write.proposeDelete,
 }
 
 async function runWrite(
@@ -73,13 +80,18 @@ async function runWrite(
   if (scope.settings.writeMode === 'read')
     throw new ToolError('Recto is set to read only for AI (Settings → AI → Write mode). Tell the person what you would change instead.')
   const draft = await WRITERS[tool]!(scope, args)
-  const outside = session?.writable == null ? [] : draft.files.filter((f) => !session.writable!.has(f.path))
+  // A rename, move or archive changes the note it is about (and, renamed or moved, where it goes).
+  const touched = draft.file === undefined ? draft.files.map((f) => f.path) : [draft.file.from, ...(draft.file.to === null ? [] : [draft.file.to])]
+  const outside = session?.writable == null ? [] : touched.filter((p) => !session.writable!.has(p))
   if (outside.length > 0)
-    throw new ToolError(`Here you may only change ${[...session!.writable!].map((p) => `“${p}”`).join(', ')}, not “${outside[0]!.path}”.`)
-  const diff = draft.files
-    .map((f) => `${f.before === null ? 'new' : 'edit'} ${f.path}\n${unifiedDiff(f.before ?? '', f.after)}`)
-    .join('\n\n')
-  const base = { paths: draft.files.map((f) => f.path), formatted: draft.formatted }
+    throw new ToolError(`Here you may only change ${[...session!.writable!].map((p) => `“${p}”`).join(', ')}, not “${outside[0]!}”.`)
+  const diff =
+    draft.file === undefined
+      ? draft.files.map((f) => `${f.before === null ? 'new' : 'edit'} ${f.path}\n${unifiedDiff(f.before ?? '', f.after)}`).join('\n\n')
+      : draft.file.to === null
+        ? `archive ${draft.file.from}`
+        : `${draft.file.kind} ${draft.file.from} -> ${draft.file.to}`
+  const base = { paths: touched, formatted: draft.formatted }
   // A chat inside Recto suggests; only an outside client may write directly.
   if (scope.settings.writeMode === 'write' && session === null) {
     const applied = await applyNow(draft)

@@ -83,10 +83,23 @@ export function SuggestionCard({
   const pending = items.filter((i) => i.state === 'pending')
   // Each change on its own only when there is more than one to choose from, and the proposal may be split.
   const each = items.length > 1 && items.every((i) => i.index !== null)
-  const outcome = outcomeOf(items, proposal.canvas === undefined ? 'note' : 'canvas')
+  const outcome = outcomeOf(items, proposal.canvas === undefined ? 'note' : 'canvas', proposal.file?.undone === true)
+  // An applied rename, move or archive can be taken back from the card.
+  const undoable = proposal.file !== undefined && proposal.status === 'applied' && proposal.file.undone !== true
   const open = (path: string): void => {
     openFileFromAnywhere(path)
     onOpen?.()
+  }
+  const undo = (): void => {
+    setBusy(true)
+    setError(null)
+    void api
+      .invoke(IPC.aiProposalUndo, proposal.id)
+      .then((result) => {
+        if (!result.ok) setError(result.error ?? 'It could not be undone.')
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'It could not be undone.'))
+      .finally(() => setBusy(false))
   }
   const settle = (channel: typeof IPC.aiProposalApply | typeof IPC.aiProposalDiscard, picks?: number[]): void => {
     setBusy(true)
@@ -111,10 +124,12 @@ export function SuggestionCard({
         <Icon name={heading.icon} size={14} />
         <h3 className="suggestion__title">
           <span className="suggestion__kind">{heading.verb}</span>{' '}
-          {heading.target !== '' && (
+          {heading.target !== '' ? (
             <button className="suggestion__note" onClick={() => open(heading.target)} title={heading.target}>
-              {titleOf(heading.target)}
+              {heading.name}
             </button>
+          ) : (
+            heading.name !== '' && <span className="suggestion__note is-gone">{heading.name}</span>
           )}
         </h3>
         <span className="suggestion__meta">
@@ -183,10 +198,20 @@ export function SuggestionCard({
           </button>
         )}
         {outcome !== null ? (
-          <span className={`suggestion__settled suggestion__settled--${outcome.tone}`}>
-            <Icon name={outcome.tone === 'stale' ? 'alert-triangle' : outcome.tone === 'rejected' ? 'x' : 'check'} size={13} />{' '}
-            {outcome.text}
-          </span>
+          <>
+            <span className={`suggestion__settled suggestion__settled--${outcome.tone}`}>
+              <Icon name={outcome.tone === 'stale' ? 'alert-triangle' : outcome.tone === 'rejected' ? 'x' : 'check'} size={13} />{' '}
+              {outcome.text}
+            </span>
+            {undoable && (
+              <>
+                <span className="suggestion__spacer" />
+                <button className="btn btn--ghost btn--sm" disabled={busy} onClick={undo}>
+                  <Icon name="rotate-ccw" size={13} /> Undo
+                </button>
+              </>
+            )}
+          </>
         ) : (
           <>
             <span className="suggestion__spacer" />

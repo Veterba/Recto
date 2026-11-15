@@ -3,7 +3,8 @@ import { BrowserWindow, Notification } from 'electron'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { AI_PROPOSALS_STATE, isExcludedPath, type FileChange, type Proposal } from '../../shared/ai-access'
+import { AI_PROPOSALS_STATE, isExcludedPath, type FileChange, type FileOp, type Proposal } from '../../shared/ai-access'
+import { archive, restore } from '../archive'
 import { IPC_EVENT } from '../../shared/ipc'
 import { VAULT_STATE_DIR } from '../../shared/vault'
 import { sendEvent } from '../events'
@@ -69,6 +70,7 @@ export function queue(draft: Draft, client: string, tool: string): Proposal {
     ...(draft.canvas === undefined
       ? {}
       : { canvas: { path: draft.canvas.path, ops: draft.canvas.ops, states: draft.canvas.ops.map(() => 'pending' as const), refs: {} } }),
+    ...(draft.file === undefined ? {} : { file: draft.file }),
   }
   save([made, ...load()])
   const window = BrowserWindow.getAllWindows()[0]
@@ -127,7 +129,9 @@ export function forgetExcluded(excluded: readonly string[]): void {
   const vault = currentVault()
   if (vault === null || excluded.length === 0) return
   const about = (p: Proposal): boolean =>
-    p.files.some((f) => isExcludedPath(f.path, excluded)) || (p.canvas !== undefined && isExcludedPath(p.canvas.path, excluded))
+    p.files.some((f) => isExcludedPath(f.path, excluded)) ||
+    (p.canvas !== undefined && isExcludedPath(p.canvas.path, excluded)) ||
+    (p.file !== undefined && [p.file.from, p.file.to].some((f) => f !== null && isExcludedPath(f, excluded)))
   const list = load()
   const kept = list.filter((p) => p.status === 'pending' || !about(p))
   if (kept.length !== list.length) save(kept)
@@ -211,6 +215,10 @@ async function applyCanvas(
 
 /** Write directly: a backup of every file it changes, then the write. */
 export async function applyNow(draft: Draft): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (draft.file !== undefined) {
+    const done = await runFileOp(draft.file)
+    return 'error' in done ? { ok: false, error: done.error } : { ok: true }
+  }
   backup(draft.files)
   if (draft.canvas !== undefined) {
     const done = await applyCanvas({ ...draft.canvas, states: draft.canvas.ops.map(() => 'pending'), refs: {} })
@@ -263,6 +271,7 @@ async function applyOnce(id: string, picks?: readonly number[]): Promise<Applied
   const found = proposal(id)
   if (found === null || found.status !== 'pending') return { ok: false, error: 'This suggestion is no longer pending.' }
   if (found.canvas !== undefined) return applyCanvasProposal(found, picks)
+  if (found.file !== undefined) return applyFileProposal(found)
   if (found.files.length > 1) return applyWhole(found)
   const file = found.files[0]!
   const states = statesOf(found, file)
@@ -330,6 +339,10 @@ async function applyCanvasProposal(found: Proposal, picks?: readonly number[]): 
 export function discard(id: string, picks?: readonly number[]): { ok: boolean } {
   const found = proposal(id)
   if (found === null || found.status !== 'pending') return { ok: false }
+  if (found.file !== undefined) {
+    update(id, (p) => ({ ...p, status: 'discarded' }))
+    return { ok: true }
+  }
   if (found.canvas !== undefined) {
     const canvas = found.canvas
     const states = rejectOps(canvas, picks ?? canvas.states.map((_, i) => i))
@@ -342,5 +355,68 @@ export function discard(id: string, picks?: readonly number[]): { ok: boolean } 
     const files = p.files.map((f) => ({ ...f, states: statesOf(p, f).map((s, i) => (s === 'pending' && (whole || picks.includes(i)) ? ('rejected' as const) : s)) }))
     return { ...p, status: statusOf(files.flatMap((f) => f.states)), files }
   })
+  return { ok: true }
+}
+
+/**
+ * How a note is renamed or moved with everything that follows it - its links (as Obsidian updates them),
+ * canvases, version history: main/ipc.ts's `relocate`, the file tree's own, handed over at start.
+ */
+export type Relocate = (from: string, to: string) => Promise<{ ok: true; path: string } | { ok: false; error: string }>
+let relocate: Relocate | null = null
+export function setRelocate(fn: Relocate): void {
+  relocate = fn
+}
+
+const exists = (p: string): boolean => {
+  const vault = currentVault()
+  return vault !== null && fs.existsSync(path.join(vault.path, p))
+}
+
+/** A rename, move or archive done: where the note is now, or (archived) its id in the archive; or why not. */
+async function runFileOp(op: FileOp): Promise<{ path: string } | { archive: string } | { error: string; stale?: true }> {
+  if (!exists(op.from)) return { error: `${titleOf(op.from)} is not where it was any more.`, stale: true }
+  if (op.to === null) {
+    const archived = await archive(op.from)
+    return archived.ok ? { archive: archived.id } : { error: archived.error }
+  }
+  // A different case of its own name is the same file on this Mac's disk, not one in the way.
+  if (exists(op.to) && op.to.toLowerCase() !== op.from.toLowerCase()) return { error: `A note is at ${op.to} now.`, stale: true }
+  if (relocate === null) return { error: 'Recto is not ready to move notes yet. Try again in a moment.' }
+  const moved = await relocate(op.from, op.to)
+  return moved.ok ? { path: moved.path } : { error: moved.error }
+}
+
+async function applyFileProposal(found: Proposal): Promise<Applied> {
+  const op = found.file!
+  const done = await runFileOp(op)
+  if ('error' in done) {
+    if (done.stale === true) update(found.id, (p) => ({ ...p, status: 'stale' }))
+    return { ok: false, error: done.error, ...(done.stale === true ? { stale: true } : {}) }
+  }
+  update(found.id, (p) => ({ ...p, status: 'applied', file: { ...op, ...('archive' in done ? { archive: done.archive } : { to: done.path }) } }))
+  return { ok: true }
+}
+
+/**
+ * An applied rename, move or archive taken back: moved back the same way (its links follow again), or
+ * restored from the archive. Once only; the card then says it was undone.
+ */
+export async function undo(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const found = proposal(id)
+  const op = found?.file
+  if (found === null || op === undefined || found.status !== 'applied' || op.undone === true) return { ok: false, error: 'There is nothing to undo here.' }
+  if (op.to === null) {
+    if (op.archive === undefined) return { ok: false, error: 'The archive does not know this note.' }
+    const back = await restore(op.archive)
+    if (!back.ok) return { ok: false, error: back.error }
+  } else {
+    if (!exists(op.to)) return { ok: false, error: `${titleOf(op.to)} has moved on since; it was not moved back.` }
+    if (exists(op.from) && op.to.toLowerCase() !== op.from.toLowerCase()) return { ok: false, error: `A note is at ${op.from} now; it was not moved back.` }
+    if (relocate === null) return { ok: false, error: 'Recto is not ready to move notes yet. Try again in a moment.' }
+    const back = await relocate(op.to, op.from)
+    if (!back.ok) return { ok: false, error: back.error }
+  }
+  save(load().map((p) => (p.id === id ? { ...p, file: { ...op, undone: true } } : p)))
   return { ok: true }
 }

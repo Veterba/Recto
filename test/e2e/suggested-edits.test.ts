@@ -69,6 +69,8 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
             `${basil.replace('# Basil', '# Basil (Genovese)')}\n## Harvest\n\nPick in the morning.\n`,
             120_000,
           ),
+          { ...proposal('p-rename', 'recto-chat · Claude Code', 'propose_rename', 'Rename Soil to Garden soil', 'Garden/Soil.md', null, '', 90_000), files: [], file: { kind: 'rename', from: 'Garden/Soil.md', to: 'Garden/Garden soil.md' } },
+          { ...proposal('p-archive', 'recto-chat · Claude Code', 'propose_delete', 'Move Ideas to the archive', 'Ideas.md', null, '', 80_000), files: [], file: { kind: 'delete', from: 'Ideas.md', to: null } },
           proposal('p-tomatoes', 'recto-chat · Claude Code', 'propose_edit', 'Edit Tomatoes', 'Garden/Tomatoes.md', tomatoes, tomatoes.replace('six weeks', 'eight weeks'), 110_000),
           {
             ...proposal('p-canvas', 'recto-chat · Claude Code', 'canvas_propose_nodes', 'Two edits to Beds', 'Recto/Canvas/Beds.canvas', canvas, canvas, 100_000),
@@ -97,7 +99,7 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
         content: 'I suggested a Harvest section for [[Basil]]. It waits for you to apply it.',
         at: '2026-11-10T09:00:20',
         model: 'claude-code',
-        record: { read: ['Garden/Basil.md'], skimmed: [], proposals: ['p-basil', 'p-tomatoes', 'p-canvas'] },
+        record: { read: ['Garden/Basil.md'], skimmed: [], proposals: ['p-basil', 'p-tomatoes', 'p-canvas', 'p-rename', 'p-archive'] },
       },
     ]
     fs.writeFileSync(path.join(chats, '2026-11-10 09-00 Basil harvest.md'), topicFile({ bot: 'recto', created: '2026-11-10T09:00:00', title: 'Basil harvest' }, [], appendTurns('', turns, 'Recto')))
@@ -166,6 +168,36 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
     await card.locator('.suggestion__settled', { hasText: 'Partly applied: 1 of 2' }).waitFor()
     await expect.poll(() => page.locator('.canvas-ghosts').count()).toBe(0)
     expect((JSON.parse(read('Recto/Canvas/Beds.canvas')) as { edges: unknown[] }).edges).toEqual([])
+    await page.keyboard.press('Meta+Shift+C')
+  })
+
+  it('a rename suggested in the chat: accepted, the note is renamed and links follow; Undo puts it and them back. An archive, undone, is restored', async () => {
+    await page.keyboard.press('Meta+Shift+C')
+    const linksAsked = async (): Promise<void> => {
+      const dialog = page.locator('[role=alertdialog][aria-label="Update links"]')
+      await dialog.waitFor({ timeout: 10_000 })
+      await dialog.getByRole('button', { name: 'Just once' }).click()
+    }
+    const card = cardTitled('Soil')
+    expect(await card.locator('.suggestion__label').textContent()).toMatch(/“Soil” → “Garden soil”/)
+    await card.getByRole('button', { name: 'Accept', exact: true }).click()
+    await linksAsked()
+    await expect.poll(() => fs.existsSync(path.join(vault, 'Garden/Garden soil.md'))).toBe(true)
+    expect(fs.existsSync(path.join(vault, 'Garden/Soil.md'))).toBe(false)
+    await expect.poll(() => read('Garden/Tomatoes.md')).toContain('[[Garden soil]]')
+    await card.getByRole('button', { name: 'Undo' }).click()
+    await linksAsked()
+    await expect.poll(() => fs.existsSync(path.join(vault, 'Garden/Soil.md'))).toBe(true)
+    await expect.poll(() => read('Garden/Tomatoes.md')).toContain('[[Soil]]')
+    await card.locator('.suggestion__settled', { hasText: 'Undone' }).waitFor()
+
+    const archive = cardTitled('Ideas')
+    const ideas = read('Ideas.md')
+    await archive.getByRole('button', { name: 'Accept', exact: true }).click()
+    await expect.poll(() => fs.existsSync(path.join(vault, 'Ideas.md'))).toBe(false)
+    await archive.getByRole('button', { name: 'Undo' }).click()
+    await expect.poll(() => fs.existsSync(path.join(vault, 'Ideas.md'))).toBe(true)
+    expect(read('Ideas.md')).toBe(ideas)
     await page.keyboard.press('Meta+Shift+C')
   })
 
