@@ -402,6 +402,37 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
       .poll(() => lane('Doing').split('\n').filter((l) => l.startsWith('- [')))
       .toEqual(['- [ ] [[Record the demo]]', '- [ ] [[Fix the export bug]]', '- [ ] [[Plant garlic]]'])
     expect(await nodeOf(id).boundingBox()).toEqual(where)
+    const BOARD = 'Recto/Boards/Launch/Launch.md'
+    // A card renamed in place: a double-click on its title renames its note, and the board's link with it.
+    await chip('Plant garlic').locator('.canvas-board__title').dblclick()
+    await nodeOf(id).locator('[aria-label="Card name"]').fill('Plant shallots')
+    await page.keyboard.press('Enter')
+    await expect.poll(() => lane('Doing')).toContain('[[Plant shallots]]')
+    expect(fs.existsSync(path.join(vault, 'Recto/Boards/Launch/Plant shallots.md'))).toBe(true)
+    // A lane renamed in place keeps its colour; "+ Column" adds one, named at once.
+    await nodeOf(id).locator('.canvas-board__lane', { hasText: 'Doing' }).locator('.canvas-board__name').dblclick()
+    await nodeOf(id).locator('[aria-label="Column name"]').fill('In progress')
+    await page.keyboard.press('Enter')
+    await expect.poll(() => read(BOARD)).toMatch(/^## In progress/m)
+    expect(read(BOARD)).toContain('"In progress":{"color":"orange"}')
+    await nodeOf(id).locator('.canvas-board__add-column').click()
+    await nodeOf(id).locator('[aria-label="Column name"]').fill('Later')
+    await page.keyboard.press('Enter')
+    await expect.poll(() => read(BOARD)).toMatch(/^## Later$/m)
+    // Every card in a lane, however many: none hidden behind "+N more".
+    const many = Array.from({ length: 9 }, (_, i) => `- [ ] Seed ${i + 1}`).join('\n')
+    const kept = read(BOARD)
+    fs.writeFileSync(path.join(vault, BOARD), kept.replace(/## Later\n/, `## Later\n\n${many}\n`))
+    // Written by another app: the canvas shows it.
+    await expect.poll(() => nodeOf(id).locator('.canvas-board__lane', { hasText: 'Later' }).locator('.canvas-board__card').count()).toBe(9)
+    // And taken back: the rest of this test reads the board's Markdown at its old length.
+    fs.writeFileSync(path.join(vault, BOARD), kept)
+    await expect.poll(() => nodeOf(id).locator('.canvas-board__lane', { hasText: 'Later' }).locator('.canvas-board__card').count()).toBe(0)
+    // Right-click has the board's menu: removed from the board, its note stays.
+    await chip('Plant shallots').click({ button: 'right' })
+    await page.locator('.menu__item', { hasText: 'Remove from board' }).click()
+    await expect.poll(() => read(BOARD)).not.toContain('[[Plant shallots]]')
+    expect(fs.existsSync(path.join(vault, 'Recto/Boards/Launch/Plant shallots.md'))).toBe(true)
     // A name a note has in another folder: said where; a new card here, or that note put here if asked.
     await nodeOf(id).locator('[aria-label="Add a task to To do"]').click()
     fs.writeFileSync(path.join(vault, 'Garden/Garlic notes.md'), 'Cloves in October.\n')

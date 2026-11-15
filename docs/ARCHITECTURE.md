@@ -278,7 +278,7 @@ board records an opened card as a step (`step`); the shell does the travelling
 | `search` | full-text search, quick switcher | `search-result` (inside the shared `palette`) |
 | `graph` | the link graph and its settings panel | `graph`, `gset`, `gwheel`, `glegend` |
 | `boards` | kanban boards as notes in the Obsidian Kanban format (`shared/kanban.ts`: parse, and line-level edits that never touch a line they do not mean to): full-height glass columns, a card panel that edits a card note's frontmatter one key at a time (`shared/card-fields.ts`), and a widget strip (`widgets/registry.ts`). `hooks/use-board-cards.ts` reads the board note and the cards' notes; every change is shown first and written second, every board write re-reads the file and makes the same change to what is there now (found by the card's own lines), edits to one card's note go one at a time, and a failed write is undone with a notice. A board note opens as a board in a note tab too (`BoardNote`, through the editor's `NoteHosts`), with its Markdown a click away; a link to a board or a card opens it in the tab you are in, or in Tasks when that tab is not one to move on from (`use-shell-navigation.ts`); a card opened on a board is a step in the tab's history. The card panel edits the note's body with the editor's `NoteBodyEditor` (frontmatter stays the panel's fields', `withBody`). `boards-store.ts` lists boards and where each card stands (from the index), publishes the link icons (`app/link-kinds.ts`) and holds `isTaskPath`, the one rule that keeps Recto/ (boards, cards, chats) out of the Data tree unless Settings → Vault → "Show the Recto folder" is on (`recto-folder-setting.ts`, kept per vault in `.recto/recto-folder.json`). Where the files live is `shared/recto-paths.ts` and nothing else; rename, delete and filing of cards are `main/boards.ts` (see Recto's folder, below). The one-time move from `boards.json` is `shared/board-migration.ts` (plan) and `main/board-migration.ts` (backup, write) | `board`, `board-col`, `board-card`, `board-pri`, `board-cal`, `board-seg`, `board-done`, `board-due`, `board-pris`, `board-widget`, `card-panel`, `new-card`, `boards` |
-| `canvas` | JSON Canvas files (`.canvas`) drawn on a plane you pan and zoom, and the Canvas section's list (`components/CanvasList.tsx`). `use-canvas.ts` reads, changes and writes one file; `canvas-flow.ts` maps it to the drawing library; `canvas-change.ts`, `canvas-edit.ts`, `canvas-menus.ts`, `canvas-guides.ts` are the pure parts (undo, selection edits, right-click menus, snapping); `canvas-state.ts` holds folds; `note-body.ts` writes a note edited on a canvas; `shapes.ts`, `arrow-geometry.ts` (pure maths), `canvas-arrows.ts` and `canvas-style.ts` are the shapes, arrows and looks; `components/CanvasNodes.tsx` and `CanvasBoardNodes.tsx` (cards) draw each kind of node, `CanvasEdge.tsx` an arrow, and `CanvasToolbar.tsx` and `StyleBar.tsx` are the two bars. See Canvas, below | `canvas` |
+| `canvas` | JSON Canvas files (`.canvas`) drawn on a plane you pan and zoom, and the Canvas section's list (`components/CanvasList.tsx`). `use-canvas.ts` reads, changes and writes one file; `canvas-flow.ts` maps it to the drawing library; `canvas-change.ts`, `canvas-edit.ts`, `canvas-menus.ts`, `canvas-guides.ts` are the pure parts (undo, selection edits, right-click menus, snapping); `canvas-state.ts` holds folds; `note-body.ts` writes a note edited on a canvas; `shapes.ts`, `arrow-geometry.ts` (pure maths), `canvas-arrows.ts` and `canvas-style.ts` are the shapes, arrows and looks; `components/CanvasNodes.tsx`, `CanvasBoardNodes.tsx` (a card) and `CanvasBoardPreview.tsx` (a board) draw each kind of node, `CanvasEdge.tsx` an arrow, and `CanvasToolbar.tsx` and `StyleBar.tsx` are the two bars. See Canvas, below | `canvas` |
 | `topics` | topics settings and the run notice | `topics` |
 | `tidy` | filing loose notes | `tidy` |
 | `home` | the overlay on ⌃⌘H: one WebGL scene (`scene.ts`) behind two panes that slide - the welcome, whose text the shader draws (`hero-text.ts`, `scene-text.ts`), and the vault overview, a pane that scrolls as a whole: the vault's name drawn by the shader (moved by a scroll uniform), then a solid card (`components/Overview.tsx`). Main gathers the raw material (`main/overview.ts`: one `overview` query on the index, the `.recto/stats/` files, the userData usage file); every figure is a pure sum in `shared/overview.ts` worked out against the renderer's clock. Where it was left (pane, page, scroll) is `overviewPlace` in `app-state.json`. Edits, active time and last opened are reported from `app/usage.ts` | `home`, `overview` |
@@ -345,7 +345,8 @@ main: vault-tools/socket.ts  (first line must carry the token)
 - **Canvas tools** (`vault-tools/canvas-tools.ts`): `canvas_list`, `canvas_read` (nodes by short ids
   `n1`… in file order, a note AI may not see only as a place) and five `canvas_propose_*`. A change to a
   canvas is a list of edits (`shared/canvas-ops.ts`: add node with a `ref` other edits may name, add
-  edge, add group, move), placed by `shared/canvas-layout.ts` (beside, around, packed rows, group frames;
+  edge - written as the Arrow tool writes one, pinned at both centres so it is straight, its facing
+  sides kept for Obsidian - add group, move), placed by `shared/canvas-layout.ts` (beside, around, packed rows, group frames;
   never over what is there). The proposal carries `canvas: { path, ops, states, refs }`; `files` holds
   the canvas with every edit, for the list. Apply from Suggested edits, and Write directly, apply the
   pending edits in main onto the canvas as it is (`acceptOps`; an edit whose node is gone is stale).
@@ -606,9 +607,16 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
   attachments, as for images) and puts the paths down through `addFiles`. A placing tool does its one
   placement in `onPaneClick` (or the arrow's drag) and then sets Select. Keys V H A T F R pick tools (the one shape Recto makes is the square),
   N and B open the pickers.
-- **Boards on a canvas.** `BoardPreview` in `CanvasBoardNodes.tsx`, through the board's own
-  `useBoardCards`: lanes in a CSS grid that wraps by the node's width, the first cards of each as chips,
-  a circle that moves a card to the done lane (or back) with the board's `move`. The name bar switches
+- **Boards on a canvas.** `BoardPreview` in `CanvasBoardPreview.tsx`, through the board's own
+  `useBoardCards` on the same note - so the board's tab, the card notes and the canvas are one thing:
+  each write calls `noteIndexChanged()`, and every `useBoardCards` (on a canvas, in a tab) reads the
+  board again; another app's write reaches it the same way through the watcher. Lanes sit in a CSS grid
+  that wraps by the node's width, each with all its cards (it scrolls). A card is dragged to another
+  lane or place (the board's `move` and `fileIndex`), opened with a click (a double-click on its title
+  renames it - its note, or its line with `setCardText`), and has the board's right-click menu. A lane's
+  name is renamed in place (`renameColumnIn` in `boards.ts`, shared with the board), "+ Column" adds
+  one. Left to the board's own page: column colours, dates, WIP limits and the done lane, deleting a
+  column, filters, sorting, widgets and the calendar. The name bar switches
   the node to `NoteNode` (the board's Markdown, `%%` comments hidden), kept per canvas as `raw` in
   `.recto/canvas.json` beside the folds (`canvas-state.ts`). A task opened from a canvas
   (`CanvasView`'s `open`) is shown by `CanvasCardPanel.tsx`: the board's `CardPanel` on the right.

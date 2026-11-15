@@ -72,6 +72,8 @@ export function useBoardCards(path: string): {
   removeCard: (key: string) => Promise<boolean>
   /** Rename the card's note, which is its title. Resolves to the new path, or null. */
   renameCard: (path: string, name: string) => Promise<string | null>
+  /** A card that is a line of text: its text, changed where it is. */
+  setCardText: (key: string, text: string) => Promise<boolean>
 } {
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -453,6 +455,18 @@ export function useBoardCards(path: string): {
     [editBoard, place],
   )
 
+  /** A card that is a line of text, not a note: its text changed where it is. */
+  const setCardText = useCallback(
+    async (key: string, text: string): Promise<boolean> => {
+      const card = find(key)
+      const next = text.trim()
+      if (card === undefined || !card.light || next === '' || next === card.text) return false
+      return editBoard((t) => replaceItem(t, locate(card)(t), next))
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `find` and `locate` read refs
+    [editBoard],
+  )
+
   /**
    * Renaming a card renames its note; main rewrites every link to it, this
    * board's line among them, and the board reads that back.
@@ -492,6 +506,7 @@ export function useBoardCards(path: string): {
     makeNote,
     removeCard,
     renameCard,
+    setCardText,
   }
 }
 

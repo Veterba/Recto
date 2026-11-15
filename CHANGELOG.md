@@ -4,6 +4,12 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.62.0 — 2026-11-15
+### Added
+- A board on a canvas works like the board: every card in its lane (it scrolls), cards renamed in place with a double-click, the board's right-click menu on a card (open, rename, move to a lane, remove from the board, move its note to the archive), lanes renamed in place, "+ Column" to add one, and each card's checklist progress. Changes show at once in the board's tab and the card's note, and changes from the board or another app show on the canvas.
+### Changed
+- Arrows the AI adds to a canvas are straight, drawn the way the Arrow tool draws them, instead of curving from side to side.
+
 ## v0.61.2 — 2026-11-15
 ### Fixed
 - ChatGPT plan: when OpenAI refuses an account even with a fresh token, or cannot confirm its plan, Recto no longer calls the sign-in expired and sends you round to sign in again; it says the account's plan may not be open to other apps.

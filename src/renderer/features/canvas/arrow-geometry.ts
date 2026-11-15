@@ -1,5 +1,7 @@
 import { styleOf, type CanvasEdge, type CanvasNode, type CanvasSide } from '@shared/canvas'
 
+export { facingSides } from '@shared/canvas'
+
 /**
  * Arrows as tldraw draws them: each end is pinned to a point inside its node
  * (the centre, unless put elsewhere), the arrow runs from one point to the
@@ -67,13 +69,6 @@ export function anchorAt(r: Rect, p: Point): Anchor {
   return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }
 }
 
-/** The side of `from` that faces `to`, and of `to` that faces `from`, along the axis they are further apart on. */
-export function facingSides(from: Rect, to: Rect): { from: CanvasSide; to: CanvasSide } {
-  const dx = to.x + to.width / 2 - (from.x + from.width / 2)
-  const dy = to.y + to.height / 2 - (from.y + from.height / 2)
-  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? { from: 'right', to: 'left' } : { from: 'left', to: 'right' }
-  return dy >= 0 ? { from: 'bottom', to: 'top' } : { from: 'top', to: 'bottom' }
-}
 
 /** One end of an arrow: the point it is pinned to, and the node it is cut by (none for a free end or a side). */
 export type End = { at: Point; cut: Rect | null }

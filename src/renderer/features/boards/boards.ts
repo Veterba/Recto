@@ -1,4 +1,4 @@
-import { boardText, doneLane, parseKanban, rectoSettings, type KanbanBoard } from '@shared/kanban'
+import { boardText, doneLane, parseKanban, rectoSettings, setLaneHeading, updateRecto, type KanbanBoard } from '@shared/kanban'
 
 /**
  * A board, as the board view sees it: read from the board note itself, a
@@ -88,3 +88,33 @@ export const newBoardText = (): string =>
     { title: 'Doing', items: [] },
     { title: 'Done', complete: true, items: [] },
   ])
+
+/**
+ * A lane's colour and dates, by title, in the settings block: `look` merged in
+ * (an empty value drops its key), carried to `rename`, or dropped with the lane.
+ * The block is left alone when nothing in it changes.
+ */
+export function setLook(
+  text: string,
+  title: string,
+  change: { look?: Record<string, string | undefined>; rename?: string; drop?: boolean },
+): string {
+  const before = rectoSettings(parseKanban(text)).lanes ?? {}
+  const lanes = { ...before }
+  const current = lanes[title] ?? {}
+  delete lanes[title]
+  if (change.drop !== true) {
+    const merged: Record<string, string | undefined> = { ...current, ...change.look }
+    const clean = Object.fromEntries(
+      Object.entries(merged).filter((entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== ''),
+    )
+    if (Object.keys(clean).length > 0) lanes[change.rename ?? title] = clean
+  }
+  if (JSON.stringify(lanes) === JSON.stringify(before)) return text
+  return updateRecto(text, { lanes: Object.keys(lanes).length > 0 ? lanes : undefined })
+}
+
+/** A lane renamed in the board's text: its heading (its WIP limit kept) and its colour and dates, carried to the new name. */
+export function renameColumnIn(text: string, column: Pick<Column, 'index' | 'name' | 'wip'>, name: string): string {
+  return setLook(setLaneHeading(text, column.index, name, column.wip ?? null), column.name, { rename: name })
+}

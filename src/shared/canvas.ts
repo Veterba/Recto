@@ -12,6 +12,17 @@
  */
 
 export type CanvasSide = 'top' | 'right' | 'bottom' | 'left'
+
+/** The side of `from` that faces `to`, and of `to` that faces `from`, along the axis they are further apart on. */
+export function facingSides(from: Box, to: Box): { from: CanvasSide; to: CanvasSide } {
+  const dx = to.x + to.width / 2 - (from.x + from.width / 2)
+  const dy = to.y + to.height / 2 - (from.y + from.height / 2)
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? { from: 'right', to: 'left' } : { from: 'left', to: 'right' }
+  return dy >= 0 ? { from: 'bottom', to: 'top' } : { from: 'top', to: 'bottom' }
+}
+
+/** A node's box, as far as placing an arrow needs it. */
+type Box = { x: number; y: number; width: number; height: number }
 export type CanvasEnd = 'none' | 'arrow'
 export type CanvasNodeType = 'text' | 'file' | 'link' | 'group'
 

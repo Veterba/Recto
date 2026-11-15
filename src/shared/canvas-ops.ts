@@ -1,4 +1,4 @@
-import { newCanvasId, patchNode, type CanvasDoc, type CanvasEdge, type CanvasNode } from './canvas'
+import { facingSides, newCanvasId, patchNode, withStyle, type CanvasDoc, type CanvasEdge, type CanvasNode, type CanvasSide } from './canvas'
 
 /**
  * An AI's changes to a canvas, as small edits rather than a new file: so each
@@ -55,6 +55,10 @@ export function needs(ops: readonly CanvasOp[], index: number): number[] {
   })
 }
 
+/** A pin at a node's centre, as `fromAnchor`/`toAnchor` keep it (arrow-geometry.ts anchorText). */
+const CENTRE_PIN = '0.5,0.5'
+const sidesOf = (s: { from: CanvasSide; to: CanvasSide }): Pick<CanvasEdge, 'fromSide' | 'toSide'> => ({ fromSide: s.from, toSide: s.to })
+
 /**
  * One edit applied to the canvas as it is now: the new canvas, and the refs
  * it made real; null when it no longer fits (a node it names is gone).
@@ -76,7 +80,14 @@ export function applyOp(
       const from = idOf(doc, refs, op.from)
       const to = idOf(doc, refs, op.to)
       if (from === null || to === null) return null
-      const edge: CanvasEdge = { id: newCanvasId(doc), fromNode: from, toNode: to, ...(op.label === undefined ? {} : { label: op.label }) }
+      const a = doc.nodes.find((n) => n.id === from)!
+      const b = doc.nodes.find((n) => n.id === to)!
+      // As the Arrow tool draws one (canvas-arrows.ts connect): pinned at both centres, so it is straight - the
+      // sides kept for Obsidian, which draws it between them.
+      const edge = withStyle(
+        { id: newCanvasId(doc), fromNode: from, ...sidesOf(facingSides(a, b)), toNode: to, ...(op.label === undefined ? {} : { label: op.label }) } as CanvasEdge,
+        { fromAnchor: CENTRE_PIN, toAnchor: CENTRE_PIN },
+      )
       return { doc: { ...doc, edges: [...doc.edges, edge] }, refs: { ...refs } }
     }
     case 'add-group': {

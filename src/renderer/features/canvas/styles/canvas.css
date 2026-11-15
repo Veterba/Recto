@@ -1373,6 +1373,55 @@
   margin-top: 4px;
 }
 
+/* A name edited in place: a lane's in its head, a card's in its chip. */
+.canvas-board__name-input,
+.canvas-board__title-input {
+  all: unset;
+  box-sizing: border-box;
+  min-width: 0;
+  flex: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--canvas-chip);
+  box-shadow: 0 0 0 1px var(--accent);
+  font: inherit;
+  font-size: var(--font-size-12-5);
+}
+.canvas-board__title-input {
+  width: 100%;
+  padding: 3px 6px;
+}
+.canvas-board__name {
+  cursor: text;
+}
+/* A card's checklist: done of all, as the board's card footer counts it. */
+.canvas-board__progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* After the last lane: a quiet + that adds a column, named at once. */
+.canvas-board__add-column {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  align-self: start;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--text-primary) 18%, transparent);
+  color: var(--text-muted);
+  font-size: var(--font-size-12-5);
+  cursor: pointer;
+}
+.canvas-board__add-column:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
 /* A lane's +, and the task being named under its head. */
 .canvas-board__add {
   all: unset;

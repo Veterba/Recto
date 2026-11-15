@@ -34,6 +34,11 @@ describe('canvas edits', () => {
     expect(done.refs['g1']).toBe(added.id)
   })
 
+  it('an AI’s arrow is drawn as the Arrow tool draws one: pinned at both centres, straight, its sides kept for Obsidian', () => {
+    const done = acceptOps(doc(), proposal(), [1])
+    expect(done.doc.edges[0]).toMatchObject({ fromSide: 'right', toSide: 'left', styleAttributes: { fromAnchor: '0.5,0.5', toAnchor: '0.5,0.5' } })
+  })
+
   it('a group goes first in the file, under what it holds', () => {
     const done = acceptOps(doc(), proposal(), [2])
     expect(done.doc.nodes[0]).toMatchObject({ type: 'group', label: 'Garden' })

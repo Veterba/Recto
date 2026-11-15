@@ -5,7 +5,6 @@ import { IPC } from '@shared/ipc'
 import {
   addLane,
   parseKanban,
-  rectoSettings,
   removeLane,
   setLaneComplete,
   setLaneHeading,
@@ -17,7 +16,7 @@ import { noteIndexChanged } from '../../../app/note-bus'
 import { ContextMenu, useContextMenu, type MenuItem } from '../../../ui/ContextMenu'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
-import { newColumnName, type Board, type Column } from '../boards'
+import { newColumnName, setLook, type Board, type Column } from '../boards'
 import { fileIndex, filterCards, isSortKey, sortCards, SORTS, type CardView, type SortKey } from '../board-view'
 import { takeNewCardRequest, useNewCardRequest } from '../boards-store'
 import { useBoardCards, type Drop } from '../hooks/use-board-cards'
@@ -51,31 +50,6 @@ type Props = {
   onCardChange?: (key: string | null) => void
   /** The tab it is shown in, for ← and →. */
   leafId?: string | undefined
-}
-
-/**
- * A lane's colour and dates, by title, in the settings block: `look` merged in
- * (an empty value drops its key), carried to `rename`, or dropped with the lane.
- * The block is left alone when nothing in it changes.
- */
-function setLook(
-  text: string,
-  title: string,
-  change: { look?: Record<string, string | undefined>; rename?: string; drop?: boolean },
-): string {
-  const before = rectoSettings(parseKanban(text)).lanes ?? {}
-  const lanes = { ...before }
-  const current = lanes[title] ?? {}
-  delete lanes[title]
-  if (change.drop !== true) {
-    const merged: Record<string, string | undefined> = { ...current, ...change.look }
-    const clean = Object.fromEntries(
-      Object.entries(merged).filter((entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== ''),
-    )
-    if (Object.keys(clean).length > 0) lanes[change.rename ?? title] = clean
-  }
-  if (JSON.stringify(lanes) === JSON.stringify(before)) return text
-  return updateRecto(text, { lanes: Object.keys(lanes).length > 0 ? lanes : undefined })
 }
 
 export function BoardView({
