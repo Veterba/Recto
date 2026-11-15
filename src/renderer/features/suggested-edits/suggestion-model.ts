@@ -1,7 +1,7 @@
 import type { FileChange, Proposal } from '@shared/ai-access'
 import type { CanvasOp } from '@shared/canvas-ops'
-import { diffLines } from '@shared/line-diff'
-import { changesOf, fileStates, type ChangeState } from '@shared/text-changes'
+import { changedLines, diffLines } from '@shared/line-diff'
+import { applyChanges, changesOf, fileStates, type ChangeState } from '@shared/text-changes'
 
 /**
  * What a suggestion card shows, worked out apart from how it is drawn: its
@@ -197,4 +197,33 @@ export function outcomeOf(
   if (stale > 0 && stale === items.length)
     return { text: `Out of date: the ${on} changed there since, so nothing was written`, tone: 'stale' }
   return { text: 'Rejected', tone: 'rejected' }
+}
+
+/** The file a preview shows: the only one, or of several (a card and its board) the new note. */
+export function previewFile(p: Proposal): FileChange | null {
+  if (p.canvas !== undefined || p.file !== undefined || p.files.length === 0) return null
+  return p.files.find((f) => f.before === null) ?? p.files[0]!
+}
+
+/**
+ * A note as it would read once the suggestion's waiting changes are accepted - worked out as Accept will
+ * do it, from the note as it is now (`current`, null when it is not there): its text, the lines added or
+ * changed (0-based, to mark), how many lines go, and how many changes no longer fit.
+ */
+export function previewOf(p: Proposal, current: string | null): { text: string; marked: number[]; removed: number; stale: number } | null {
+  const f = previewFile(p)
+  if (f === null) return null
+  const states = fileStates(p.status, f)
+  const pending = states.flatMap((s, i) => (s === 'pending' ? [i] : []))
+  const done = applyChanges(current, changesOf(f.before, f.after), pending)
+  const text = done.text ?? current ?? ''
+  const before = (current ?? '').split('\n')
+  const after = text.split('\n')
+  return {
+    text,
+    // An empty line added marks nothing anyone would read.
+    marked: (current === null ? after.map((_, i) => i) : [...changedLines(before, after)]).filter((n) => after[n]!.trim() !== ''),
+    removed: current === null ? 0 : diffLines(before, after).filter((l) => l.kind === 'removed').length,
+    stale: [...done.states.values()].filter((s) => s === 'stale').length,
+  }
 }

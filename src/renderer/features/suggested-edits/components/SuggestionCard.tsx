@@ -4,7 +4,8 @@ import { IPC } from '@shared/ipc'
 import { api } from '../../../app/api'
 import { openFileFromAnywhere } from '../../../app/open-file'
 import { Icon } from '../../../ui/Icon'
-import { headingOf, itemsOf, outcomeOf, titleOf, type ChangeItem, type DiffRow } from '../suggestion-model'
+import { headingOf, itemsOf, outcomeOf, previewFile, titleOf, type ChangeItem, type DiffRow } from '../suggestion-model'
+import { SuggestionPreview } from './SuggestionPreview'
 
 /**
  * One suggestion, the same wherever it is read - under the chat's answer
@@ -78,6 +79,7 @@ export function SuggestionCard({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [all, setAll] = useState(!inChat)
+  const [previewing, setPreviewing] = useState(false)
   const heading = headingOf(proposal)
   const items = itemsOf(proposal)
   const pending = items.filter((i) => i.state === 'pending')
@@ -214,6 +216,18 @@ export function SuggestionCard({
           </>
         ) : (
           <>
+            {/* Seen whole before it is taken: a note as it will read, or the canvas with its ghosts. */}
+            {previewFile(proposal) !== null ? (
+              <button className="btn btn--ghost btn--sm" onClick={() => setPreviewing(true)}>
+                <Icon name="eye" size={13} /> Preview
+              </button>
+            ) : (
+              proposal.canvas !== undefined && (
+                <button className="btn btn--ghost btn--sm" onClick={() => open(proposal.canvas!.path)}>
+                  <Icon name="eye" size={13} /> Preview on the canvas
+                </button>
+              )
+            )}
             <span className="suggestion__spacer" />
             <button className="btn btn--ghost btn--sm" disabled={busy} onClick={() => settle(IPC.aiProposalDiscard)}>
               {pending.length > 1 ? 'Reject all' : 'Reject'}
@@ -224,6 +238,14 @@ export function SuggestionCard({
           </>
         )}
       </footer>
+      {previewing && (
+        <SuggestionPreview
+          proposal={proposal}
+          onAccept={() => settle(IPC.aiProposalApply)}
+          onReject={() => settle(IPC.aiProposalDiscard)}
+          onClose={() => setPreviewing(false)}
+        />
+      )}
     </article>
   )
 }

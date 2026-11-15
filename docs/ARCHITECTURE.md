@@ -398,6 +398,10 @@ main: vault-tools/socket.ts  (first line must carry the token)
   edit in words - with ✓/✕ when there is more than one; Accept all / Reject all; then each change's
   and the whole's outcome ("Partly applied: 2 of 3", "Out of date: …"). `use-proposals.ts` is one store
   for the window (one subscription to main), read by the cards, the panel and a canvas's ghosts.
+  Preview (`SuggestionPreview.tsx`) shows a note as it will read once its waiting changes are accepted -
+  worked out from the note as it is now, as Accept will (`previewOf`, `applyChanges`) - in the note
+  window's read-only editor, the added and changed lines marked (`editor/marked-lines.ts`), with Accept all
+  and Reject all; a card and its board preview the card's note; a canvas's Preview opens the canvas.
   Recto's chats (the panel and Quick ask) show each answer's suggestions under it, by the ids in its record; the
   status bar's count opens a glass panel of everything waiting (Settings' panel classes), where a
   suggestion settled stays with its outcome until the panel closes. AI edits keep a note's line

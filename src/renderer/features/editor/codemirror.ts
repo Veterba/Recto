@@ -9,6 +9,7 @@ import { Compartment, EditorState, type Extension } from '@codemirror/state'
 import { EditorView, drawSelection, dropCursor, highlightActiveLine, keymap, rectangularSelection, type KeyBinding } from '@codemirror/view'
 import { vim } from '@replit/codemirror-vim'
 import { activeFormats } from './active-formats'
+import { markedLines } from './marked-lines'
 import { blockDecorations } from './blocks'
 import { imageDrop } from './images'
 import { noSetextHeadings, obsidianSyntax } from './obsidian-syntax'
@@ -67,6 +68,8 @@ type EditorOptions = {
   onFocus?: () => void
   /** Where the note's properties are drawn, in place of its frontmatter (block-hiding.ts). */
   propertiesSlot?: HTMLElement
+  /** Lines (0-based) shown as marked: a suggestion's preview (marked-lines.ts). */
+  markedLines?: readonly number[]
 }
 
 const editable = new Compartment()
@@ -292,6 +295,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         linkHover,
         EditorView.lineWrapping,
         editable.of(EditorView.editable.of(options.readOnly !== true)),
+        options.markedLines === undefined ? [] : markedLines(options.markedLines),
         // Before the default keymap, or Vim's bindings lose every collision.
         vimMode.of(options.vim === true ? vimExtension() : []),
         // App shortcuts are registered in the command registry and handled by

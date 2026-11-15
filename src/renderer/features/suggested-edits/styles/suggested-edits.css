@@ -239,3 +239,64 @@
 .suggestion__settled--stale {
   color: var(--warning, var(--danger));
 }
+
+/* ---------- a suggestion's preview ---------- */
+
+/* Over the app, as a dialog: a light scrim, the note in a large glass panel. */
+.suggestion-preview__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: var(--size-6);
+  background: color-mix(in srgb, var(--bg-primary) 35%, transparent);
+}
+.suggestion-preview {
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 100%);
+  height: min(80vh, 900px);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+}
+.suggestion-preview__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: var(--size-3) var(--size-4);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.suggestion-preview__title {
+  margin: 0;
+  font-size: var(--font-size-14);
+  font-weight: 400;
+  color: var(--text-primary);
+}
+.suggestion-preview__notes {
+  flex: 1;
+  color: var(--text-muted);
+  font-size: var(--font-size-12-5);
+}
+.suggestion-preview__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--size-2) var(--size-6);
+  background: var(--bg-primary);
+}
+.suggestion-preview__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  padding: var(--size-2) var(--size-4);
+  border-top: 1px solid var(--border);
+}
+
+/* What the suggestion adds or changes, in the note as it would read. */
+.cm-suggested-line {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--success);
+}

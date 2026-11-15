@@ -39,6 +39,7 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
     const basil = read('Garden/Basil.md')
     const soil = read('Garden/Soil.md')
     const tomatoes = read('Garden/Tomatoes.md')
+    const reading = read('Reading list.md')
     // A canvas the chat suggested two edits to: a card, and an arrow to it.
     const canvas = JSON.stringify({ nodes: [{ id: 'aaaaaaaaaaaaaaaa', type: 'text', text: 'Soil', x: 0, y: 0, width: 220, height: 90 }], edges: [] })
     fs.mkdirSync(path.join(vault, 'Recto/Canvas'), { recursive: true })
@@ -84,6 +85,7 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
               refs: {},
             },
           },
+          proposal('p-reading', 'cursor', 'propose_append', 'Append to Reading list', 'Reading list.md', reading, `${reading}\n- The Well-Tempered Garden\n`, 50_000),
           proposal('p-water', 'claude-code', 'propose_new_note', 'New note Watering', 'Garden/Watering.md', null, '# Watering\n\nAt the root.\n', 60_000),
           proposal('p-soil', 'codex', 'propose_append', 'Append to Soil', 'Garden/Soil.md', soil, `${soil}\nMix in grit.\n`, 30_000),
         ],
@@ -122,7 +124,7 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
 
   it('a chat answer shows its suggestions under it; a note’s changes are accepted or rejected one by one, and the card says what became of each', async () => {
     // The status bar counts only the two from outside: the chat's own wait in its chat.
-    await expect.poll(() => page.locator('.edits__badge').textContent()).toBe('2')
+    await expect.poll(() => page.locator('.edits__badge').textContent()).toBe('3')
     await page.keyboard.press('Meta+Shift+C')
     const card = cardTitled('Basil')
     await card.waitFor({ timeout: 15_000 })
@@ -199,6 +201,25 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
     await expect.poll(() => fs.existsSync(path.join(vault, 'Ideas.md'))).toBe(true)
     expect(read('Ideas.md')).toBe(ideas)
     await page.keyboard.press('Meta+Shift+C')
+  })
+
+  it('Preview shows the note as it will read, the suggestion’s lines marked; Accept all there writes it', async () => {
+    await page.locator('.edits__badge').click()
+    const panel = page.getByRole('dialog', { name: 'Suggested edits' })
+    const card = panel.locator('.suggestion').filter({ has: page.locator('.suggestion__title', { hasText: 'Reading list' }) })
+    await card.getByRole('button', { name: 'Preview' }).click()
+    const preview = page.getByRole('dialog', { name: 'Preview of the suggestion' })
+    await preview.waitFor()
+    await expect.poll(() => preview.locator('.cm-suggested-line').allTextContents()).toEqual([expect.stringContaining('The Well-Tempered Garden')])
+    expect(await preview.locator('.suggestion-preview__notes').textContent()).toMatch(/1 line added or changed/)
+    // Seen, not written.
+    expect(read('Reading list.md')).not.toContain('Well-Tempered')
+    await preview.getByRole('button', { name: 'Accept all' }).click()
+    await expect.poll(() => read('Reading list.md')).toContain('- The Well-Tempered Garden')
+    await preview.waitFor({ state: 'detached' })
+    // The panel stayed open under it; the card says what became of it.
+    await card.locator('.suggestion__settled', { hasText: 'Applied' }).waitFor()
+    await page.keyboard.press('Escape')
   })
 
   it('the count opens a glass panel, not a dialog over a backdrop; Accept all writes every waiting edit and each says so', async () => {

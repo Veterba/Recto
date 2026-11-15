@@ -32,6 +32,8 @@ type EditorProps = {
   onReady?: (handle: EditorHandle) => void
   /** Where the note's properties are drawn, in place of its frontmatter. Read once, at mount. */
   propertiesSlot?: HTMLElement
+  /** Lines (0-based) shown as marked, for a suggestion's preview. Read once, at mount. */
+  markedLines?: readonly number[]
 }
 
 export function Editor({
@@ -51,6 +53,7 @@ export function Editor({
   onFocus,
   onReady,
   propertiesSlot,
+  markedLines,
 }: EditorProps): React.ReactElement {
   const host = useRef<HTMLDivElement | null>(null)
   const handle = useRef<EditorHandle | null>(null)
@@ -105,6 +108,7 @@ export function Editor({
       onAuthorsChange: () => callbacks.current.onAuthorsChange?.(),
       onFocus: () => callbacks.current.onFocus?.(),
       ...(propertiesSlot === undefined ? {} : { propertiesSlot }),
+      ...(markedLines === undefined ? {} : { markedLines }),
     })
     handle.current = editor
     callbacks.current.onReady?.(editor)
