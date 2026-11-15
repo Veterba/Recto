@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GhostLayer } from './GhostLayer'
+import { SuggestionBar } from './SuggestionBar'
 import { DrawingEditor } from './DrawingEditor'
 import { setCanvasSelection } from '../../../app/canvas-selection'
 import {
@@ -289,7 +289,7 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
 
   const run = useCallback((change: CanvasChange) => void edit(change), [edit])
 
-  // An AI's suggested changes to this canvas, as ghosts until accepted.
+  // An AI's suggested changes to this canvas: an outside app's said in a bar (SuggestionBar).
   const proposals = useCanvasProposals(path)
 
   const stopEditing = useCallback(() => {
@@ -1386,7 +1386,7 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
           opening={picking}
           setOpening={setPicking}
         />
-        {doc !== null && <GhostLayer proposals={proposals} doc={doc} transform={transform} />}
+        <SuggestionBar proposals={proposals} />
         {editingDrawing !== null && (
           <DrawingEditor
             key={editingDrawing.id}

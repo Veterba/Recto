@@ -41,7 +41,7 @@ export type MenuCommands = {
   folded?: ReadonlySet<string>
   /** "Make it a link" on an edge between two notes. */
   makeLink?: (id: string) => void
-  /** An AI command on what is selected: asked through Quick ask, its changes shown as ghosts. */
+  /** An AI command on what is selected: asked through Quick ask, its changes suggested there. */
   ask?: (command: CanvasAsk) => void
   /** A group made a board, its cards and notes as the board's cards. */
   toBoard?: (groupId: string) => void
@@ -85,7 +85,7 @@ export function nodeMenu(doc: CanvasDoc, ids: ReadonlySet<string>, run: MenuComm
       run: () => run.toggleFold!(one.id),
     })
   }
-  // AI on the canvas: what it suggests comes back as ghosts to accept or reject.
+  // AI on the canvas: what it suggests comes back as suggestions to preview, accept or reject.
   const ai: MenuItem[] = []
   if (run.ask !== undefined) {
     const ask = run.ask

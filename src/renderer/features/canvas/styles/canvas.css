@@ -1577,22 +1577,11 @@
   white-space: nowrap;
 }
 
-/* ---------- an AI's suggested changes, as ghosts (GhostLayer) ---------- */
+/* ---------- an outside app's suggestions for this canvas (SuggestionBar) ---------- */
 
-.canvas-ghosts {
+.canvas-suggestions {
   position: absolute;
-  inset: 0;
   z-index: 7;
-  pointer-events: none;
-}
-.canvas-ghosts__where {
-  color: var(--text-muted);
-  font-size: var(--font-size-12-5);
-}
-.canvas-ghosts__bar {
-  position: absolute;
-  /* Over every ghost, however big a group's frame. */
-  z-index: 2;
   top: var(--size-3);
   left: 50%;
   transform: translateX(-50%);
@@ -1604,74 +1593,4 @@
   font-size: var(--font-size-13);
   color: var(--text-primary);
   white-space: nowrap;
-  pointer-events: auto;
-}
-.canvas-ghosts__lines {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-.canvas-ghost__line {
-  stroke: var(--accent);
-  stroke-width: 2;
-  stroke-dasharray: 6 5;
-  opacity: 0.8;
-}
-.canvas-ghost__line.is-move {
-  stroke-dasharray: 2 4;
-}
-.canvas-ghost {
-  position: absolute;
-  box-sizing: border-box;
-  border: 1.5px dashed var(--accent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--accent) 7%, var(--bg-primary));
-  overflow: hidden;
-  /* Only a preview: the canvas under it stays yours to click and drag. */
-  pointer-events: none;
-}
-.canvas-ghost.is-group {
-  background: color-mix(in srgb, var(--accent) 4%, transparent);
-  overflow: visible;
-  /* A frame: what is inside it stays clickable. */
-  pointer-events: none;
-}
-.canvas-ghost.is-move {
-  background: transparent;
-  border-style: dotted;
-}
-.canvas-ghost__text {
-  display: block;
-  padding: 10px 12px;
-  font-size: var(--font-size-13);
-  line-height: 1.45;
-  color: color-mix(in srgb, var(--text-primary) 75%, transparent);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.canvas-ghost__label {
-  position: absolute;
-  top: -24px;
-  left: 0;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: var(--font-size-12);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-primary));
-}
-.canvas-ghost__edge {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.canvas-ghost__edge-label {
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: var(--font-size-12);
-  color: var(--accent);
-  background: var(--bg-primary);
 }

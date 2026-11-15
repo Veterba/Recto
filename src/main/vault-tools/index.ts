@@ -6,7 +6,7 @@ import { AI_ACCESS_STATE, coerceAiAccess, type ActivityEntry } from '../../share
 import { readState } from '../state'
 import { currentVault } from '../vault'
 import { logCall, summariseArgs } from './activity'
-import { applyNow, proposal, queue } from './proposals'
+import { applyNow, discard, proposal, queue } from './proposals'
 import * as read from './read'
 import { vaultProfile } from './profile'
 import { buildScope, ToolError, type Scope } from './scope'
@@ -52,6 +52,15 @@ const READERS: Record<string, Run> = {
     if (found === null || hidden) throw new ToolError(`No proposal “${String(a['id'])}”. Settled proposals are kept for a while, then forgotten.`)
     return [{ kind: 'data', data: { id: found.id, status: found.status, summary: found.summary } }]
   },
+  withdraw_proposal: (scope, a) => {
+    const id = String(a['id'])
+    const found = proposal(id)
+    // Only its own, and only one still waiting: what the person accepted or another app suggested is not the AI's to take back.
+    if (found === null || found.client !== scope.client) throw new ToolError(`No suggestion “${id}” of yours.`)
+    if (found.status !== 'pending') throw new ToolError(`“${id}” is ${found.status}, no longer waiting: it cannot be taken back.`)
+    discard(id)
+    return [{ kind: 'data', data: { id, status: 'withdrawn' } }]
+  },
 }
 
 const WRITERS: Record<string, (scope: Scope, args: Args) => write.Draft | Promise<write.Draft>> = {
@@ -60,6 +69,8 @@ const WRITERS: Record<string, (scope: Scope, args: Args) => write.Draft | Promis
   canvas_propose_edges: canvas.proposeCanvasEdges,
   canvas_propose_group: canvas.proposeCanvasGroup,
   canvas_propose_layout: canvas.proposeCanvasLayout,
+  canvas_propose_arrange: canvas.proposeCanvasArrange,
+  canvas_propose_remove: canvas.proposeCanvasRemove,
   canvas_propose_new: canvas.proposeCanvasNew,
   propose_edit: write.proposeEdit,
   propose_append: write.proposeAppend,
@@ -105,21 +116,19 @@ async function runWrite(
     }
   }
   const made = queue(draft, scope.client, tool)
-  return {
-    outcome: 'proposed',
-    blocks: [
-      {
-        kind: 'data',
-        data: {
-          outcome: 'proposed',
-          proposal_id: made.id,
-          ...base,
-          hint: 'The person reviews this in Recto (Suggested edits). get_proposal says whether it was applied.',
-        },
-      },
-      { kind: 'note', path: base.paths[0]!, part: 'diff', text: diff },
-    ],
+  const head: ResultBlock = {
+    kind: 'data',
+    data: {
+      outcome: 'proposed',
+      proposal_id: made.id,
+      ...base,
+      hint: `The person reviews this in Recto. Its id is ${made.id}: get_proposal says whether it was applied, withdraw_proposal takes it back while it waits.`,
+    },
   }
+  // A canvas's suggestion is shown as the canvas it makes, not as a diff of its JSON.
+  const onCanvas = draft.files.length === 1 && draft.files[0]!.path.toLowerCase().endsWith('.canvas')
+  const seen = onCanvas ? await canvas.suggestionPicture(scope, made.id, draft.files[0]!) : []
+  return { outcome: 'proposed', blocks: [head, ...(seen.length > 0 ? seen : [{ kind: 'note' as const, path: base.paths[0]!, part: 'diff', text: diff }])] }
 }
 
 /**

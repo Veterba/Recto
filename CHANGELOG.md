@@ -4,6 +4,18 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.66.0 — 2026-11-15
+### Added
+- AI sees a canvas as a picture: reading one gives it a drawing of the canvas - every card where it is, with its first lines, groups and labelled arrows - as well as each node's place and size, so it can tell crowded, overlapping or tangled from tidy. It can also look at its own canvas suggestion as it would be before you do, and tidy it. Notes AI may not see are blank boxes in the picture. Local models that cannot see pictures get the places and sizes.
+- AI sees its own canvas suggestions: each answers with a picture of the canvas as it will be once accepted, what it adds or moves dashed green, and the AI can take back its suggestion and suggest a better one.
+- AI can put a whole canvas in order: as a mind map from the card everything hangs off - branches left and right, each level a column, arrows straight from side to side so none crosses a card - or in columns by topic, each optionally framed. Frames move with everything in them.
+- AI can suggest removing cards, frames and arrows from a canvas (a note's card only - the note stays), and moving a card into a frame, which grows to fit.
+### Changed
+- AI suggestions are no longer drawn on the canvas itself: the canvas stays as it is until you accept, and Preview shows it as it would be. A chat's or Quick ask's suggestions show only there, once the answer is written; an outside app's are said in a small bar over the canvas.
+### Fixed
+- AI moves on a canvas left cards where they were: a suggested move now puts the card beside the one asked for, and moving a frame takes everything in it along.
+- OpenAI models are told which tool a picture came from (it always said read_file).
+
 ## v0.65.0 — 2026-11-15
 ### Added
 - Preview on every AI suggestion: the screen as it will look once accepted, in the view Recto draws it in - a note rendered with its added and changed lines marked, a canvas as the canvas, a new card on its board - what is new outlined and brought into sight, with Accept all and Reject all right there. Nothing is written until accepted.

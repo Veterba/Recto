@@ -111,14 +111,16 @@ function nodeNames(p: Proposal): Map<string, string> {
               ? n.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]!
               : 'a card'),
     )
-  // The canvas with every edit made (`files`): the names of the nodes there now.
-  try {
-    const doc = JSON.parse(p.files[0]?.after ?? '{}') as {
-      nodes?: { id: string; text?: string; file?: string; url?: string; label?: string }[]
+  // The canvas before and with every edit made (`files`): the names of the nodes there - a removed one's too.
+  for (const text of [p.files[0]?.before, p.files[0]?.after]) {
+    try {
+      const doc = JSON.parse(text ?? '{}') as {
+        nodes?: { id: string; text?: string; file?: string; url?: string; label?: string }[]
+      }
+      for (const n of doc.nodes ?? []) names.set(n.id, name(n))
+    } catch {
+      // Not readable: the edits name their own nodes.
     }
-    for (const n of doc.nodes ?? []) names.set(n.id, name(n))
-  } catch {
-    // Not readable: the edits name their own nodes.
   }
   for (const op of p.canvas?.ops ?? []) {
     if (op.op === 'add-node') names.set(op.node.ref, name(op.node))
@@ -139,6 +141,8 @@ function canvasLabel(op: CanvasOp, names: ReadonlyMap<string, string>): { label:
   if (op.op === 'add-edge')
     return { label: `Arrow ${named(op.from)} → ${named(op.to)}${op.label === undefined ? '' : `, “${op.label}”`}`, icon: 'arrow-right' }
   if (op.op === 'add-group') return { label: `Group ${named(op.ref)}`, icon: 'frame' }
+  if (op.op === 'remove-node') return { label: `Remove ${named(op.id)}`, icon: 'trash' }
+  if (op.op === 'remove-edge') return { label: `Remove arrow ${named(op.from)} → ${named(op.to)}`, icon: 'trash' }
   return { label: `Move ${named(op.id)}`, icon: 'move' }
 }
 
@@ -196,7 +200,7 @@ export function briefOf(p: Proposal): string {
       const n = p.canvas!.ops.filter((o) => o.op === kind).length
       return n === 0 ? [] : [plural(n, one)]
     }
-    return [...count('add-node', 'card'), ...count('add-edge', 'arrow'), ...count('add-group', 'group'), ...count('move', 'move')].join(
+    return [...count('add-node', 'card'), ...count('add-edge', 'arrow'), ...count('add-group', 'group'), ...count('move', 'move'), ...count('remove-node', 'removal'), ...count('remove-edge', 'removed arrow')].join(
       ', ',
     )
   }
@@ -289,6 +293,8 @@ export function previewOf(p: Proposal, current: string | null): Preview | null {
       ...(count('add-edge') > 0 ? [`${plural(count('add-edge'), 'arrow')} added`] : []),
       ...(count('add-group') > 0 ? [`${plural(count('add-group'), 'group')} added`] : []),
       ...(count('move') > 0 ? [`${plural(count('move'), 'card')} moved`] : []),
+      ...(count('remove-node') > 0 ? [`${plural(count('remove-node'), 'card')} removed`] : []),
+      ...(count('remove-edge') > 0 ? [`${plural(count('remove-edge'), 'arrow')} removed`] : []),
       ...(stale > 0
         ? [`${plural(stale, 'edit')} no longer ${stale === 1 ? 'fits' : 'fit'} and ${stale === 1 ? 'is' : 'are'} left out`]
         : []),

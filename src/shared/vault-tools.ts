@@ -181,8 +181,11 @@ export const VAULT_TOOLS: readonly ToolDef[] = [
   tool(
     'canvas_read',
     'Read a canvas',
-    'A canvas’s nodes - cards (text), notes, files, web links, groups and what they hold - and the arrows between them. Each node has a short id (n1, n2…) for the canvas_propose tools; read again after the canvas changes.',
-    z.object({ canvas: z.string().min(1).describe('Its path, or its name.') }),
+    'A canvas’s nodes - cards (text), notes, files, web links, groups and what they hold, each with its place and size - the arrows between them, and a picture of it to look at. Each node has a short id (n1, n2…) for the canvas_propose tools; read again after the canvas changes. With with_proposal (a suggestion’s id), the canvas as it would be with that suggestion made, its nodes drawn dashed green: look before the person does, and propose moves to tidy it.',
+    z.object({
+      canvas: z.string().min(1).describe('Its path, or its name.'),
+      with_proposal: z.string().optional().describe('A waiting suggestion for this canvas, to see it made.'),
+    }),
   ),
   tool(
     'canvas_propose_nodes',
@@ -225,8 +228,33 @@ export const VAULT_TOOLS: readonly ToolDef[] = [
   tool(
     'canvas_propose_layout',
     'Propose moves on a canvas',
-    'Move nodes beside other nodes (node, near): Recto finds a clear place.',
-    z.object({ canvas: z.string().min(1), moves: z.array(z.object({ node: z.string(), near: z.string() })).min(1).max(40) }),
+    'Move nodes: beside another node (near) - Recto finds a clear place - or into a frame (into: the group’s id), under what it holds, the frame grown to fit. Near a card in a frame is into that frame. A frame moves with all it holds. To put a whole canvas in order, canvas_propose_arrange.',
+    z.object({
+      canvas: z.string().min(1),
+      moves: z.array(z.object({ node: z.string(), near: z.string().optional(), into: z.string().optional() })).min(1).max(40),
+    }),
+    true,
+  ),
+  tool(
+    'canvas_propose_arrange',
+    'Propose arranging a canvas',
+    'Put a whole canvas in order - for a messy or tangled one. Either root (a node): a mind map along the arrows, half its branches right, half left, each level a column. Or columns: lists of nodes, each top to bottom, with an optional label that frames it as a group. Recto works out every place; nodes not in it go in rows below. A frame (group) moves as one with all it holds: name it, or a card in it.',
+    z.object({
+      canvas: z.string().min(1),
+      root: z.string().optional(),
+      columns: z.array(z.object({ label: z.string().optional(), nodes: z.array(z.string()).min(1) })).min(1).max(12).optional(),
+    }),
+    true,
+  ),
+  tool(
+    'canvas_propose_remove',
+    'Propose removing from a canvas',
+    'Take cards, frames (groups) or arrows off a canvas. A card goes with its arrows; a frame goes without what it holds; a note’s card goes, the note stays. Arrows are named by the nodes they join.',
+    z.object({
+      canvas: z.string().min(1),
+      nodes: z.array(z.string()).max(40).optional(),
+      edges: z.array(z.object({ from: z.string(), to: z.string() })).max(40).optional(),
+    }),
     true,
   ),
   tool(
@@ -283,6 +311,12 @@ export const VAULT_TOOLS: readonly ToolDef[] = [
     'get_proposal',
     'Proposal status',
     'Whether a proposal is still pending, was applied, discarded, or went stale.',
+    z.object({ id: z.string() }),
+  ),
+  tool(
+    'withdraw_proposal',
+    'Withdraw a proposal',
+    'Take back a suggestion of yours the person has not decided on yet - to suggest a better one instead. Changes no file.',
     z.object({ id: z.string() }),
   ),
 ]

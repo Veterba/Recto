@@ -124,4 +124,45 @@ describe('suggesting a rename, a move, an archive', () => {
     expect((await propose('propose_rename', { note: 'Basil', name: 'Herbs/Basil' })).error).toMatch(/propose_move/)
     expect((await propose('propose_rename', { note: 'Diary', name: 'Journal' })).error).toMatch(/No note/)
   })
+
+  it('withdrawn by the app that suggested it, while it waits - not another app’s, not one decided', async () => {
+    const { id } = await propose('propose_rename', { note: 'Basil', name: 'Sweet basil' })
+    const withdraw = (client: string) => callTool('withdraw_proposal', { id }, client)
+    expect(await withdraw('codex')).toMatchObject({ ok: false })
+    expect(proposals.proposal(id!)?.status).toBe('pending')
+    expect(await withdraw('claude-code')).toMatchObject({ ok: true })
+    expect(proposals.proposal(id!)?.status).toBe('discarded')
+    expect(there('Garden/Basil.md')).toBe(true)
+    expect(await withdraw('claude-code')).toMatchObject({ ok: false, error: expect.stringMatching(/no longer waiting/) })
+  })
+
+  it('a canvas suggestion answers with the canvas as it will be: its id, each new or moved card’s place, what goes', async () => {
+    put(
+      'Recto/Canvas/Beds.canvas',
+      JSON.stringify({
+        nodes: [
+          { id: 'aaaaaaaaaaaaaaaa', type: 'text', text: 'Soil', x: 0, y: 0, width: 200, height: 100 },
+          { id: 'bbbbbbbbbbbbbbbb', type: 'text', text: 'Old', x: 0, y: 300, width: 200, height: 100 },
+        ],
+        edges: [],
+      }),
+    )
+    const out = await callTool('canvas_propose_nodes', { canvas: 'Beds', nodes: [{ text: 'Compost', near: 'n1' }] }, 'claude-code')
+    expect(out.ok).toBe(true)
+    const blocks = out.ok ? out.blocks : []
+    const head = (blocks[0] as { data: { proposal_id: string; hint: string } }).data
+    expect(head.hint).toContain(head.proposal_id)
+    const seen = (blocks[1] as { data: { as_it_will_be: { new_or_moved: { id: string; new: boolean; x: number; y: number; width: number; height: number }[] }; check: string } }).data
+    const [compost] = seen.as_it_will_be.new_or_moved
+    expect(seen.as_it_will_be.new_or_moved).toHaveLength(1)
+    expect(compost).toMatchObject({ id: 'n3', new: true })
+    // Where Recto put it: clear of Soil.
+    const clear = compost!.x + compost!.width <= 0 || compost!.x >= 200 || compost!.y + compost!.height <= 0 || compost!.y >= 100
+    expect(clear).toBe(true)
+    expect(seen.check).toContain(head.proposal_id)
+
+    const removed = await callTool('canvas_propose_remove', { canvas: 'Beds', nodes: ['n2'] }, 'claude-code')
+    expect(removed.ok && (removed.blocks[1] as { data: { as_it_will_be: { removed: string[] } } }).data.as_it_will_be.removed).toEqual(['n2'])
+  })
 })
+

@@ -343,11 +343,23 @@ main: vault-tools/socket.ts  (first line must carry the token)
   `input_image` message for OpenAI's Responses - and `src/mcp/index.ts` as MCP `image` content; Ollama
   and the local bots get the text only.
 - **Canvas tools** (`vault-tools/canvas-tools.ts`): `canvas_list`, `canvas_read` (nodes by short ids
-  `n1`… in file order, a note AI may not see only as a place) and five `canvas_propose_*`. A change to a
+  `n1`… in file order with their places and sizes, a note AI may not see only as a place; and a picture of
+  the canvas - `shared/canvas-picture.ts` draws it as SVG, each node with its id and first lines, frames
+  and labelled arrows, a hidden note an empty box; `main/canvas-picture.ts` makes it a PNG in a hidden
+  offscreen window with no scripts, one at a time - sent as an image block, so a model sees overlaps and
+  gaps; `with_proposal` shows the canvas with a waiting suggestion made, its nodes dashed green) and seven `canvas_propose_*`.
+  Every canvas suggestion answers with the same picture of the canvas as it will be, what it adds or moves
+  dashed green, instead of a diff of the JSON; `withdraw_proposal` lets the AI take back its own waiting
+  suggestion and suggest a better one. A change to a
   canvas is a list of edits (`shared/canvas-ops.ts`: add node with a `ref` other edits may name, add
   edge - written as the Arrow tool writes one, pinned at both centres so it is straight, its facing
-  sides kept for Obsidian - add group, move), placed by `shared/canvas-layout.ts` (beside, around, packed rows, group frames;
-  never over what is there). The proposal carries `canvas: { path, ops, states, refs }`; `files` holds
+  sides kept for Obsidian - add group, move - a frame's may grow it, and a move may pin the arrow into
+  the node to side middles - remove node, with its arrows, and remove edge), placed by
+  `shared/canvas-layout.ts` (beside, around, packed rows, group frames, a mind map, columns; never over
+  what is there). A frame moves as one with all it holds: `canvas_propose_layout` takes it along, puts a
+  card `into` a frame (growing it), and `canvas_propose_arrange` places frames and lone cards as units -
+  a mind map from a root along the arrows (each level a column on the side toward the root, so arrows
+  pinned side to facing side pass no card) or columns the model names, what is left in rows below. The proposal carries `canvas: { path, ops, states, refs }`; `files` holds
   the canvas with every edit, for the list. Accepting edits - some or all, from the card in the chat,
   Quick ask or Suggested edits - and Write directly apply them in main onto the canvas as it is
   (`acceptOps`; an edit whose node is gone is stale, a canvas gone makes them all stale); rejecting one
@@ -397,7 +409,7 @@ main: vault-tools/socket.ts  (first line must carry the token)
   which note or canvas), who and when; each change - its lines in the note's own font, or a canvas
   edit in words - with ✓/✕ when there is more than one; Accept all / Reject all; then each change's
   and the whole's outcome ("Partly applied: 2 of 3", "Out of date: …"). `use-proposals.ts` is one store
-  for the window (one subscription to main), read by the cards, the panel and a canvas's ghosts.
+  for the window (one subscription to main), read by the cards, the panel and a canvas's suggestion bar.
   Preview (`SuggestionPreview.tsx`) shows the screen as it will look once the waiting changes are
   accepted, worked out from the file as it is now as Accept will (`previewOf`: `applyChanges`, or
   `acceptOps` for a canvas), in the view Recto draws it in: a note in the note window's read-only editor,
@@ -724,12 +736,11 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
   with the card machinery (`createCardNote`, the same name rules, free only in its folder) and then
   changes the node in place to `type: "file"`. A name a note already has offers "Use that note" (the
   existing file is put on the canvas and stays where it is) or "Create a new “X” here".
-- **Ghosts** (`components/GhostLayer.tsx`). The open canvas's pending canvas proposals drawn in place
-  over it - frames, then arrows (clipped to the cards' edges), then cards - as a preview only: they take
-  no clicks, and the bar says who suggested them and where to review them (the chat, Quick ask, or
-  Suggested edits for an app outside Recto). Main writes what is accepted there, and the canvas reads it
-  like any change to its file, so an accepted edit is not in the canvas's undo; the ghosts follow the
-  proposals' store.
+- **Suggestion bar** (`components/SuggestionBar.tsx`). Nothing an AI suggests is drawn on the open
+  canvas: the canvas as it would be is in the suggestion's Preview. An outside app's pending suggestions
+  for it are said in a bar over it (who, how many changes, Review opens Suggested edits); a chat's or
+  Quick ask's have no bar - they show there once the answer is. Main writes what is accepted, and the
+  canvas reads it like any change to its file, so an accepted edit is not in the canvas's undo.
 - **Canvas commands** (`canvas-menus.ts`, `CanvasView.tsx`). Group these, Brainstorm around this, Map
   this note and Arrange as moodboard are questions for Quick ask (`app/quick-ask-request.ts`) naming the
   selection by short ids; Quick ask on a canvas has the read and propose canvas tools, the canvas

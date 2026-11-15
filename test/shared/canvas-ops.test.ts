@@ -40,6 +40,28 @@ describe('canvas edits', () => {
     expect(done.doc.edges[0]).toMatchObject({ fromSide: 'right', toSide: 'left', styleAttributes: { fromAnchor: '0.5,0.5', toAnchor: '0.5,0.5' } })
   })
 
+  it('a move can pin the arrow into the node to facing sides: straight, any bend gone', () => {
+    const before: CanvasDoc = {
+      ...doc(),
+      nodes: [...doc().nodes, { id: 'b', type: 'text', text: 'Water', x: 0, y: 300, width: 200, height: 100 }],
+      edges: [{ id: 'e', fromNode: 'b', fromSide: 'top', toNode: 'a', toSide: 'bottom', styleAttributes: { bend: '40' } }],
+    }
+    const p: CanvasProposal = {
+      path: 'P.canvas',
+      ops: [{ op: 'move', id: 'b', x: 400, y: 0, sides: [{ edge: 'e', from: 'left', to: 'right' }] }],
+      states: ['pending'],
+      refs: {},
+    }
+    expect(acceptOps(before, p, [0]).doc.edges[0]).toEqual({
+      id: 'e',
+      fromNode: 'b',
+      fromSide: 'left',
+      toNode: 'a',
+      toSide: 'right',
+      styleAttributes: { fromAnchor: '0,0.5', toAnchor: '1,0.5' },
+    })
+  })
+
   it('a group goes first in the file, under what it holds', () => {
     const done = acceptOps(doc(), proposal(), [2])
     expect(done.doc.nodes[0]).toMatchObject({ type: 'group', label: 'Garden' })

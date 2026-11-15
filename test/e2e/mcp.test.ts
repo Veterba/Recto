@@ -130,7 +130,7 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
 
   it('lists every tool, read tools marked read-only and write tools not', async () => {
     const { tools } = (await client.request('tools/list')).result as { tools: { name: string; annotations?: { readOnlyHint?: boolean } }[] }
-    expect(tools).toHaveLength(30)
+    expect(tools).toHaveLength(33)
     expect(tools.find((t) => t.name === 'read_note')?.annotations?.readOnlyHint).toBe(true)
     for (const name of ['propose_edit', 'propose_rename', 'propose_move', 'propose_delete'])
       expect(tools.find((t) => t.name === name)?.annotations?.readOnlyHint, name).toBe(false)
@@ -374,7 +374,7 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     expect(allText(await client.call('read_file', { file: 'Kitchen/Recipes.pdf' }))).toMatch(/No file/)
   }, 30_000)
 
-  it('canvas tools: a proposal shows on the canvas as ghosts, reviewed in Suggested edits; an arrow accepted brings its card; a rejected group leaves the file as it was', async () => {
+  it('canvas tools: a proposal is said in a bar over the canvas, nothing drawn on it, reviewed in Suggested edits; an arrow accepted brings its card; a rejected group leaves the file as it was', async () => {
     // Propose (an earlier test left it on Write directly).
     await page.evaluate(async () => {
       const api = (window as unknown as WithApi).api
@@ -388,23 +388,36 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
       JSON.stringify({ nodes: [{ id: 'aaaaaaaaaaaaaaaa', type: 'text', text: 'Herbs', x: 0, y: 0, width: 200, height: 100 }], edges: [] }),
     )
     const read = await client.data<{ nodes: { id: string; text?: string }[] }>('canvas_read', { canvas: 'Herbs' })
-    expect(read.nodes).toEqual([{ id: 'n1', type: 'text', text: 'Herbs' }])
-    const proposed = JSON.parse(
-      (await client.call('canvas_propose_nodes', { canvas: 'Herbs', nodes: [{ text: 'Basil', near: 'n1' }], edges: [{ from: 'n1', to: 'new:1', label: 'grows' }] })).content[0]!
-        .text,
-    ) as { outcome: string; proposal_id: string }
+    expect(read.nodes).toEqual([{ id: 'n1', type: 'text', x: 0, y: 0, width: 200, height: 100, text: 'Herbs' }])
+    // And a picture of it to look at: a real PNG, drawn in a window that is gone again.
+    const pictured = await client.call('canvas_read', { canvas: 'Herbs' })
+    const image = pictured.content.find((c) => (c as { type: string }).type === 'image') as { data: string; mimeType: string } | undefined
+    expect(image?.mimeType).toBe('image/png')
+    const png = Buffer.from(image!.data, 'base64')
+    expect(png.subarray(1, 4).toString()).toBe('PNG')
+    expect(png.length).toBeGreaterThan(1000)
+    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
+    const suggested = await client.call('canvas_propose_nodes', {
+      canvas: 'Herbs',
+      nodes: [{ text: 'Basil', near: 'n1' }],
+      edges: [{ from: 'n1', to: 'new:1', label: 'grows' }],
+    })
+    const proposed = JSON.parse(suggested.content[0]!.text) as { outcome: string; proposal_id: string }
     expect(proposed.outcome).toBe('proposed')
+    // The AI sees what it suggested: the canvas as it will be, as a picture - not a diff of its JSON.
+    expect(suggested.content.some((c) => (c as { type: string; mimeType?: string }).mimeType === 'image/png')).toBe(true)
     const before = fs.readFileSync(path.join(vault, canvasPath), 'utf8')
 
     await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Canvas' }).click()
     await page.locator('.canvas-list .boards__name', { hasText: 'Herbs' }).click()
-    await page.waitForSelector('.canvas-ghost')
-    expect(await page.locator('.canvas-ghosts__bar').textContent()).toContain('suggests 2 changes')
-    expect(await page.locator('.canvas-ghost').textContent()).toContain('Basil')
+    // Said in a bar over the canvas; nothing suggested drawn on it.
+    await page.waitForSelector('.canvas-suggestions')
+    expect(await page.locator('.canvas-suggestions').textContent()).toContain('suggests 2 changes')
+    expect(await page.locator('.react-flow__node', { hasText: 'Basil' }).count()).toBe(0)
     // Nothing in the file yet.
     expect(fs.readFileSync(path.join(vault, canvasPath), 'utf8')).toBe(before)
     // Its controls are in Suggested edits: the bar opens it.
-    await page.locator('.canvas-ghosts__bar').getByRole('button', { name: 'Review' }).click()
+    await page.locator('.canvas-suggestions').getByRole('button', { name: 'Review' }).click()
     const panel = page.getByRole('dialog', { name: 'Suggested edits' })
     const card = panel.locator('.suggestion').filter({ has: page.locator('.suggestion__title', { hasText: 'Herbs' }) })
     // The arrow accepted: its new card comes with it.
@@ -415,18 +428,33 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     const after = JSON.parse(fs.readFileSync(path.join(vault, canvasPath), 'utf8')) as { nodes: { text?: string }[]; edges: { label?: string }[] }
     expect(after.nodes.map((n) => n.text)).toEqual(['Herbs', 'Basil'])
     expect(after.edges[0]!.label).toBe('grows')
-    await page.waitForSelector('.canvas-ghosts', { state: 'detached' })
+    await page.waitForSelector('.canvas-suggestions', { state: 'detached' })
     expect(await client.data('get_proposal', { id: proposed.proposal_id })).toMatchObject({ status: 'applied' })
     await page.keyboard.press('Escape')
 
     // A group, rejected: the file is byte for byte as it was.
     await client.call('canvas_propose_group', { canvas: 'Herbs', groups: [{ label: 'Garden', nodes: ['n1', 'n2'] }] })
-    await page.waitForSelector('.canvas-ghost.is-group')
+    await page.waitForSelector('.canvas-suggestions')
     const kept = fs.readFileSync(path.join(vault, canvasPath), 'utf8')
-    await page.locator('.canvas-ghosts__bar').getByRole('button', { name: 'Review' }).click()
+    await page.locator('.canvas-suggestions').getByRole('button', { name: 'Review' }).click()
     await panel.locator('.suggestion').filter({ hasText: 'Group “Garden”' }).getByRole('button', { name: 'Reject', exact: true }).click()
-    await page.waitForSelector('.canvas-ghosts', { state: 'detached' })
+    await page.waitForSelector('.canvas-suggestions', { state: 'detached' })
     expect(fs.readFileSync(path.join(vault, canvasPath), 'utf8')).toBe(kept)
+    await page.keyboard.press('Escape')
+
+    // Arranged as a mind map from Herbs, accepted: Basil to its right, the arrow pinned from side to facing side.
+    await client.call('canvas_propose_arrange', { canvas: 'Herbs', root: 'n1' })
+    await page.waitForSelector('.canvas-suggestions')
+    await page.locator('.canvas-suggestions').getByRole('button', { name: 'Review' }).click()
+    await panel.locator('.suggestion').filter({ hasText: 'Move “Basil”' }).getByRole('button', { name: 'Accept', exact: true }).click()
+    await expect
+      .poll(() => (JSON.parse(fs.readFileSync(path.join(vault, canvasPath), 'utf8')) as { edges: { styleAttributes?: Record<string, string> }[] }).edges[0]!.styleAttributes, {
+        timeout: 5000,
+      })
+      .toEqual({ fromAnchor: '1,0.5', toAnchor: '0,0.5' })
+    const arranged = JSON.parse(fs.readFileSync(path.join(vault, canvasPath), 'utf8')) as { nodes: { text?: string; x: number; width: number }[] }
+    const [herbs, basil] = ['Herbs', 'Basil'].map((t) => arranged.nodes.find((n) => n.text === t)!)
+    expect(basil!.x).toBeGreaterThan(herbs!.x + herbs!.width)
     await page.keyboard.press('Escape')
   }, 40_000)
 
@@ -441,13 +469,13 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
       }
       ids.push(proposed.proposal_id)
     }
-    await page.waitForFunction(() => document.querySelector('.canvas-ghosts__bar')?.textContent?.includes('suggests 2 changes') === true)
-    await page.locator('.canvas-ghosts__bar').getByRole('button', { name: 'Review' }).click()
+    await page.waitForFunction(() => document.querySelector('.canvas-suggestions')?.textContent?.includes('suggests 2 changes') === true)
+    await page.locator('.canvas-suggestions').getByRole('button', { name: 'Review' }).click()
     await page.getByRole('dialog', { name: 'Suggested edits' }).getByRole('button', { name: 'Accept all' }).click()
     // Both, in whichever order the proposals are listed (newest first).
     await expect.poll(() => nodes().slice(before.length).sort(), { timeout: 5000 }).toEqual(['Mint', 'Thyme'])
     expect(nodes().slice(0, before.length)).toEqual(before)
-    await page.waitForSelector('.canvas-ghosts', { state: 'detached' })
+    await page.waitForSelector('.canvas-suggestions', { state: 'detached' })
     for (const id of ids) expect(await client.data('get_proposal', { id })).toMatchObject({ status: 'applied' })
     await page.keyboard.press('Escape')
   }, 40_000)

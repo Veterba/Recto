@@ -22,10 +22,10 @@ import { ProviderError, runCall } from './run'
  * reach, so the note open when it was asked is the one it is about.
  */
 
-export const QUICK_TOOLS = ['get_ai_guide', 'read_note', 'read_file', 'get_note_context', 'propose_edit', 'propose_append', 'get_proposal']
+export const QUICK_TOOLS = ['get_ai_guide', 'read_note', 'read_file', 'get_note_context', 'propose_edit', 'propose_append', 'get_proposal', 'withdraw_proposal']
 /**
  * On a canvas: read the notes and files on it, and suggest changes to the canvas itself - cards, arrows,
- * groups, moves - shown on it as ghosts to accept or reject. Notes stay unchanged from here.
+ * groups, moves - suggested, to preview, accept or reject. Notes stay unchanged from here.
  */
 export const QUICK_CANVAS_TOOLS = [
   'get_ai_guide',
@@ -37,7 +37,10 @@ export const QUICK_CANVAS_TOOLS = [
   'canvas_propose_edges',
   'canvas_propose_group',
   'canvas_propose_layout',
+  'canvas_propose_arrange',
+  'canvas_propose_remove',
   'get_proposal',
+  'withdraw_proposal',
 ]
 
 /** How much of the note and its links goes with each question. */

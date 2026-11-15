@@ -6,7 +6,7 @@ import { api } from '../../app/api'
 /**
  * Every suggestion main keeps - waiting, applied, discarded, gone stale - by
  * id, in one store for the whole window: the chats' cards, the Suggested
- * edits panel and a canvas's ghosts all read the same list, fetched once per
+ * edits panel and a canvas's suggestion bar all read the same list, fetched once per
  * change rather than once per reader, so they never show one suggestion in
  * two states.
  */
@@ -53,7 +53,7 @@ export function useProposals(): ReadonlyMap<string, Proposal> {
   )
 }
 
-/** The pending suggestions for one canvas: what its ghosts show. */
+/** The pending suggestions for one canvas: what its suggestion bar counts. */
 export function useCanvasProposals(path: string): Proposal[] {
   const proposals = useProposals()
   return useMemo(() => [...proposals.values()].filter((p) => p.status === 'pending' && p.canvas?.path === path), [proposals, path])

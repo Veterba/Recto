@@ -10,8 +10,8 @@ import { quitApp, removeDir } from './helpers/app'
 /**
  * Suggested edits where they were made and in one panel: a chat answer shows
  * the edits it suggested under it - a note's changes and a canvas's edits,
- * each accepted or rejected on its own or all at once, the canvas showing
- * its edits as ghosts until then; a change whose lines were edited since is
+ * each accepted or rejected on its own or all at once, the canvas
+ * unchanged until then; a change whose lines were edited since is
  * out of date, the others still go in; the
  * status bar's count opens a panel of everything waiting - glass over the
  * app, as Settings is, with no backdrop - where a settled suggestion stays
@@ -154,7 +154,7 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
     expect(read('Garden/Tomatoes.md')).toBe(typed)
   })
 
-  it('a canvas’s edits: ghosts on the canvas, accepted and rejected in the chat; main writes the canvas and the ghosts follow', async () => {
+  it('a canvas’s edits: previewed, never drawn on the canvas, accepted and rejected in the chat; main writes the canvas', async () => {
     const card = cardTitled('Beds')
     expect(await card.locator('.suggestion__brief').textContent()).toBe('1 card, 1 arrow')
     await card.getByRole('button', { name: 'Show' }).click()
@@ -170,22 +170,18 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
     await preview.getByRole('button', { name: 'Close', exact: true }).click()
     await preview.waitFor({ state: 'detached' })
     expect(read('Recto/Canvas/Beds.canvas')).toBe(before)
-    // The canvas, open beside the chat: both edits as ghosts, reviewed in the chat.
+    // The canvas, open beside the chat: as it is - nothing suggested drawn on it, no bar (the suggestion is in the chat).
     await card.locator('.suggestion__note').click()
-    const ghosts = page.locator('.canvas-ghosts')
-    await ghosts.waitFor({ timeout: 10_000 })
-    expect(await ghosts.locator('.canvas-ghosts__bar').textContent()).toMatch(/Review in the chat/)
-    expect(await ghosts.locator('.canvas-ghost').count()).toBe(1)
+    await page.locator('.react-flow__node', { hasText: 'Soil' }).waitFor({ timeout: 10_000 })
+    expect(await page.locator('.react-flow__node', { hasText: 'Compost' }).count()).toBe(0)
+    expect(await page.locator('.canvas-suggestions').count()).toBe(0)
     await card.getByRole('button', { name: 'Accept change 1' }).click()
     await expect.poll(() => read('Recto/Canvas/Beds.canvas')).toContain('Compost')
-    // On the canvas: the card is real now, its ghost gone; the arrow still a ghost.
+    // On the canvas: the card is real now.
     await expect.poll(() => page.locator('.react-flow__node', { hasText: 'Compost' }).count()).toBe(1)
-    await expect.poll(() => ghosts.locator('.canvas-ghost').count()).toBe(0)
-    expect(await ghosts.locator('.canvas-ghost__line').count()).toBe(1)
     // One edit left: the card's buttons say so.
     await card.getByRole('button', { name: 'Reject', exact: true }).click()
     await card.locator('.suggestion__settled', { hasText: 'Partly applied: 1 of 2' }).waitFor()
-    await expect.poll(() => page.locator('.canvas-ghosts').count()).toBe(0)
     expect((JSON.parse(read('Recto/Canvas/Beds.canvas')) as { edges: unknown[] }).edges).toEqual([])
     await page.keyboard.press('Meta+Shift+C')
   })

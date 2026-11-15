@@ -103,7 +103,7 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
           type: 'message',
           role: 'user',
           content: [
-            { type: 'input_text', text: 'The pictures read_file returned:' },
+            { type: 'input_text', text: `The pictures ${[...new Set(results.filter((r) => r.images.length > 0).map((r) => r.name))].join(' and ')} returned:` },
             ...images.map((i) => ({ type: 'input_image', image_url: `data:${i.mime};base64,${i.data}` })),
           ],
         })

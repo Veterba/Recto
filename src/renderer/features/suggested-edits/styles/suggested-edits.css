@@ -327,7 +327,7 @@
 }
 .suggestion-preview .canvas-view__bar,
 .suggestion-preview .canvas-tools,
-.suggestion-preview .canvas-ghosts,
+.suggestion-preview .canvas-suggestions,
 .suggestion-preview .react-flow__handle {
   display: none;
 }

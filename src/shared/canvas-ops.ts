@@ -28,7 +28,12 @@ export type CanvasOp =
   | { op: 'add-edge'; from: string; to: string; label?: string }
   /** A labelled frame round `members` (ids or refs): Recto worked out its box. */
   | { op: 'add-group'; ref: string; label: string; members: string[]; x: number; y: number; width: number; height: number }
-  | { op: 'move'; id: string; x: number; y: number }
+  /** `width`, `height`: a frame grown to take what is moved into it. `sides`: the arrows into the moved node, pinned to these sides' middles - straight, from side to facing side. */
+  | { op: 'move'; id: string; x: number; y: number; sides?: { edge: string; from: CanvasSide; to: CanvasSide }[]; width?: number; height?: number }
+  /** A node gone, and its arrows with it; a group's frame gone, what it holds kept. */
+  | { op: 'remove-node'; id: string }
+  /** `from`, `to`: its ends, to name and draw it. */
+  | { op: 'remove-edge'; id: string; from: string; to: string }
 
 /** One edit's state: the same four as a note's changes (text-changes.ts). */
 export type CanvasOpState = ChangeState
@@ -60,6 +65,11 @@ export function needs(ops: readonly CanvasOp[], index: number): number[] {
 /** A pin at a node's centre, as `fromAnchor`/`toAnchor` keep it (arrow-geometry.ts anchorText). */
 const CENTRE_PIN = '0.5,0.5'
 const sidesOf = (s: { from: CanvasSide; to: CanvasSide }): Pick<CanvasEdge, 'fromSide' | 'toSide'> => ({ fromSide: s.from, toSide: s.to })
+/** A pin at the middle of a side. */
+const SIDE_PIN: Readonly<Record<CanvasSide, string>> = { top: '0.5,0', right: '1,0.5', bottom: '0.5,1', left: '0,0.5' }
+/** An arrow pinned at these sides' middles, any bend gone: straight from side to side. */
+const pinnedTo = (e: CanvasEdge, s: { from: CanvasSide; to: CanvasSide }): CanvasEdge =>
+  withStyle({ ...e, ...sidesOf(s) }, { fromAnchor: SIDE_PIN[s.from], toAnchor: SIDE_PIN[s.to], bend: undefined })
 
 /**
  * One edit applied to the canvas as it is now: the new canvas, and the refs
@@ -102,7 +112,29 @@ export function applyOp(
     case 'move': {
       const id = idOf(doc, refs, op.id)
       if (id === null) return null
-      return { doc: { ...doc, nodes: doc.nodes.map((n) => (n.id === id ? patchNode(n, { x: op.x, y: op.y }) : n)) }, refs: { ...refs } }
+      const pinned = new Map((op.sides ?? []).map((s) => [s.edge, s]))
+      return {
+        doc: {
+          ...doc,
+          nodes: doc.nodes.map((n) => (n.id === id ? patchNode(n, { x: op.x, y: op.y, ...(op.width === undefined ? {} : { width: op.width }), ...(op.height === undefined ? {} : { height: op.height }) }) : n)),
+          edges: doc.edges.map((e) => {
+            const s = pinned.get(e.id)
+            return s === undefined ? e : pinnedTo(e, s)
+          }),
+        },
+        refs: { ...refs },
+      }
+    }
+    case 'remove-node': {
+      if (!doc.nodes.some((n) => n.id === op.id)) return null
+      return {
+        doc: { ...doc, nodes: doc.nodes.filter((n) => n.id !== op.id), edges: doc.edges.filter((e) => e.fromNode !== op.id && e.toNode !== op.id) },
+        refs: { ...refs },
+      }
+    }
+    case 'remove-edge': {
+      if (!doc.edges.some((e) => e.id === op.id)) return null
+      return { doc: { ...doc, edges: doc.edges.filter((e) => e.id !== op.id) }, refs: { ...refs } }
     }
   }
 }
