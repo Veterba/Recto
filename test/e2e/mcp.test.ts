@@ -92,7 +92,7 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     fs.writeFileSync(path.join(vault, '.recto', 'templates.json'), JSON.stringify(settings))
     fs.writeFileSync(
       path.join(vault, '.recto', 'ai-access.json'),
-      JSON.stringify({ excluded: ['Kitchen'], writeMode: 'propose', formatting: { headingBlankBefore: 'one', headingBlankAfter: 'none' } }),
+      JSON.stringify({ excluded: ['Kitchen'], cloud: true, writeMode: 'propose', formatting: { headingBlankBefore: 'one', headingBlankAfter: 'none' } }),
     )
     fs.mkdirSync(profile)
     fs.writeFileSync(path.join(profile, 'app-state.json'), JSON.stringify({ lastVaultPath: vault }))
@@ -141,16 +141,33 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
       notes: number
       folders: { folder: string }[]
       boards: { name: string }[]
-      excluded_from_ai: string[]
+      excluded_from_ai: string
       topics?: unknown
       periodic_notes: { daily: { on: boolean } }
     }>('get_vault_profile')
     expect(profile_.folders.map((f) => f.folder)).not.toContain('Kitchen/')
     expect(profile_.boards.map((b) => b.name)).toEqual(['Launch'])
-    expect(profile_.excluded_from_ai).toEqual(['Kitchen'])
+    // How many folders are excluded, never which.
+    expect(profile_.excluded_from_ai).toMatch(/^1 folder is excluded from AI/)
+    expect(JSON.stringify(profile_)).not.toContain('Kitchen')
     expect(profile_.periodic_notes.daily.on).toBe(true)
     // Topics are off in the fixture: left out, not "off".
     expect(profile_.topics).toBeUndefined()
+  })
+
+  it('Cloud off pauses the connected client; on again, the same connection works at once', async () => {
+    const setCloud = (on: boolean): Promise<unknown> =>
+      page.evaluate(async (cloud) => {
+        const api = (window as unknown as WithApi).api
+        const current = (await api.invoke('ai-access:settings')) as Record<string, unknown>
+        return api.invoke('ai-access:set-settings', { ...current, cloud })
+      }, on)
+    await setCloud(false)
+    const paused = await client.call('read_note', { note: 'Basil' })
+    expect(paused.isError).toBe(true)
+    expect(allText(paused)).toMatch(/Cloud AI is off/)
+    await setCloud(true)
+    expect(allText(await client.call('read_note', { note: 'Basil' }))).toContain('Garden/Basil.md')
   })
 
   it('search, read, context, folders, recent, tags: Kitchen never shows', async () => {
@@ -333,9 +350,10 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
   it('read_file reads any file the AI may see - a PDF by pages - and never one in an excluded folder', async () => {
     fs.mkdirSync(path.join(vault, 'attachments'), { recursive: true })
     fs.writeFileSync(path.join(vault, 'attachments/Treatise.pdf'), makePdf(['Of knowledge and probability', 'Of the passions']))
-    const pdf = await client.data<{ kind: string; text: string }>('read_file', { file: 'Treatise.pdf' })
-    expect(pdf.kind).toBe('pdf')
-    expect(pdf.text).toContain('--- page 2 ---\nOf the passions')
+    const pdf = await client.call('read_file', { file: 'Treatise.pdf' })
+    expect((JSON.parse(pdf.content[0]!.text) as { kind: string }).kind).toBe('pdf')
+    // Its text is marked as a note's: something to read, never instructions.
+    expect(pdf.content[1]!.text).toMatch(/^<note path="attachments\/Treatise\.pdf">\n[\s\S]*--- page 2 ---\nOf the passions[\s\S]*\n<\/note>$/)
     // A picture comes back as an image the client's model can look at.
     fs.writeFileSync(
       path.join(vault, 'attachments/Dot.png'),

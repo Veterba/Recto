@@ -4,6 +4,27 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.61.0 — 2026-11-13
+### Changed
+- Cloud off now also pauses apps connected to Recto (Claude Code, Codex, Cursor, Claude Desktop): their calls are refused with a note saying why. They stay connected, keep their suggestions, and work again the moment Cloud is on.
+- "Summarize with Claude" in a note's preview follows Cloud off and the excluded folders: it is refused instead of sending the note.
+- AI no longer learns the names of excluded folders: the vault profile says only how many there are, and leaves out topics only excluded notes have.
+- Excluding a folder removes what Recto kept of its notes for AI: settled suggestions about them and the copies Write directly made.
+- One AI app can have at most 30 suggestions waiting; past that it is asked to stop.
+- A development build of Recto no longer connects or disconnects your AI apps.
+### Fixed
+- A bot's own excluded folders are honoured in cloud chats, not only in local answers.
+- The bots match excluded folders the same way as every other AI tool (accented names, a note given without .md).
+- A malformed sign-in token sent to Recto's AI socket can no longer crash Recto; a connection that never sends one is closed after 5 seconds.
+- Errors an AI reads no longer contain file paths on your Mac.
+- Text read with read_file is marked as note content for the AI, and a note can no longer fake the end of that marking.
+- A folder that is a symlink into an excluded folder no longer lets AI create notes there.
+- Disconnecting Codex no longer removes blank lines elsewhere in its config; Repair in Claude Code no longer leaves no entry when the new one fails; a config file that is a symlink stays one, with its permissions.
+- Link previews no longer reach this Mac or the local network through an IPv6-written address.
+- "Open with app" no longer runs apps, scripts or installers from the vault.
+- Web pages and embedded content can no longer ask for the camera, microphone, location or notifications; the vault file scheme no longer bypasses the app's content policy.
+- A packaged Recto ignores provider addresses set in the environment.
+
 ## v0.60.5 — 2026-11-13
 ### Changed
 - Suggested edits made in a chat or Quick ask are no longer counted in the status bar; they wait under the answer that made them. The status bar keeps the ones from outside apps and the canvas.

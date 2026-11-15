@@ -24,10 +24,11 @@ const put = (relative: string, content: string | Buffer): void => {
   fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true })
   fs.writeFileSync(path.join(root, relative), content)
 }
-/** What the model is given: the data block's fields. */
+/** What the model is given: the data block's fields, and the text from the note block after it. */
 const read = async (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
-  const [block] = await readAnyFile(buildScope('test'), args)
-  return (block as { kind: 'data'; data: Record<string, unknown> }).data
+  const [block, note] = await readAnyFile(buildScope('test'), args)
+  const fields = (block as { kind: 'data'; data: Record<string, unknown> }).data
+  return note?.kind === 'note' ? { ...fields, text: note.text } : fields
 }
 /** A PNG's first bytes: signature, then the header chunk with its width and height. */
 const png = (width: number, height: number): Buffer => {
@@ -55,6 +56,15 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }))
 
 describe('read_file', () => {
+  it('a file’s text comes as a note block, not inside the data: marked as something to read, never instructions', async () => {
+    for (const file of ['Treatise.pdf', 'Data/plan.json', 'Plan.canvas']) {
+      const [details, text] = await readAnyFile(buildScope('test'), { file })
+      expect(details).toMatchObject({ kind: 'data' })
+      expect((details as { data: object }).data).not.toHaveProperty('text')
+      expect(text).toMatchObject({ kind: 'note' })
+    }
+  })
+
   it('a PDF: its text, page by page, by name; and only the pages asked for', async () => {
     const all = await read({ file: 'Treatise.pdf' })
     expect(all).toMatchObject({ path: 'attachments/Treatise.pdf', kind: 'pdf' })

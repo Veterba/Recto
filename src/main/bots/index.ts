@@ -16,6 +16,8 @@ import { IPC_EVENT, type IpcEvents } from '../../shared/ipc'
 import { botsMock } from '../config'
 import { sendEvent } from '../events'
 import { readState, writeState } from '../store'
+import { readState as readVaultState } from '../state'
+import { AI_ACCESS_STATE, coerceAiAccess } from '../../shared/ai-access'
 import { currentVault } from '../vault'
 import { cleanTitle } from '../../shared/chat-topics'
 import { listBots, writeBotModel } from './definitions'
@@ -270,7 +272,8 @@ export function startBackground(): void {
   startJobs({
     provider: () => providerFor(settings().defaultModel),
     model: () => settings().defaultModel,
-    exclude: () => list().flatMap((b) => b.exclude ?? []),
+    // The folders excluded from AI (Settings → AI) too: no cards or vectors are made of them.
+    exclude: () => [...coerceAiAccess(readVaultState(AI_ACCESS_STATE)).excluded, ...list().flatMap((b) => b.exclude ?? [])],
     enabled: () => ({
       vectors: settings().harness.hybridRetrieval,
       cards: settings().harness.noteCards && !isApiModel(settings().defaultModel),

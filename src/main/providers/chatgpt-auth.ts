@@ -1,3 +1,4 @@
+import { providerBase } from '../config'
 import { createHash, createPublicKey, randomBytes, randomUUID, verify, type JsonWebKey } from 'node:crypto'
 import http from 'node:http'
 import type { ProviderModel } from '../../shared/providers'
@@ -68,10 +69,10 @@ export class ChatGptAuth {
   constructor(private readonly deps: AuthDeps) {}
 
   private get authBase(): string {
-    return this.deps.authBase ?? process.env['RECTO_SIWC_AUTH_BASE'] ?? 'https://auth.openai.com'
+    return this.deps.authBase ?? providerBase('RECTO_SIWC_AUTH_BASE') ?? 'https://auth.openai.com'
   }
   private get apiBase(): string {
-    return this.deps.apiBase ?? process.env['RECTO_OPENAI_BASE'] ?? 'https://api.openai.com/v1'
+    return this.deps.apiBase ?? providerBase('RECTO_OPENAI_BASE') ?? 'https://api.openai.com/v1'
   }
   private now(): number {
     return this.deps.now?.() ?? Date.now()

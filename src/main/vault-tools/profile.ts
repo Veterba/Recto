@@ -13,7 +13,7 @@ import { folderOf, titleOf, type Scope } from './scope'
  * The vault profile: how this vault is kept, from its settings and the index,
  * built fresh on every call. Nothing in it assumes one person's workflow -
  * every convention is read from the vault itself. Excluded notes are not
- * counted; excluded folders are named, so the AI knows to leave them alone.
+ * counted, and excluded folders only so: how many, never their names.
  */
 
 const KEY_PATTERN: Record<Period, RegExp> = {
@@ -111,7 +111,8 @@ export async function vaultProfile(scope: Scope): Promise<Record<string, unknown
       const { paths } = await ask({ kind: 'link-sources', target: `${TOPIC_PREFIX}${t.name}` }, 'link-sources-result')
       list.push({ name: t.name, notes: paths.filter((p) => !scope.hidden(p)).length })
     }
-    topics = { on: true, how: TOPICS_HOW, topics: list.sort((a, b) => b.notes - a.notes).slice(0, 40) }
+    // A topic only excluded notes have is not named: its name alone says what they are about.
+    topics = { on: true, how: TOPICS_HOW, topics: list.filter((t) => t.notes > 0).sort((a, b) => b.notes - a.notes).slice(0, 40) }
   }
 
   const f = scope.settings.formatting
@@ -134,7 +135,8 @@ export async function vaultProfile(scope: Scope): Promise<Record<string, unknown
       lanes: parseKanban(b.text).lanes.map((l) => ({ title: l.title, cards: l.items.length })),
     })),
     ...(topics === undefined ? {} : { topics }),
-    excluded_from_ai: scope.settings.excluded,
+    // How many, never which: a folder's name is already something about what is in it.
+    excluded_from_ai: excludedSaying(scope.settings.excluded.length),
     formatting: RULES.filter((r) => f[r.key] !== 'leave').map((r) => ({
       rule: r.label,
       value: r.options.find((o) => o.value === f[r.key])!.label,
@@ -201,3 +203,6 @@ export async function draftGuide(scope: Scope): Promise<string> {
 }
 
 export const guideExists = (scope: Scope, p: string): boolean => fs.existsSync(path.join(scope.vault, p))
+
+const excludedSaying = (n: number): string =>
+  n === 0 ? 'none' : `${n} ${n === 1 ? 'folder is' : 'folders are'} excluded from AI: not counted here, and no tool can see them`

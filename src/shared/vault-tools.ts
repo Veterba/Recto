@@ -284,8 +284,8 @@ export type ResultBlock =
 
 export type ToolOutcome = { ok: true; blocks: ResultBlock[] } | { ok: false; error: string }
 
-/** Note text can never close its own wrapper. */
-const escapeNote = (text: string): string => text.replace(/<\/note>/gi, '<\\/note>')
+/** Note text can never close its wrapper or open another: any `<note`, `</note`, `< / NOTE >` in it loses its `<`. */
+const escapeNote = (text: string): string => text.replace(/<(?=\s*\/?\s*note\b)/gi, '&lt;')
 const attr = (value: string): string => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
 /** A result as the text blocks a client shows the model. */

@@ -6,6 +6,7 @@ import { coerceTemplateSettings, type TemplateSettings } from '../../shared/temp
 import { readState } from '../state'
 import { currentVault } from '../vault'
 import { currentLinkSettings, currentLinkVault } from '../link-context'
+import { realPath } from '../paths'
 import * as vaultFs from '../vault-fs'
 
 /**
@@ -56,17 +57,35 @@ export type Scope = {
 
 export const isNote = (p: string): boolean => p.toLowerCase().endsWith('.md')
 
-/** What a session (sessions.ts) narrows the vault to: only these notes are there at all. */
-export type ScopeLimit = { notes: ReadonlySet<string> | null }
+/** What a session (sessions.ts) narrows the vault to: only these notes are there at all, and these folders are excluded too. */
+export type ScopeLimit = { notes: ReadonlySet<string> | null; exclude?: readonly string[] }
 
 export function buildScope(client: string, limit: ScopeLimit = { notes: null }): Scope {
   const vault = currentVault()
   if (vault === null) throw new ToolError('No vault is open in Recto. Open one, then try again.')
-  const settings = coerceAiAccess(readState(AI_ACCESS_STATE))
+  const stored = coerceAiAccess(readState(AI_ACCESS_STATE))
+  const settings = { ...stored, excluded: [...stored.excluded, ...(limit.exclude ?? [])] }
   const templates = coerceTemplateSettings(readState('templates'))
   const allNotes = vaultFs.vaultFiles().filter(isNote)
+  const listed = new Set(allNotes)
+  /**
+   * A path not in the vault's list - a note about to be made - as the disk
+   * would take it: through a symlinked folder it lands where the link points,
+   * and there it may be excluded (or not in the vault at all). Listed paths
+   * never go through a link (vault-fs.ts skips them).
+   */
+  const viaLink = (p: string): boolean => {
+    if (listed.has(p)) return false
+    let real: string
+    try {
+      real = path.relative(realPath(vault.path), realPath(path.join(vault.path, p))).split(path.sep).join('/')
+    } catch {
+      return true // a loop of links: nowhere to write
+    }
+    return real.startsWith('../') || path.isAbsolute(real) || (real !== p && (isChatPath(real) || isExcludedPath(real, settings.excluded)))
+  }
   const hidden = (p: string): boolean =>
-    !isNote(p) || isChatPath(p) || isExcludedPath(p, settings.excluded) || (limit.notes !== null && !limit.notes.has(p))
+    !isNote(p) || isChatPath(p) || isExcludedPath(p, settings.excluded) || (limit.notes !== null && !limit.notes.has(p)) || viaLink(p)
   const notes = allNotes.filter((p) => !hidden(p))
   const files = currentLinkVault()
   const format = { newLinkFormat: currentLinkSettings().newLinkFormat, useMarkdownLinks: false }
@@ -132,6 +151,10 @@ export const folderOf = (p: string): string => (p.includes('/') ? p.slice(0, p.l
 
 export async function readNote(p: string): Promise<string> {
   const read = await vaultFs.readFile(p)
-  if (!read.ok) throw new ToolError(`“${p}” could not be read: ${read.error}`)
+  if (!read.ok) {
+    // The reason stays here: it can carry the file's path on this Mac.
+    console.error('[vault-tools] read', p, read.error)
+    throw new ToolError(`“${p}” could not be read.`)
+  }
   return read.content
 }

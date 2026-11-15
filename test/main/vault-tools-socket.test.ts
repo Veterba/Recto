@@ -67,6 +67,29 @@ describe('the MCP socket', () => {
     expect(await talk(['not json', JSON.stringify({ id: 1, method: 'ping' })], 2)).toEqual([{ id: 0, error: 'bad-token' }])
   })
 
+  it('a 64-letter token with non-ASCII letters is refused, and Recto keeps serving', async () => {
+    const crash = vi.fn()
+    process.on('uncaughtException', crash)
+    expect(await talk([JSON.stringify({ token: 'é'.repeat(64) })], 1)).toEqual([{ id: 0, error: 'bad-token' }])
+    process.off('uncaughtException', crash)
+    expect(crash).not.toHaveBeenCalled()
+    expect(await talk([JSON.stringify({ token }), JSON.stringify({ id: 1, method: 'ping' })], 1)).toEqual([
+      { id: 1, pong: { vault: 'Test vault', version: '0.0.0-test' } },
+    ])
+  })
+
+  it('a connection that never sends the token is closed after 5 s', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const socket = net.connect(socketPath(dir))
+    const closed = new Promise((resolve) => socket.on('close', resolve))
+    await new Promise((resolve) => socket.on('connect', resolve))
+    // Let the server see the connection, then pass the deadline.
+    await vi.waitFor(() => expect(vi.getTimerCount()).toBeGreaterThan(0))
+    vi.advanceTimersByTime(5001)
+    vi.useRealTimers()
+    await closed
+  })
+
   it('the right token: ping, then a call that reaches the tool layer', async () => {
     const replies = await talk(
       [

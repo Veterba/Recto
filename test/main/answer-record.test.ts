@@ -111,7 +111,7 @@ describe('the record of an answer', () => {
     expect(given.ok && given.blocks.some((b) => b.kind === 'note')).toBe(true)
     expect(recordOf(s)).toEqual({ read: [], skimmed: [], proposals: [] })
     closeSession(s.id)
-    access = { guide: `${TRIP}/Kyoto.md`, excluded: [TRIP] }
+    access = { guide: `${TRIP}/Kyoto.md`, excluded: [TRIP], cloud: true }
     const hidden = await callTool('get_ai_guide', {}, 'claude-code')
     expect(hidden.ok && hidden.blocks.some((b) => b.kind === 'note')).toBe(false)
   })

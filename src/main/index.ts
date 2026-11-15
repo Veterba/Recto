@@ -6,6 +6,7 @@ import { evalJob } from './config'
 import { isolateDevState } from './dev-guard'
 import { registerIpc } from './ipc'
 import { handleVaultScheme, registerVaultScheme } from './vault-protocol'
+import { limitPermissions } from './permissions'
 import { createWindow } from './window'
 import { flushWindows, markQuitting } from './flush'
 import { writeLauncher } from './vault-tools/launcher'
@@ -45,6 +46,7 @@ if (job !== undefined) {
   })
 
   void app.whenReady().then(() => {
+    limitPermissions()
     handleVaultScheme()
     registerIpc()
     createWindow()

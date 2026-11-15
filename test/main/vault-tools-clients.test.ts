@@ -65,6 +65,26 @@ describe('Cursor (and Claude Desktop’s config file): JSON', () => {
     expect(read(CURSOR)).toBe('{ "mcpServers": { oops ')
   })
 
+  it('a config that is a symlink stays one, with its permissions: the file it points at is what changes', async () => {
+    put('dotfiles/cursor-mcp.json', JSON.stringify({ mcpServers: {} }))
+    fs.chmodSync(file('dotfiles/cursor-mcp.json'), 0o600)
+    fs.mkdirSync(file('.cursor'))
+    fs.symlinkSync(file('dotfiles/cursor-mcp.json'), file(CURSOR))
+    expect(await connectClient('cursor', env)).toEqual({ ok: true })
+    expect(fs.lstatSync(file(CURSOR)).isSymbolicLink()).toBe(true)
+    expect(fs.statSync(file('dotfiles/cursor-mcp.json')).mode & 0o777).toBe(0o600)
+    expect(clientStatus('cursor', env).state).toBe('connected')
+  })
+
+  it('a development build changes no AI app’s settings', async () => {
+    put(CURSOR, JSON.stringify({ mcpServers: {} }))
+    const dev = { ...env, dev: true }
+    expect(await connectClient('cursor', dev)).toMatchObject({ ok: false, error: expect.stringMatching(/development build/) })
+    expect(await disconnectClient('cursor', dev)).toMatchObject({ ok: false })
+    expect(read(CURSOR)).toBe(JSON.stringify({ mcpServers: {} }))
+    expect(backups()).toEqual([])
+  })
+
   it('Claude Desktop: a missing config file is made, and the plan says to restart Desktop', async () => {
     fs.mkdirSync(file('Library/Application Support/Claude'), { recursive: true })
     const plan = clientPlan('claude-desktop', 'connect', env)
@@ -91,6 +111,14 @@ describe('Codex: TOML, edited as text', () => {
     expect(read(CODEX)).toBe(ORIGINAL)
   })
 
+  it('Disconnect leaves blank lines elsewhere in the file as they were - inside a multi-line string they are text', async () => {
+    const text = 'instructions = """\nFirst.\n\n\n\nAfter three blank lines.\n"""\n'
+    put(CODEX, text)
+    expect(await connectClient('codex', env)).toEqual({ ok: true })
+    expect(await disconnectClient('codex', env)).toEqual({ ok: true })
+    expect(read(CODEX)).toBe(text)
+  })
+
   it('Recto’s table between others: only it goes', async () => {
     put(CODEX, `[mcp_servers.recto]\ncommand = "/old"\n\n[mcp_servers.recto.env]\nX = "1"\n\n[mcp_servers.other]\ncommand = "other"\n`)
     expect(clientStatus('codex', env)).toMatchObject({ state: 'broken' })
@@ -115,6 +143,20 @@ describe('Claude Code: through its own CLI', () => {
     expect(await disconnectClient('claude-code', env)).toEqual({ ok: true })
     expect(read('claude-args.txt')).toMatch(/mcp remove recto --scope user\n$/)
     expect(clientStatus('claude-code', env).state).toBe('not-connected')
+  })
+
+  it('Repair whose add fails puts the old entry back, not none', async () => {
+    const log = file('claude-args.txt')
+    const old = { type: 'stdio', command: '/old/recto-mcp', args: ['--client', 'claude-code'] }
+    put('.claude.json', JSON.stringify({ mcpServers: { recto: old } }))
+    // A `claude` whose add fails; remove and add-json do what the real one does.
+    put(
+      '.local/bin/claude',
+      `#!/bin/sh\necho "$@" >> '${log}'\ncase "$2" in\n  add) echo 'boom' >&2; exit 1 ;;\n  remove) printf '{"mcpServers":{}}' > '${file('.claude.json')}' ;;\n  add-json) printf '{"mcpServers":{"recto":%s}}' "$4" > '${file('.claude.json')}' ;;\nesac\n`,
+    )
+    fs.chmodSync(file('.local/bin/claude'), 0o755)
+    expect(await connectClient('claude-code', env)).toMatchObject({ ok: false, error: expect.stringMatching(/boom/) })
+    expect((JSON.parse(read('.claude.json')) as { mcpServers: Record<string, unknown> }).mcpServers['recto']).toEqual(old)
   })
 
   it('not installed: said, with nothing to run', () => {

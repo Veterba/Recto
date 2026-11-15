@@ -20,7 +20,7 @@ vi.mock('../../src/main/state', () => ({ readState: (feature: string) => state[f
 vi.mock('../../src/main/bots/vectors', () => ({ searchVectors: async () => [] }))
 vi.mock('../../src/main/topics/storage', () => ({
   readSettings: () => ({ enabled: topicsOn }),
-  readTopics: () => ({ topics: [{ id: 't1', name: 'Gardening' }], deleted: [] }),
+  readTopics: () => ({ topics: [{ id: 't1', name: 'Gardening' }, { id: 't2', name: 'Divorce' }], deleted: [] }),
 }))
 vi.mock('../../src/main/index-client', () => ({
   send: async (request: IndexRequest) => {
@@ -46,7 +46,8 @@ vi.mock('../../src/main/index-client', () => ({
         },
       }
     if (request.kind === 'boards') return { kind: 'boards-result', boards: [{ path: 'Recto/Boards/B/B.md', name: 'B', cards: 1 }] }
-    if (request.kind === 'link-sources') return { kind: 'link-sources-result', paths: ['Garden/Basil.md', 'Private/Diary.md'] }
+    if (request.kind === 'link-sources')
+      return { kind: 'link-sources-result', paths: request.target.endsWith('Divorce') ? ['Private/Diary.md'] : ['Garden/Basil.md', 'Private/Diary.md'] }
     throw new Error(`unexpected ${request.kind}`)
   },
 }))
@@ -106,15 +107,15 @@ describe('the vault profile', () => {
     expect(p['formatting']).toEqual([{ rule: 'List marker', value: '-' }])
   })
 
-  it('never counts an excluded note: not its folder, tags or properties - and names the exclusion', async () => {
+  it('never counts an excluded note: not its folder, tags or properties - and says how many folders are excluded, not which', async () => {
     const text = JSON.stringify(await vaultProfile(buildScope('test')))
-    expect(text).not.toContain('Private/')
+    expect(text).not.toContain('Private')
     expect(text).not.toContain('secret')
     expect(text).not.toContain('mood')
-    expect(text).toContain('"excluded_from_ai":["Private"]')
+    expect(text).toContain('"excluded_from_ai":"1 folder is excluded from AI: not counted here, and no tool can see them"')
   })
 
-  it('topics: left out while off; described, with counts that skip excluded notes, while on', async () => {
+  it('topics: left out while off; described, with counts that skip excluded notes, while on - a topic only excluded notes have is not named', async () => {
     expect(await vaultProfile(buildScope('test'))).not.toHaveProperty('topics')
     topicsOn = true
     const p = (await vaultProfile(buildScope('test'))) as { topics: { how: string; topics: unknown[] } }

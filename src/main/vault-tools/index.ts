@@ -1,3 +1,4 @@
+import os from 'node:os'
 import { toolNamed, type ResultBlock, type ToolOutcome } from '../../shared/vault-tools'
 import { readAnyFile } from './files'
 import * as canvas from './canvas-tools'
@@ -40,9 +41,11 @@ const READERS: Record<string, Run> = {
   list_boards: (s) => read.listBoards(s),
   read_board: read.readBoard,
   list_tasks: read.listTasks,
-  get_proposal: (_s, a) => {
+  get_proposal: (scope, a) => {
     const found = proposal(String(a['id']))
-    if (found === null) throw new ToolError(`No proposal “${String(a['id'])}”. Settled proposals are kept for a while, then forgotten.`)
+    // One about a note now excluded is "no proposal": even its summary says something about that note.
+    const hidden = found !== null && (found.files.some((f) => scope.fileHidden(f.path)) || (found.canvas !== undefined && scope.fileHidden(found.canvas.path)))
+    if (found === null || hidden) throw new ToolError(`No proposal “${String(a['id'])}”. Settled proposals are kept for a while, then forgotten.`)
     return [{ kind: 'data', data: { id: found.id, status: found.status, summary: found.summary } }]
   },
 }
@@ -123,7 +126,7 @@ export async function callTool(name: string, rawArgs: unknown, client: string, s
     return { ok: false, error: 'This conversation has ended in Recto; its tools are closed.' }
   }
   // Checked at every call, not once per answer: the vault or the cloud switch can change while it runs.
-  const stopped = session === null ? null : sessionStopped(session)
+  const stopped = session === null ? outsidePaused() : sessionStopped(session)
   if (stopped !== null) {
     logCall({ ...entry, outcome: 'error', error: 'session stopped' })
     return { ok: false, error: stopped }
@@ -154,6 +157,17 @@ function sessionStopped(session: ToolSession): string | null {
   if (session.vault !== (currentVault()?.path ?? null)) return 'Another vault is open in Recto now: this answer is stopped.'
   if (session.cloud && !coerceAiAccess(readState(AI_ACCESS_STATE)).cloud) return 'Cloud providers were turned off for this vault: this answer is stopped.'
   return null
+}
+
+/**
+ * An app connected from outside - Claude Code, Codex, Cursor, Claude Desktop -
+ * sends what it reads to its own cloud model, so Cloud off pauses it too.
+ * Only its calls are refused: its connection, its config and its suggestions
+ * stay, and the next call after Cloud is turned on simply works.
+ */
+function outsidePaused(): string | null {
+  if (coerceAiAccess(readState(AI_ACCESS_STATE)).cloud) return null
+  return 'Cloud AI is off for this vault in Recto (Settings → AI → Providers), so connected apps are paused. Tell the person; once they turn it on, call again - nothing needs reconnecting.'
 }
 
 /** Parts that are not about a note the answer read: a proposal's diff, the AI guide. */
@@ -187,7 +201,7 @@ async function run(
   entry: Omit<ActivityEntry, 'outcome'>,
 ): Promise<ToolOutcome> {
   try {
-    const scope = buildScope(who, { notes: session?.notes ?? null })
+    const scope = buildScope(who, { notes: session?.notes ?? null, exclude: session?.exclude ?? [] })
     if (isWrite) {
       const { blocks, outcome } = await runWrite(scope, name, args, session)
       logCall({ ...entry, outcome })
@@ -197,11 +211,18 @@ async function run(
     logCall({ ...entry, outcome: 'ok' })
     return { ok: true, blocks }
   } catch (err) {
-    const error = err instanceof ToolError ? err.message : `Recto could not do that: ${err instanceof Error ? err.message : String(err)}`
+    // Only Recto's own words go to the AI: a system error's text names paths on this Mac. Its detail goes to the console.
+    const error = withoutPaths(err instanceof ToolError ? err.message : 'Recto could not do that.')
     if (!(err instanceof ToolError)) console.error('[vault-tools]', name, err)
     logCall({ ...entry, outcome: 'error', error })
     return { ok: false, error }
   }
+}
+
+/** A message as the AI may read it: paths in the vault as the vault names them, none of this Mac's own. */
+function withoutPaths(text: string): string {
+  const vault = currentVault()?.path
+  return (vault === undefined ? text : text.split(`${vault}/`).join('').split(vault).join('the vault')).split(os.homedir()).join('~')
 }
 
 export { ToolError }

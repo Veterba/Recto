@@ -15,7 +15,10 @@ import type { ClientId, ClientPlan, ClientStatus } from '../../shared/ai-access'
 
 const run = promisify(execFile)
 
-export type ClientEnv = { home: string; launcher: string; backups: string }
+/** `dev`: a development build, whose launcher must never end up in the person's real AI apps. */
+export type ClientEnv = { home: string; launcher: string; backups: string; dev?: boolean }
+
+const DEV_REFUSED = 'A development build of Recto does not change your AI apps’ settings: it would point them at this build. Connect from the installed Recto.'
 
 const NAMES: Record<ClientId, string> = {
   'claude-code': 'Claude Code',
@@ -220,24 +223,42 @@ function backup(file: string, env: ClientEnv): void {
   fs.copyFileSync(file, path.join(dir, path.basename(file)))
 }
 
-const writeJson = (file: string, value: unknown): void => {
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  const tmp = `${file}.recto-tmp`
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`)
-  fs.renameSync(tmp, file)
+/**
+ * A client's config, written whole or not at all: through a temporary file
+ * beside the real one, renamed over it. A config that is a symlink (kept in
+ * a dotfiles folder) stays one - the file it points at is what changes - and
+ * its permissions stay as they were.
+ */
+function writeText(file: string, text: string): void {
+  const real = exists(file) ? fs.realpathSync(file) : file
+  const mode = exists(real) ? fs.statSync(real).mode & 0o777 : 0o644
+  fs.mkdirSync(path.dirname(real), { recursive: true })
+  const tmp = `${real}.recto-tmp`
+  fs.writeFileSync(tmp, text, { mode })
+  fs.chmodSync(tmp, mode)
+  fs.renameSync(tmp, real)
 }
 
+const writeJson = (file: string, value: unknown): void => writeText(file, `${JSON.stringify(value, null, 2)}\n`)
+
 export async function connectClient(id: ClientId, env: ClientEnv): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (env.dev === true) return { ok: false, error: DEV_REFUSED }
   const plan = clientPlan(id, 'connect', env)
   if (!plan.ok) return plan
   backup(plan.file, env)
   if (id === 'claude-code') {
-    // An old or broken entry first: `mcp add` refuses a name that exists.
-    if (clientStatus(id, env).state !== 'not-connected')
-      await run(binaryIn(env.home, 'claude')!, ['mcp', 'remove', 'recto', '--scope', 'user']).catch(() => undefined)
+    const claude = binaryIn(env.home, 'claude')!
+    // An old or broken entry first: `mcp add` refuses a name that exists. Kept, to be put back if the add fails.
+    const old = (() => {
+      const read = readJson(plan.file)
+      return read.ok ? servers(read.value)['recto'] : undefined
+    })()
+    if (old !== undefined) await run(claude, ['mcp', 'remove', 'recto', '--scope', 'user']).catch(() => undefined)
     try {
-      await run(binaryIn(env.home, 'claude')!, claudeArgs(env), { timeout: 30_000 })
+      await run(claude, claudeArgs(env), { timeout: 30_000 })
     } catch (err) {
+      if (old !== undefined)
+        await run(claude, ['mcp', 'add-json', 'recto', JSON.stringify(old), '--scope', 'user'], { timeout: 30_000 }).catch(() => undefined)
       return {
         ok: false,
         error: `claude mcp add failed: ${(err as { stderr?: string }).stderr?.trim() || (err instanceof Error ? err.message : String(err))}`,
@@ -251,8 +272,7 @@ export async function connectClient(id: ClientId, env: ClientEnv): Promise<{ ok:
     const range = codexRange(lines)
     const rest = range === null ? lines : [...lines.slice(0, range.start), ...lines.slice(range.end)]
     const body = rest.join('\n').replace(/\n+$/, '')
-    fs.mkdirSync(path.dirname(plan.file), { recursive: true })
-    fs.writeFileSync(plan.file, `${body === '' ? '' : `${body}\n\n`}${codexBlock(env.launcher, id)}\n`)
+    writeText(plan.file, `${body === '' ? '' : `${body}\n\n`}${codexBlock(env.launcher, id)}\n`)
     return { ok: true }
   }
   const read = readJson(plan.file)
@@ -263,6 +283,7 @@ export async function connectClient(id: ClientId, env: ClientEnv): Promise<{ ok:
 }
 
 export async function disconnectClient(id: ClientId, env: ClientEnv): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (env.dev === true) return { ok: false, error: DEV_REFUSED }
   const plan = clientPlan(id, 'disconnect', env)
   if (!plan.ok) return plan
   backup(plan.file, env)
@@ -280,11 +301,12 @@ export async function disconnectClient(id: ClientId, env: ClientEnv): Promise<{ 
   if (id === 'codex') {
     const lines = fs.readFileSync(plan.file, 'utf8').split('\n')
     const range = codexRange(lines)!
-    const kept = [...lines.slice(0, range.start), ...lines.slice(range.end)]
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/\n+$/, '')
-    fs.writeFileSync(plan.file, kept === '' ? '' : `${kept}\n`)
+    // Only the blank lines where Recto's table was are joined: elsewhere - inside a multi-line string - they are the person's.
+    const before = lines.slice(0, range.start)
+    const after = lines.slice(range.end)
+    while (before.at(-1) === '' && (after.length === 0 || after[0] === '')) before.pop()
+    const kept = [...before, ...after].join('\n').replace(/\n+$/, '')
+    writeText(plan.file, kept === '' ? '' : `${kept}\n`)
     return { ok: true }
   }
   const read = readJson(plan.file)

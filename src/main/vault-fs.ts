@@ -608,10 +608,34 @@ export async function trash(relative: string): Promise<{ ok: boolean; error?: st
   }
 }
 
-/** A vault file opened in the app the system has for it (a .docx in Word, a .zip in Archive Utility). */
+/**
+ * What the system would run rather than open: apps, scripts, installers, and
+ * links that run something. A vault can come from anyone (a shared folder, a
+ * download), so a click on its file never starts a program.
+ */
+const RUNS = new Set(
+  (
+    'app command tool sh zsh bash csh ksh terminal workflow action scpt scptd applescript pkg mpkg jar py rb pl ' +
+    'php js mjs fileloc inetloc webloc url shortcut prefpane kext osax saver qlgenerator mdimporter plugin bundle framework dylib xpc systemextension'
+  ).split(' '),
+)
+export function runsSomething(absolute: string): boolean {
+  if (RUNS.has(path.extname(absolute).slice(1).toLowerCase())) return true
+  try {
+    const stat = fs.statSync(absolute)
+    // A file marked executable opens in Terminal and runs, whatever its name.
+    return stat.isFile() && (stat.mode & 0o111) !== 0
+  } catch {
+    return false
+  }
+}
+
+/** A vault file opened in the app the system has for it (a .docx in Word, a .zip in Archive Utility) - never one that runs. */
 export async function openWithApp(relative: string): Promise<{ ok: boolean }> {
   try {
-    const error = await shell.openPath(resolveInVault(requireVault(), relative))
+    const absolute = resolveInVault(requireVault(), relative)
+    if (runsSomething(absolute)) return { ok: false }
+    const error = await shell.openPath(absolute)
     return { ok: error === '' }
   } catch {
     return { ok: false }

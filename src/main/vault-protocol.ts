@@ -65,12 +65,16 @@ async function partOf(absolute: string, range: string): Promise<Response | null>
   })
 }
 
-/** Must run before `app.whenReady()`, or the scheme has no privileges. */
+/**
+ * Must run before `app.whenReady()`, or the scheme has no privileges. Not
+ * `bypassCSP`: the page's policy names recto-file: where it may load (index.html),
+ * so the policy stays the one thing that says what the window may load.
+ */
 export function registerVaultScheme(): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: SCHEME,
-      privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true },
+      privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
     },
   ])
 }

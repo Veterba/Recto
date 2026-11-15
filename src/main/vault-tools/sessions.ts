@@ -11,6 +11,7 @@ import { currentVault } from '../vault'
  *
  * - `tools`: the only tools it may call (Quick ask has a handful);
  * - `notes`: the only notes it may see (Quick ask: the open note and its links);
+ * - `exclude`: folders hidden from it besides the vault's excluded ones (a bot's own);
  * - `writable`: the only notes it may change (Quick ask: the open note);
  * - writes always wait for Apply, whatever the write mode says - a chat
  *   inside Recto suggests, it never writes on its own;
@@ -24,6 +25,7 @@ export type ToolSession = {
   client: string
   tools: ReadonlySet<string> | null
   notes: ReadonlySet<string> | null
+  exclude?: readonly string[]
   writable: ReadonlySet<string> | null
   /** The vault the session was opened in: a call after a switch would read another vault's notes. */
   vault: string | null

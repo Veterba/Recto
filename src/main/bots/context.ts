@@ -1,4 +1,5 @@
 import type { AiMessage } from '../../shared/ai'
+import { isExcludedPath } from '../../shared/ai-access'
 import { isEvalsPath, type BotSource } from '../../shared/bots'
 
 /**
@@ -48,16 +49,12 @@ export function queryTerms(question: string, max = 8): string[] {
 }
 
 /**
- * Is `path` inside one of `folders` (vault-relative, compared case-insensitively)?
- * The eval runner's reports always are: a bot never reads its own old answers.
+ * Is `path` one of `folders` or inside one, by the same rule as every AI tool
+ * (isExcludedPath: any case, any Unicode form)? The eval runner's reports
+ * always are: a bot never reads its own old answers.
  */
 export function isExcluded(path: string, folders: readonly string[]): boolean {
-  if (isEvalsPath(path)) return true
-  const lower = path.toLowerCase()
-  return folders.some((folder) => {
-    const f = folder.toLowerCase().replace(/^\/+|\/+$/g, '')
-    return f !== '' && (lower === f || lower.startsWith(`${f}/`))
-  })
+  return isEvalsPath(path) || isExcludedPath(path, folders)
 }
 
 /**

@@ -40,7 +40,12 @@ Recto is an Electron app over a folder of markdown files. The files are the trut
   `on(channel, listener)`. It refuses any channel not in the contract and never hands the renderer
   the `IpcRendererEvent` (which carries `sender`).
 - **renderer** has `contextIsolation: true` and `nodeIntegration: false`. It can only ask. Images
-  load through `recto-file://vault/<path>`, which main resolves inside the vault or answers 403.
+  load through `recto-file://vault/<path>`, which main resolves inside the vault or answers 403. The
+  scheme does not bypass the page's CSP: `index.html` names `recto-file:` for images, media and fetch.
+  Of Chromium's permissions only the clipboard and full screen are granted (`main/permissions.ts`).
+  "Open with app" never opens what would run a program - apps, scripts, installers, run-links, a file
+  marked executable (`runsSomething` in `vault-fs.ts`). A provider's address from the environment
+  (`RECTO_*_BASE`, for tests) is ignored by a packaged app (`providerBase` in `config.ts`).
 - **indexer** and **embedder** are utility processes so a first index of a large vault, or a model
   run, never blocks the window. Main talks to them with typed messages
   (`shared/indexer-protocol.ts`, `shared/embedder-protocol.ts`), one request id per message.
@@ -316,7 +321,10 @@ main: vault-tools/socket.ts  (first line must carry the token)
 - **One catalogue.** `shared/vault-tools.ts` holds the 27 tools (zod schemas, titles, descriptions,
   which ones write) and the prompts; the MCP program and main both use it, so the two ends cannot
   disagree. Note text in an answer is always wrapped in `<note path="…">` blocks, so a client can tell
-  a note's words from Recto's.
+  a note's words from Recto's; `read_file` gives a file's text the same way, after its details as data,
+  and any `<note` or `</note` inside the text loses its `<` (`renderBlocks` in `shared/vault-tools.ts`).
+  An error the AI reads is Recto's own words: a system error's text (it names paths on this Mac) goes
+  to the console, and any vault or home path left in a message is cut (`withoutPaths`, `vault-tools/index.ts`).
 - **Any file, not only notes.** `read_file` (`vault-tools/files.ts`) reads what is not a note: a PDF's
   text by pages (pdf.js's Node build in main), text and code files in parts, a canvas
   (`vault-tools/canvas-context.ts`), a picture's name and pixel size; anything else is said to be
@@ -336,8 +344,15 @@ main: vault-tools/socket.ts  (first line must carry the token)
   pending edits in main onto the canvas as it is (`acceptOps`; an edit whose node is gone is stale).
   `canvas_propose_new` is an ordinary new-file proposal.
 - **Why a socket.** The client starts `recto-mcp` as its own process, but only the running app has
-  the index, the vault and the settings. The socket (mode 0600, plus a random per-install token compared in constant time) lets that process ask
-  main, and when Recto is closed the connect fails and the client is told to open Recto.
+  the index, the vault and the settings. The socket (mode 0600, plus a random per-install token, compared
+  as SHA-256 digests in constant time, sent within 5 s of connecting) lets that process ask main, and
+  when Recto is closed the connect fails and the client is told to open Recto. Nothing a client sends can
+  throw out of the socket handler.
+- **Connecting clients** (`vault-tools/clients.ts`). Only Recto's own entry is added or removed, after a
+  backup; a config is written through a temporary file onto its real path, so a symlinked config stays a
+  symlink and keeps its permissions; Codex's TOML loses only the lines of Recto's table. Claude Code's
+  Repair puts the old entry back if the new add fails. An unpackaged build refuses to connect or
+  disconnect: it would point the person's real apps at itself.
 - **The launcher.** `main/vault-tools/launcher.ts` rewrites `<userData>/bin/recto-mcp` on every start
   with this install's paths, so clients keep one stable command while Recto updates or moves. It runs
   on Recto's own Electron as Node, so no Node install is needed.
@@ -424,7 +439,12 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   before in `main/secrets.ts`; ChatGPT tokens are refreshed one request at a time and revoked on
   sign-out. None of them reaches the renderer.
 - **The cloud gate.** `cloud` in `<vault>/.recto/ai-access.json` is off until turned on in
-  Settings → AI → Providers; `providers/index.ts` refuses a non-local provider while it is off. Background jobs
+  Settings → AI → Providers; `providers/index.ts` refuses a non-local provider while it is off. Apps
+  connected from outside (no session) send what they read to their own cloud model, so while it is off
+  every one of their tool calls is refused (`outsidePaused` in `vault-tools/index.ts`); their configs,
+  connections and suggestions stay, and the next call after it is turned on works. "Summarize with
+  Claude" in a note's preview goes through the same gate: the renderer sends only the path, and
+  `ai/index.ts summarize` refuses while cloud is off or the note is hidden from AI. Background jobs
   (note cards, tasks, topic titles) always run on the local model, topic titles even for cloud chats,
   and only Recto's chat and Quick ask can use cloud; the other bots stay local. Each answer stores
   the model string with a provider prefix (`codex`, `chatgpt:<slug>`); a provider switch is a
@@ -438,7 +458,14 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   "Looked through N" come from it; Quick ask's "Review the suggested edit" and "No edit was created"
   read the suggestions' state live.
 - **Exclusions.** Excluded folders hold for every provider: the tool layer hides them, the AI guide
-  too; earlier answers that used a note in an excluded folder - by their sources or their record -
+  too, and `get_vault_profile` says only how many there are, never their names (nor a topic only their
+  notes have). One matcher, `isExcludedPath` (`shared/ai-access.ts`), is used everywhere, the bots'
+  too. A bot's own excluded folders ride on its cloud chat's session (`exclude`) and join the vault's
+  in `buildScope`. A new path is checked as the disk would take it: through a symlinked folder it is
+  where the link points (`viaLink` in `scope.ts`). Excluding a folder drops settled suggestions about
+  its notes and Write directly's copies of them (`forgetExcluded` in `proposals.ts`); waiting ones stay
+  for the person; one client may have at most 30 waiting. The background cards and vectors skip
+  excluded folders too. Earlier answers that used a note in an excluded folder - by their sources or their record -
   are withheld from the history a model receives, the chats' and Quick ask's alike; and the local pipeline now merges them into its own bot exclude list
   (`bots/answers.ts`).
 - **Limits and usage** (`providers/limits.ts`, kept in the installed app's folder,

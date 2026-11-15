@@ -130,7 +130,7 @@ export const IPC = {
   aiSetKey: 'ai:set-key',
   aiClearKey: 'ai:clear-key',
   aiTest: 'ai:test',
-  aiSend: 'ai:send',
+  aiSummarize: 'ai:summarize',
   aiCancel: 'ai:cancel',
   obsidianVaults: 'obsidian:vaults',
   obsidianPick: 'obsidian:pick',
@@ -429,7 +429,7 @@ export type IpcApi = Exhaustive<
      * Start a reply. Resolves as soon as the request is accepted; the reply
      * itself arrives on `ai:delta` and ends with `ai:done` or `ai:error`.
      */
-    [IPC.aiSend]: (request: { id: string; model: string; system: string; messages: AiMessage[] }) => { ok: boolean; error?: string }
+    [IPC.aiSummarize]: (id: string, notePath: string) => { ok: boolean; error?: string }
     /** Stop a running stream. Unknown ids are a no-op, not an error. */
     [IPC.aiCancel]: (id: string) => { ok: boolean }
     /** Obsidian vaults registered on this machine. */

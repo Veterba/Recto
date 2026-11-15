@@ -73,6 +73,12 @@ describe('ranking notes', () => {
     expect(isExcluded('chatsy/a.md', ['chats'])).toBe(false)
     expect(isExcluded('Work/Secret/a.md', ['work/secret/'])).toBe(true)
   })
+
+  it('by the same rule as every AI tool: any Unicode form, and an excluded note given as its name', () => {
+    // "Café" typed composed, the Mac's folder name decomposed.
+    expect(isExcluded('Cafe\u0301/menu.md', ['Café'])).toBe(true)
+    expect(isExcluded('Folder/Note.md', ['Folder/Note'])).toBe(true)
+  })
 })
 
 describe('sections', () => {

@@ -30,7 +30,7 @@ const DETECT_NOTES = 400
 
 const clientEnv = (): ClientEnv => {
   const userData = app.getPath('userData')
-  return { home: os.homedir(), launcher: launcherPath(userData), backups: path.join(userData, 'backup', 'clients') }
+  return { home: os.homedir(), launcher: launcherPath(userData), backups: path.join(userData, 'backup', 'clients'), dev: !app.isPackaged }
 }
 
 const readJson = (file: string): unknown => {
@@ -63,7 +63,12 @@ async function detectFormatting(): Promise<ReturnType<IpcApi[typeof IPC.aiAccess
 
 export function registerAiAccessIpc(handle: Handle): void {
   handle(IPC.aiAccessSettings, () => coerceAiAccess(readState(AI_ACCESS_STATE)))
-  handle(IPC.aiAccessSetSettings, (next) => writeState(AI_ACCESS_STATE, coerceAiAccess(next)))
+  handle(IPC.aiAccessSetSettings, (next) => {
+    const settings = coerceAiAccess(next)
+    const written = writeState(AI_ACCESS_STATE, settings)
+    proposals.forgetExcluded(settings.excluded)
+    return written
+  })
   handle(IPC.aiAccessDetectFormatting, () => detectFormatting())
   handle(IPC.aiAccessDraftGuide, () => draftGuide(buildScope('recto')))
   handle(IPC.aiAccessSaveGuide, async (name, text) => {

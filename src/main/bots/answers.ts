@@ -251,7 +251,7 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
     .slice(-2)
     .flatMap((m) => m.sources ?? [])
 
-  if (isCloudModel(job.model)) return runCloudJob(job, controls, d, bot, topic, forCloud(turns, excluded, (id) => proposal(id)?.status ?? null), started)
+  if (isCloudModel(job.model)) return runCloudJob(job, controls, d, bot, topic, forCloud(turns, [...excluded, ...(bot.exclude ?? [])], (id) => proposal(id)?.status ?? null), started)
 
   const harness: BotHarness = d.settings().harness
   const provider = d.providerFor(job.model)
@@ -357,7 +357,15 @@ async function runCloudJob(
   messages: AiMessage[],
   started: number,
 ): Promise<void> {
-  const session = openSession({ client: `recto-chat · ${providerInfo(providerOf(job.model)).name}`, tools: null, notes: null, writable: null, cloud: true })
+  // The bot's own excluded folders hold for its tools as the vault's do (scope.ts).
+  const session = openSession({
+    client: `recto-chat · ${providerInfo(providerOf(job.model)).name}`,
+    tools: null,
+    notes: null,
+    exclude: bot.exclude ?? [],
+    writable: null,
+    cloud: true,
+  })
   const base = topic.body
   let text = ''
   let steps: BotStep[] = []

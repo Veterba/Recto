@@ -1,5 +1,9 @@
 import { BrowserWindow } from 'electron'
-import { MAX_ANSWER_TOKENS, type AiMessage } from '../../shared/ai'
+import { MAX_ANSWER_TOKENS, UTILITY_MODEL, type AiMessage } from '../../shared/ai'
+import { AI_ACCESS_STATE, coerceAiAccess } from '../../shared/ai-access'
+import { readState } from '../state'
+import * as vaultFs from '../vault-fs'
+import { buildScope } from '../vault-tools/scope'
 import { readKey } from '../secrets'
 import { DirectProvider, type AiProvider } from './provider'
 import { IPC_EVENT } from '../../shared/ipc'
@@ -66,7 +70,33 @@ export function cancel(id: string): { ok: boolean } {
   return { ok: true }
 }
 
-export function startStream(request: { id: string; model: string; system: string; messages: AiMessage[] }): {
+/** How much of a note a summary reads. */
+const SUMMARY_INPUT_CHARS = 24_000
+const SUMMARY_SYSTEM =
+  "Summarise the user's note in two or three plain sentences: what it is about and what matters in it. No preamble, no bullet points, no markdown."
+
+/**
+ * "Summarize with Claude" in a note's preview card. Only the note's path comes
+ * from the renderer; the text, the instructions and the model are main's. It
+ * is a cloud call like any other: refused while Cloud is off for the vault,
+ * and for a note excluded from AI (or a chat), whose text never leaves.
+ */
+export async function summarize(id: string, notePath: string): Promise<{ ok: boolean; error?: string }> {
+  if (!coerceAiAccess(readState(AI_ACCESS_STATE)).cloud)
+    return { ok: false, error: 'Cloud providers are off for this vault. Turn them on in Settings → AI → Providers.' }
+  let hidden: boolean
+  try {
+    hidden = buildScope('recto').hidden(notePath)
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+  if (hidden) return { ok: false, error: 'This note is in a folder excluded from AI, so it is not sent anywhere.' }
+  const read = await vaultFs.readFile(notePath)
+  if (!read.ok) return { ok: false, error: read.error }
+  return startStream({ id, model: UTILITY_MODEL, system: SUMMARY_SYSTEM, messages: [{ role: 'user', content: read.content.slice(0, SUMMARY_INPUT_CHARS) }] })
+}
+
+function startStream(request: { id: string; model: string; system: string; messages: AiMessage[] }): {
   ok: boolean
   error?: string
 } {

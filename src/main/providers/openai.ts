@@ -1,3 +1,4 @@
+import { providerBase } from '../config'
 import type { AiMessage } from '../../shared/ai'
 import { USAGE_URL, type ProviderProblem } from '../../shared/providers'
 import { ProviderError, toolSchema, type ToolModel } from './run'
@@ -14,7 +15,7 @@ import type { VAULT_TOOLS } from '../../shared/vault-tools'
  * model's reasoning comes back encrypted and goes back in with the next turn.
  */
 
-export const OPENAI_BASE = (): string => process.env['RECTO_OPENAI_BASE'] ?? 'https://api.openai.com/v1'
+export const OPENAI_BASE = (): string => providerBase('RECTO_OPENAI_BASE') ?? 'https://api.openai.com/v1'
 
 type Item = Record<string, unknown>
 type State = { instructions: string; input: Item[]; tools: Item[] }

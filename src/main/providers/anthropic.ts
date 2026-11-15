@@ -1,3 +1,4 @@
+import { providerBase } from '../config'
 import Anthropic from '@anthropic-ai/sdk'
 import { currentAiModel, MAX_ANSWER_TOKENS, type AiMessage } from '../../shared/ai'
 import type { ProviderProblem } from '../../shared/providers'
@@ -9,7 +10,8 @@ import { ProviderError, toolSchema, type ToolModel } from './run'
 type State = { system: string; messages: Anthropic.MessageParam[]; tools: Anthropic.Tool[] }
 
 export function messagesModel(model: string, key: string, tools: typeof VAULT_TOOLS): ToolModel<State> {
-  const client = new Anthropic({ apiKey: key, ...(process.env['RECTO_ANTHROPIC_BASE'] ? { baseURL: process.env['RECTO_ANTHROPIC_BASE'] } : {}) })
+  const base = providerBase('RECTO_ANTHROPIC_BASE')
+  const client = new Anthropic({ apiKey: key, ...(base === undefined ? {} : { baseURL: base }) })
   return {
     start: (system, messages: AiMessage[]) => ({
       system,

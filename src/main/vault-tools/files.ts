@@ -19,6 +19,16 @@ type Args = Record<string, unknown>
 
 const data = (value: unknown): ResultBlock => ({ kind: 'data', data: value })
 
+/**
+ * The file's details as data, its text in a <note> block: text in a file is
+ * something the AI reads, never instructions, and is marked as such
+ * (shared/vault-tools.ts renderBlocks). Part of it is an excerpt.
+ */
+const withText = (p: string, details: Record<string, unknown>, whole: boolean, text: string): ResultBlock[] => [
+  data({ ...details, whole }),
+  { kind: 'note', path: p, ...(whole ? {} : { part: 'excerpt' }), text },
+]
+
 /** About 6,000 tokens of text per call. */
 const BUDGET_CHARS = 24_000
 
@@ -133,20 +143,22 @@ export async function readAnyFile(scope: Scope, a: Args): Promise<ResultBlock[]>
   if (kind === 'note') {
     const text = await readNote(p)
     const whole = text.length <= BUDGET_CHARS
-    return [data({ ...head, whole, text: whole ? text : `${text.slice(0, BUDGET_CHARS)}…` })]
+    return withText(p, head, whole, whole ? text : `${text.slice(0, BUDGET_CHARS)}…`)
   }
   if (kind === 'canvas') {
     const context = await canvasContext(scope, p, [], BUDGET_CHARS / 4)
     if (context === null) throw new ToolError(`“${name}” could not be read.`)
     // The canvas itself is always mapped whole; the notes on it are other notes.
-    return [data({ ...head, whole: true, text: context.text })]
+    return withText(p, head, true, context.text)
   }
   if (kind === 'pdf') {
     const { text, whole } = await pdfText(absolute, a['pages']).catch((err: unknown) => {
       if (err instanceof ToolError) throw err
-      throw new ToolError(`“${name}” could not be read as a PDF: ${err instanceof Error ? err.message : String(err)}`)
+      // The reason stays here: it can carry the file's path on this Mac.
+      console.error('[vault-tools] pdf', p, err)
+      throw new ToolError(`“${name}” could not be read as a PDF.`)
     })
-    return [data({ ...head, whole, text })]
+    return withText(p, head, whole, text)
   }
   if (kind === 'image' && !p.toLowerCase().endsWith('.svg')) {
     const bytes = await fsp.readFile(absolute)
@@ -172,7 +184,7 @@ export async function readAnyFile(scope: Scope, a: Args): Promise<ResultBlock[]>
     const offset = Math.max(0, Number(a['offset'] ?? 0) || 0)
     const text = read.content.slice(offset, offset + BUDGET_CHARS)
     const next = offset + BUDGET_CHARS < read.content.length ? offset + BUDGET_CHARS : null
-    return [data({ ...head, whole: offset === 0 && next === null, text, ...(next === null ? {} : { next_offset: next }) })]
+    return withText(p, { ...head, ...(next === null ? {} : { next_offset: next }) }, offset === 0 && next === null, text)
   }
   throw new ToolError(`“${name}” is a file Recto cannot read yet (${path.posix.extname(p).slice(1).toUpperCase() || 'binary'}, ${kb(size)}).`)
 }

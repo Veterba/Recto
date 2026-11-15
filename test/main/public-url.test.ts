@@ -9,6 +9,14 @@ describe('public addresses only', () => {
     for (const ip of ['93.184.216.34', '172.32.0.1', '8.8.8.8', '2606:4700::1111']) expect(privateAddress(ip), ip).toBe(false)
   })
 
+  it('an IPv4 address written inside an IPv6 one is that address, in whatever form the URL parser leaves it', async () => {
+    for (const ip of ['::ffff:7f00:1', '::ffff:a00:1', '::7f00:1', '64:ff9b::7f00:1', '64:ff9b::127.0.0.1', '::ffff:c0a8:101'])
+      expect(privateAddress(ip), ip).toBe(true)
+    expect(privateAddress('::ffff:808:808')).toBe(false)
+    for (const url of ['http://[::ffff:127.0.0.1]/', 'http://[::ffff:7f00:1]:8080/', 'http://[::ffff:192.168.1.1]/'])
+      expect(await publicUrl(new URL(url)), url).toBe(false)
+  })
+
   it('refuses localhost, .local, literal private addresses and other schemes without looking anything up', async () => {
     for (const url of ['http://localhost:3000/', 'http://router.local/', 'http://192.168.0.1/', 'http://[::1]/', 'file:///etc/hosts', 'ftp://example.org/'])
       expect(await publicUrl(new URL(url)), url).toBe(false)

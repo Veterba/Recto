@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
@@ -31,7 +31,16 @@ export function mcpToken(userData = app.getPath('userData')): string {
   return token
 }
 
-const same = (a: string, b: string): boolean => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b))
+/**
+ * Compared as digests, always 32 bytes each: compared as they came, a 64-letter
+ * token with a non-ASCII letter was longer in bytes than in letters, and
+ * timingSafeEqual threw - uncaught, it took Recto down.
+ */
+const digest = (s: string): Buffer => createHash('sha256').update(s, 'utf8').digest()
+const same = (a: string, b: string): boolean => timingSafeEqual(digest(a), digest(b))
+
+/** How long a connection has to send the token before it is closed. */
+const AUTH_MS = 5000
 
 function serve(socket: net.Socket, token: string): void {
   let buffer = ''
@@ -39,7 +48,18 @@ function serve(socket: net.Socket, token: string): void {
   const reply = (response: BridgeResponse): void => void socket.write(`${JSON.stringify(response)}\n`)
   socket.setEncoding('utf8')
   socket.on('error', () => undefined)
+  const deadline = setTimeout(() => socket.destroy(), AUTH_MS)
+  socket.on('close', () => clearTimeout(deadline))
   socket.on('data', (chunk: string) => {
+    // Whatever a client sends, it must not throw out of here: an uncaught error ends Recto.
+    try {
+      read(chunk)
+    } catch (err) {
+      console.error('[mcp socket]', err)
+      socket.destroy()
+    }
+  })
+  const read = (chunk: string): void => {
     buffer += chunk
     // A client that never sends a newline does not get to fill memory.
     if (buffer.length > 4_000_000) socket.destroy()
@@ -60,6 +80,7 @@ function serve(socket: net.Socket, token: string): void {
           return
         }
         authed = true
+        clearTimeout(deadline)
         continue
       }
       let request: BridgeRequest
@@ -79,9 +100,13 @@ function serve(socket: net.Socket, token: string): void {
           typeof request.session === 'string' ? request.session : undefined,
         ).then(
           (outcome) => reply({ id: request.id, outcome }),
+          (err: unknown) => {
+            console.error('[mcp socket]', err)
+            reply({ id: request.id, outcome: { ok: false, error: 'Recto could not do that.' } })
+          },
         )
     }
-  })
+  }
 }
 
 export function startMcpSocket(userData = app.getPath('userData')): Promise<string> {

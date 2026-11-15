@@ -494,7 +494,7 @@ export function registerIpc(): void {
     return { ok: true }
   })
   handle(IPC.aiTest, (model) => ai.test(model))
-  handle(IPC.aiSend, (request) => ai.startStream(request))
+  handle(IPC.aiSummarize, (id, notePath) => ai.summarize(id, notePath))
   handle(IPC.aiCancel, (id) => ai.cancel(id))
 
   handle(IPC.botsList, () => bots.list())

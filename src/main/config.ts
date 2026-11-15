@@ -21,6 +21,9 @@
  *   RECTO_EVAL_JOB=<job.json>     Open no window: run the bot evals described
  *                                 in the job on its (scratch) vault, write the
  *                                 results, quit. `npm run bots:eval` sets it.
+ *   RECTO_ANTHROPIC_BASE, RECTO_OPENAI_BASE, RECTO_SIWC_AUTH_BASE=<url>
+ *                                 A provider's address, for tests against a
+ *                                 local stand-in. Ignored by a packaged app.
  *
  * Read by the tests and scripts only, not by the app:
  *
@@ -29,6 +32,16 @@
  *                                 against the live model.
  *   RECTO_RECORD_FIXTURE=1        Re-record that test's embedding fixture.
  */
+
+import * as electron from 'electron'
+
+/**
+ * A provider's address from the environment - development and tests only. A
+ * packaged app always talks to the provider itself: an address set in the
+ * environment would be sent the person's key and every question.
+ */
+export const providerBase = (name: 'RECTO_ANTHROPIC_BASE' | 'RECTO_OPENAI_BASE' | 'RECTO_SIWC_AUTH_BASE'): string | undefined =>
+  (electron as { app?: { isPackaged?: boolean } }).app?.isPackaged === true ? undefined : process.env[name] || undefined
 
 export const allowRealVault = (): boolean => process.env['RECTO_ALLOW_REAL_VAULT'] === '1'
 

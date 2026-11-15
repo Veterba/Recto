@@ -3,7 +3,7 @@ import { BrowserWindow, Notification } from 'electron'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { AI_PROPOSALS_STATE, type Proposal, type ProposalStatus } from '../../shared/ai-access'
+import { AI_PROPOSALS_STATE, isExcludedPath, type Proposal, type ProposalStatus } from '../../shared/ai-access'
 import { IPC_EVENT } from '../../shared/ipc'
 import { VAULT_STATE_DIR } from '../../shared/vault'
 import { sendEvent } from '../events'
@@ -11,6 +11,7 @@ import { readState, writeState } from '../state'
 import { currentVault } from '../vault'
 import * as vaultFs from '../vault-fs'
 import type { Draft } from './write'
+import { ToolError } from './scope'
 import { parseCanvas, serializeCanvas } from '../../shared/canvas'
 import { acceptOps, settledAs, type CanvasOpState, type CanvasProposal } from '../../shared/canvas-ops'
 
@@ -27,6 +28,8 @@ import { acceptOps, settledAs, type CanvasOpState, type CanvasProposal } from '.
 
 /** Settled proposals kept, newest first. */
 const KEEP_SETTLED = 50
+/** Suggestions one client may have waiting at once: a client stuck in a loop does not bury the person in them. */
+export const MAX_PENDING_PER_CLIENT = 30
 
 const load = (): Proposal[] => {
   const raw = readState(AI_PROPOSALS_STATE) as { proposals?: unknown } | null
@@ -49,6 +52,10 @@ export const proposal = (id: string): Proposal | null => load().find((p) => p.id
 
 /** A draft as a pending proposal; said with a notification when Recto is not in front. */
 export function queue(draft: Draft, client: string, tool: string): Proposal {
+  if (load().filter((p) => p.status === 'pending' && p.client === client).length >= MAX_PENDING_PER_CLIENT)
+    throw new ToolError(
+      `${MAX_PENDING_PER_CLIENT} of your suggestions already wait in Recto. Stop and tell the person to apply or discard them first.`,
+    )
   const made: Proposal = {
     id: randomUUID(),
     client,
@@ -108,6 +115,34 @@ function backup(files: Draft['files'], now = new Date()): void {
     fs.writeFileSync(to, f.before)
   }
   pruneBackups(root, now.getTime() - KEEP_BACKUP_DAYS * 86_400_000)
+}
+
+/**
+ * Folders were excluded from AI: what Recto kept of their notes for the AI
+ * goes too - settled suggestions about them, and Write directly's copies.
+ * One still waiting stays: the person still applies or discards it.
+ */
+export function forgetExcluded(excluded: readonly string[]): void {
+  const vault = currentVault()
+  if (vault === null || excluded.length === 0) return
+  const about = (p: Proposal): boolean =>
+    p.files.some((f) => isExcludedPath(f.path, excluded)) || (p.canvas !== undefined && isExcludedPath(p.canvas.path, excluded))
+  const list = load()
+  const kept = list.filter((p) => p.status === 'pending' || !about(p))
+  if (kept.length !== list.length) save(kept)
+  const root = path.join(vault.path, VAULT_STATE_DIR, 'backup', 'ai')
+  let copies: string[] = []
+  try {
+    copies = fs.readdirSync(root)
+  } catch {
+    return
+  }
+  for (const copy of copies)
+    for (const entry of excluded) {
+      const folder = entry.replace(/^\/+|\/+$/g, '')
+      if (folder === '' || folder.split('/').includes('..')) continue
+      for (const p of [folder, `${folder}.md`]) fs.rmSync(path.join(root, copy, p), { recursive: true, force: true })
+    }
 }
 
 /** Folders in `root` made before `cutoff` (epoch ms), by their own time: removed. */

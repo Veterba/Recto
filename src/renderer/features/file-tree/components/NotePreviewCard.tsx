@@ -1,4 +1,3 @@
-import { UTILITY_MODEL } from '@shared/ai'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../../../app/api'
@@ -35,8 +34,6 @@ type Props = {
 
 const WIDTH = 340
 const GAP = 10
-/** Enough for a gist, and a bound on what one click sends to the API. */
-const SUMMARY_INPUT_CHARS = 24_000
 
 export function NotePreviewCard({ path, anchor, mtime, onOpen, onPin, onPointerEnter, onPointerLeave }: Props): React.ReactElement {
   const card = useRef<HTMLDivElement | null>(null)
@@ -112,14 +109,7 @@ export function NotePreviewCard({ path, anchor, mtime, onOpen, onPin, onPointerE
     if (text === null) return
     setSummary({ text: '', state: 'streaming' })
     void api
-      .invoke(IPC.aiSend, {
-        id: streamId,
-        model: UTILITY_MODEL,
-        system:
-          "Summarise the user's note in two or three plain sentences: what it is about and what matters in it. " +
-          'No preamble, no bullet points, no markdown.',
-        messages: [{ role: 'user', content: text.slice(0, SUMMARY_INPUT_CHARS) }],
-      })
+      .invoke(IPC.aiSummarize, streamId, path)
       .then((started) => {
         if (!started.ok) setSummary({ text: started.error ?? 'Could not start.', state: 'error' })
       })

@@ -143,8 +143,8 @@ export function ProvidersGroup({ settings, save }: Props): React.ReactElement {
         label="Cloud providers in this vault"
         hint={
           settings.cloud
-            ? 'On: Recto’s chat and Quick ask can answer with the providers below. Your question, the chat so far and the notes the AI reads leave this Mac.'
-            : 'Off: every answer stays on this Mac.'
+            ? 'On: Recto’s chat and Quick ask can answer with the providers below, and connected apps (Claude Code, Cursor…) can read the vault. Your question, the chat so far and the notes the AI reads leave this Mac.'
+            : 'Off: every answer stays on this Mac. Connected apps (Claude Code, Cursor…) are paused: they stay connected and work again once this is on.'
         }
         more="Excluded folders are never sent to any provider. Background work - note cards, tasks, topic names - always stays on this Mac. Other bots stay on this Mac too."
       >
