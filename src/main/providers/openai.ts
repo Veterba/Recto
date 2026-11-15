@@ -52,7 +52,9 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
       if (!response.ok || response.body === null) throw new ProviderError(await problemOf(response, auth.plan))
 
       const output: Item[] = []
-      for await (const event of sse(response.body)) {
+      // Done only once OpenAI says so: a stream that just ends was cut off, and its text is not an answer.
+      let finished = false
+      for await (const event of events(response.body, signal)) {
         const type = event['type']
         if (type === 'response.output_text.delta' && typeof event['delta'] === 'string') yield { type: 'text', text: event['delta'] }
         else if (type === 'response.output_item.done' && typeof event['item'] === 'object' && event['item'] !== null) {
@@ -61,16 +63,19 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
           if (item['type'] === 'function_call')
             yield { type: 'call', id: String(item['call_id']), name: String(item['name']), args: String(item['arguments'] ?? '') }
         } else if (type === 'response.completed') {
+          finished = true
           const tokens = ((event['response'] as Item | undefined)?.['usage'] as Item | undefined)?.['total_tokens']
           if (typeof tokens === 'number') yield { type: 'usage', tokens }
         } else if (type === 'response.failed' || type === 'error') {
           const error = ((event['response'] as Item | undefined)?.['error'] ?? event['error'] ?? event) as Item
           throw new ProviderError(problemFromCode(String(error['code'] ?? ''), String(error['message'] ?? 'The answer failed.'), auth.plan))
         } else if (type === 'response.incomplete') {
+          finished = true
           const reason = ((event['response'] as Item | undefined)?.['incomplete_details'] as Item | undefined)?.['reason']
           yield { type: 'text', text: `\n\n(The answer was cut short${typeof reason === 'string' ? `: ${reason.replace(/_/g, ' ')}` : ''}.)` }
         }
       }
+      if (!finished) throw new ProviderError({ kind: 'down', message: 'The connection to OpenAI dropped before the answer was finished. Try again.' })
       // What the model said and asked, back into the conversation for its next turn.
       state.input.push(...output.map(withoutStatus))
     },
@@ -108,6 +113,16 @@ function post(body: string, token: string, signal: AbortSignal): Promise<Respons
     if (signal.aborted) throw err
     throw new ProviderError({ kind: 'down', message: `OpenAI could not be reached: ${err instanceof Error ? err.message : String(err)}` })
   })
+}
+
+/** The stream's events; the connection failing under it is OpenAI not answering, not a raw network error. */
+async function* events(body: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncIterable<Item> {
+  try {
+    yield* sse(body)
+  } catch (err) {
+    if (signal.aborted || err instanceof ProviderError) throw err
+    throw new ProviderError({ kind: 'down', message: 'The connection to OpenAI dropped before the answer was finished. Try again.' })
+  }
 }
 
 /** Server-sent events, one JSON object per `data:` line. */

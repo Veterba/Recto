@@ -32,6 +32,12 @@ export function messagesModel(model: string, key: string, tools: typeof VAULT_TO
           if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') yield { type: 'text', text: event.delta.text }
         const final = await stream.finalMessage()
         yield { type: 'usage', tokens: final.usage.input_tokens + final.usage.output_tokens }
+        // At the length limit the answer just stops: said, as the OpenAI loop says it, and a tool call
+        // cut off in the middle is not made with half its arguments.
+        if (final.stop_reason === 'max_tokens') {
+          yield { type: 'text', text: '\n\n(The answer was cut short: it reached the length limit.)' }
+          return
+        }
         state.messages.push({ role: 'assistant', content: final.content })
         for (const block of final.content)
           if (block.type === 'tool_use') yield { type: 'call', id: block.id, name: block.name, args: JSON.stringify(block.input ?? {}) }
@@ -66,7 +72,12 @@ function problemOf(err: unknown): ProviderProblem {
     if (err.status === 401) return { kind: 'no-key', message: 'The Anthropic key was rejected. Check it in Settings → AI.' }
     if (err.status === 429) return { kind: 'limit', message: 'Rate limited by the Anthropic API. Wait a moment and try again.' }
     if (err.status !== undefined && err.status >= 500) return { kind: 'down', message: 'The Anthropic API is not answering right now. Try again shortly.' }
-    return { kind: 'failed', message: err.message }
+    // The API's own sentence, not the SDK's "404 {"type":"error",…}".
+    const said = (err.error as { error?: { message?: unknown } } | undefined)?.error?.message
+    const reason = typeof said === 'string' && said !== '' ? said : 'no reason given'
+    if (err.status === 403) return { kind: 'failed', message: `The Anthropic key may not do this: ${reason}` }
+    if (err.status === 404) return { kind: 'failed', message: `The Anthropic API does not know this model: ${reason}` }
+    return { kind: 'failed', message: `The Anthropic API refused the request: ${reason}` }
   }
   if (err instanceof Anthropic.APIConnectionError) return { kind: 'down', message: 'The Anthropic API could not be reached.' }
   return { kind: 'failed', message: err instanceof Error ? err.message : String(err) }

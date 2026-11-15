@@ -68,7 +68,8 @@ async function statusOf(id: ProviderId, local: () => Promise<ProviderModel[]>): 
     const file = await find(name)
     if (file === null) return { ...base, ready: false, problem: { kind: 'cli-missing', message: 'Not installed, or not found.', url: INSTALL_URL[name] } }
     const env = { ...process.env, PATH: await cliPath() }
-    const ok = await signedIn(name, file, env)
+    const signed = await signedIn(name, file, env)
+    const ok = signed === 'yes'
     // Codex says its limits on request, for free; Claude Code only with an answer (kept from the last one).
     const limits = ok && id === 'codex' ? await readCodexLimits(file, env) : base.limits
     const models = id === 'claude-code' ? ['opus', 'sonnet', 'haiku'].map((m) => ({ id: m, label: m[0]!.toUpperCase() + m.slice(1) })) : []
@@ -78,31 +79,48 @@ async function statusOf(id: ProviderId, local: () => Promise<ProviderModel[]>): 
       ready: ok,
       detail: file,
       models: [{ id: '', label: 'Default model' }, ...models],
-      problem: ok ? null : { kind: 'signed-out', message: `Not signed in. Run \`${name === 'codex' ? 'codex login' : 'claude'}\` in a terminal.` },
+      problem: ok
+        ? null
+        : signed === 'unknown'
+          ? { kind: 'down', message: `${providerInfo(id).name} did not say whether it is signed in. Check again in a moment.` }
+          : { kind: 'signed-out', message: `Not signed in. Run \`${name === 'codex' ? 'codex login' : 'claude'}\` in a terminal.` },
     }
   }
   if (id === 'chatgpt') {
     const record = chatgpt.record()
     if (!chatgpt.signedIn()) return { ...base, ready: false, problem: { kind: 'signed-out', message: 'Not signed in.' } }
     if (!chatgpt.planAllowed())
-      return { ...base, ready: false, detail: record?.email ?? null, problem: { kind: 'signed-out', message: 'Plan usage was not allowed at sign-in.' } }
+      return {
+        ...base,
+        ready: false,
+        detail: record?.email ?? null,
+        problem: { kind: 'signed-out', message: 'Plan usage was not allowed at sign-in. Continue with ChatGPT again and allow it.' },
+      }
     const models = await chatgpt.models().catch(() => [])
-    return { ...base, ready: true, detail: record?.email ?? null, models }
+    // Signed in, but no model to pick: said, rather than an empty picker.
+    const problem: ProviderProblem | null =
+      models.length === 0 ? { kind: 'down', message: 'OpenAI did not list any models for this account just now. Check again in a moment.' } : null
+    return { ...base, ready: true, detail: record?.email ?? null, models, problem }
   }
   if (id === 'openai') {
     const key = openAiKey()
     if (key === null) return { ...base, ready: false, problem: { kind: 'no-key', message: 'No key saved.' } }
-    return { ...base, ready: true, detail: `sk-…${key.slice(-4)}`, models: await openAiModels(key) }
+    const listed = await openAiModels(key)
+    // A key OpenAI turned away (revoked, deleted) is not "Key saved, ready".
+    if (listed === 'rejected')
+      return { ...base, ready: false, detail: `sk-…${key.slice(-4)}`, problem: { kind: 'no-key', message: 'OpenAI rejected this key. Save a new one under Advanced.' } }
+    return { ...base, ready: true, detail: `sk-…${key.slice(-4)}`, models: listed }
   }
   const key = readKey()
   if (key === null) return { ...base, ready: false, problem: { kind: 'no-key', message: 'No key saved.' } }
   return { ...base, ready: true, detail: `sk-ant-…${key.slice(-4)}`, models: AI_MODELS.map((m) => ({ id: m.id, label: m.label })) }
 }
 
-/** The key's chat models, newest first; no call when it fails. */
-async function openAiModels(key: string): Promise<ProviderModel[]> {
+/** The key's chat models, newest first; none when the list could not be had, 'rejected' when OpenAI refused the key. */
+export async function openAiModels(key: string): Promise<ProviderModel[] | 'rejected'> {
   try {
     const response = await fetch(`${OPENAI_BASE()}/models`, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(5000) })
+    if (response.status === 401) return 'rejected'
     if (!response.ok) return []
     const body = (await response.json()) as { data?: { id?: unknown; created?: unknown }[] }
     return (body.data ?? [])
@@ -137,22 +155,47 @@ function runnerFor(model: string, local: BotModelProvider): Runner {
   }
 }
 
+/** No sign of life - a word, a step, a tool call, usage - for this long, and an answer is stopped. Long enough for a model reasoning in silence. */
+export const IDLE_MS = 180_000
+
 /**
  * One answer, with its steps. A cloud provider in a vault where cloud is off
- * refuses before anything is sent anywhere.
+ * refuses before anything is sent anywhere. One that shows no sign of life
+ * for `idleMs` is stopped with a reason - before its first word too, which no
+ * caller's own timer saw, and never while it is still working.
  */
-export async function* run(request: RunRequest, local: BotModelProvider): AsyncIterable<Exclude<RunEvent, { type: 'usage' | 'limits' }>> {
+export async function* run(
+  request: RunRequest,
+  local: BotModelProvider,
+  idleMs = IDLE_MS,
+): AsyncIterable<Exclude<RunEvent, { type: 'usage' | 'limits' }>> {
   const id = providerOf(request.model)
   if (id !== 'ollama' && !cloudEnabled())
     throw new ProviderError({ kind: 'cloud-off', message: 'Cloud providers are off for this vault. Turn them on in Settings → AI → Providers.' })
+  const controller = new AbortController()
+  const stop = (): void => controller.abort()
+  request.signal.addEventListener('abort', stop)
+  if (request.signal.aborted) stop()
+  const events = withSteps(runnerFor(request.model, local), { ...request, signal: controller.signal })[Symbol.asyncIterator]()
   try {
-    // What the answer used, and the plan's limits, are kept for Settings and the picker; the answer gets the rest.
-    for await (const event of withSteps(runnerFor(request.model, local), request)) {
+    for (;;) {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const idle = new Promise<'idle'>((resolve) => (timer = setTimeout(() => resolve('idle'), idleMs)))
+      const next = await Promise.race([events.next(), idle]).finally(() => clearTimeout(timer))
+      if (next === 'idle') {
+        controller.abort()
+        void events.return?.()?.catch(() => undefined)
+        throw new ProviderError({ kind: 'down', message: `No sign of an answer for ${Math.round(idleMs / 1000)} seconds, so it was stopped. Try again.` })
+      }
+      if (next.done === true) return
+      // What the answer used, and the plan's limits, are kept for Settings and the picker; the answer gets the rest.
+      const event = next.value
       if (event.type === 'usage') recordUsage(id, event.tokens)
       else if (event.type === 'limits') recordLimits(id, event.limits)
       else yield event
     }
   } finally {
+    request.signal.removeEventListener('abort', stop)
     if (id === 'codex') forgetCodexLimits()
   }
 }
@@ -166,7 +209,7 @@ export async function readiness(model: string): Promise<ProviderProblem | null> 
     const name = CLI[id]
     const file = await find(name)
     if (file === null) return { kind: 'cli-missing', message: `${providerInfo(id).name} is not installed, or Recto cannot find it.`, url: INSTALL_URL[name] }
-    if (!(await signedIn(name, file, { ...process.env, PATH: await cliPath() })))
+    if ((await signedIn(name, file, { ...process.env, PATH: await cliPath() })) === 'no')
       return { kind: 'signed-out', message: `${providerInfo(id).name} is not signed in. Run \`${name === 'codex' ? 'codex login' : 'claude'}\` in a terminal.` }
     return null
   }

@@ -16,7 +16,8 @@ import type { ClientId, ClientPlan, ClientStatus } from '../../shared/ai-access'
 const run = promisify(execFile)
 
 /** `dev`: a development build, whose launcher must never end up in the person's real AI apps. */
-export type ClientEnv = { home: string; launcher: string; backups: string; dev?: boolean }
+/** `version`: this Recto's, which an installed Claude Desktop extension must match - it carries its own copy of the program. */
+export type ClientEnv = { home: string; launcher: string; backups: string; dev?: boolean; version?: string }
 
 const DEV_REFUSED = 'A development build of Recto does not change your AI apps’ settings: it would point them at this build. Connect from the installed Recto.'
 
@@ -144,6 +145,18 @@ function desktopExtension(home: string): string | null {
   }
 }
 
+/** The Recto version an installed extension was built by, from its manifest; null when it cannot be read. */
+function extensionVersion(home: string, folder: string): string | null {
+  try {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(home, 'Library', 'Application Support', 'Claude', 'Claude Extensions', folder, 'manifest.json'), 'utf8'),
+    ) as { version?: unknown }
+    return typeof manifest.version === 'string' ? manifest.version : null
+  } catch {
+    return null
+  }
+}
+
 export function clientStatus(id: ClientId, env: ClientEnv): ClientStatus {
   const base = { id, name: NAMES[id], url: URLS[id], installed: installed(id, env.home) }
   const file = files(env.home)[id]
@@ -159,8 +172,14 @@ export function clientStatus(id: ClientId, env: ClientEnv): ClientStatus {
   if (!read.ok) return { ...base, state: 'broken', detail: read.error }
   const state = entryState(servers(read.value)['recto'], env.launcher)
   if (state === 'missing') {
-    if (id === 'claude-desktop' && desktopExtension(env.home) !== null)
+    const extension = id === 'claude-desktop' ? desktopExtension(env.home) : null
+    if (extension !== null) {
+      const built = extensionVersion(env.home, extension)
+      // Made by an older Recto, it runs that Recto's program against this one: said, with the way to fix it.
+      if (env.version !== undefined && built !== null && built !== env.version)
+        return { ...base, state: 'broken', detail: `The Claude Desktop extension is from Recto ${built}. Install it again from here (Install extension).` }
       return { ...base, state: 'connected', detail: 'As a Claude Desktop extension.' }
+    }
     return { ...base, state: 'not-connected', detail: null }
   }
   return state === 'connected'

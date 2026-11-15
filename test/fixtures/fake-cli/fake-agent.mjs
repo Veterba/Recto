@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // A stand-in for `codex` and `claude` in tests: it answers by its own file name,
 // in that CLI's JSON stream, and spends nothing. FAKE_SCENARIO picks the script:
-// ok, signed-out, limit, down, slow. `codex app-server` answers the limits
+// ok, signed-out, limit, down, slow, retried (an error on the way, then the answer),
+// silent-error (an error, no answer, exit 0). `codex app-server` answers the limits
 // read. FAKE_LOG, when set, gets the arguments and
 // the prompt it received, as JSON, so a test can check what reached the "cloud".
 
@@ -76,6 +77,8 @@ process.stdin.on('end', async () => {
   if (name === 'codex') {
     out({ type: 'thread.started', thread_id: 't1' })
     out({ type: 'turn.started' })
+    if (scenario === 'retried' || scenario === 'silent-error') out({ type: 'error', message: 'stream disconnected before completion; retrying 1/5' })
+    if (scenario === 'silent-error') process.exit(0)
     out({ type: 'item.completed', item: { id: 'i1', type: 'agent_message', text: 'Your notes say compost, loam and grit.' } })
     out({ type: 'turn.completed', usage: { input_tokens: 900, cached_input_tokens: 0, output_tokens: 40 } })
   } else {

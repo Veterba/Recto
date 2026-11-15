@@ -3,7 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
-import { socketPath, TOKEN_FILE, type BridgeRequest, type BridgeResponse } from '../../mcp/bridge'
+import { MAX_REQUEST_CHARS, socketPath, TOKEN_FILE, type BridgeRequest, type BridgeResponse } from '../../mcp/bridge'
 import { currentVault } from '../vault'
 import { callTool } from '.'
 
@@ -60,9 +60,16 @@ function serve(socket: net.Socket, token: string): void {
     }
   })
   const read = (chunk: string): void => {
+    // Refused and closing: the rest of what it sends is not read.
+    if (socket.writableEnded) return
     buffer += chunk
-    // A client that never sends a newline does not get to fill memory.
-    if (buffer.length > 4_000_000) socket.destroy()
+    // A client that never sends a newline does not get to fill memory - told why, not just cut off.
+    if (buffer.length > MAX_REQUEST_CHARS) {
+      buffer = ''
+      reply({ id: 0, error: 'too-large' })
+      socket.end()
+      return
+    }
     let at: number
     while ((at = buffer.indexOf('\n')) !== -1) {
       const line = buffer.slice(0, at)

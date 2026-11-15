@@ -90,7 +90,7 @@ in main, over the same index (`main/bots/context.ts`).
 An answer is a **job owned by main** (`main/bots/jobs.ts`, `main/bots/answers.ts`), never by the chat
 on screen. `bots:send` writes the question into the topic file and queues a job; one job runs at a
 time across all topics (`queued → preparing → streaming → done | error | cancelled`, one `end()` exit,
-a 60 s stall ends it). The answer is written into the topic as it streams (every second, tagged with
+three minutes with no sign of life - no word, step or update, before the first word too - ends it). The answer is written into the topic as it streams (every second, tagged with
 the job's id), so leaving the chat, switching topics or reloading the window loses nothing; on quit
 it is saved and marked interrupted (Retry). Every change is pushed as `bots:job`; the chat, History
 and the sidebar only watch (`renderer/features/bots/jobs-store.ts`). A finished answer out of sight
@@ -325,6 +325,13 @@ main: vault-tools/socket.ts  (first line must carry the token)
   and any `<note` or `</note` inside the text loses its `<` (`renderBlocks` in `shared/vault-tools.ts`).
   An error the AI reads is Recto's own words: a system error's text (it names paths on this Mac) goes
   to the console, and any vault or home path left in a message is cut (`withoutPaths`, `vault-tools/index.ts`).
+- **Reading tools** (`vault-tools/read.ts`). `search_notes` gives the index the notes it may return
+  (visible, and in the folder, tag and dates asked for), so its limit counts only those; by meaning it
+  casts a wider net when filters will thin it. `list_tasks` groups a task carried from daily note to
+  daily note into one (`groupTasks`, `shared/tasks.ts`), open or done as its latest copy says, with
+  `copies` and `carried_since`. `read_note` reads the file even while the index rebuilds, with
+  `backlinks: null` and a note saying why. `canvas_read` gives text cards up to 2000 characters and
+  marks a longer one `cut`, the canvas then not `whole`.
 - **Any file, not only notes.** `read_file` (`vault-tools/files.ts`) reads what is not a note: a PDF's
   text by pages (pdf.js's Node build in main), text and code files in parts, a canvas
   (`vault-tools/canvas-context.ts`), a picture's name and pixel size; anything else is said to be
@@ -482,12 +489,24 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
 - **Failures** become `ProblemLine` states (`renderer/features/bots/components/ProblemLine.tsx`): CLI
   missing (Install link), not signed in, sign-in expired, plan limit (Manage usage), not eligible,
   provider down, cloud off (Turn on). Cancel aborts HTTP, and sends CLIs SIGINT, then kill.
+- **Watchdog and endings.** `run()` in `providers/index.ts` stops any answer that shows no sign of life
+  (`IDLE_MS`, three minutes: long enough for a model reasoning in silence), before its first word too -
+  Quick ask's included. An answer counts as finished only when its provider says so: OpenAI's
+  `response.completed` or `response.incomplete`, Ollama's `done` line; a stream that just ends is a
+  dropped connection, said as one. Claude's `max_tokens` stop and OpenAI's `response.incomplete` add
+  "(The answer was cut short…)". A Codex `error` event fails the run only when no answer came; a CLI
+  that does not say whether it is signed in is "unknown", not signed out, and not remembered.
+- **ChatGPT plan** follows OpenAI's "Sign in with ChatGPT" token-sharing preview
+  (developers.openai.com/siwc): refresh tokens rotate, and a reply without a new one keeps the old;
+  the refresh errors OpenAI lists as unusable (`invalid_grant`, `refresh_token_reused`, …) sign out,
+  anything else keeps the sign-in. Settings says why a signed-in account is not usable, and when
+  OpenAI lists no models.
 - **Chats panel, floating bot, Quick ask** (`renderer/features/chats/`). `ChatsPanel` is a right-hand
   panel (⌘⇧C, a toggle in the top-right `TabBar` that hides while the panel is open), with sections AI and People (People disabled for now), the bot
   list and then the picked bot's chat; `VaultShell` makes it and the graph take turns on the right.
   `FloatingBot` (⌘⇧B, or its status-bar button) is the bot itself, with no plate, draggable, and snaps to the nearest edge. `QuickAsk` (⌘J) is a bubble
   anchored to the bot's saved place (`bubbleAt`: above it in the lower half, below in the upper, lined up with its outer side, a tail
-  pointing at it), not a `FloatingWindow`. The bot stands only along the note area's left, right and bottom edges, under the tab bar and the arrows' row and above Linked mentions (`botArea`, kept current by a `ResizeObserver` on those bars and a `MutationObserver` on the view, so a bar that comes with another tab is seen in the next frame); on a board it sits on a frosted disc (`.is-frosted`) that blurs the cards behind it. While it is dragged, `bot-motion.ts` (a small store) carries its position to the bubble, so a drag redraws only those two. Quick ask is about the open note: each question calls `get_note_context` (budgeted) for the note and its links. On a canvas it is about the canvas: `app/canvas-selection.ts` carries the canvas's selected node ids to Quick ask, and main's `canvasContext` turns the selection - a group with what it holds - or the whole canvas into text (cards, notes with their opening, files, groups, arrows; a note AI may not see only as a place), with read-only tools and the notes and files on it as its reach;
+  pointing at it), not a `FloatingWindow`. The bot stands only along the note area's left, right and bottom edges, under the tab bar and the arrows' row and above Linked mentions (`botArea`, kept current by a `ResizeObserver` on those bars and a `MutationObserver` on the view, so a bar that comes with another tab is seen in the next frame); on a board it sits on a frosted disc (`.is-frosted`) that blurs the cards behind it. While it is dragged, `bot-motion.ts` (a small store) carries its position to the bubble, so a drag redraws only those two. Quick ask is about the open note: each question calls `get_note_context` (budgeted) for the note and its links; a note it could not reach is said as such, apart from an excluded one, and a failed read never goes to the model as the note. A question sent again replaces the run, and the old one says nothing more; answers go back to the window that asked (`ipcMain.handle` with its sender, in `providers/ipc.ts`). The AI guide reaches Quick ask too: only the excluded folders hide it, not Quick ask's narrow reach. On a canvas it is about the canvas: `app/canvas-selection.ts` carries the canvas's selected node ids to Quick ask, and main's `canvasContext` turns the selection - a group with what it holds - or the whole canvas into text (cards, notes with their opening, files, groups, arrows; a note AI may not see only as a place), with read-only tools and the notes and files on it as its reach;
   an "About: <note>" line marks a change of note, and the thread lives in memory only; "Save as chat"
   writes it as a normal chat in `Recto/Chats`. `shared/quick-ask.ts` holds its shared types and
   `providers/quick-ask.ts` its prompt and session. ⌘⇧H hides every floating window and the bot. Chats

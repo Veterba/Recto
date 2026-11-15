@@ -39,6 +39,10 @@ const mock = {
   revoked: [] as string[],
   responses: [] as (() => { status: number; body: string; sse: boolean })[],
   requests: [] as Record<string, unknown>[],
+  /** A refresh reply without a new refresh token. */
+  noNewRefresh: false,
+  /** The refresh tokens refresh requests were made with. */
+  refreshedWith: [] as string[],
   /** The scope the token reply says it granted; null leaves it out. */
   scope: 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct' as string | null,
   /** What the browser was shown at the callback. */
@@ -77,12 +81,15 @@ beforeAll(async () => {
     if (url.pathname === '/api/accounts/oauth/token') {
       const form = new URLSearchParams(body)
       if (mock.tokenStatus !== 200) return json(mock.tokenStatus, { error: mock.tokenError })
-      if (form.get('grant_type') === 'refresh_token') mock.refreshes++
+      if (form.get('grant_type') === 'refresh_token') {
+        mock.refreshes++
+        mock.refreshedWith.push(form.get('refresh_token') ?? '')
+      }
       expect(form.get('resource')).toBe('https://api.openai.com/v1')
       expect(form.get('client_id')).toBe(mock.issued)
       return json(200, {
         access_token: `access-${mock.refreshes}`,
-        refresh_token: `refresh-${mock.refreshes}`,
+        ...(mock.noNewRefresh && form.get('grant_type') === 'refresh_token' ? {} : { refresh_token: `refresh-${mock.refreshes}` }),
         id_token: idToken(mock.issued, mock.nonce),
         token_type: 'Bearer',
         expires_in: 3600,
@@ -109,6 +116,8 @@ afterAll(() => {
 afterEach(() => {
   mock.tokenStatus = 200
   mock.tokenError = 'invalid_grant'
+  mock.noNewRefresh = false
+  mock.refreshedWith = []
   mock.scope = 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct'
   mock.responses = []
   mock.requests = []
@@ -251,6 +260,38 @@ describe('Sign in with ChatGPT', () => {
     mock.tokenStatus = 200
   })
 
+  it('a refresh reply without a new refresh token keeps the old one; each code OpenAI calls unusable signs out', async () => {
+    let now = Date.now()
+    const auth = new ChatGptAuth({
+      store: memoryStore(),
+      authBase: base,
+      now: () => now,
+      open: browser(() => {}, (p) => ({ code: 'c', state: p.get('state')!, client_id: mock.issued })),
+    })
+    mock.refreshes = 0
+    await auth.signIn()
+    const first = auth.record()!.refreshToken!
+    mock.noNewRefresh = true
+    now += 59 * 60_000
+    await auth.token()
+    now += 59 * 60_000
+    await auth.token()
+    expect(mock.refreshedWith).toEqual([first, first])
+    expect(auth.signedIn()).toBe(true)
+    mock.noNewRefresh = false
+
+    for (const code of ['invalid_refresh_token', 'token_expired', 'refresh_token_expired', 'refresh_token_invalidated', 'refresh_token_reused']) {
+      now = Date.now()
+      await auth.signIn()
+      now += 59 * 60_000
+      mock.tokenStatus = 400
+      mock.tokenError = code
+      await expect(auth.token(), code).rejects.toMatchObject({ problem: { kind: 'expired' } })
+      expect(auth.signedIn(), code).toBe(false)
+      mock.tokenStatus = 200
+    }
+  })
+
   it('signs out by revoking the refresh token, and keeps the registration', async () => {
     const auth = new ChatGptAuth({ store: memoryStore(), authBase: base, open: browser(() => {}, (p) => ({ code: 'c', state: p.get('state')!, client_id: mock.issued })) })
     await auth.signIn()
@@ -309,6 +350,39 @@ describe('the Responses API with Recto’s tools', () => {
     expect(input).toContainEqual({ type: 'reasoning', encrypted_content: 'enc', summary: [] })
     expect(input).toContainEqual({ type: 'function_call', call_id: 'call_1', name: 'search_notes', arguments: '{"query":"soil"}' })
     expect(input.at(-1)).toMatchObject({ type: 'function_call_output', call_id: 'call_1' })
+  })
+
+  it('a stream that ends without response.completed is a dropped connection, not an answer', async () => {
+    mock.responses.push(() => ({ status: 200, sse: true, body: sse([{ type: 'response.output_text.delta', delta: 'Compost and' }]) }))
+    let text = ''
+    const error = await (async () => {
+      for await (const e of run()) if (e.type === 'text') text += e.text
+    })().catch((err: unknown) => err)
+    expect(text).toBe('Compost and')
+    expect(error).toBeInstanceOf(ProviderError)
+    expect((error as InstanceType<typeof ProviderError>).problem).toMatchObject({ kind: 'down', message: expect.stringMatching(/dropped before the answer was finished/) })
+  })
+
+  it('a 401 gets one refresh and the request again, with the new token', async () => {
+    let token = 'old'
+    let refreshed = 0
+    const auth = { token: async () => token, refreshed: async () => ((token = 'new'), ++refreshed > 0), plan: true }
+    mock.responses.push(
+      () => ({ status: 401, sse: false, body: JSON.stringify({ error: { message: 'expired' } }) }),
+      () => ({ status: 200, sse: true, body: sse([{ type: 'response.output_text.delta', delta: 'Hi.' }, { type: 'response.completed', response: {} }]) }),
+    )
+    let text = ''
+    for await (const e of toolLoop(responsesModel('gpt-test', auth, VAULT_TOOLS), {
+      model: 'chatgpt:gpt-test',
+      system: 'You are Recto.',
+      messages: [{ role: 'user', content: 'Hi' }],
+      session,
+      signal: new AbortController().signal,
+    }))
+      if (e.type === 'text') text += e.text
+    expect(text).toBe('Hi.')
+    expect(refreshed).toBe(1)
+    expect(mock.requests).toHaveLength(2)
   })
 
   it('turns the plan’s error codes into problems: limit with Manage usage, not eligible, unavailable, mid-stream failure', async () => {

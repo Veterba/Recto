@@ -297,7 +297,11 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
   }
 }
 
-/** Ollama's stream with tools: each line carries text, or (once) the tool calls. */
+/**
+ * Ollama's stream with tools: each line carries text, or (once) the tool
+ * calls; the last says `done`. A stream that ends before it was cut off -
+ * Ollama crashed or was quit - and is an error, not a finished answer.
+ */
 export async function* readChatLines(body: ReadableStream<Uint8Array>, onStats?: (stats: StreamStats) => void): AsyncIterable<ChatEvent> {
   const decoder = new TextDecoder()
   let pending = ''
@@ -309,7 +313,7 @@ export async function* readChatLines(body: ReadableStream<Uint8Array>, onStats?:
       pending = pending.slice(newline + 1)
       newline = pending.indexOf('\n')
       if (line === '') continue
-      const event = JSON.parse(line) as {
+      let event: {
         message?: { content?: unknown; tool_calls?: { function?: { name?: unknown; arguments?: unknown } }[] }
         error?: unknown
         done?: unknown
@@ -318,6 +322,11 @@ export async function* readChatLines(body: ReadableStream<Uint8Array>, onStats?:
         eval_count?: unknown
         eval_duration?: unknown
         load_duration?: unknown
+      }
+      try {
+        event = JSON.parse(line) as typeof event
+      } catch {
+        throw new Error('Ollama sent a reply Recto could not read.')
       }
       if (typeof event.error === 'string') throw new Error(event.error)
       const calls = (event.message?.tool_calls ?? [])
@@ -345,46 +354,12 @@ export async function* readChatLines(body: ReadableStream<Uint8Array>, onStats?:
       }
     }
   }
+  throw new Error('Ollama stopped before it finished the answer.')
 }
 
-/** Ollama streams one JSON object per line; each carries the next piece of the message. */
+/** Ollama streams one JSON object per line; each carries the next piece of the message. Its text only. */
 export async function* readLines(body: ReadableStream<Uint8Array>, onStats?: (stats: StreamStats) => void): AsyncIterable<string> {
-  const decoder = new TextDecoder()
-  let pending = ''
-  for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
-    pending += decoder.decode(chunk, { stream: true })
-    let newline = pending.indexOf('\n')
-    while (newline !== -1) {
-      const line = pending.slice(0, newline).trim()
-      pending = pending.slice(newline + 1)
-      newline = pending.indexOf('\n')
-      if (line === '') continue
-      const event = JSON.parse(line) as {
-        message?: { content?: unknown }
-        error?: unknown
-        done?: unknown
-        prompt_eval_count?: unknown
-        prompt_eval_duration?: unknown
-        eval_count?: unknown
-        eval_duration?: unknown
-        load_duration?: unknown
-      }
-      if (typeof event.error === 'string') throw new Error(event.error)
-      const text = event.message?.content
-      if (typeof text === 'string' && text !== '') yield text
-      if (event.done === true) {
-        const n = (v: unknown): number => (typeof v === 'number' ? v : 0)
-        onStats?.({
-          promptTokens: n(event.prompt_eval_count),
-          promptMs: n(event.prompt_eval_duration) / 1e6,
-          evalTokens: n(event.eval_count),
-          evalMs: n(event.eval_duration) / 1e6,
-          loadMs: n(event.load_duration) / 1e6,
-        })
-        return
-      }
-    }
-  }
+  for await (const event of readChatLines(body, onStats)) if (event.type === 'text') yield event.text
 }
 
 /**

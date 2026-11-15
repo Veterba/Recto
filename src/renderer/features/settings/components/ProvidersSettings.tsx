@@ -62,7 +62,14 @@ export function ProvidersGroup({ settings, save }: Props): React.ReactElement {
         <SettingRow
           key={p.id}
           label={label}
-          hint={p.ready ? `Signed in as ${p.detail ?? 'your account'} · Using ChatGPT plan. ${meter(p)}. Limits: Manage usage.` : info.blurb}
+          hint={
+            p.ready
+              ? `Signed in as ${p.detail ?? 'your account'} · Using ChatGPT plan. ${meter(p)}. Limits: Manage usage.${p.problem === null ? '' : ` ${p.problem.message}`}`
+              : // Signed in but not usable: why, not the blurb.
+                p.detail !== null && p.problem !== null
+                ? `Signed in as ${p.detail} · ${p.problem.message}`
+                : info.blurb
+          }
           more="Recto signs in in your browser and keeps the tokens in your login keychain. It never reads Codex’s or ChatGPT’s own sign-in. OpenAI’s plan sharing is a preview: what it allows may change."
         >
           <div className="setting__buttons">

@@ -52,10 +52,17 @@ function nodeNamed(doc: CanvasDoc, id: unknown): CanvasNode {
   return found
 }
 
+/** How much of a text card canvas_read gives. */
+const CARD_CHARS = 2000
+
 /** What a node is, for the model - a note AI may not see is only a place. */
 function described(scope: Scope, doc: CanvasDoc, n: CanvasNode, ids: Map<string, string>): Record<string, unknown> {
   const base = { id: ids.get(n.id), type: n.type }
-  if (n.type === 'text') return { ...base, text: (n.text ?? '').slice(0, 400) }
+  if (n.type === 'text') {
+    const text = n.text ?? ''
+    // A long card is cut, and says so: a cut card read as the whole of it misleads.
+    return text.length <= CARD_CHARS ? { ...base, text } : { ...base, text: `${text.slice(0, CARD_CHARS)}…`, cut: true, length: text.length }
+  }
   if (n.type === 'file' && typeof n.file === 'string')
     return scope.fileHidden(n.file) ? { ...base, file: '(a file AI may not see)' } : { ...base, file: n.file, ...(n.file.endsWith('.md') ? { note: titleOf(n.file) } : {}) }
   if (n.type === 'link') return { ...base, url: n.url }
@@ -70,11 +77,14 @@ export function canvasList(scope: Scope): ResultBlock[] {
 export async function canvasRead(scope: Scope, a: Args): Promise<ResultBlock[]> {
   const { path: p, doc } = await canvasOf(scope, a['canvas'])
   const ids = shortIds(doc)
+  const nodes = doc.nodes.map((n) => described(scope, doc, n, ids))
+  const cut = nodes.some((n) => n['cut'] === true)
   return [
     data({
       path: p,
-      whole: true,
-      nodes: doc.nodes.map((n) => described(scope, doc, n, ids)),
+      whole: !cut,
+      ...(cut ? { note: `Text cards longer than ${CARD_CHARS} characters are cut here (cut: true, length: the whole card's).` } : {}),
+      nodes,
       edges: doc.edges.map((e) => ({ from: ids.get(e.fromNode), to: ids.get(e.toNode), ...(typeof e.label === 'string' ? { label: e.label } : {}) })),
     }),
   ]

@@ -533,7 +533,7 @@ function handle(request: IndexRequest): IndexResponse {
     case 'note-changed':
       throw new Error('handled asynchronously')
     case 'search':
-      return { kind: 'search-result', hits: search(request.query, request.limit ?? 50) }
+      return { kind: 'search-result', hits: search(request.query, request.limit ?? 50, request.paths) }
     case 'backlinks':
       return { kind: 'backlinks-result', links: backlinks(request.path) }
     case 'canvases-of':

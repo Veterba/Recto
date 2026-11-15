@@ -22,7 +22,7 @@ import { McpServer } from '@modelcontextprotocol/server'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import * as z from 'zod'
 import { imagesOf, renderBlocks, SERVER_INSTRUCTIONS, VAULT_PROMPTS, VAULT_TOOLS, type ToolOutcome } from '../shared/vault-tools'
-import { CLOSED_MESSAGE, socketPath, TOKEN_FILE, type BridgeRequest, type BridgeResponse } from './bridge'
+import { CLOSED_MESSAGE, DROPPED_MESSAGE, socketPath, TIMEOUT_MESSAGE, TOKEN_FILE, TOO_LARGE_MESSAGE, type BridgeRequest, type BridgeResponse } from './bridge'
 
 const VERSION = '1'
 
@@ -39,26 +39,34 @@ const only = arg('--tools')?.split(',') ?? null
 /** One request over a fresh connection: Recto may have restarted since the last one. */
 type Request = BridgeRequest extends infer R ? (R extends { id: number } ? Omit<R, 'id'> : never) : never
 
-function ask(request: Request, timeoutMs = 55_000): Promise<BridgeResponse | null> {
+/** Why no answer came: Recto is not running, it took too long, or it closed the connection after taking it. */
+type NoAnswer = { failed: string }
+
+function ask(request: Request, timeoutMs = 55_000): Promise<BridgeResponse | NoAnswer> {
   return new Promise((resolve) => {
-    if (data === null) return resolve(null)
+    if (data === null) return resolve({ failed: CLOSED_MESSAGE })
     let token: string
     try {
       token = fs.readFileSync(path.join(data, TOKEN_FILE), 'utf8').trim()
     } catch {
-      return resolve(null)
+      return resolve({ failed: CLOSED_MESSAGE })
     }
     const socket = net.connect(socketPath(data))
     let buffer = ''
-    const done = (value: BridgeResponse | null): void => {
+    let connected = false
+    const done = (value: BridgeResponse | NoAnswer): void => {
       clearTimeout(timer)
       socket.destroy()
       resolve(value)
     }
-    const timer = setTimeout(() => done(null), timeoutMs)
+    const timer = setTimeout(() => done({ failed: TIMEOUT_MESSAGE }), timeoutMs)
     socket.setEncoding('utf8')
-    socket.on('error', () => done(null))
-    socket.on('connect', () => socket.write(`${JSON.stringify({ token })}\n${JSON.stringify({ ...request, id: 1 })}\n`))
+    // Before the connection there is no Recto to talk to; after it, Recto was there and stopped answering.
+    socket.on('error', () => done({ failed: connected ? DROPPED_MESSAGE : CLOSED_MESSAGE }))
+    socket.on('connect', () => {
+      connected = true
+      socket.write(`${JSON.stringify({ token })}\n${JSON.stringify({ ...request, id: 1 })}\n`)
+    })
     socket.on('data', (chunk: string) => {
       buffer += chunk
       const at = buffer.indexOf('\n')
@@ -66,20 +74,23 @@ function ask(request: Request, timeoutMs = 55_000): Promise<BridgeResponse | nul
       try {
         done(JSON.parse(buffer.slice(0, at)) as BridgeResponse)
       } catch {
-        done(null)
+        done({ failed: 'Recto gave an answer this program could not read.' })
       }
     })
-    socket.on('close', () => done(null))
+    socket.on('close', () => done({ failed: connected ? DROPPED_MESSAGE : CLOSED_MESSAGE }))
   })
 }
 
 async function call(tool: string, args: unknown): Promise<ToolOutcome> {
   const response = await ask({ method: 'call', tool, args, client, ...(session === undefined ? {} : { session }) })
-  if (response === null) return { ok: false, error: CLOSED_MESSAGE }
+  if ('failed' in response) return { ok: false, error: response.failed }
   if ('error' in response)
     return {
       ok: false,
-      error: 'Recto refused the connection: this program has a stale token. Reconnect this client in Recto (Settings → AI).',
+      error:
+        response.error === 'too-large'
+          ? TOO_LARGE_MESSAGE
+          : 'Recto refused the connection: this program has a stale token. Reconnect this client in Recto (Settings → AI).',
     }
   if (!('outcome' in response)) return { ok: false, error: 'Recto gave an unexpected answer.' }
   return response.outcome
@@ -151,10 +162,9 @@ function server(): McpServer {
 if (process.argv.includes('--self-test')) {
   // Settings → AI → Test connection: this launcher, this socket, this token.
   void ask({ method: 'ping' }, 5000).then((response) => {
-    const pong = response !== null && 'pong' in response ? response.pong : null
-    process.stdout.write(
-      `${JSON.stringify(pong === null ? { ok: false, error: response !== null && 'error' in response ? 'bad token' : CLOSED_MESSAGE } : { ok: true, ...pong })}\n`,
-    )
+    const pong = 'pong' in response ? response.pong : null
+    const error = 'failed' in response ? response.failed : 'error' in response ? 'bad token' : 'Recto gave an unexpected answer.'
+    process.stdout.write(`${JSON.stringify(pong === null ? { ok: false, error } : { ok: true, ...pong })}\n`)
     process.exit(pong === null ? 1 : 0)
   })
 } else {

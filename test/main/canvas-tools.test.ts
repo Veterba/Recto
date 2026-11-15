@@ -58,6 +58,18 @@ describe('canvas tools', () => {
     expect(tools.canvasList(buildScope('t'))).toEqual([{ kind: 'data', data: { canvases: [{ path: CANVAS, name: 'Plan' }] } }])
   })
 
+  it('read: a long text card is cut and says so, and the canvas is not called whole', async () => {
+    const short = (await tools.canvasRead(buildScope('t'), { canvas: 'Plan' }))[0] as { data: Record<string, unknown> }
+    expect(short.data['whole']).toBe(true)
+    const doc = JSON.parse(fs.readFileSync(path.join(root, CANVAS), 'utf8')) as { nodes: { text?: string }[] }
+    doc.nodes[0]!.text = 'Soil. '.repeat(400)
+    put(CANVAS, JSON.stringify(doc))
+    const long = (await tools.canvasRead(buildScope('t'), { canvas: 'Plan' }))[0] as { data: { whole: boolean; note?: string; nodes: Record<string, unknown>[] } }
+    expect(long.data.whole).toBe(false)
+    expect(long.data.nodes[0]).toMatchObject({ id: 'n1', cut: true, length: 2400 })
+    expect(long.data.note).toMatch(/cut here/)
+  })
+
   it('cards near a node: placed clear of everything, arrows to them by "new:N"', async () => {
     const draft = await tools.proposeCanvasNodes(buildScope('t'), {
       canvas: CANVAS,

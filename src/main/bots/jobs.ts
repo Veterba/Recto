@@ -27,10 +27,14 @@ export type JobsOptions = {
   onChange: (job: BotJob) => void
   /** Something runs (true) or nothing does (false): for the power-save blocker. */
   onBusy?: (busy: boolean) => void
-  /** No new text for this long while streaming: the job ends with an error (Retry). */
+  /** No sign of life - text, a step, sources, any update - for this long: the job ends with an error (Retry). */
   stallMs?: number
   now?: () => Date
 }
+
+/** Long enough for a local model to load, or a cloud one to reason, before its first word. */
+const STALL_MS = 180_000
+const STALLED = 'No sign of the answer for three minutes, so it was stopped.'
 
 let counter = 0
 const newId = (): string => `job-${Date.now().toString(36)}-${(++counter).toString(36)}`
@@ -148,16 +152,19 @@ export class Jobs {
       const current = this.jobs.get(id)
       if (current === undefined || !isActive(current)) return
       Object.assign(current, patch)
-      if (patch.text !== undefined) this.armStall(id)
+      // Any sign of life, not only words: an answer working through tool calls is not stalled.
+      this.armStall(id)
       this.o.onChange({ ...current })
     }
+    // From the start: an answer that never says a word is stalled too.
+    this.armStall(id)
     void this.o.run({ ...job }, { signal: controller.signal, update }).then(
       () => this.end(id, controller.signal.aborted ? (this.running?.reason === 'stall' ? 'error' : 'cancelled') : 'done', null),
       (err: unknown) =>
         this.end(
           id,
           controller.signal.aborted && this.running?.reason !== 'stall' ? 'cancelled' : 'error',
-          this.running?.reason === 'stall' ? 'No answer for a minute - stopped.' : err instanceof Error ? err.message : String(err),
+          this.running?.reason === 'stall' ? STALLED : err instanceof Error ? err.message : String(err),
         ),
     )
   }
@@ -168,7 +175,7 @@ export class Jobs {
       if (this.running?.id !== id) return
       this.running.reason = 'stall'
       this.running.controller.abort()
-    }, this.o.stallMs ?? 60_000)
+    }, this.o.stallMs ?? STALL_MS)
   }
 
   /** The one way a job ends. Frees the queue if it was the running one, and starts the next. */

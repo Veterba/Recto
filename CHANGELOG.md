@@ -4,6 +4,19 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.61.1 — 2026-11-15
+### Fixed
+- An AI answer that shows no sign of life for three minutes is stopped with a reason - before its first word too, and in Quick ask - while one still working through tool calls is no longer cut off after a minute.
+- ChatGPT plan: a token refresh that comes back without a new refresh token no longer signs you out at the next one; every reason OpenAI gives for an unusable sign-in now asks you to sign in again, and only those do.
+- ChatGPT plan and OpenAI key: an answer whose connection drops is said to be cut off, not saved as if it were complete.
+- Settings says why a signed-in ChatGPT account cannot be used, and when OpenAI lists no models for it; a rejected OpenAI key shows as rejected, not ready; a CLI that is slow to say whether it is signed in no longer shows "Not signed in".
+- Claude API answers that reach the length limit say they were cut short; a refusal (such as a retired model) reads as a sentence, not raw JSON.
+- A local (Ollama) answer that stops halfway is marked as failed for Retry instead of saved as complete; an unreadable reply is said plainly.
+- A Codex answer that recovered from a dropped connection is no longer shown as failed.
+- Quick ask uses your AI guide; a note it could not read is no longer called excluded, and a failed read never goes to the AI as the note; sending again while an answer starts keeps Stop working; answers go to the window that asked.
+- AI tools: a task carried across daily notes is listed once, as its latest copy says; search with a folder, tag or date finds notes beyond the vault's top hits; a note can be read while the index rebuilds; a long canvas card is marked as cut.
+- AI apps connected to Recto are told when a request is too large, when Recto is slow, or when the connection dropped, instead of "Recto isn't running"; an outdated Claude Desktop extension shows as needing a reinstall.
+
 ## v0.61.0 — 2026-11-13
 ### Changed
 - Cloud off now also pauses apps connected to Recto (Claude Code, Codex, Cursor, Claude Desktop): their calls are refused with a note saying why. They stay connected, keep their suggestions, and work again the moment Cloud is on.

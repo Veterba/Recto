@@ -28,6 +28,14 @@ export type BridgeRequest =
   | { id: number; method: 'ping' }
 
 export type BridgeResponse =
-  { id: number; outcome: ToolOutcome } | { id: number; pong: { vault: string | null; version: string } } | { id: 0; error: 'bad-token' }
+  | { id: number; outcome: ToolOutcome }
+  | { id: number; pong: { vault: string | null; version: string } }
+  | { id: 0; error: 'bad-token' | 'too-large' }
+
+/** How much one request may carry: a line longer than this is refused, said, and the connection closed. */
+export const MAX_REQUEST_CHARS = 4_000_000
 
 export const CLOSED_MESSAGE = "Recto isn't running. Open Recto, then try again."
+export const TIMEOUT_MESSAGE = 'Recto did not answer in time. It may be busy (indexing a large vault); try again in a moment.'
+export const DROPPED_MESSAGE = 'Recto closed the connection without an answer. Try again; if it keeps happening, restart Recto.'
+export const TOO_LARGE_MESSAGE = 'That request is too large for Recto (over 4 MB). Send less at once: a shorter text, or several smaller changes.'

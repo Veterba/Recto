@@ -1,4 +1,4 @@
-import { BrowserWindow, shell } from 'electron'
+import { BrowserWindow, ipcMain, shell } from 'electron'
 import { IPC, IPC_EVENT, type IpcApi } from '../../shared/ipc'
 import { PROBLEM_TEXT } from '../../shared/providers'
 import * as bots from '../bots'
@@ -46,10 +46,11 @@ export function registerProvidersIpc(handle: Handle): void {
     void shell.openExternal(url)
     return { ok: true }
   })
-  handle(IPC.quickAskSend, (request) => {
-    const window = BrowserWindow.getAllWindows()[0]
-    void quickAsk(request, bots.localProvider(), (event) => {
-      if (window !== undefined && !window.isDestroyed()) sendEvent(window, IPC_EVENT.quickAskEvent, event)
+  // Not through `handle`: the answer goes back to the window that asked (a note window has its own Quick ask), so its sender is needed.
+  ipcMain.handle(IPC.quickAskSend, (event, request: Parameters<IpcApi[typeof IPC.quickAskSend]>[0]) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    void quickAsk(request, bots.localProvider(), (answer) => {
+      if (window !== null && !window.isDestroyed()) sendEvent(window, IPC_EVENT.quickAskEvent, answer)
     })
     return { ok: true }
   })

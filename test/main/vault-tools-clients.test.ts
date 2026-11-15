@@ -85,6 +85,13 @@ describe('Cursor (and Claude Desktop’s config file): JSON', () => {
     expect(backups()).toEqual([])
   })
 
+  it('Claude Desktop as an extension: connected while it is from this Recto, broken - with the fix - once Recto is newer', () => {
+    put('Library/Application Support/Claude/claude_desktop_config.json', JSON.stringify({ mcpServers: {} }))
+    put('Library/Application Support/Claude/Claude Extensions/local.mcpb.recto.recto/manifest.json', JSON.stringify({ name: 'recto', version: '0.61.0' }))
+    expect(clientStatus('claude-desktop', { ...env, version: '0.61.0' })).toMatchObject({ state: 'connected' })
+    expect(clientStatus('claude-desktop', { ...env, version: '0.62.0' })).toMatchObject({ state: 'broken', detail: expect.stringMatching(/from Recto 0\.61\.0.*Install it again/) })
+  })
+
   it('Claude Desktop: a missing config file is made, and the plan says to restart Desktop', async () => {
     fs.mkdirSync(file('Library/Application Support/Claude'), { recursive: true })
     const plan = clientPlan('claude-desktop', 'connect', env)

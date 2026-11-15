@@ -165,7 +165,8 @@ export type IndexRequest =
   | { kind: 'open'; vaultPath: string; dbPath: string }
   | { kind: 'reindex'; force?: boolean }
   | { kind: 'note-changed'; changes: NoteChange[] }
-  | { kind: 'search'; query: string; limit?: number }
+  /** `paths`: only these notes may be hits - filtered in the query, so the limit counts only them. */
+  | { kind: 'search'; query: string; limit?: number; paths?: string[] }
   | { kind: 'backlinks'; path: string }
   /** The canvases this file is on. */
   | { kind: 'canvases-of'; path: string }

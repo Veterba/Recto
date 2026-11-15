@@ -36,7 +36,9 @@ const today = (): string => new Date().toLocaleDateString('en-CA')
 async function guide(session: ToolSession): Promise<string> {
   if (session.tools !== null && !session.tools.has('get_ai_guide')) return ''
   const text = await runCall(session, 'get_ai_guide', {})
-  return text.startsWith('Error:') ? '' : `\n\nThe person's AI guide for this vault:\n${text}`
+  // No guide, or one AI may not see: nothing to add - its hint is for a model calling the tool, not a guide.
+  if (text.startsWith('Error:') || /^\{\s*"path": null/.test(text)) return ''
+  return `\n\nThe person's AI guide for this vault:\n${text}`
 }
 
 export async function chatSystem(session: ToolSession): Promise<string> {

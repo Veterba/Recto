@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../src/main/vault-tools', () => ({ callTool: async () => ({ ok: true, blocks: [] }) }))
 
 const { findCli, searchDirs } = await import('../../src/main/providers/detect')
-const { cliArgs, cliRunner, forgetAuth, parseLine, problemFrom, transcript } = await import('../../src/main/providers/cli')
+const { cliArgs, cliRunner, forgetAuth, parseLine, problemFrom, signedIn, transcript } = await import('../../src/main/providers/cli')
 const { ProviderError } = await import('../../src/main/providers/run')
 const { forCloud, quickAskCanvasSystem, quickAskSystem } = await import('../../src/main/providers/prompts')
 
@@ -200,6 +200,14 @@ describe('an answer from a fake CLI', () => {
       }
     })
 
+    if (name === 'codex')
+      it('codex: an error it reports on the way and then gets past is not a failed answer; one with no answer after it is', async () => {
+        process.env['FAKE_SCENARIO'] = 'retried'
+        expect(await ask(name)).toBe('Your notes say compost, loam and grit.')
+        process.env['FAKE_SCENARIO'] = 'silent-error'
+        expect(await ask(name).catch((err: unknown) => err)).toBeInstanceOf(ProviderError)
+      })
+
     it(`${name}: a stop mid-answer ends it quietly`, async () => {
       process.env['FAKE_SCENARIO'] = 'slow'
       const controller = new AbortController()
@@ -209,6 +217,17 @@ describe('an answer from a fake CLI', () => {
       expect(Date.now() - started).toBeLessThan(5000)
     })
   }
+
+  it('signed in, not, or unknown: a CLI that could not even run is not a sign-out, and is asked again next time', async () => {
+    const file = install('opt/homebrew/bin', 'codex')
+    fs.chmodSync(file, 0o644)
+    expect(await signedIn('codex', file, process.env)).toBe('unknown')
+    fs.chmodSync(file, 0o755)
+    expect(await signedIn('codex', file, process.env)).toBe('yes')
+    forgetAuth()
+    process.env['FAKE_SCENARIO'] = 'signed-out'
+    expect(await signedIn('codex', file, process.env)).toBe('no')
+  })
 
   it('reports a missing CLI with where to get it', async () => {
     const run = cliRunner('codex', { find: async () => null, path: async () => '', launcher: () => '' })

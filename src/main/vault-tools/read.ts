@@ -1,5 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { groupTasks } from '../../shared/tasks'
+import { isExcludedPath } from '../../shared/ai-access'
+import { isChatPath } from '../../shared/recto-paths'
 import type { IndexRequest, IndexResponse, VaultMeta } from '../../shared/indexer-protocol'
 import { cardDescription, cardFields, readPriority, readTags } from '../../shared/card-fields'
 import { bodyOf } from '../../shared/frontmatter'
@@ -71,8 +74,9 @@ export async function getAiGuide(scope: Scope): Promise<ResultBlock[]> {
     return [
       data({ path: null, hint: 'The person has not chosen an AI guide (Recto: Settings → AI → AI guide). Follow the vault profile.' }),
     ]
-  // Excluded since it was chosen: no tool returns a note AI may not see, the guide neither.
-  if (scope.hidden(guide))
+  // Excluded since it was chosen: no tool returns a note AI may not see, the guide neither. Only the
+  // exclusions count: a session that sees a few notes (Quick ask) still gets the person's guide.
+  if (isChatPath(guide) || isExcludedPath(guide, scope.settings.excluded))
     return [data({ path: null, hint: 'The AI guide is in a folder AI may not see (Settings → AI → Excluded). Follow the vault profile.' })]
   // Not a note the answer is about: kept out of its record (vault-tools/index.ts).
   return [data({ path: guide }), noteBlock(guide, await readNote(guide), 'guide')]
@@ -105,13 +109,18 @@ export async function searchNotes(scope: Scope, a: Args): Promise<ResultBlock[]>
     hit.by.add(by)
     hits.set(p, hit)
   }
+  // The filters go to the index with the query: filtered after its top 200 of the whole vault, a folder's
+  // notes past those 200 were never found.
+  const filtered = typeof a['folder'] === 'string' || tagged !== null || after !== null || before !== null
   if (mode !== 'semantic') {
-    const { hits: text } = await ask({ kind: 'search', query, limit: 200 }, 'search-result')
+    const paths = meta.notes.map((n) => n.path).filter(keep)
+    const { hits: text } = await ask({ kind: 'search', query, limit: 200, paths }, 'search-result')
     text.filter((h) => keep(h.path)).forEach((h, i) => add(h.path, i, h.snippet, 'text'))
   }
   let semantic = false
   if (mode !== 'text') {
-    const found = await searchVectors(query, 60, scope.settings.excluded)
+    // By meaning, the nearest chunks are taken first and filtered after: a wider net when filters will thin it.
+    const found = await searchVectors(query, filtered ? 400 : 60, scope.settings.excluded)
     semantic = found.length > 0
     const best = new Map<string, (typeof found)[number]>()
     for (const h of found) if (keep(h.path) && !best.has(h.path)) best.set(h.path, h)
@@ -145,7 +154,11 @@ export async function readNoteTool(scope: Scope, a: Args): Promise<ResultBlock[]
   const text = content.slice(offset, offset + max)
   // All of it, or a part: what the answer's record calls a read in full.
   const whole = offset <= 0 && offset + max >= content.length
-  const { links } = await ask({ kind: 'backlinks', path: p }, 'backlinks-result')
+  // The note is on disk whether or not the index is ready: only its backlinks wait for the index.
+  const links = await ask({ kind: 'backlinks', path: p }, 'backlinks-result').then(
+    (r) => r.links,
+    () => null,
+  )
   const stat = fs.statSync(path.join(scope.vault, p))
   return [
     data({
@@ -161,7 +174,9 @@ export async function readNoteTool(scope: Scope, a: Args): Promise<ResultBlock[]
         path: scope.resolve(target, p),
         exists: scope.exists(target, p),
       })),
-      backlinks: links.filter((l) => !scope.hidden(l.path)).map((l) => ({ path: l.path, line: l.line })),
+      ...(links === null
+        ? { backlinks: null, backlinks_note: "Recto's index is not ready yet, so backlinks are not listed this time. The note's text is complete." }
+        : { backlinks: links.filter((l) => !scope.hidden(l.path)).map((l) => ({ path: l.path, line: l.line })) }),
     }),
     noteBlock(p, text, whole ? undefined : 'excerpt'),
   ]
@@ -386,8 +401,10 @@ export async function listTasks(scope: Scope, a: Args): Promise<ResultBlock[]> {
   const { rows } = await ask({ kind: 'task-rows', since: '0000-01-01', to: '9999-12-31' }, 'task-rows-result')
   const wantBoard = typeof a['board'] === 'string' ? a['board'].toLowerCase() : null
   const tasks = []
-  for (const row of rows) {
-    if (scope.hidden(row.path)) continue
+  // A task carried from daily note to daily note is one task, as the person's task views count it (shared/tasks.ts):
+  // open or done as its latest copy says, listed at that copy.
+  for (const group of groupTasks(rows.filter((r) => !scope.hidden(r.path)))) {
+    const row = group.occurrences.at(-1)!
     if (status === 'open' && row.done) continue
     if (status === 'done' && !row.done) continue
     if (wantBoard !== null && (row.board ?? '').toLowerCase() !== wantBoard && titleOf(row.board ?? '').toLowerCase() !== wantBoard)
@@ -408,6 +425,7 @@ export async function listTasks(scope: Scope, a: Args): Promise<ResultBlock[]> {
       status: row.done ? 'done' : 'open',
       ...(row.due === null ? {} : { due: row.due }),
       ...(priority === null ? {} : { priority }),
+      ...(group.occurrences.length > 1 ? { carried_since: group.since, copies: group.occurrences.length } : {}),
     })
   }
   const { items, next_cursor } = page(tasks, Number(a['limit']), a['cursor'])

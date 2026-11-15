@@ -35,6 +35,8 @@ const PREFERRED_PORT = 1455
 const SIGN_IN_TIMEOUT_MS = 5 * 60_000
 /** Refresh this long before the access token runs out. */
 const EARLY_MS = 2 * 60_000
+/** Refresh errors OpenAI lists as an unusable refresh token: sign in again (developers.openai.com/siwc, Errors and recovery). */
+const UNUSABLE_GRANT = new Set(['invalid_grant', 'invalid_refresh_token', 'token_expired', 'refresh_token_expired', 'refresh_token_invalidated', 'refresh_token_reused'])
 
 export type ChatGptRecord = {
   clientId: string
@@ -245,7 +247,9 @@ export class ChatGptAuth {
       this.save({
         ...r,
         accessToken: t.accessToken,
-        refreshToken: t.refreshToken,
+        // OpenAI rotates refresh tokens, so a reply carries a new one; one that leaves it out keeps the old,
+        // rather than saving nothing and signing the person out at the next refresh.
+        refreshToken: t.refreshToken === '' ? r.refreshToken : t.refreshToken,
         idToken: t.idToken === '' ? r.idToken : t.idToken,
         expiresAt: this.now() + t.expiresIn * 1000,
         scopes: t.scopes ?? r.scopes,
@@ -320,10 +324,13 @@ export class ChatGptAuth {
       if (response.status >= 500 || response.status === 429 || response.status === 408)
         throw new ProviderError({ kind: 'down', message: 'OpenAI’s sign-in is not answering. Try again in a moment.' })
       if (code === 'invalid_client') throw new ProviderError({ kind: 'failed', message: 'OpenAI no longer knows this Recto registration.' })
-      // Only a refused grant means the sign-in itself is over (OAuth 2.0, RFC 6749 §5.2): the tokens go then, and only then.
-      if (code === 'invalid_grant') throw new ProviderError({ kind: 'expired', message: 'The ChatGPT sign-in expired. Sign in again.' })
+      // Only a refresh token OpenAI calls unusable means the sign-in itself is over (OAuth 2.0, RFC 6749 §5.2, and
+      // OpenAI's "Errors and recovery"): the tokens go then, and only then.
+      if (UNUSABLE_GRANT.has(code)) throw new ProviderError({ kind: 'expired', message: 'The ChatGPT sign-in expired. Sign in again.' })
       throw new ProviderError({ kind: 'failed', message: `OpenAI’s sign-in refused the request (${code === '' ? response.status : code}). Try again.` })
     }
+    if (typeof body['access_token'] !== 'string' || body['access_token'] === '')
+      throw new ProviderError({ kind: 'failed', message: 'OpenAI’s sign-in answered without a token. Try again.' })
     const scope = typeof body['scope'] === 'string' ? body['scope'].split(' ').filter((s) => s !== '') : null
     return {
       accessToken: String(body['access_token'] ?? ''),

@@ -85,21 +85,34 @@ async function reach(note: string): Promise<{ path: string; notes: Set<string> }
   return { path, notes: new Set([path, ...out, ...links.map((l) => l.path).filter((p) => !scope.hidden(p))]) }
 }
 
-export async function quickAsk(request: QuickAskRequest, local: BotModelProvider, emit: (event: QuickAskEvent) => void): Promise<void> {
+export async function quickAsk(request: QuickAskRequest, local: BotModelProvider, send: (event: QuickAskEvent) => void): Promise<void> {
   running.get(request.thread)?.abort()
   const controller = new AbortController()
   running.set(request.thread, controller)
+  // Sent again before this one got going: this one is over, and says nothing - its "stopped" would land on the new answer.
+  const emit = (event: QuickAskEvent): void => {
+    if (running.get(request.thread) === controller) send(event)
+  }
   if (request.note.toLowerCase().endsWith('.canvas')) return askAboutCanvas(request, local, emit, controller)
-  const reached = await reach(request.note).catch(() => null)
+  let reached: Awaited<ReturnType<typeof reach>>
+  try {
+    reached = await reach(request.note)
+  } catch (err) {
+    // Not excluded: something went wrong reaching it, and the person is told that, not about folders.
+    emit({ thread: request.thread, type: 'error', problem: { kind: 'failed', message: `Recto could not read “${titleOf(request.note)}” just now: ${messageOf(err)}` } })
+    finish(request.thread, controller)
+    return
+  }
   if (reached === null) {
     emit({
       thread: request.thread,
       type: 'error',
       problem: { kind: 'excluded', message: `“${titleOf(request.note)}” is in a folder AI may not see (Settings → AI → Excluded), or is not a note.` },
     })
-    running.delete(request.thread)
+    finish(request.thread, controller)
     return
   }
+  if (controller.signal.aborted) return finish(request.thread, controller)
   const session = openSession({
     client: `quick-ask · ${providerInfo(providerOf(request.model)).name}`,
     tools: new Set(QUICK_TOOLS),
@@ -110,6 +123,8 @@ export async function quickAsk(request: QuickAskRequest, local: BotModelProvider
   try {
     // The note goes with every question, so a switch of note is a switch of context.
     const context = await runCall(session, 'get_note_context', { note: reached.path, budget_tokens: CONTEXT_TOKENS })
+    // A failed read is not the note: it is never sent to the model as if it were.
+    if (context.startsWith('Error:')) throw new ProviderError({ kind: 'failed', message: `Recto could not read “${titleOf(reached.path)}” just now: ${context.slice(6).trim()}` })
     const question = `The open note and its links:\n\n${context}\n\n---\n\n${request.question}`
     const system = await quickAskSystem(session, titleOf(reached.path), request.today)
     for await (const event of run(
@@ -128,9 +143,16 @@ export async function quickAsk(request: QuickAskRequest, local: BotModelProvider
       })
   } finally {
     closeSession(session.id)
-    if (running.get(request.thread) === controller) running.delete(request.thread)
+    finish(request.thread, controller)
   }
 }
+
+/** This run is over: its thread is free - unless a newer run has it, whose Stop must keep working. */
+function finish(thread: string, controller: AbortController): void {
+  if (running.get(thread) === controller) running.delete(thread)
+}
+
+const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 /** Quick ask on a canvas: its selection (or all of it) goes with each question; only the notes on it can be read. */
 async function askAboutCanvas(
@@ -147,7 +169,7 @@ async function askAboutCanvas(
       type: 'error',
       problem: { kind: 'excluded', message: `“${canvasTitle(request.note)}” is in a folder AI may not see (Settings → AI → Excluded), or could not be read.` },
     })
-    running.delete(request.thread)
+    finish(request.thread, controller)
     return
   }
   const session = openSession({
@@ -177,7 +199,7 @@ async function askAboutCanvas(
       })
   } finally {
     closeSession(session.id)
-    if (running.get(request.thread) === controller) running.delete(request.thread)
+    finish(request.thread, controller)
   }
 }
 

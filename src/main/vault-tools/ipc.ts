@@ -30,7 +30,7 @@ const DETECT_NOTES = 400
 
 const clientEnv = (): ClientEnv => {
   const userData = app.getPath('userData')
-  return { home: os.homedir(), launcher: launcherPath(userData), backups: path.join(userData, 'backup', 'clients'), dev: !app.isPackaged }
+  return { home: os.homedir(), launcher: launcherPath(userData), backups: path.join(userData, 'backup', 'clients'), dev: !app.isPackaged, version: app.getVersion() }
 }
 
 const readJson = (file: string): unknown => {

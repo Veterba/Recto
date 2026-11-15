@@ -110,6 +110,11 @@ describe('the MCP socket', () => {
     expect(replies).toEqual([{ id: 3, pong: { vault: 'Test vault', version: '0.0.0-test' } }])
   })
 
+  it('a request too large to take is refused with that reason, not by a silent close', async () => {
+    const huge = JSON.stringify({ id: 4, method: 'call', tool: 'propose_new_note', args: { text: 'x'.repeat(4_100_000) }, client: 'codex' })
+    expect(await talk([JSON.stringify({ token }), huge], 1)).toEqual([{ id: 0, error: 'too-large' }])
+  })
+
   it('the token is made once and kept', async () => {
     stopMcpSocket()
     await startMcpSocket(dir)

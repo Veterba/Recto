@@ -208,4 +208,20 @@ describe('ollama', () => {
     }
     await expect(run()).rejects.toThrow('model "x" not found')
   })
+
+  it('a stream that ends before its done line was cut off: an error, the words so far already given', async () => {
+    const tokens: string[] = []
+    const run = async (): Promise<void> => {
+      for await (const t of readLines(stream('{"message":{"content":"Half an"},"done":false}\n'))) tokens.push(t)
+    }
+    await expect(run()).rejects.toThrow('Ollama stopped before it finished the answer.')
+    expect(tokens).toEqual(['Half an'])
+  })
+
+  it('a line that is not JSON is said plainly, not as a SyntaxError', async () => {
+    const run = async (): Promise<void> => {
+      for await (const _ of readLines(stream('<html>proxy error</html>\n'))) void _
+    }
+    await expect(run()).rejects.toThrow('Ollama sent a reply Recto could not read.')
+  })
 })

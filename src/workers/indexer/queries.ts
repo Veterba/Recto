@@ -23,7 +23,7 @@ import { CHATS_FOLDER, RECTO_FOLDER, RECTO_README, RECTO_README_FALLBACK } from 
 import { linkVault, resolveLinkpath, type LinkVault } from '../../shared/obsidian-links'
 import { cardDescription, checklist } from '../../shared/card-fields'
 
-export function search(query: string, limit: number): SearchHit[] {
+export function search(query: string, limit: number, paths?: readonly string[]): SearchHit[] {
   const handle = requireDb()
   const trimmed = query.trim()
   if (trimmed === '') return []
@@ -43,11 +43,11 @@ export function search(query: string, limit: number): SearchHit[] {
                 snippet(notes_fts, 4, '<<', '>>', '…', 12) AS snippet,
                 bm25(notes_fts, 0.0, 8.0, 6.0, 3.0, 1.0) AS score
          FROM notes_fts
-         WHERE notes_fts MATCH ?
+         WHERE notes_fts MATCH ?${paths === undefined ? '' : ' AND path IN (SELECT value FROM json_each(?))'}
          ORDER BY score
          LIMIT ?`,
       )
-      .all(fts, limit) as SearchHit[]
+      .all(...(paths === undefined ? [fts, limit] : [fts, JSON.stringify(paths), limit])) as SearchHit[]
   } catch {
     // A query FTS5 still cannot parse returns nothing rather than throwing at
     // the user mid-keystroke.

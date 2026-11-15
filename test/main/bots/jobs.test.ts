@@ -79,8 +79,23 @@ describe('the job registry', () => {
     const b = h.jobs.enqueue(input('b.md'))
     h.runs.get(a.id)!.controls.update({ state: 'streaming', text: 'Hel' })
     await new Promise((r) => setTimeout(r, 40))
-    expect(h.jobs.get(a.id)).toMatchObject({ state: 'error', error: 'No answer for a minute - stopped.', text: 'Hel' })
+    expect(h.jobs.get(a.id)).toMatchObject({ state: 'error', error: 'No sign of the answer for three minutes, so it was stopped.', text: 'Hel' })
     expect(h.state(b.id)).toBe('preparing')
+  })
+
+  it('an answer that never says a word is stalled too; one working through steps is not', async () => {
+    const h = harness(40)
+    const silent = h.jobs.enqueue(input('a.md'))
+    await new Promise((r) => setTimeout(r, 70))
+    expect(h.state(silent.id)).toBe('error')
+    const busy = h.jobs.enqueue(input('b.md'))
+    await h.tick()
+    const controls = h.runs.get(busy.id)!.controls
+    for (let i = 0; i < 4; i++) {
+      await new Promise((r) => setTimeout(r, 25))
+      controls.update({ steps: [{ action: `Step ${i}`, result: '', state: 'running' }] })
+    }
+    expect(h.state(busy.id)).toBe('preparing')
   })
 
   it('reports updates to watchers, never after the end', async () => {

@@ -170,19 +170,27 @@ export function problemFrom(name: CliName, text: string): ProviderProblem {
   return { kind: 'failed', message: said === '' ? `${who} stopped without an answer.` : `${who}: ${said}` }
 }
 
-const authCache = new Map<string, { at: number; ok: boolean }>()
+/** Signed in, not signed in, or the CLI did not say (it timed out, or could not start). */
+export type SignedIn = 'yes' | 'no' | 'unknown'
 
-/** Signed in? `codex login status` / `claude auth status`, remembered for a minute. Spends nothing. */
-export function signedIn(name: CliName, file: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+const authCache = new Map<string, { at: number; state: SignedIn }>()
+
+/**
+ * Signed in? `codex login status` / `claude auth status`, remembered for a
+ * minute. Spends nothing. A CLI that did not answer is "unknown", not "no",
+ * and is asked again next time: a slow start once is not a sign-out.
+ */
+export function signedIn(name: CliName, file: string, env: NodeJS.ProcessEnv): Promise<SignedIn> {
   const known = authCache.get(file)
-  if (known !== undefined && Date.now() - known.at < 60_000) return Promise.resolve(known.ok)
+  if (known !== undefined && Date.now() - known.at < 60_000) return Promise.resolve(known.state)
   const args = name === 'codex' ? ['login', 'status'] : ['auth', 'status']
   return new Promise((resolve) =>
     execFile(file, args, { env, timeout: 10_000 }, (err, stdout, stderr) => {
       const said = `${stdout}${stderr}`
-      const ok = err === null && !/not (logged|signed) in/i.test(said)
-      authCache.set(file, { at: Date.now(), ok })
-      resolve(ok)
+      const silent = err !== null && (err.killed || typeof err.code === 'string') && !/not (logged|signed) in/i.test(said)
+      const state: SignedIn = silent ? 'unknown' : err === null && !/not (logged|signed) in/i.test(said) ? 'yes' : 'no'
+      if (state !== 'unknown') authCache.set(file, { at: Date.now(), state })
+      resolve(state)
     }),
   )
 }
@@ -201,7 +209,8 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
           url: INSTALL_URL[name],
         })
       const env = { ...process.env, PATH: await deps.path() }
-      if (!(await signedIn(name, file, env))) throw new ProviderError(problemFrom(name, 'not logged in'))
+      // Unknown goes ahead: the run says for itself if it is not signed in.
+      if ((await signedIn(name, file, env)) === 'no') throw new ProviderError(problemFrom(name, 'not logged in'))
       if (request.signal.aborted) return
 
       const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-agent-'))
@@ -219,6 +228,7 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
           const child = spawn(file, cliArgs(name, { model, system: request.system, cwd, server }), { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
           let stderr = ''
           let failure = ''
+          let answered = false
           let pending = ''
           const stop = (): void => {
             child.kill('SIGINT')
@@ -233,7 +243,10 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
               const parsed = parseLine(name, pending.slice(0, at).trim())
               pending = pending.slice(at + 1)
               at = pending.indexOf('\n')
-              if (parsed.text !== undefined) channel.push({ type: 'text', text: parsed.text })
+              if (parsed.text !== undefined) {
+                answered = true
+                channel.push({ type: 'text', text: parsed.text })
+              }
               if (parsed.tokens !== undefined) channel.push({ type: 'usage', tokens: parsed.tokens })
               if (parsed.limits !== undefined) {
                 const limits = claudeLimits(parsed.limits)
@@ -248,7 +261,9 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
           child.on('close', (code) => {
             request.signal.removeEventListener('abort', stop)
             if (request.signal.aborted) resolve()
-            else if (failure !== '' || code !== 0) reject(new ProviderError(problemFrom(name, `${failure}\n${stderr}`)))
+            // A failure said on the way - Codex reports a dropped connection it then retried as an `error` - fails the
+            // run only when no answer came of it; a non-zero exit always does.
+            else if (code !== 0 || (failure !== '' && !answered)) reject(new ProviderError(problemFrom(name, `${failure}\n${stderr}`)))
             else resolve()
           })
           // A CLI that exits before it has read the whole prompt (a flag it no longer knows, a sign-in gone) closes the

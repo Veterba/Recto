@@ -31,6 +31,7 @@ vi.mock('../../src/main/index-client', () => ({ send: async () => ({ kind: 'back
 
 const { callTool, openSession, closeSession, recordOf } = await import('../../src/main/vault-tools')
 const { pruneBackups } = await import('../../src/main/vault-tools/proposals')
+const { quickAskSystem } = await import('../../src/main/providers/prompts')
 
 const TRIP = 'Projects/Japan trip'
 const PLAN = `${TRIP}/Japan trip plan.md`
@@ -114,6 +115,20 @@ describe('the record of an answer', () => {
     access = { guide: `${TRIP}/Kyoto.md`, excluded: [TRIP], cloud: true }
     const hidden = await callTool('get_ai_guide', {}, 'claude-code')
     expect(hidden.ok && hidden.blocks.some((b) => b.kind === 'note')).toBe(false)
+  })
+
+  it('Quick ask sees only the open note and its links, yet gets the person’s AI guide in its prompt; with none, no hint goes in', async () => {
+    put('Guides/How I write.md', 'Short sentences. British spelling.\n')
+    access = { guide: 'Guides/How I write.md', excluded: [] }
+    const s = session()
+    expect(await quickAskSystem(s, PLAN)).toContain('British spelling')
+    access = { guide: null, excluded: [] }
+    const none = await quickAskSystem(s, PLAN)
+    expect(none).not.toContain('AI guide for this vault')
+    expect(none).not.toMatch(/has not chosen an AI guide|may not see/)
+    access = { guide: 'Guides/How I write.md', excluded: ['Guides'] }
+    expect(await quickAskSystem(s, PLAN)).not.toContain('British spelling')
+    closeSession(s.id)
   })
 
   it('a session stops calling once cloud is turned off, or another vault is open', async () => {
