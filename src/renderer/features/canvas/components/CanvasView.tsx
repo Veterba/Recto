@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GhostLayer } from './GhostLayer'
-import { useGhosts } from '../use-ghosts'
 import { DrawingEditor } from './DrawingEditor'
 import { setCanvasSelection } from '../../../app/canvas-selection'
 import {
@@ -61,7 +60,7 @@ import { CANVAS_FOLDER, noteFolderBeside } from '@shared/recto-paths'
 import { noteEntries } from '../../file-tree'
 import { boardOfCard, isBoardPath, useBoards } from '../../boards'
 import { createBoard, createCardNote } from '../../boards/create-card'
-import { openSuggestedEdits } from '../../suggested-edits'
+import { openSuggestedEdits, useCanvasProposals } from '../../suggested-edits'
 import { noteIndexChanged, useNoteBus } from '../../../app/note-bus'
 
 /**
@@ -290,7 +289,7 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
   const run = useCallback((change: CanvasChange) => void edit(change), [edit])
 
   // An AI's suggested changes to this canvas, as ghosts until accepted.
-  const { proposals, accept: acceptGhosts, reject: rejectGhosts } = useGhosts(path, docRef, edit)
+  const proposals = useCanvasProposals(path)
 
   const stopEditing = useCallback(() => {
     const typed = draft.current
@@ -1386,7 +1385,7 @@ function CanvasBoard({ path, leafId, shell }: { path: string; leafId: string; sh
           opening={picking}
           setOpening={setPicking}
         />
-        {doc !== null && <GhostLayer proposals={proposals} doc={doc} transform={transform} onAccept={(a) => void acceptGhosts(a)} onReject={rejectGhosts} />}
+        {doc !== null && <GhostLayer proposals={proposals} doc={doc} transform={transform} />}
         {editingDrawing !== null && (
           <DrawingEditor
             key={editingDrawing.id}

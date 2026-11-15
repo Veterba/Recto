@@ -92,7 +92,7 @@ function Panel({ shown, waiting, onClose }: { shown: Proposal[]; waiting: Propos
   const [height, setHeight] = useState(0)
   useEffect(() => {
     const resize = (): void => setPlace(placeOf())
-    // Esc closes it when focus is in it or nowhere: a button it removed (Apply all, once nothing is left)
+    // Esc closes it when focus is in it or nowhere: a button it removed (Accept all, once nothing is left)
     // takes the focus with it. Esc in the editor or a field stays theirs.
     const escape = (e: KeyboardEvent): void => {
       const at = document.activeElement
@@ -117,7 +117,7 @@ function Panel({ shown, waiting, onClose }: { shown: Proposal[]; waiting: Propos
     return () => observer.disconnect()
   }, [])
   const every = (channel: typeof IPC.aiProposalApply | typeof IPC.aiProposalDiscard): void => {
-    for (const p of waiting) if (p.canvas === undefined) void api.invoke(channel, p.id).catch(() => undefined)
+    for (const p of waiting) void api.invoke(channel, p.id).catch(() => undefined)
   }
   return (
     <>
@@ -133,13 +133,13 @@ function Panel({ shown, waiting, onClose }: { shown: Proposal[]; waiting: Propos
           <h2 className="settings-panel__title">
             Suggested edits{waiting.length > 0 && <span className="edits-panel__count">{waiting.length}</span>}
           </h2>
-          {waiting.filter((p) => p.canvas === undefined).length > 1 && (
+          {waiting.length > 1 && (
             <>
               <button className="btn btn--ghost btn--sm" onClick={() => every(IPC.aiProposalDiscard)}>
-                Discard all
+                Reject all
               </button>
               <button className="btn btn--sm" onClick={() => every(IPC.aiProposalApply)}>
-                Apply all
+                Accept all
               </button>
             </>
           )}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CanvasDoc } from '../../src/shared/canvas'
-import { acceptOps, rejectOps, settledAs, type CanvasProposal } from '../../src/shared/canvas-ops'
+import { acceptOps, rejectOps, type CanvasProposal } from '../../src/shared/canvas-ops'
+import { statusOf } from '../../src/shared/text-changes'
 
 /** An AI's canvas changes as edits: each accepted or rejected on its own, on the canvas as it is then. */
 
@@ -54,8 +55,10 @@ describe('canvas edits', () => {
     const p = proposal()
     const states = rejectOps(p, [0])
     expect(states).toEqual(['rejected', 'rejected', 'rejected', 'pending'])
-    expect(settledAs(states)).toBe('pending')
-    expect(settledAs(['rejected', 'rejected', 'rejected', 'accepted'])).toBe('applied')
-    expect(settledAs(['rejected', 'stale'])).toBe('discarded')
+    expect(statusOf(states)).toBe('pending')
+    expect(statusOf(['rejected', 'rejected', 'rejected', 'accepted'])).toBe('applied')
+    expect(statusOf(['rejected', 'stale'])).toBe('discarded')
+    // None of them could go in: out of date, not "discarded".
+    expect(statusOf(['stale', 'stale'])).toBe('stale')
   })
 })

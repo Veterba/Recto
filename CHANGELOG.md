@@ -4,6 +4,19 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.63.0 — 2026-11-15
+### Added
+- AI suggestions are reviewed change by change: each change has ✓ and ✕, with Accept all and Reject all, and the card says what became of each and of the whole ("Partly applied: 2 of 3", "Out of date"). The same card in the chat, Quick ask and Suggested edits, in light and dark.
+- Suggestions for a canvas are accepted or rejected from the chat (or Suggested edits) too, each edit named in words - "Card “Compost”", "Arrow “Soil” → “Compost”"; the canvas shows them as ghosts until then.
+### Changed
+- A suggestion is applied to the note as it is now: an edit elsewhere in the note, or another suggestion applied first, no longer makes it out of date - only a change whose own lines were edited is, and the rest still go in.
+- The canvas's ghosts are a preview: their bar says where to review them, and they no longer take clicks meant for the canvas under them.
+- Suggested edits' buttons are Accept all and Reject all, as on each card.
+### Fixed
+- Two suggestions for one canvas accepted together both go in; before, the second could write over the first.
+- A canvas suggestion whose canvas was deleted is out of date instead of waiting forever; one where nothing could go in says "Out of date", not "Discarded".
+- "Make it a link" on a canvas keeps a Windows note's line ends.
+
 ## v0.62.0 — 2026-11-15
 ### Added
 - A board on a canvas works like the board: every card in its lane (it scrolls), cards renamed in place with a double-click, the board's right-click menu on a card (open, rename, move to a lane, remove from the board, move its note to the archive), lanes renamed in place, "+ Column" to add one, and each card's checklist progress. Changes show at once in the board's tab and the card's note, and changes from the board or another app show on the canvas.

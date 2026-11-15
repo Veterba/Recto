@@ -1585,6 +1585,10 @@
   z-index: 7;
   pointer-events: none;
 }
+.canvas-ghosts__where {
+  color: var(--text-muted);
+  font-size: var(--font-size-12-5);
+}
 .canvas-ghosts__bar {
   position: absolute;
   /* Over every ghost, however big a group's frame. */
@@ -1625,16 +1629,14 @@
   border-radius: 10px;
   background: color-mix(in srgb, var(--accent) 7%, var(--bg-primary));
   overflow: hidden;
-  pointer-events: auto;
+  /* Only a preview: the canvas under it stays yours to click and drag. */
+  pointer-events: none;
 }
 .canvas-ghost.is-group {
   background: color-mix(in srgb, var(--accent) 4%, transparent);
   overflow: visible;
-  /* A frame: what is inside it stays clickable; only its label and chips take clicks. */
+  /* A frame: what is inside it stays clickable. */
   pointer-events: none;
-}
-.canvas-ghost.is-group .canvas-ghost__chips {
-  pointer-events: auto;
 }
 .canvas-ghost.is-move {
   background: transparent;
@@ -1659,27 +1661,12 @@
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, var(--bg-primary));
 }
-.canvas-ghost__chips {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  display: flex;
-  gap: 3px;
-}
-.canvas-ghost.is-group .canvas-ghost__chips {
-  top: -26px;
-  right: 0;
-}
 .canvas-ghost__edge {
   position: absolute;
   transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   gap: 4px;
-  pointer-events: auto;
-}
-.canvas-ghost__edge .canvas-ghost__chips {
-  position: static;
 }
 .canvas-ghost__edge-label {
   padding: 1px 6px;
@@ -1687,23 +1674,4 @@
   font-size: var(--font-size-12);
   color: var(--accent);
   background: var(--bg-primary);
-}
-.canvas-ghost__chip {
-  all: unset;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  box-shadow: var(--glass-surface-border);
-  cursor: pointer;
-}
-.canvas-ghost__chip:hover {
-  color: var(--text-primary);
-}
-.canvas-ghost__chip.is-yes {
-  background: var(--accent);
-  color: white;
 }

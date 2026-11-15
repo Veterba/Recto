@@ -348,8 +348,10 @@ main: vault-tools/socket.ts  (first line must carry the token)
   edge - written as the Arrow tool writes one, pinned at both centres so it is straight, its facing
   sides kept for Obsidian - add group, move), placed by `shared/canvas-layout.ts` (beside, around, packed rows, group frames;
   never over what is there). The proposal carries `canvas: { path, ops, states, refs }`; `files` holds
-  the canvas with every edit, for the list. Apply from Suggested edits, and Write directly, apply the
-  pending edits in main onto the canvas as it is (`acceptOps`; an edit whose node is gone is stale).
+  the canvas with every edit, for the list. Accepting edits - some or all, from the card in the chat,
+  Quick ask or Suggested edits - and Write directly apply them in main onto the canvas as it is
+  (`acceptOps`; an edit whose node is gone is stale, a canvas gone makes them all stale); rejecting one
+  rejects the arrows and groups that need it (`rejectOps`).
   `canvas_propose_new` is an ordinary new-file proposal.
 - **Why a socket.** The client starts `recto-mcp` as its own process, but only the running app has
   the index, the vault and the settings. The socket (mode 0600, plus a random per-install token, compared
@@ -370,16 +372,26 @@ main: vault-tools/socket.ts  (first line must carry the token)
   uses the same file in a `.mcpb` that `buildMcpb` makes on demand.
 - **Writes.** Every write tool returns a `Draft`; the mode in `ai-access.json` decides what happens.
   `shared/formatting.ts` (8 rules, detected from the vault or the Obsidian Linter's config) is applied
-  only to the lines the AI wrote. A proposal keeps the file's text it was made against; Apply on a
-  note that has changed since writes nothing (stale). Names (free in their folder), links (resolved
+  only to the lines the AI wrote. A proposal keeps the file's text it was made against, and is
+  accepted or rejected change by change (`shared/text-changes.ts`: `changesOf` splits it into runs of
+  changed lines with two lines of context; each `FileChange` keeps its changes' `states`). Accepting
+  finds each change's old lines in the note as it is now, nearest where they were (`applyChanges`): an
+  edit elsewhere in the note, or another suggestion applied first, leaves it applicable; only a change
+  whose own lines are gone is stale, and the rest still go in. A proposal that writes several files (a
+  card and its board) goes whole or not at all. Applies run one at a time (`turn` in `proposals.ts`), so
+  two suggestions on one note or canvas never write over each other; `statusOf` makes the proposal's
+  status from its changes (pending while any is; applied when any went in; discarded; stale). Names (free in their folder), links (resolved
   as Obsidian does; an ambiguous `[[name]]` is refused with the exact links to write), periodic-note
   templates, boards (changed only through the board tools) and excluded folders are checked in
   `write.ts`; a note given by a name several notes share is answered with the list, to be given by path.
   `shared/line-diff.ts` makes the diff shown in Suggested edits
   (`renderer/features/suggested-edits/`). One card shows a suggestion everywhere
-  (`SuggestionCard.tsx`): which note, what kind of change, who and when, the change in the note's
-  own font, Apply and Discard or what became of it. Recto's chats (the panel and Quick ask) show
-  each answer's suggestions under it, by the ids in its record, live from `useProposals`; the
+  (`SuggestionCard.tsx`, what it shows worked out in `suggestion-model.ts`): a title (what it does, to
+  which note or canvas), who and when; each change - its lines in the note's own font, or a canvas
+  edit in words - with ✓/✕ when there is more than one; Accept all / Reject all; then each change's
+  and the whole's outcome ("Partly applied: 2 of 3", "Out of date: …"). `use-proposals.ts` is one store
+  for the window (one subscription to main), read by the cards, the panel and a canvas's ghosts.
+  Recto's chats (the panel and Quick ask) show each answer's suggestions under it, by the ids in its record; the
   status bar's count opens a glass panel of everything waiting (Settings' panel classes), where a
   suggestion settled stays with its outcome until the panel closes. AI edits keep a note's line
   ends (`noteChange` works in LF and writes CRLF back); Write directly's backups go after 30 days.
@@ -695,10 +707,11 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
   changes the node in place to `type: "file"`. A name a note already has offers "Use that note" (the
   existing file is put on the canvas and stays where it is) or "Create a new “X” here".
 - **Ghosts** (`components/GhostLayer.tsx`). The open canvas's pending canvas proposals drawn in place
-  over it - frames, then arrows (clipped to the cards' edges), then cards - with ✓/✕ each and Accept all /
-  Reject all. Accepting runs `acceptOps` through the canvas's own `edit` (one undo step, replayed onto the
-  file as it is when written) and reports the edits' states to main (`ai-proposals:canvas`), which settles
-  the proposal once none is pending; rejecting an edit rejects the arrows and groups that need it.
+  over it - frames, then arrows (clipped to the cards' edges), then cards - as a preview only: they take
+  no clicks, and the bar says who suggested them and where to review them (the chat, Quick ask, or
+  Suggested edits for an app outside Recto). Main writes what is accepted there, and the canvas reads it
+  like any change to its file, so an accepted edit is not in the canvas's undo; the ghosts follow the
+  proposals' store.
 - **Canvas commands** (`canvas-menus.ts`, `CanvasView.tsx`). Group these, Brainstorm around this, Map
   this note and Arrange as moodboard are questions for Quick ask (`app/quick-ask-request.ts`) naming the
   selection by short ids; Quick ask on a canvas has the read and propose canvas tools, the canvas

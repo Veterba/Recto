@@ -1,4 +1,5 @@
 import type { CanvasProposal } from './canvas-ops'
+import type { ChangeState } from './text-changes'
 /**
  * AI access: what AI clients (Claude Code, Codex, Claude Desktop, Cursor -
  * and later Recto's own providers) may do with the vault, through Recto's
@@ -51,8 +52,11 @@ export function isExcludedPath(path: string, excluded: readonly string[]): boole
   })
 }
 
-/** One file a proposal changes: its text when proposed (null: a new file) and after. */
-export type FileChange = { path: string; before: string | null; after: string }
+/**
+ * One file a proposal changes: its text when proposed (null: a new file) and after; and what became of each
+ * of its changes (text-changes.ts changesOf), in order - missing in proposals from before changes were kept.
+ */
+export type FileChange = { path: string; before: string | null; after: string; states?: ChangeState[] }
 
 export type ProposalStatus = 'pending' | 'applied' | 'discarded' | 'stale'
 

@@ -263,14 +263,22 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     expect(await client.data('get_proposal', { id: made.proposal_id })).toMatchObject({ status: 'applied' })
   }, 30_000)
 
-  it('a stale proposal writes nothing; Discard leaves the note alone', async () => {
-    const first = JSON.parse(
+  it('an edit elsewhere in the note leaves a proposal applicable; one to its own line makes it stale and writes nothing; Discard leaves the note alone', async () => {
+    const elsewhere = JSON.parse(
       (await client.call('propose_edit', { note: 'Soil', changes: [{ find: 'Soil', replace: 'Good soil' }] })).content[0]!.text,
     ) as { proposal_id: string }
     fs.appendFileSync(path.join(vault, 'Garden/Soil.md'), '\nEdited by hand.\n')
+    expect(await invoke(page, 'ai-proposals:apply', elsewhere.proposal_id)).toEqual({ ok: true })
+    expect(read('Garden/Soil.md')).toMatch(/Good soil[\s\S]*Edited by hand\./)
+
+    const first = JSON.parse(
+      (await client.call('propose_edit', { note: 'Soil', changes: [{ find: 'Good soil', replace: 'Rich soil' }] })).content[0]!.text,
+    ) as { proposal_id: string }
+    fs.writeFileSync(path.join(vault, 'Garden/Soil.md'), read('Garden/Soil.md').replace('Good soil', 'Loamy soil'))
+    const typed = read('Garden/Soil.md')
     const result = await invoke(page, 'ai-proposals:apply', first.proposal_id)
     expect(result).toMatchObject({ ok: false, stale: true })
-    expect(read('Garden/Soil.md')).toContain('Edited by hand.')
+    expect(read('Garden/Soil.md')).toBe(typed)
 
     const second = JSON.parse((await client.call('propose_link', { from: 'Handbook', to: 'Raised beds' })).content[0]!.text) as {
       proposal_id: string
@@ -365,7 +373,7 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     expect(allText(await client.call('read_file', { file: 'Kitchen/Recipes.pdf' }))).toMatch(/No file/)
   }, 30_000)
 
-  it('canvas tools: a proposal shows on the canvas as ghosts; an arrow accepted brings its card; Reject all leaves the file as it was', async () => {
+  it('canvas tools: a proposal shows on the canvas as ghosts, reviewed in Suggested edits; an arrow accepted brings its card; a rejected group leaves the file as it was', async () => {
     // Propose (an earlier test left it on Write directly).
     await page.evaluate(async () => {
       const api = (window as unknown as WithApi).api
@@ -394,8 +402,12 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     expect(await page.locator('.canvas-ghost').textContent()).toContain('Basil')
     // Nothing in the file yet.
     expect(fs.readFileSync(path.join(vault, canvasPath), 'utf8')).toBe(before)
+    // Its controls are in Suggested edits: the bar opens it.
+    await page.locator('.canvas-ghosts__bar').getByRole('button', { name: 'Review' }).click()
+    const panel = page.getByRole('dialog', { name: 'Suggested edits' })
+    const card = panel.locator('.suggestion').filter({ has: page.locator('.suggestion__title', { hasText: 'Herbs' }) })
     // The arrow accepted: its new card comes with it.
-    await page.locator('.canvas-ghost__edge').getByRole('button', { name: 'Accept' }).click()
+    await card.getByRole('button', { name: 'Accept change 2' }).click()
     await expect
       .poll(() => (JSON.parse(fs.readFileSync(path.join(vault, canvasPath), 'utf8')) as { nodes: unknown[]; edges: unknown[] }).edges.length, { timeout: 5000 })
       .toBe(1)
@@ -404,17 +416,20 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     expect(after.edges[0]!.label).toBe('grows')
     await page.waitForSelector('.canvas-ghosts', { state: 'detached' })
     expect(await client.data('get_proposal', { id: proposed.proposal_id })).toMatchObject({ status: 'applied' })
+    await page.keyboard.press('Escape')
 
     // A group, rejected: the file is byte for byte as it was.
     await client.call('canvas_propose_group', { canvas: 'Herbs', groups: [{ label: 'Garden', nodes: ['n1', 'n2'] }] })
     await page.waitForSelector('.canvas-ghost.is-group')
     const kept = fs.readFileSync(path.join(vault, canvasPath), 'utf8')
-    await page.locator('.canvas-ghosts__bar').getByRole('button', { name: 'Reject all' }).click()
+    await page.locator('.canvas-ghosts__bar').getByRole('button', { name: 'Review' }).click()
+    await panel.locator('.suggestion').filter({ hasText: 'Group “Garden”' }).getByRole('button', { name: 'Reject', exact: true }).click()
     await page.waitForSelector('.canvas-ghosts', { state: 'detached' })
     expect(fs.readFileSync(path.join(vault, canvasPath), 'utf8')).toBe(kept)
+    await page.keyboard.press('Escape')
   }, 40_000)
 
-  it('Accept all with two proposals on one canvas writes both, in one edit ⌘Z takes back', async () => {
+  it('Accept all with two proposals on one canvas writes both, onto the canvas as it is', async () => {
     const canvasPath = 'Recto/Canvas/Herbs.canvas'
     const nodes = (): string[] => (JSON.parse(fs.readFileSync(path.join(vault, canvasPath), 'utf8')) as { nodes: { text?: string }[] }).nodes.map((n) => n.text ?? '')
     const before = nodes()
@@ -426,16 +441,14 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
       ids.push(proposed.proposal_id)
     }
     await page.waitForFunction(() => document.querySelector('.canvas-ghosts__bar')?.textContent?.includes('suggests 2 changes') === true)
-    await page.locator('.canvas-ghosts__bar').getByRole('button', { name: 'Accept all' }).click()
+    await page.locator('.canvas-ghosts__bar').getByRole('button', { name: 'Review' }).click()
+    await page.getByRole('dialog', { name: 'Suggested edits' }).getByRole('button', { name: 'Accept all' }).click()
     // Both, in whichever order the proposals are listed (newest first).
     await expect.poll(() => nodes().slice(before.length).sort(), { timeout: 5000 }).toEqual(['Mint', 'Thyme'])
     expect(nodes().slice(0, before.length)).toEqual(before)
     await page.waitForSelector('.canvas-ghosts', { state: 'detached' })
     for (const id of ids) expect(await client.data('get_proposal', { id })).toMatchObject({ status: 'applied' })
-    // One edit: one ⌘Z takes both back.
-    await page.locator('.react-flow__pane').click({ position: { x: 5, y: 5 } })
-    await page.keyboard.press('Meta+z')
-    await expect.poll(nodes, { timeout: 5000 }).toEqual(before)
+    await page.keyboard.press('Escape')
   }, 40_000)
 })
 

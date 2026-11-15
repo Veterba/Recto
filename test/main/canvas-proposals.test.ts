@@ -56,20 +56,30 @@ afterEach(() => fs.rmSync(root, { recursive: true, force: true }))
 const draft = () => ({ summary: '3 changes to Plan', files: [], formatted: [], canvas: { path: CANVAS, ops } })
 
 describe('canvas proposals', () => {
-  it('wait with every edit pending; settled from the canvas, edit by edit', () => {
+  it('wait with every edit pending; settled where they were suggested, edit by edit - the canvas written by main', async () => {
     const made = proposals.queue(draft(), 'claude-code', 'canvas_propose_nodes')
     expect(made.canvas?.states).toEqual(['pending', 'pending', 'pending'])
-    expect(proposals.updateCanvas(made.id, ['accepted', 'pending', 'rejected'], { g1: 'x' })).toEqual({ ok: true })
+    expect(await proposals.apply(made.id, [0])).toEqual({ ok: true })
+    expect(read().nodes.map((n) => n.text)).toContain('Compost')
     expect(proposals.proposal(made.id)?.status).toBe('pending')
-    proposals.updateCanvas(made.id, ['accepted', 'rejected', 'rejected'], { g1: 'x' })
+    proposals.discard(made.id, [2])
+    expect(proposals.proposal(made.id)?.canvas?.states).toEqual(['accepted', 'pending', 'rejected'])
+    proposals.discard(made.id, [1])
     expect(proposals.proposal(made.id)?.status).toBe('applied')
+  })
+
+  it('a canvas deleted since: its edits are out of date, never pending forever', async () => {
+    const made = proposals.queue(draft(), 'claude-code', 'canvas_propose_nodes')
+    fs.rmSync(path.join(root, CANVAS))
+    expect(await proposals.apply(made.id)).toMatchObject({ ok: false, stale: true })
+    expect(proposals.proposal(made.id)?.status).toBe('stale')
   })
 
   it('Apply from Suggested edits writes them onto the canvas as it is now; one whose node is gone since is left out', async () => {
     const made = proposals.queue(draft(), 'claude-code', 'canvas_propose_nodes')
     // Water deleted since the proposal was made.
     fs.writeFileSync(path.join(root, CANVAS), text([{ id: 'a', type: 'text', text: 'Soil', x: 0, y: 0, width: 200, height: 100 }]))
-    expect(await proposals.apply(made.id)).toEqual({ ok: true })
+    expect(await proposals.apply(made.id)).toMatchObject({ ok: false, stale: true })
     const after = read()
     expect(after.nodes.map((n) => n.text)).toEqual(['Soil', 'Compost'])
     expect(after.edges).toHaveLength(1)
@@ -79,5 +89,18 @@ describe('canvas proposals', () => {
   it('Write directly applies them at once, with a backup of the canvas', async () => {
     expect(await proposals.applyNow(draft())).toEqual({ ok: true })
     expect(read().nodes.find((n) => n.id === 'b')).toMatchObject({ y: 500 })
+  })
+})
+
+describe('two canvas proposals applied at once', () => {
+  it('both go in: the second is written onto the canvas the first wrote, not over it', async () => {
+    const one = proposals.queue({ ...draft(), canvas: { path: CANVAS, ops: [ops[0]!] } }, 'claude-code', 'canvas_propose_nodes')
+    const two = proposals.queue(
+      { ...draft(), canvas: { path: CANVAS, ops: [{ op: 'add-node', node: { ref: 'g9', type: 'text', text: 'Mulch', x: 900, y: 0, width: 200, height: 100 } }] } },
+      'claude-code',
+      'canvas_propose_nodes',
+    )
+    expect(await Promise.all([proposals.apply(one.id), proposals.apply(two.id)])).toEqual([{ ok: true }, { ok: true }])
+    expect(read().nodes.map((n) => n.text)).toEqual(expect.arrayContaining(['Compost', 'Mulch']))
   })
 })

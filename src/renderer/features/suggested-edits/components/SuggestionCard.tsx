@@ -1,22 +1,28 @@
 import { useState } from 'react'
-import type { FileChange, Proposal } from '@shared/ai-access'
+import type { Proposal } from '@shared/ai-access'
 import { IPC } from '@shared/ipc'
-import { diffLines } from '@shared/line-diff'
 import { api } from '../../../app/api'
 import { openFileFromAnywhere } from '../../../app/open-file'
 import { Icon } from '../../../ui/Icon'
+import { headingOf, itemsOf, outcomeOf, titleOf, type ChangeItem, type DiffRow } from '../suggestion-model'
 
 /**
- * One suggestion, as it reads in a chat under the answer that made it and in
- * the Suggested edits panel: which note, what kind of change, who suggested
- * it and when; the change itself in the note's own font, added lines marked
- * green, removed ones red and struck through; Apply and Discard - or, once
- * settled, what became of it.
+ * One suggestion, the same wherever it is read - under the chat's answer
+ * that made it, in Quick ask, in the Suggested edits panel: a title (what it
+ * does, to which note or canvas), who suggested it and when; then each
+ * change - the lines in the note's own font, added green, removed red and
+ * struck through, or a canvas edit in words - with ✓ and ✕; Accept all and
+ * Reject all; and after, what became of each and of the whole.
  */
 
 /** Who suggested it, as a person reads it: "Quick ask · Claude Code" from `quick-ask · Claude Code`. */
 const PLACES: Record<string, string> = { 'quick-ask': 'Quick ask', 'recto-chat': 'Chat' }
-const CLIENTS: Record<string, string> = { 'claude-code': 'Claude Code', codex: 'Codex', 'claude-desktop': 'Claude Desktop', cursor: 'Cursor' }
+const CLIENTS: Record<string, string> = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  'claude-desktop': 'Claude Desktop',
+  cursor: 'Cursor',
+}
 export function clientLabel(client: string): string {
   const [where, provider] = client.split(' · ')
   if (provider !== undefined) return `${PLACES[where!] ?? where} · ${provider}`
@@ -33,82 +39,60 @@ export function whenLabel(created: number, now = Date.now()): string {
   return `${at.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
 }
 
-/** What kind of change, by the tool that made it; the summary when there is no better word. */
-const KINDS: Record<string, { verb: string; icon: string }> = {
-  propose_append: { verb: 'Adds to', icon: 'pen-line' },
-  propose_edit: { verb: 'Changes', icon: 'pen-line' },
-  propose_new_note: { verb: 'New note', icon: 'file-plus' },
-  propose_link: { verb: 'Adds a link to', icon: 'link' },
-  propose_task: { verb: 'New card on', icon: 'square-kanban' },
-  propose_task_update: { verb: 'Changes card', icon: 'square-kanban' },
+/** How many changes a card in a chat shows before "Show all". */
+const CHAT_ITEMS = 3
+
+const STATE: Record<Exclude<ChangeItem['state'], 'pending'>, { text: string; icon: string }> = {
+  accepted: { text: 'Applied', icon: 'check' },
+  rejected: { text: 'Rejected', icon: 'x' },
+  stale: { text: 'Out of date', icon: 'alert-triangle' },
 }
 
-const titleOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.(md|canvas)$/i, '')
-
-/** The changed lines with two lines around them; longer unchanged runs fold into one line that says how many. */
-function diffRows(change: FileChange): React.ReactNode[] {
-  const lines = diffLines(change.before === null ? [] : change.before.split('\n'), change.after.split('\n'))
-  const near = new Set<number>()
-  lines.forEach((l, i) => {
-    if (l.kind !== 'same') for (let k = i - 2; k <= i + 2; k++) near.add(k)
-  })
-  const rows: React.ReactNode[] = []
-  let folded = 0
-  const fold = (at: number): void => {
-    if (folded > 0) rows.push(<div key={`f${at}`} className="suggestion__fold">{folded === 1 ? '1 line unchanged' : `${folded} lines unchanged`}</div>)
-    folded = 0
-  }
-  lines.forEach((l, i) => {
-    if (!near.has(i)) {
-      folded++
-      return
-    }
-    fold(i)
-    rows.push(
-      <div key={i} className={`suggestion__line suggestion__line--${l.kind}`}>
-        {l.text === '' ? ' ' : l.text}
-      </div>,
-    )
-  })
-  fold(lines.length)
-  return rows
-}
-
-function Diff({ change, limit }: { change: FileChange; limit: number | null }): React.ReactElement {
-  const rows = diffRows(change)
-  const shown = limit === null ? rows : rows.slice(0, limit)
+function Rows({ rows, label }: { rows: readonly DiffRow[]; label: string }): React.ReactElement {
   return (
-    <div className="suggestion__diff" aria-label={`Changes to ${titleOf(change.path)}`}>
-      {shown}
-      {shown.length < rows.length && <div className="suggestion__fold">…</div>}
+    <div className="suggestion__diff" aria-label={label}>
+      {rows.map((r, i) =>
+        r.kind === 'fold' ? (
+          <div key={i} className="suggestion__fold">
+            {r.text}
+          </div>
+        ) : (
+          <div key={i} className={`suggestion__line suggestion__line--${r.kind}`}>
+            {r.text === '' ? ' ' : r.text}
+          </div>
+        ),
+      )}
     </div>
   )
 }
 
-const SETTLED: Record<Exclude<Proposal['status'], 'pending'>, { text: string; icon: string }> = {
-  applied: { text: 'Applied', icon: 'check' },
-  discarded: { text: 'Discarded', icon: 'x' },
-  stale: { text: 'Out of date: the note changed since, so it was not applied', icon: 'alert-triangle' },
-}
-
-/** How many diff rows a card in a chat shows before "Show all". */
-const CHAT_ROWS = 8
-
-export function SuggestionCard({ proposal, inChat = false, onOpen }: { proposal: Proposal; inChat?: boolean; onOpen?: () => void }): React.ReactElement {
+export function SuggestionCard({
+  proposal,
+  inChat = false,
+  onOpen,
+}: {
+  proposal: Proposal
+  inChat?: boolean
+  onOpen?: () => void
+}): React.ReactElement {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [all, setAll] = useState(!inChat)
-  const kind = KINDS[proposal.tool]
-  const target = proposal.canvas?.path ?? proposal.files.at(-1)?.path ?? ''
+  const heading = headingOf(proposal)
+  const items = itemsOf(proposal)
+  const pending = items.filter((i) => i.state === 'pending')
+  // Each change on its own only when there is more than one to choose from, and the proposal may be split.
+  const each = items.length > 1 && items.every((i) => i.index !== null)
+  const outcome = outcomeOf(items, proposal.canvas === undefined ? 'note' : 'canvas')
   const open = (path: string): void => {
     openFileFromAnywhere(path)
     onOpen?.()
   }
-  const settle = (channel: typeof IPC.aiProposalApply | typeof IPC.aiProposalDiscard): void => {
+  const settle = (channel: typeof IPC.aiProposalApply | typeof IPC.aiProposalDiscard, picks?: number[]): void => {
     setBusy(true)
     setError(null)
     void api
-      .invoke(channel, proposal.id)
+      .invoke(channel, proposal.id, picks)
       .then((result) => {
         if (!result.ok) setError('error' in result && typeof result.error === 'string' ? result.error : 'It could not be done.')
       })
@@ -116,71 +100,102 @@ export function SuggestionCard({ proposal, inChat = false, onOpen }: { proposal:
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'It could not be applied.'))
       .finally(() => setBusy(false))
   }
-  const settled = proposal.status === 'pending' ? null : SETTLED[proposal.status]
+  const shown = all ? items : items.slice(0, CHAT_ITEMS)
 
   return (
-    <article className={`suggestion${inChat ? ' suggestion--chat' : ''}${settled === null ? '' : ' is-settled'}`} aria-label={proposal.summary}>
+    <article
+      className={`suggestion${inChat ? ' suggestion--chat' : ''}${outcome === null ? '' : ` is-settled is-${outcome.tone}`}`}
+      aria-label={proposal.summary}
+    >
       <header className="suggestion__head">
-        <Icon name={proposal.canvas !== undefined ? 'shapes' : (kind?.icon ?? 'sparkles')} size={14} />
-        <span className="suggestion__kind">{proposal.canvas !== undefined ? 'Changes on' : (kind?.verb ?? proposal.summary)}</span>
-        {(kind !== undefined || proposal.canvas !== undefined) && target !== '' && (
-          <button className="suggestion__note" onClick={() => open(target)} title={target}>
-            {titleOf(target)}
-          </button>
-        )}
+        <Icon name={heading.icon} size={14} />
+        <h3 className="suggestion__title">
+          <span className="suggestion__kind">{heading.verb}</span>{' '}
+          {heading.target !== '' && (
+            <button className="suggestion__note" onClick={() => open(heading.target)} title={heading.target}>
+              {titleOf(heading.target)}
+            </button>
+          )}
+        </h3>
         <span className="suggestion__meta">
           {clientLabel(proposal.client)} · {whenLabel(proposal.created)}
           {proposal.formatted.length > 0 && ' · formatted to your profile'}
         </span>
       </header>
 
-      {settled === null &&
-        (proposal.canvas !== undefined ? (
-          // A canvas's changes are reviewed on the canvas, one by one, as ghosts.
-          <p className="suggestion__canvas">
-            {proposal.canvas.states.filter((s) => s === 'pending').length} changes to review on the canvas.{' '}
-            <button className="btn btn--sm" onClick={() => open(proposal.canvas!.path)}>
-              Open to review
-            </button>
-          </p>
-        ) : (
-          proposal.files.map((f) => (
-            <section key={f.path} className="suggestion__file">
-              {proposal.files.length > 1 && (
-                <button className="suggestion__filename" onClick={() => open(f.path)}>
-                  {f.before === null ? 'New: ' : ''}
-                  {titleOf(f.path)}
-                </button>
-              )}
-              <Diff change={f} limit={all ? null : CHAT_ROWS} />
-            </section>
-          ))
+      <ol className="suggestion__changes">
+        {shown.map((item, k) => (
+          <li key={item.index ?? item.file ?? k} className={`suggestion__change is-${item.state}`}>
+            {(each || item.file !== undefined || item.label !== undefined) && (
+              <div className="suggestion__change-head">
+                {item.label !== undefined ? (
+                  <span className="suggestion__label">
+                    <Icon name={item.icon ?? 'shapes'} size={12} /> {item.label}
+                  </span>
+                ) : item.file !== undefined ? (
+                  <button className="suggestion__filename" onClick={() => open(item.file!)}>
+                    {titleOf(item.file)}
+                  </button>
+                ) : (
+                  <span className="suggestion__label">Change {k + 1}</span>
+                )}
+                <span className="suggestion__spacer" />
+                {item.state === 'pending' ? (
+                  each && (
+                    <span className="suggestion__picks">
+                      <button
+                        className="suggestion__pick is-yes"
+                        aria-label={`Accept change ${k + 1}`}
+                        title="Accept"
+                        disabled={busy}
+                        onClick={() => settle(IPC.aiProposalApply, [item.index!])}
+                      >
+                        <Icon name="check" size={13} />
+                      </button>
+                      <button
+                        className="suggestion__pick"
+                        aria-label={`Reject change ${k + 1}`}
+                        title="Reject"
+                        disabled={busy}
+                        onClick={() => settle(IPC.aiProposalDiscard, [item.index!])}
+                      >
+                        <Icon name="x" size={13} />
+                      </button>
+                    </span>
+                  )
+                ) : (
+                  <span className={`suggestion__state is-${item.state}`}>
+                    <Icon name={STATE[item.state].icon} size={12} /> {STATE[item.state].text}
+                  </span>
+                )}
+              </div>
+            )}
+            {item.rows.length > 0 && (item.state === 'pending' || !inChat) && <Rows rows={item.rows} label={`Change ${k + 1}`} />}
+          </li>
         ))}
+      </ol>
 
       {error !== null && <p className="suggestion__error">{error}</p>}
       <footer className="suggestion__foot">
-        {settled !== null ? (
-          <span className={`suggestion__settled suggestion__settled--${proposal.status}`}>
-            <Icon name={settled.icon} size={13} /> {settled.text}
+        {shown.length < items.length && (
+          <button className="suggestion__more" onClick={() => setAll(true)}>
+            Show all {items.length}
+          </button>
+        )}
+        {outcome !== null ? (
+          <span className={`suggestion__settled suggestion__settled--${outcome.tone}`}>
+            <Icon name={outcome.tone === 'stale' ? 'alert-triangle' : outcome.tone === 'rejected' ? 'x' : 'check'} size={13} />{' '}
+            {outcome.text}
           </span>
         ) : (
           <>
-            {!all && proposal.files.some((f) => diffRows(f).length > CHAT_ROWS) && (
-              <button className="suggestion__more" onClick={() => setAll(true)}>
-                Show all
-              </button>
-            )}
             <span className="suggestion__spacer" />
-            {proposal.canvas === undefined && (
-              <>
-                <button className="btn btn--ghost btn--sm" disabled={busy} onClick={() => settle(IPC.aiProposalDiscard)}>
-                  Discard
-                </button>
-                <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => settle(IPC.aiProposalApply)}>
-                  Apply
-                </button>
-              </>
-            )}
+            <button className="btn btn--ghost btn--sm" disabled={busy} onClick={() => settle(IPC.aiProposalDiscard)}>
+              {pending.length > 1 ? 'Reject all' : 'Reject'}
+            </button>
+            <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => settle(IPC.aiProposalApply)}>
+              {pending.length > 1 ? 'Accept all' : 'Accept'}
+            </button>
           </>
         )}
       </footer>

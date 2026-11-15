@@ -7,7 +7,6 @@
  */
 
 import type { LinkSettings } from './obsidian-links'
-import type { CanvasOpState } from './canvas-ops'
 import type { AiDelta, AiDone, AiError, AiMessage } from './ai'
 import type { ArchiveState } from './archive'
 import type { Bot, BotJob, BotMemoryStatus, BotMessage, BotModelStatus, BotSettings, ModelChoice, NoteCardsStatus, PullProgress } from './bots'
@@ -191,7 +190,6 @@ export const IPC = {
   aiProposals: 'ai-proposals:list',
   aiProposalApply: 'ai-proposals:apply',
   aiProposalDiscard: 'ai-proposals:discard',
-  aiProposalCanvas: 'ai-proposals:canvas',
   aiClients: 'ai-clients:list',
   aiClientPlan: 'ai-clients:plan',
   aiClientConnect: 'ai-clients:connect',
@@ -530,10 +528,9 @@ export type IpcApi = Exhaustive<
     /** A video played in the mini-player window: a YouTube video, or one from the vault. */
     [IPC.playerOpen]: (item: PlayerItem) => { ok: true } | { ok: false; error: string }
     [IPC.aiProposals]: () => Proposal[]
-    [IPC.aiProposalApply]: (id: string) => { ok: boolean; error?: string; stale?: boolean }
-    [IPC.aiProposalDiscard]: (id: string) => { ok: boolean }
-    /** A canvas proposal's edits, as accepted (written by the open canvas) or rejected there. */
-    [IPC.aiProposalCanvas]: (id: string, states: CanvasOpState[], refs: Record<string, string>) => { ok: boolean }
+    /** `picks`: which of its changes (or a canvas's edits) to apply; all pending ones when left out. */
+    [IPC.aiProposalApply]: (id: string, picks?: number[]) => { ok: boolean; error?: string; stale?: boolean }
+    [IPC.aiProposalDiscard]: (id: string, picks?: number[]) => { ok: boolean }
     [IPC.aiClients]: () => ClientStatus[]
     [IPC.aiClientPlan]: (id: ClientId, action: 'connect' | 'disconnect') => ClientPlan
     [IPC.aiClientConnect]: (id: ClientId) => { ok: boolean; error?: string }

@@ -1,3 +1,4 @@
+import { appendLine } from '../shared/text-changes'
 import { IPC, type IpcApi } from '../shared/ipc'
 import { publicUrl } from './public-url'
 import { parseNote } from '../shared/parse'
@@ -44,7 +45,7 @@ export function registerCanvasIpc(handle: Handle): void {
     // Written as Obsidian would write it in that note, by the vault's "New link format".
     const link = formatLink(to, from, vault, currentLinkSettings())
     const before = read.content
-    const after = `${before}${before === '' || before.endsWith('\n') ? '' : '\n'}${link}\n`
+    const after = appendLine(before, link)
     const made = queue(
       { summary: `Link “${name(from)}” to “${name(to)}”`, files: [{ path: from, before, after }], formatted: [] },
       'recto-canvas',

@@ -63,3 +63,47 @@ describe('applying a note proposal', () => {
     expect(proposals.proposal(p.id)?.status).toBe('pending')
   })
 })
+
+describe('a note proposal, change by change', () => {
+  const NOTE = '# Basil\n\nPinch the tops.\n\n## Harvest\n\nMorning.\n'
+  const EDITED = '# Basil\n\nPinch the tops weekly.\n\n## Harvest\n\nMorning.\nDry in the shade.\n'
+  const queue = (before = NOTE, after = EDITED) =>
+    proposals.queue({ summary: 'edit Basil', formatted: [], files: [{ path: 'Basil.md', before, after }] }, 'recto-chat · Codex', 'propose_edit')
+  const read = (): string => fs.readFileSync(file('Basil.md'), 'utf8')
+  beforeEach(() => fs.writeFileSync(file('Basil.md'), NOTE))
+
+  it('one change accepted, the other rejected: the note has only the first, the proposal is applied, each change says what it became', async () => {
+    const p = queue()
+    expect(await proposals.apply(p.id, [0])).toEqual({ ok: true })
+    expect(read()).toBe(NOTE.replace('Pinch the tops.', 'Pinch the tops weekly.'))
+    expect(proposals.proposal(p.id)).toMatchObject({ status: 'pending', files: [{ states: ['accepted', 'pending'] }] })
+    proposals.discard(p.id, [1])
+    expect(proposals.proposal(p.id)).toMatchObject({ status: 'applied', files: [{ states: ['accepted', 'rejected'] }] })
+    expect(read()).not.toContain('Dry in the shade')
+  })
+
+  it('the person typed elsewhere in the note since: every change still goes in, around what they typed', async () => {
+    const p = queue()
+    fs.writeFileSync(file('Basil.md'), `Seeds from Anna.\n${NOTE}`)
+    expect(await proposals.apply(p.id)).toEqual({ ok: true })
+    expect(read()).toBe(`Seeds from Anna.\n${EDITED}`)
+  })
+
+  it('the person changed the very line a change is about: that one is out of date, the other goes in, and it says so', async () => {
+    const p = queue()
+    fs.writeFileSync(file('Basil.md'), NOTE.replace('Pinch the tops.', 'Pinch the tops in June.'))
+    const result = await proposals.apply(p.id)
+    expect(result).toMatchObject({ ok: false, stale: true, error: expect.stringMatching(/1 of these changes no longer fit/) })
+    expect(read()).toContain('Pinch the tops in June.')
+    expect(read()).toContain('Dry in the shade.')
+    expect(proposals.proposal(p.id)).toMatchObject({ status: 'applied', files: [{ states: ['stale', 'accepted'] }] })
+  })
+
+  it('a second proposal on the same note still applies after the first', async () => {
+    const first = queue(NOTE, NOTE.replace('Morning.', 'Morning, before the heat.'))
+    const second = queue(NOTE, NOTE.replace('# Basil', '# Basil (Genovese)'))
+    expect(await proposals.apply(first.id)).toEqual({ ok: true })
+    expect(await proposals.apply(second.id)).toEqual({ ok: true })
+    expect(read()).toBe(NOTE.replace('Morning.', 'Morning, before the heat.').replace('# Basil', '# Basil (Genovese)'))
+  })
+})

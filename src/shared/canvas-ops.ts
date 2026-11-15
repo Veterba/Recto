@@ -1,3 +1,4 @@
+import type { ChangeState } from './text-changes'
 import { facingSides, newCanvasId, patchNode, withStyle, type CanvasDoc, type CanvasEdge, type CanvasNode, type CanvasSide } from './canvas'
 
 /**
@@ -29,7 +30,8 @@ export type CanvasOp =
   | { op: 'add-group'; ref: string; label: string; members: string[]; x: number; y: number; width: number; height: number }
   | { op: 'move'; id: string; x: number; y: number }
 
-export type CanvasOpState = 'pending' | 'accepted' | 'rejected' | 'stale'
+/** One edit's state: the same four as a note's changes (text-changes.ts). */
+export type CanvasOpState = ChangeState
 
 export type CanvasProposal = {
   path: string
@@ -153,7 +155,3 @@ export function rejectOps(proposal: CanvasProposal, indexes: readonly number[]):
   for (const i of out) states[i] = 'rejected'
   return states
 }
-
-/** What became of a proposal once no edit is pending: applied when any was accepted. */
-export const settledAs = (states: readonly CanvasOpState[]): 'pending' | 'applied' | 'discarded' =>
-  states.includes('pending') ? 'pending' : states.includes('accepted') ? 'applied' : 'discarded'

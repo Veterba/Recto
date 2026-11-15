@@ -3,7 +3,7 @@ import { BrowserWindow, Notification } from 'electron'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { AI_PROPOSALS_STATE, isExcludedPath, type Proposal, type ProposalStatus } from '../../shared/ai-access'
+import { AI_PROPOSALS_STATE, isExcludedPath, type FileChange, type Proposal } from '../../shared/ai-access'
 import { IPC_EVENT } from '../../shared/ipc'
 import { VAULT_STATE_DIR } from '../../shared/vault'
 import { sendEvent } from '../events'
@@ -13,7 +13,8 @@ import * as vaultFs from '../vault-fs'
 import type { Draft } from './write'
 import { ToolError } from './scope'
 import { parseCanvas, serializeCanvas } from '../../shared/canvas'
-import { acceptOps, settledAs, type CanvasOpState, type CanvasProposal } from '../../shared/canvas-ops'
+import { acceptOps, rejectOps, type CanvasOpState, type CanvasProposal } from '../../shared/canvas-ops'
+import { applyChanges, changesOf, fileStates, statusOf, type ChangeState } from '../../shared/text-changes'
 
 /**
  * Proposals: what an AI asked to write, waiting for Apply or Discard in
@@ -190,17 +191,19 @@ async function write(
  * they were proposed: an edit whose node is gone since is stale, the rest
  * go in. Null when the canvas cannot be read.
  */
-async function applyCanvas(proposal: CanvasProposal): Promise<{ states: CanvasOpState[]; refs: Record<string, string> } | { error: string }> {
+async function applyCanvas(
+  proposal: CanvasProposal,
+  indexes: readonly number[] = proposal.states.flatMap((s, i) => (s === 'pending' ? [i] : [])),
+): Promise<{ states: CanvasOpState[]; refs: Record<string, string> } | { error: string; gone?: true }> {
   const text = await current(proposal.path).catch(() => null)
-  if (text === null) return { error: `${proposal.path} is not there any more.` }
+  if (text === null) return { error: `${proposal.path} is not there any more.`, gone: true }
   let doc
   try {
     doc = parseCanvas(text)
   } catch {
     return { error: `${proposal.path} could not be read as a canvas.` }
   }
-  const pending = proposal.states.flatMap((s, i) => (s === 'pending' ? [i] : []))
-  const done = acceptOps(doc, proposal, pending)
+  const done = acceptOps(doc, proposal, indexes)
   const written = await vaultFs.writeFile(proposal.path, serializeCanvas(done.doc))
   if (!written.ok) return { error: written.error ?? `Could not write ${proposal.path}.` }
   return { states: done.states, refs: done.refs }
@@ -218,66 +221,126 @@ export async function applyNow(draft: Draft): Promise<{ ok: true } | { ok: false
   return { ok: false, error: result.stale ? `${result.path} changed while this was being made. Read it again and retry.` : result.error }
 }
 
-/** Settled from pending only: a late answer never turns an applied proposal into another state. */
-function settle(id: string, status: ProposalStatus): void {
-  save(load().map((p) => (p.id === id && p.status === 'pending' ? { ...p, status } : p)))
+const statesOf = (p: Proposal, f: FileChange): ChangeState[] => fileStates(p.status, f)
+
+/** A pending proposal changed, in the store: only while it is still pending - a late answer never undoes a settled one. */
+function update(id: string, change: (p: Proposal) => Proposal): void {
+  save(load().map((p) => (p.id === id && p.status === 'pending' ? change(p) : p)))
 }
 
 /** Proposals being applied now: a second Apply of one (a double click, Apply all beside it) waits for nothing and does nothing. */
 const applying = new Set<string>()
 
-export async function apply(id: string): Promise<{ ok: true } | { ok: false; error: string; stale?: boolean }> {
+type Applied = { ok: true } | { ok: false; error: string; stale?: boolean }
+
+/**
+ * Apply a proposal's pending changes - `picks` of them (indexes of its changes, or of a canvas's edits), or
+ * all. Each goes onto the note as it is now (text-changes.ts): one whose own lines are gone is out of date,
+ * the rest go in. A proposal that writes several files (a card and its board) goes in whole or not at all:
+ * half of it would break the board.
+ */
+export async function apply(id: string, picks?: readonly number[]): Promise<Applied> {
   if (applying.has(id)) return { ok: false, error: 'This suggestion is being applied.' }
   applying.add(id)
+  // One at a time: two read the same note or canvas, each wrote it with its own change, and the second
+  // write lost the first (Accept all in the panel, two suggestions on one canvas).
+  const run = turn.then(() => applyOnce(id, picks))
+  turn = run.then(
+    () => undefined,
+    () => undefined,
+  )
   try {
-    return await applyOnce(id)
+    return await run
   } finally {
     applying.delete(id)
   }
 }
 
-async function applyOnce(id: string): Promise<{ ok: true } | { ok: false; error: string; stale?: boolean }> {
+/** The apply before this one, finished or failed: the next waits for it. */
+let turn: Promise<void> = Promise.resolve()
+
+async function applyOnce(id: string, picks?: readonly number[]): Promise<Applied> {
   const found = proposal(id)
   if (found === null || found.status !== 'pending') return { ok: false, error: 'This suggestion is no longer pending.' }
-  if (found.canvas !== undefined) {
-    const done = await applyCanvas(found.canvas)
-    if ('error' in done) return { ok: false, error: done.error }
-    // Every pending edit tried: applied if any went in, stale if none could (their nodes gone since).
-    const status = done.states.includes('accepted') ? 'applied' : 'stale'
-    save(load().map((p) => (p.id === id ? { ...p, status, canvas: { ...found.canvas!, ...done } } : p)))
-    return status === 'applied' ? { ok: true } : { ok: false, stale: true, error: 'The canvas has changed so that none of these edits fit any more.' }
+  if (found.canvas !== undefined) return applyCanvasProposal(found, picks)
+  if (found.files.length > 1) return applyWhole(found)
+  const file = found.files[0]!
+  const states = statesOf(found, file)
+  const chosen = (picks ?? states.map((_, i) => i)).filter((i) => states[i] === 'pending')
+  if (chosen.length === 0) return { ok: false, error: 'Nothing in this suggestion is waiting.' }
+  const done = applyChanges(await current(file.path), changesOf(file.before, file.after), chosen)
+  if ([...done.states.values()].includes('accepted')) {
+    const written = await vaultFs.writeFile(file.path, done.text!)
+    if (!written.ok) return { ok: false, error: written.error ?? `Could not write ${file.path}.` }
   }
-  const result = await write(found.files)
-  if (result.ok) {
-    settle(id, 'applied')
-    return result
+  for (const [i, state] of done.states) states[i] = state
+  update(id, (p) => ({ ...p, status: statusOf(states), files: [{ ...file, states }] }))
+  const stale = [...done.states.values()].filter((s) => s === 'stale').length
+  if (stale === 0) return { ok: true }
+  return {
+    ok: false,
+    stale: true,
+    error:
+      stale === done.states.size
+        ? `${titleOf(file.path)} has changed where this would go, so nothing was written. Ask again for a fresh suggestion.`
+        : `${stale} of these changes no longer fit ${titleOf(file.path)} (it changed there since); the rest went in.`,
   }
-  if (result.stale) {
-    settle(id, 'stale')
-    return {
-      ok: false,
-      stale: true,
-      error: `${result.path} has changed since this was suggested, so nothing was written. Ask again for a fresh suggestion.`,
-    }
-  }
-  return { ok: false, error: result.error }
 }
 
-/**
- * What became of a canvas proposal's edits on the open canvas - accepted
- * there (the canvas wrote them) or rejected; settled once none is pending.
- */
-export function updateCanvas(id: string, states: CanvasOpState[], refs: Record<string, string>): { ok: boolean } {
-  const found = proposal(id)
-  if (found?.canvas === undefined || found.status !== 'pending' || states.length !== found.canvas.ops.length) return { ok: false }
-  const status = settledAs(states)
-  save(load().map((p) => (p.id === id ? { ...p, status: status === 'pending' ? 'pending' : status, canvas: { ...found.canvas!, states, refs } } : p)))
+const titleOf = (p: string): string => p.slice(p.lastIndexOf('/') + 1).replace(/\.(md|canvas)$/i, '')
+
+/** Several files at once: every change of every file found again, then all written - or, one missing, none. */
+async function applyWhole(found: Proposal): Promise<Applied> {
+  const next: Draft['files'] = []
+  for (const f of found.files) {
+    const now = await current(f.path)
+    const changes = changesOf(f.before, f.after)
+    const done = applyChanges(now, changes, changes.map((_, i) => i))
+    if ([...done.states.values()].includes('stale')) {
+      update(found.id, (p) => ({ ...p, status: 'stale', files: p.files.map((g) => ({ ...g, states: statesOf(p, g).map(() => 'stale' as const) })) }))
+      return { ok: false, stale: true, error: `${titleOf(f.path)} has changed where this would go, so nothing was written. Ask again for a fresh suggestion.` }
+    }
+    next.push({ path: f.path, before: now, after: done.text! })
+  }
+  const result = await write(next)
+  if (!result.ok) return { ok: false, error: result.stale ? `${titleOf(result.path)} changed while this was being applied. Try again.` : result.error }
+  update(found.id, (p) => ({ ...p, status: 'applied', files: p.files.map((g) => ({ ...g, states: statesOf(p, g).map(() => 'accepted' as const) })) }))
   return { ok: true }
 }
 
-export function discard(id: string): { ok: boolean } {
+/** A canvas's picked edits written onto it as it is now; a canvas gone since makes them out of date. */
+async function applyCanvasProposal(found: Proposal, picks?: readonly number[]): Promise<Applied> {
+  const canvas = found.canvas!
+  const chosen = (picks ?? canvas.states.map((_, i) => i)).filter((i) => canvas.states[i] === 'pending')
+  const done = await applyCanvas(canvas, chosen)
+  if ('error' in done) {
+    if (done.gone === true) {
+      const states = canvas.states.map((s) => (s === 'pending' ? 'stale' : s))
+      update(found.id, (p) => ({ ...p, status: statusOf(states), canvas: { ...canvas, states } }))
+      return { ok: false, stale: true, error: 'The canvas is not there any more.' }
+    }
+    return { ok: false, error: done.error }
+  }
+  update(found.id, (p) => ({ ...p, status: statusOf(done.states), canvas: { ...canvas, ...done } }))
+  const tried = chosen.filter((i) => done.states[i] === 'stale').length
+  return tried === 0 ? { ok: true } : { ok: false, stale: true, error: 'Some of these edits no longer fit the canvas: what they were about is gone.' }
+}
+
+/** Reject a proposal's pending changes - `picks` of them, or all. A canvas edit takes those that need it along. */
+export function discard(id: string, picks?: readonly number[]): { ok: boolean } {
   const found = proposal(id)
   if (found === null || found.status !== 'pending') return { ok: false }
-  settle(id, 'discarded')
+  if (found.canvas !== undefined) {
+    const canvas = found.canvas
+    const states = rejectOps(canvas, picks ?? canvas.states.map((_, i) => i))
+    update(id, (p) => ({ ...p, status: statusOf(states), canvas: { ...canvas, states } }))
+    return { ok: true }
+  }
+  update(id, (p) => {
+    // Several files go whole: rejected whole too.
+    const whole = p.files.length > 1 || picks === undefined
+    const files = p.files.map((f) => ({ ...f, states: statesOf(p, f).map((s, i) => (s === 'pending' && (whole || picks.includes(i)) ? ('rejected' as const) : s)) }))
+    return { ...p, status: statusOf(files.flatMap((f) => f.states)), files }
+  })
   return { ok: true }
 }
