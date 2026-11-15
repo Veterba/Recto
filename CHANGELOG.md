@@ -4,6 +4,16 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.61.2 — 2026-11-15
+### Fixed
+- ChatGPT plan: when OpenAI refuses an account even with a fresh token, or cannot confirm its plan, Recto no longer calls the sign-in expired and sends you round to sign in again; it says the account's plan may not be open to other apps.
+- ChatGPT plan errors end with OpenAI's own code and request id, and Settings shows OpenAI's reason as soon as it refuses to list the account's models - before any question is asked.
+- ChatGPT plan: a refused answer right after signing in no longer signs you out. Recto no longer asks for a new token while the one it has is fresh, which OpenAI refused, and that refusal was taken for an expired sign-in.
+- The page the browser shows at the end of a ChatGPT sign-in is a small card in the middle - what happened and that the tab may close - in light and dark, not a line of text across the top.
+- ChatGPT plan sign-in: an older sign-in page finishing in another tab no longer ends the current sign-in and leaves its page unable to reach Recto.
+- ChatGPT plan sign-in: when OpenAI refuses the sign-in code, Recto no longer says the sign-in "expired". It says that using a ChatGPT plan in other apps needs Plus or Pro on a personal account (OpenAI refuses Free, Go and work accounts this way), keeps the registration OpenAI issued, and the next try uses it instead of registering again.
+- What ChatGPT and OpenAI answered - status, code, request id, sign-in and refresh outcomes, never tokens or text - is kept in a small log in Recto's app data (logs/providers.log), so a failure can be traced.
+
 ## v0.61.1 — 2026-11-15
 ### Fixed
 - An AI answer that shows no sign of life for three minutes is stopped with a reason - before its first word too, and in Quick ask - while one still working through tool calls is no longer cut off after a minute.

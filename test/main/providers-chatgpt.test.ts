@@ -39,6 +39,10 @@ const mock = {
   revoked: [] as string[],
   responses: [] as (() => { status: number; body: string; sse: boolean })[],
   requests: [] as Record<string, unknown>[],
+  /** What /v1/models answers: null lists the models. */
+  modelsRefusal: null as { status: number; body: unknown } | null,
+  /** `earliest_refresh_at` in token replies; null leaves it out. */
+  earliestRefreshAt: null as number | null,
   /** A refresh reply without a new refresh token. */
   noNewRefresh: false,
   /** The refresh tokens refresh requests were made with. */
@@ -93,14 +97,16 @@ beforeAll(async () => {
         id_token: idToken(mock.issued, mock.nonce),
         token_type: 'Bearer',
         expires_in: 3600,
+        ...(mock.earliestRefreshAt === null ? {} : { earliest_refresh_at: mock.earliestRefreshAt }),
         ...(mock.scope === null ? {} : { scope: mock.scope }),
       })
     }
+    if (url.pathname === '/v1/models' && mock.modelsRefusal !== null) return json(mock.modelsRefusal.status, mock.modelsRefusal.body)
     if (url.pathname === '/v1/models') return json(200, { models: [{ slug: 'gpt-test', display_name: 'GPT Test', visibility: 'list' }, { slug: 'hidden', visibility: 'hide' }] })
     if (url.pathname === '/v1/responses') {
       mock.requests.push(JSON.parse(body) as Record<string, unknown>)
       const next = mock.responses.shift()!()
-      res.writeHead(next.status, { 'content-type': next.sse ? 'text/event-stream' : 'application/json' }).end(next.body)
+      res.writeHead(next.status, { 'content-type': next.sse ? 'text/event-stream' : 'application/json', 'x-request-id': `req_${mock.requests.length}` }).end(next.body)
       return
     }
     res.writeHead(404).end()
@@ -118,6 +124,8 @@ afterEach(() => {
   mock.tokenError = 'invalid_grant'
   mock.noNewRefresh = false
   mock.refreshedWith = []
+  mock.modelsRefusal = null
+  mock.earliestRefreshAt = null
   mock.scope = 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct'
   mock.responses = []
   mock.requests = []
@@ -191,9 +199,33 @@ describe('Sign in with ChatGPT', () => {
     expect(second!.get('ext_agent_host_id')).toBe(record.hostId)
   })
 
-  it('refuses a callback with the wrong state, a cancelled consent, and a registration without a client id', async () => {
+  it('an older sign-in’s callback is told to close and never ends this one, which goes on and signs in', async () => {
+    const auth = new ChatGptAuth({
+      store: memoryStore(),
+      authBase: base,
+      open: (url) => {
+        const params = new URL(url).searchParams
+        mock.nonce = params.get('nonce') ?? ''
+        const at = (q: Record<string, string>): string => {
+          const r = new URL(params.get('redirect_uri')!)
+          for (const [k, v] of Object.entries(q)) r.searchParams.set(k, v)
+          return r.toString()
+        }
+        // An old tab first, then this sign-in's own answer.
+        mock.page = fetch(at({ code: 'old', state: 'from-an-older-sign-in', client_id: 'x' }))
+          .then((r) => r.text())
+          .then((old) => {
+            expect(old).toMatch(/An older sign-in page/)
+            return fetch(at({ code: 'c', state: params.get('state')!, client_id: mock.issued })).then((r) => r.text())
+          })
+      },
+    })
+    expect(await auth.signIn()).toMatchObject({ email: 'me@example.com' })
+    expect(await mock.page).toMatch(/Signed in/)
+  })
+
+  it('refuses a cancelled consent and a registration without a client id', async () => {
     const cases: [Record<string, string> | ((p: URLSearchParams) => Record<string, string>), RegExp][] = [
-      [{ code: 'c', state: 'forged', client_id: 'x' }, /different request/],
       [(p) => ({ error: 'access_denied', state: p.get('state')! }), /cancelled/],
       [(p) => ({ code: 'c', state: p.get('state')! }), /did not finish registering/],
     ]
@@ -207,14 +239,18 @@ describe('Sign in with ChatGPT', () => {
   it('says “signed in” in the browser only once Recto has finished, and why not when it has not', async () => {
     const ok = new ChatGptAuth({ store: memoryStore(), authBase: base, open: browser(() => {}, (p) => ({ code: 'c', state: p.get('state')!, client_id: mock.issued })) })
     await ok.signIn()
-    expect(await mock.page).toContain('Signed in. You can close this tab')
+    const signed = await mock.page
+    expect(signed).toContain('<h1>Signed in to ChatGPT</h1>')
+    expect(signed).toContain('You can close this tab')
 
     mock.tokenStatus = 400
     const failing = new ChatGptAuth({ store: memoryStore(), authBase: base, open: browser(() => {}, (p) => ({ code: 'c', state: p.get('state')!, client_id: mock.issued })) })
     await expect(failing.signIn()).rejects.toThrow()
     const page = await mock.page
-    expect(page).toContain('Recto could not finish signing in')
-    expect(page).not.toContain('Signed in.')
+    expect(page).toContain('<h1>Recto couldn’t sign in</h1>')
+    expect(page).not.toContain('Signed in to ChatGPT')
+    // Said once: the message, then the one line about the tab.
+    expect(page.match(/try again/gi)?.length ?? 0).toBeLessThanOrEqual(1)
   })
 
   it('a token reply without a scope grants what was asked, plan usage included', async () => {
@@ -290,6 +326,60 @@ describe('Sign in with ChatGPT', () => {
       expect(auth.signedIn(), code).toBe(false)
       mock.tokenStatus = 200
     }
+  })
+
+  it('an account OpenAI will not list models for says why, with OpenAI’s code - before any question is asked', async () => {
+    process.env['RECTO_OPENAI_BASE'] = `${base}/v1`
+    const auth = new ChatGptAuth({ store: memoryStore(), authBase: base, apiBase: `${base}/v1`, open: browser(() => {}, (p) => ({ code: 'c', state: p.get('state')!, client_id: mock.issued })) })
+    await auth.signIn()
+    expect(await auth.models()).toEqual([{ id: 'gpt-test', label: 'GPT Test' }])
+    mock.modelsRefusal = { status: 403, body: { error: { code: 'subscription_sharing_user_not_eligible', message: 'x' } } }
+    await expect(auth.models()).rejects.toMatchObject({ problem: { kind: 'not-eligible', message: expect.stringMatching(/subscription_sharing_user_not_eligible/) } })
+  })
+
+  it('a token too fresh to refresh is not refreshed - by earliest_refresh_at, or for a minute - so a refused account never signs you out', async () => {
+    let now = Date.now()
+    const auth = new ChatGptAuth({ store: memoryStore(), authBase: base, now: () => now, open: browser(() => {}, (p) => ({ code: 'c', state: p.get('state')!, client_id: mock.issued })) })
+    mock.refreshes = 0
+    await auth.signIn()
+    expect(await auth.refresh()).toBe(false)
+    expect(mock.refreshes).toBe(0)
+    expect(auth.signedIn()).toBe(true)
+    now += 61_000
+    expect(await auth.refresh()).toBe(true)
+    expect(mock.refreshes).toBe(1)
+    // OpenAI's own earliest time, in epoch seconds.
+    mock.earliestRefreshAt = Math.floor(now / 1000) + 600
+    now = Date.now() + 61_000
+    await auth.signIn()
+    now += 120_000
+    expect(await auth.refresh()).toBe(false)
+    now += 600_000
+    expect(await auth.refresh()).toBe(true)
+  })
+
+  it('a code OpenAI refuses keeps the issued client id for the next try, and says what it most likely means', async () => {
+    const seen: string[] = []
+    const auth = new ChatGptAuth({
+      store: memoryStore(),
+      authBase: base,
+      open: browser(
+        (p) => seen.push(p.get('client_id')!),
+        (p) => ({ code: 'c', state: p.get('state')!, client_id: mock.issued }),
+      ),
+    })
+    mock.tokenStatus = 400
+    mock.tokenError = 'invalid_grant'
+    const error = await auth.signIn().catch((err: unknown) => err)
+    expect((error as InstanceType<typeof ProviderError>).problem).toMatchObject({ kind: 'not-eligible', message: expect.stringMatching(/Plus or Pro on a personal account/) })
+    expect(await mock.page).not.toMatch(/expired/)
+    expect(auth.signedIn()).toBe(false)
+    expect(auth.record()?.clientId).toBe(mock.issued)
+    mock.tokenStatus = 200
+    await auth.signIn()
+    // Registered once; the second try is with the issued id, as OpenAI asks.
+    expect(seen).toEqual(['dynamic_agent_client', mock.issued])
+    expect(auth.signedIn()).toBe(true)
   })
 
   it('signs out by revoking the refresh token, and keeps the registration', async () => {
@@ -383,6 +473,37 @@ describe('the Responses API with Recto’s tools', () => {
     expect(text).toBe('Hi.')
     expect(refreshed).toBe(1)
     expect(mock.requests).toHaveLength(2)
+  })
+
+  it('a 401 that comes again after a fresh token is not an expired sign-in: no Sign in loop, and OpenAI’s reference said', async () => {
+    const auth = { token: async () => 'tok', refreshed: async () => true, plan: true }
+    const unauthorized = () => ({ status: 401, sse: false, body: JSON.stringify({ error: { message: 'no' } }) })
+    mock.responses.push(unauthorized, unauthorized)
+    const error = await (async () => {
+      for await (const _ of toolLoop(responsesModel('gpt-test', auth, VAULT_TOOLS), {
+        model: 'chatgpt:gpt-test',
+        system: 's',
+        messages: [{ role: 'user', content: 'Hi' }],
+        session,
+        signal: new AbortController().signal,
+      }))
+        void _
+    })().catch((err: unknown) => err)
+    expect((error as InstanceType<typeof ProviderError>).problem).toMatchObject({
+      kind: 'not-eligible',
+      message: expect.stringMatching(/even with a fresh sign-in.*\(OpenAI: HTTP 401, request req_2\)$/),
+    })
+  })
+
+  it('subscription_sharing_invalid_user is not "sign in again", and carries its code', async () => {
+    mock.responses.push(() => ({ status: 401, sse: false, body: JSON.stringify({ error: { code: 'subscription_sharing_invalid_user', message: 'x' } }) }))
+    const error = await (async () => {
+      for await (const _ of run()) void _
+    })().catch((err: unknown) => err)
+    const problem = (error as InstanceType<typeof ProviderError>).problem
+    expect(problem.kind).toBe('not-eligible')
+    expect(problem.message).toMatch(/could not confirm.*\(OpenAI: subscription_sharing_invalid_user, request req_1\)$/)
+    expect(problem.message).not.toMatch(/Sign in again/)
   })
 
   it('turns the plan’s error codes into problems: limit with Manage usage, not eligible, unavailable, mid-stream failure', async () => {

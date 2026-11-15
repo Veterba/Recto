@@ -39,7 +39,7 @@ export type ProviderInfo = {
 export const PROVIDERS: readonly ProviderInfo[] = [
   { id: 'ollama', name: 'Ollama', where: 'mac', kind: 'model', blurb: 'Runs on this Mac. Nothing leaves it.' },
   { id: 'codex', name: 'Codex', vendor: 'openai', where: 'cloud', kind: 'agent', blurb: 'Your Codex CLI, signed in with your ChatGPT plan or key.' },
-  { id: 'chatgpt', name: 'ChatGPT plan', vendor: 'openai', where: 'cloud', kind: 'model', badge: 'Preview', blurb: 'Sign in with ChatGPT; answers use your plan.' },
+  { id: 'chatgpt', name: 'ChatGPT plan', vendor: 'openai', where: 'cloud', kind: 'model', badge: 'Preview', blurb: 'Sign in with ChatGPT; answers use your plan (Plus or Pro).' },
   {
     id: 'claude-code',
     name: 'Claude Code',

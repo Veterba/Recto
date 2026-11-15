@@ -1,6 +1,7 @@
 import { providerBase } from '../config'
 import type { AiMessage } from '../../shared/ai'
 import { USAGE_URL, type ProviderProblem } from '../../shared/providers'
+import { logProvider } from './log'
 import { ProviderError, toolSchema, type ToolModel } from './run'
 import type { VAULT_TOOLS } from '../../shared/vault-tools'
 
@@ -47,9 +48,19 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
         include: ['reasoning.encrypted_content'],
       })
       let response = await post(body, await auth.token(), signal)
-      if (response.status === 401 && auth.refreshed !== undefined && (await auth.refreshed()))
-        response = await post(body, await auth.token(), signal)
-      if (!response.ok || response.body === null) throw new ProviderError(await problemOf(response, auth.plan))
+      logProvider(`${auth.plan ? 'chatgpt' : 'openai'} responses ${model}: ${response.status} request ${response.headers.get('x-request-id') ?? '-'}`)
+      // A 401 is first taken for a stale token: refreshed once, and asked again. A token too fresh to refresh,
+      // or one just refreshed, turned down again: the account is refused, not the sign-in old.
+      let fresh = false
+      if (response.status === 401 && auth.refreshed !== undefined) {
+        fresh = true
+        if (await auth.refreshed()) {
+          response = await post(body, await auth.token(), signal)
+          logProvider(`chatgpt responses ${model} again: ${response.status} request ${response.headers.get('x-request-id') ?? '-'}`)
+        }
+      }
+      const retried = fresh
+      if (!response.ok || response.body === null) throw new ProviderError(await problemOf(response, auth.plan, retried))
 
       const output: Item[] = []
       // Done only once OpenAI says so: a stream that just ends was cut off, and its text is not an answer.
@@ -68,7 +79,10 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
           if (typeof tokens === 'number') yield { type: 'usage', tokens }
         } else if (type === 'response.failed' || type === 'error') {
           const error = ((event['response'] as Item | undefined)?.['error'] ?? event['error'] ?? event) as Item
-          throw new ProviderError(problemFromCode(String(error['code'] ?? ''), String(error['message'] ?? 'The answer failed.'), auth.plan))
+          const code = String(error['code'] ?? '')
+          const id = (event['response'] as Item | undefined)?.['id']
+          const problem = problemFromCode(code, String(error['message'] ?? 'The answer failed.'), auth.plan)
+          throw new ProviderError(withReference(problem, code, typeof id === 'string' ? id : null))
         } else if (type === 'response.incomplete') {
           finished = true
           const reason = ((event['response'] as Item | undefined)?.['incomplete_details'] as Item | undefined)?.['reason']
@@ -151,8 +165,23 @@ export async function* sse(body: ReadableStream<Uint8Array>): AsyncIterable<Item
   }
 }
 
-/** A failed response, as something the person can act on. */
-export async function problemOf(response: Response, plan: boolean): Promise<ProviderProblem> {
+/**
+ * OpenAI's own code and the request's id, after the message: what OpenAI's
+ * "Errors and recovery" asks to keep, and the only way to tell one refusal
+ * from another when something goes wrong for one account and not another.
+ */
+function withReference(problem: ProviderProblem, code: string, requestId: string | null): ProviderProblem {
+  const parts = [code, requestId === null ? '' : `request ${requestId}`].filter((p) => p !== '')
+  if (parts.length > 0) logProvider(`refused: ${parts.join(', ')} - ${problem.kind}: ${problem.message}`)
+  return parts.length === 0 ? problem : { ...problem, message: `${problem.message} (OpenAI: ${parts.join(', ')})` }
+}
+
+/**
+ * A failed response, as something the person can act on. `retried`: it is the
+ * answer to a request made again with a fresh token - a 401 then is not a
+ * stale sign-in, and signing in again would only loop.
+ */
+export async function problemOf(response: Response, plan: boolean, retried = false): Promise<ProviderProblem> {
   let code = ''
   let message = `OpenAI answered ${response.status}.`
   try {
@@ -163,10 +192,18 @@ export async function problemOf(response: Response, plan: boolean): Promise<Prov
   } catch {
     // No JSON: the status is all there is.
   }
-  if (code === '' && response.status === 401) return { kind: plan ? 'expired' : 'no-key', message: plan ? 'The ChatGPT sign-in is no longer accepted. Sign in again.' : 'The API key was rejected. Check it in Settings → AI.' }
-  if (code === '' && response.status === 429) return plan ? limitProblem() : { kind: 'limit', message: 'Rate limited by the API. Wait a moment and try again.' }
-  if (code === '' && response.status >= 500) return { kind: 'down', message: 'OpenAI is not answering right now. Try again in a moment.' }
-  return problemFromCode(code, message, plan)
+  const reference = (problem: ProviderProblem): ProviderProblem => withReference(problem, code === '' ? `HTTP ${response.status}` : code, response.headers.get('x-request-id'))
+  if (code === '' && response.status === 401) {
+    if (!plan) return reference({ kind: 'no-key', message: 'The API key was rejected. Check it in Settings → AI.' })
+    return reference(
+      retried
+        ? { kind: 'not-eligible', message: 'OpenAI turned this ChatGPT account down for Recto, even with a fresh sign-in. Signing in again will not help: its plan may not be open to other apps.' }
+        : { kind: 'expired', message: 'The ChatGPT sign-in is no longer accepted. Sign in again.' },
+    )
+  }
+  if (code === '' && response.status === 429) return reference(plan ? limitProblem() : { kind: 'limit', message: 'Rate limited by the API. Wait a moment and try again.' })
+  if (code === '' && response.status >= 500) return reference({ kind: 'down', message: 'OpenAI is not answering right now. Try again in a moment.' })
+  return reference(problemFromCode(code, message, plan))
 }
 
 const limitProblem = (): ProviderProblem => ({
@@ -186,7 +223,10 @@ export function problemFromCode(code: string, message: string, plan: boolean): P
     case 'subscription_sharing_user_unavailable':
       return { kind: 'down', message: 'ChatGPT plan usage is unavailable right now. Try again in a moment.' }
     case 'subscription_sharing_invalid_user':
-      return { kind: 'expired', message: 'ChatGPT could not confirm this sign-in. Sign in again.' }
+      // Not a stale sign-in (OpenAI: "diagnose the credential failure"; sign in again only after a confirmed revocation).
+      return { kind: 'not-eligible', message: 'ChatGPT could not confirm that this account’s plan can be used in Recto. Signing in again will not change that.' }
+    case 'subscription_sharing_unsupported_capability':
+      return { kind: 'failed', message: `ChatGPT plan usage does not support part of what Recto asked for: ${message}` }
     case 'insufficient_quota':
     case 'rate_limit_exceeded':
       return { kind: 'limit', message }

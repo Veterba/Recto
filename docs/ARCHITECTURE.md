@@ -500,7 +500,16 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   (developers.openai.com/siwc): refresh tokens rotate, and a reply without a new one keeps the old;
   the refresh errors OpenAI lists as unusable (`invalid_grant`, `refresh_token_reused`, …) sign out,
   anything else keeps the sign-in. Settings says why a signed-in account is not usable, and when
-  OpenAI lists no models.
+  OpenAI lists no models or refuses to (its reason, from `/v1/models`). A 401 that comes again after a
+  fresh token, and `subscription_sharing_invalid_user`, are "not eligible", not "expired": no Sign in
+  button to loop on. Every plan error ends with OpenAI's code and request id (`withReference`, `openai.ts`).
+  A sign-in code OpenAI refuses (`invalid_grant`, what a Free, Go or work account gets) is said as "needs
+  Plus or Pro on a personal account", and the issued client id is kept for the next try, as OpenAI asks.
+  A callback with another sign-in's `state` (an old tab) is told to close and never ends the current one.
+  No refresh is asked for while the token is fresh (`refreshFrom`: OpenAI's `earliest_refresh_at`, else a
+  minute after it came); a 401 then is the account refused. `providers/log.ts` keeps what OpenAI answered -
+  status, code, request id, sign-in and refresh outcomes, never a token or text - in
+  `<userData>/logs/providers.log` (200 KB at most).
 - **Chats panel, floating bot, Quick ask** (`renderer/features/chats/`). `ChatsPanel` is a right-hand
   panel (⌘⇧C, a toggle in the top-right `TabBar` that hides while the panel is open), with sections AI and People (People disabled for now), the bot
   list and then the picked bot's chat; `VaultShell` makes it and the graph take turns on the right.

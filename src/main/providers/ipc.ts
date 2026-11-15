@@ -6,6 +6,7 @@ import { saveThread } from '../bots/answers'
 import { sendEvent } from '../events'
 import { chatgpt, setOpenAiKey, statuses } from '.'
 import { forgetAuth, INSTALL_URL } from './cli'
+import { logProvider } from './log'
 import { cancelQuickAsk, quickAsk } from './quick-ask'
 import { ProviderError } from './run'
 
@@ -32,6 +33,7 @@ export function registerProvidersIpc(handle: Handle): void {
       return { ok: true as const, ...done }
     } catch (err) {
       console.error('[providers] ChatGPT sign-in', err)
+      logProvider(`chatgpt sign-in failed: ${err instanceof Error ? err.message : String(err)}`)
       // A failure Recto did not foresee still says what it was: the sign-in cannot be debugged from "failed".
       return { ok: false as const, error: err instanceof ProviderError ? err.message : `${PROBLEM_TEXT.failed} (${err instanceof Error ? err.message : String(err)})` }
     }

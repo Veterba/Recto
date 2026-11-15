@@ -2,6 +2,8 @@ import { providerBase } from '../config'
 import { createHash, createPublicKey, randomBytes, randomUUID, verify, type JsonWebKey } from 'node:crypto'
 import http from 'node:http'
 import type { ProviderModel } from '../../shared/providers'
+import { logProvider } from './log'
+import { problemOf } from './openai'
 import { ProviderError } from './run'
 import type { SecretStore } from './store'
 
@@ -47,7 +49,27 @@ export type ChatGptRecord = {
   accessToken: string | null
   refreshToken: string | null
   expiresAt: number
+  /** Before this (ms), a refresh is not asked for: OpenAI's `earliest_refresh_at`, or a minute after the token came. */
+  refreshFrom?: number
   scopes: string[]
+}
+
+/** How long a new access token is taken as fresh when OpenAI does not say: a 401 then is not about its age. */
+const FRESH_MS = 60_000
+
+/**
+ * `earliest_refresh_at` as epoch ms, in whatever form it comes: epoch seconds or ms, or a date. OpenAI's token
+ * reference names the field without its format.
+ */
+function epochMs(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value > 1e12 ? value : value * 1000
+  if (typeof value === 'string' && value !== '') {
+    const n = Number(value)
+    if (Number.isFinite(n)) return n > 1e12 ? n : n * 1000
+    const at = Date.parse(value)
+    return Number.isNaN(at) ? null : at
+  }
+  return null
 }
 
 export type AuthDeps = {
@@ -130,6 +152,7 @@ export class ChatGptAuth {
     const { server, port } = await listen()
     const redirectUri = `http://127.0.0.1:${port}${CALLBACK_PATH}`
     const first = previous === null
+    logProvider(`chatgpt sign-in start: ${first ? 'first, registering' : `again, as ${previous.clientId}`} port=${port}`)
     const params = new URLSearchParams({
       client_id: first ? REGISTER : previous.clientId,
       ...(first ? { agent_name_hint: 'Recto' } : {}),
@@ -145,9 +168,9 @@ export class ChatGptAuth {
       code_challenge: b64url(createHash('sha256').update(verifier).digest()),
     })
 
-    let back: { query: URLSearchParams; reply: (ok: boolean, text: string) => void }
+    let back: { query: URLSearchParams; reply: (page: Page) => void }
     try {
-      const waiting = callback(server, (cancel) => (this.cancelSignIn = cancel))
+      const waiting = callback(server, state, (cancel) => (this.cancelSignIn = cancel))
       this.deps.open(`${this.authBase}/api/accounts/authorize?${params.toString()}`)
       back = await waiting
     } catch (err) {
@@ -160,10 +183,14 @@ export class ChatGptAuth {
     const { query } = back
     try {
       const done = await this.finish(query, { first, previous, state, verifier, redirectUri, hostId, nonce })
-      back.reply(true, done.plan ? 'Signed in. You can close this tab and go back to Recto.' : 'Signed in, but plan usage was not allowed. Go back to Recto to sign in again and allow it.')
+      back.reply(
+        done.plan
+          ? { ok: true, title: 'Signed in to ChatGPT', text: 'Recto can now answer with your ChatGPT plan.' }
+          : { ok: false, title: 'Signed in, without plan usage', text: 'Plan usage was not allowed. In Recto, continue with ChatGPT again and allow it.' },
+      )
       return done
     } catch (err) {
-      back.reply(false, err instanceof Error ? err.message : String(err))
+      back.reply({ ok: false, title: 'Recto couldn’t sign in', text: err instanceof Error ? err.message : String(err) })
       throw err
     } finally {
       server.close()
@@ -199,6 +226,19 @@ export class ChatGptAuth {
       code_verifier: verifier,
       redirect_uri: redirectUri,
       resource: RESOURCE,
+    }).catch((err: unknown) => {
+      if (!(err instanceof ProviderError && err.problem.kind === 'expired')) throw err
+      // The code refused. OpenAI: keep the issued client id and start a fresh authorization with it - registering
+      // again each time only makes another. The tokens of a sign-in before this one stay as they were.
+      if (first) this.save({ clientId, hostId, subject: '', email: null, idToken: '', accessToken: null, refreshToken: null, expiresAt: 0, scopes: [] })
+      logProvider(`chatgpt sign-in: the code was refused for ${clientId}; the registration is kept for the next try`)
+      // What OpenAI does not say: other apps that use this preview see it for accounts whose plan it does not
+      // cover - plan use in other apps needs Plus or Pro on a personal account.
+      throw new ProviderError({
+        kind: 'not-eligible',
+        message:
+          'OpenAI did not accept the sign-in. Using a ChatGPT plan in other apps needs ChatGPT Plus or Pro on a personal account - not Free, Go or a work workspace. With one of those, try again.',
+      })
     })
     // Checked before anything is saved: a sign-in that fails here leaves the previous one as it was.
     const claims = await this.checkIdToken(tokens.idToken, clientId, nonce)
@@ -211,6 +251,7 @@ export class ChatGptAuth {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       expiresAt: this.now() + tokens.expiresIn * 1000,
+      refreshFrom: tokens.refreshFrom ?? this.now() + FRESH_MS,
       // No `scope` in the reply means it was granted as asked (RFC 6749, 5.1).
       scopes: tokens.scopes ?? SCOPES.split(' '),
     }
@@ -232,8 +273,17 @@ export class ChatGptAuth {
     return fresh.accessToken
   }
 
-  /** One refresh at a time; a 401 mid-answer asks for one too. True when there is a new token. */
+  /**
+   * One refresh at a time; a 401 mid-answer asks for one too. True when there is a new token; false when the
+   * one there is still fresh - asked again so soon, OpenAI refuses the refresh, and a refused refresh signed
+   * the person out, so a refusal of the account read as an expired sign-in.
+   */
   async refresh(): Promise<boolean> {
+    const r = this.record()
+    if (r !== null && r.refreshFrom !== undefined && this.now() < r.refreshFrom) {
+      logProvider('chatgpt refresh skipped: the token is fresh')
+      return false
+    }
     this.refreshing ??= this.doRefresh().finally(() => (this.refreshing = null))
     await this.refreshing
     return this.record()?.accessToken != null
@@ -252,6 +302,7 @@ export class ChatGptAuth {
         refreshToken: t.refreshToken === '' ? r.refreshToken : t.refreshToken,
         idToken: t.idToken === '' ? r.idToken : t.idToken,
         expiresAt: this.now() + t.expiresIn * 1000,
+        refreshFrom: t.refreshFrom ?? this.now() + FRESH_MS,
         scopes: t.scopes ?? r.scopes,
       })
     } catch (err) {
@@ -286,12 +337,16 @@ export class ChatGptAuth {
     return { revoked }
   }
 
-  /** The models this account may use, in OpenAI's order. */
+  /**
+   * The models this account may use, in OpenAI's order. OpenAI refusing to
+   * list them throws its reason: Settings says it before any question is asked.
+   */
   async models(): Promise<ProviderModel[]> {
     const token = await this.token()
     // Asked each time Settings or the model picker opens: a request that hangs must not hold them.
     const response = await fetch(`${this.apiBase}/models`, { headers: { authorization: `Bearer ${token}` }, signal: timed() }).catch(() => null)
-    if (response === null || !response.ok) return []
+    if (response === null) return []
+    if (!response.ok) throw new ProviderError(await problemOf(response, true))
     const body = (await response.json()) as { models?: { slug?: unknown; display_name?: unknown; visibility?: unknown }[] }
     return (body.models ?? [])
       .filter((m) => m.visibility === 'list' && typeof m.slug === 'string')
@@ -303,6 +358,8 @@ export class ChatGptAuth {
     refreshToken: string
     idToken: string
     expiresIn: number
+    /** OpenAI's `earliest_refresh_at`, epoch ms; null when it is not there. */
+    refreshFrom: number | null
     /** Null when the reply leaves it out. */
     scopes: string[] | null
   }> {
@@ -315,9 +372,16 @@ export class ChatGptAuth {
         body: new URLSearchParams(form).toString(),
       })
     } catch {
+      logProvider(`chatgpt token ${form['grant_type']}: could not reach OpenAI`)
       throw new ProviderError({ kind: 'down', message: 'OpenAI’s sign-in could not be reached. Try again in a moment.' })
     }
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>
+    logProvider(
+      `chatgpt token ${form['grant_type']}: ${response.status}` +
+        (response.ok
+          ? ` expires_in=${String(body['expires_in'])} earliest_refresh_at=${String(body['earliest_refresh_at'])} new_refresh_token=${typeof body['refresh_token'] === 'string'} scope="${String(body['scope'] ?? '')}"`
+          : ` ${JSON.stringify(body)} sent=${Object.keys(form).join(',')}`),
+    )
     if (!response.ok) {
       const code = String(body['error'] ?? '')
       // Busy, slow or down: the sign-in stands, and the next try may work.
@@ -337,6 +401,7 @@ export class ChatGptAuth {
       refreshToken: String(body['refresh_token'] ?? ''),
       idToken: typeof body['id_token'] === 'string' ? body['id_token'] : '',
       expiresIn: typeof body['expires_in'] === 'number' ? body['expires_in'] : 3600,
+      refreshFrom: epochMs(body['earliest_refresh_at']),
       scopes: scope,
     }
   }
@@ -378,8 +443,34 @@ function listen(): Promise<{ server: http.Server; port: number }> {
   return at(PREFERRED_PORT).catch(() => at(0))
 }
 
-const PAGE = (text: string): string =>
-  `<!doctype html><meta charset="utf-8"><title>Recto</title><body style="font:16px -apple-system,sans-serif;display:grid;place-items:center;height:90vh;color:#222"><p>${text}</p></body>`
+/** What the browser tab says at the end of a sign-in: a heading, what happened, and that the tab may close. */
+type Page = { ok: boolean; title: string; text: string }
+
+/**
+ * The page in the browser tab: a small card in the middle, in the system's
+ * font, light or dark as the system is - plain enough to read at a glance in
+ * any window size. Every text is escaped: an error message can carry anything.
+ */
+const PAGE = ({ ok, title, text }: Page): string => `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recto · ${escapeHtml(title)}</title>
+<style>
+:root{color-scheme:light dark;--bg:#f5f5f4;--card:#fff;--ink:#1c1c1e;--muted:#6e6e73;--rim:rgba(0,0,0,.08);--mark:${ok ? '#2f9e5b' : '#d9534f'}}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1c1e;--card:#2c2c2e;--ink:#f2f2f7;--muted:#a1a1a6;--rim:rgba(255,255,255,.08)}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+main{width:100%;max-width:440px;padding:28px 28px 24px;background:var(--card);border-radius:16px;box-shadow:0 0 0 1px var(--rim),0 12px 32px rgba(0,0,0,.08)}
+.mark{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--mark);color:#fff;font-size:20px;font-weight:600;margin-bottom:14px}
+h1{margin:0 0 8px;font-size:19px;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+.close{margin-top:18px;color:var(--muted);font-size:13px}
+</style></head>
+<body><main>
+<div class="mark" aria-hidden="true">${ok ? '✓' : '!'}</div>
+<h1>${escapeHtml(title)}</h1>
+<p>${escapeHtml(text)}</p>
+<p class="close">You can close this tab and go back to Recto.</p>
+</main></body></html>`
 
 /**
  * Waits for the browser at the callback path; anything else gets a 404. The
@@ -388,26 +479,45 @@ const PAGE = (text: string): string =>
  */
 function callback(
   server: http.Server,
+  state: string,
   onCancel: (cancel: () => void) => void,
-): Promise<{ query: URLSearchParams; reply: (ok: boolean, text: string) => void }> {
+): Promise<{ query: URLSearchParams; reply: (page: Page) => void }> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new ProviderError({ kind: 'signed-out', message: 'Sign-in timed out. Try again.' })), SIGN_IN_TIMEOUT_MS)
     onCancel(() => {
       clearTimeout(timer)
       reject(new ProviderError({ kind: 'signed-out', message: 'Sign-in was cancelled.' }))
     })
+    let answered = false
     server.on('request', (req, res) => {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1')
       if (url.pathname !== CALLBACK_PATH) {
         res.writeHead(404).end()
         return
       }
+      const query = url.searchParams
+      logProvider(
+        `chatgpt callback: ${[...query.keys()].join(',')} state=${query.get('state') === state ? 'this sign-in' : 'another'} client_id=${query.get('client_id') ?? '-'} error=${query.get('error') ?? '-'}${answered ? ' (after the first)' : ''}`,
+      )
+      // An older sign-in's page finishing in another tab, or the same page asked twice: it never ends this one.
+      if (query.get('state') !== state || answered) {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+        res.end(
+          PAGE(
+            answered
+              ? { ok: true, title: 'Already done', text: 'Recto already has this sign-in.' }
+              : { ok: false, title: 'An older sign-in page', text: 'This page is from an earlier sign-in. Recto is waiting for the newest one.' },
+          ),
+        )
+        return
+      }
+      answered = true
       clearTimeout(timer)
       resolve({
         query: url.searchParams,
-        reply: (ok, text) => {
+        reply: (page) => {
           res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-          res.end(PAGE(ok ? text : `Recto could not finish signing in: ${escapeHtml(text)} Go back to Recto to try again.`))
+          res.end(PAGE(page))
         },
       })
     })

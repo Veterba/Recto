@@ -96,11 +96,15 @@ async function statusOf(id: ProviderId, local: () => Promise<ProviderModel[]>): 
         detail: record?.email ?? null,
         problem: { kind: 'signed-out', message: 'Plan usage was not allowed at sign-in. Continue with ChatGPT again and allow it.' },
       }
-    const models = await chatgpt.models().catch(() => [])
+    // OpenAI's own reason when it will not list them - the same refusal an answer would get.
+    const listed = await chatgpt.models().then(
+      (models) => ({ models, refused: null }),
+      (err: unknown) => ({ models: [], refused: err instanceof ProviderError ? err.problem : null }),
+    )
     // Signed in, but no model to pick: said, rather than an empty picker.
     const problem: ProviderProblem | null =
-      models.length === 0 ? { kind: 'down', message: 'OpenAI did not list any models for this account just now. Check again in a moment.' } : null
-    return { ...base, ready: true, detail: record?.email ?? null, models, problem }
+      listed.refused ?? (listed.models.length === 0 ? { kind: 'down', message: 'OpenAI did not list any models for this account just now. Check again in a moment.' } : null)
+    return { ...base, ready: listed.refused === null, detail: record?.email ?? null, models: listed.models, problem }
   }
   if (id === 'openai') {
     const key = openAiKey()
