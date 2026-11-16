@@ -314,6 +314,48 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     expect(read(today.path)).toBe(`${before.replace(/\n+$/, '')}\n- Walked the garden\n`)
   }, 30_000)
 
+  it('cards: renamed (a card note with its links following, a plain card on its line), its text replaced, deleted - and a delete undone', async () => {
+    const board = 'Recto/Boards/Launch/Launch.md'
+    const propose = async (args: Record<string, unknown>): Promise<string> =>
+      (JSON.parse((await client.call('propose_task_update', { board: 'Launch', ...args })).content[0]!.text) as { proposal_id: string }).proposal_id
+    const apply = async (args: Record<string, unknown>): Promise<void> => expect(await invoke(page, 'ai-proposals:apply', await propose(args))).toEqual({ ok: true })
+
+    // A card that is a note: renamed as a note is - asked about its links as any rename is, the board's following -
+    // and its text replaced, fields kept.
+    const renamed = invoke(page, 'ai-proposals:apply', await propose({ card: 'Record the demo', title: 'Record the launch demo' }))
+    const asked = page.locator('[role=alertdialog][aria-label="Update links"]')
+    await asked.waitFor()
+    await asked.getByRole('button', { name: 'Just once' }).click()
+    expect(await renamed).toEqual({ ok: true })
+    expect(fs.existsSync(path.join(vault, 'Recto/Boards/Launch/Record the demo.md'))).toBe(false)
+    expect(read(board)).toContain('- [ ] [[Record the launch demo]]')
+    const fields = read('Recto/Boards/Launch/Record the launch demo.md').match(/^---\n[\s\S]*?\n---\n/)?.[0] ?? ''
+    await apply({ card: 'Record the launch demo', text: 'Two minutes, no voice-over.\n\n- [ ] Script' })
+    expect(read('Recto/Boards/Launch/Record the launch demo.md')).toBe(`${fields}Two minutes, no voice-over.\n\n- [ ] Script\n`)
+
+    // A plain card: renamed on its line, then deleted from the board.
+    fs.writeFileSync(path.join(vault, board), read(board).replace('## Doing (1)\n\n', '## Doing (1)\n\n- [ ] Call the printer\n'))
+    await apply({ card: 'Call the printer', title: 'Call the print shop' })
+    expect(read(board)).toContain('- [ ] Call the print shop\n')
+    expect(read(board)).not.toContain('Call the printer')
+    await apply({ card: 'Call the print shop', delete: true })
+    expect(read(board)).not.toContain('Call the print shop')
+
+    // A card that is a note, deleted: off the board, its note in the archive - and Undo brings both back.
+    const before = read(board)
+    const id = await propose({ card: 'Write the announcement', delete: true })
+    expect(await invoke(page, 'ai-proposals:apply', id)).toEqual({ ok: true })
+    expect(read(board)).not.toContain('Write the announcement')
+    expect(fs.existsSync(path.join(vault, 'Recto/Boards/Launch/Write the announcement.md'))).toBe(false)
+    expect(await invoke(page, 'ai-proposals:undo', id)).toEqual({ ok: true })
+    expect(read(board)).toBe(before)
+    expect(fs.existsSync(path.join(vault, 'Recto/Boards/Launch/Write the announcement.md'))).toBe(true)
+
+    // What makes no sense is refused, said why.
+    const refusal = async (args: Record<string, unknown>): Promise<string> => (await client.call('propose_task_update', { board: 'Launch', ...args })).content[0]!.text
+    expect(await refusal({ card: 'Fix the export bug', delete: true, done: true })).toMatch(/Delete a card alone/)
+  }, 30_000)
+
   it('every call is in the activity log, without note text', async () => {
     const log = fs.readFileSync(path.join(vault, '.recto', 'ai-activity.jsonl'), 'utf8')
     expect(log).toContain('"tool":"read_note"')

@@ -294,7 +294,7 @@ export const VAULT_TOOLS: readonly ToolDef[] = [
   tool(
     'propose_task_update',
     'Propose a task update',
-    'Move a card to a lane, mark it done or open, set its due date or priority; or tick a "- [ ]" line in a note (note, line).',
+    'Change a card on a board: move it to a lane, mark it done or open, set its due date or priority, rename it (title), replace what its note says (text), or delete it (delete: its line leaves the board and its note goes to the archive). Or tick a "- [ ]" line in a note (note, line).',
     z.object({
       board: z.string().optional(),
       card: z.string().optional().describe('The card’s text, or its note’s name.'),
@@ -302,6 +302,9 @@ export const VAULT_TOOLS: readonly ToolDef[] = [
       done: z.boolean().optional(),
       due: day.nullable().optional(),
       priority: z.enum(['high', 'medium', 'low']).nullable().optional(),
+      title: z.string().min(1).optional().describe('A new name for the card: one line. A card that is a note is renamed, its links following.'),
+      text: z.string().optional().describe('What the card’s note says, below its fields - all of it, replacing what is there. Only a card that is a note has text.'),
+      delete: z.boolean().optional().describe('Delete the card; give nothing else with it.'),
       note: note.optional(),
       line: z.number().int().min(1).optional().describe('1-based line of the task in the note.'),
     }),

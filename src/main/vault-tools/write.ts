@@ -5,8 +5,8 @@ import path from 'node:path'
 import type { FileChange, FileOp } from '../../shared/ai-access'
 import { setCardField } from '../../shared/card-fields'
 import { formatChanged, type FormatContext } from '../../shared/formatting'
-import { setField } from '../../shared/frontmatter'
-import { cardLink, doneLane, insertItem, isKanban, moveItem, parseKanban, setChecked, type KanbanBoard } from '../../shared/kanban'
+import { setField, withBody } from '../../shared/frontmatter'
+import { cardLink, doneLane, findItem, insertItem, isKanban, moveItem, parseKanban, removeItem, replaceItem, setChecked, type KanbanBoard } from '../../shared/kanban'
 import { normalizeName } from '../../shared/parse'
 import { periodicNoteText } from '../../shared/periodic'
 import { cardFolderFor, inRecto } from '../../shared/recto-paths'
@@ -368,6 +368,20 @@ export async function proposeTaskUpdate(scope: Scope, a: Args): Promise<Draft> {
     )
   const ref = found[0]!
   const item = parsed.lanes[ref.lane]!.items[ref.index]!
+  const cardNote = item.link === null ? null : scope.resolve(item.link, board.path)
+  const name = titleOf(item.link ?? item.text)
+
+  // Deleted: off the board, and a card that is a note to the archive, where Undo finds it.
+  if (a['delete'] === true) {
+    if (['lane', 'done', 'due', 'priority', 'title', 'text'].some((k) => a[k] !== undefined)) throw new ToolError('Delete a card alone: give nothing else with delete.')
+    const off = { path: board.path, before: board.text, after: removeItem(board.text, ref) }
+    return cardNote === null
+      ? { summary: `Delete “${name}” from ${titleOf(board.path)}`, files: [off], formatted: [] }
+      : { summary: `Delete “${name}” from ${titleOf(board.path)}`, files: [off], formatted: [], file: { kind: 'delete', from: cardNote, to: null } }
+  }
+  if (a['text'] !== undefined && cardNote === null) throw new ToolError('This card is plain text: it has no note to hold text. Rename it with title instead.')
+  const newTitle = typeof a['title'] === 'string' ? a['title'].trim() : null
+  if (newTitle !== null && newTitle.includes('\n')) throw new ToolError('A card’s title is one line.')
   const done = doneLane(parsed.lanes)
   let target = a['lane'] === undefined ? ref.lane : laneIndex(parsed, a['lane'])
   if (a['done'] === true && a['lane'] === undefined && done !== -1) target = done
@@ -376,21 +390,39 @@ export async function proposeTaskUpdate(scope: Scope, a: Args): Promise<Draft> {
   else if (checked !== item.checked) text = setChecked(text, ref, checked)
   const files: FileChange[] = text === board.text ? [] : [{ path: board.path, before: board.text, after: text }]
 
+  // A plain card renamed: its line says the new title.
+  if (newTitle !== null && cardNote === null && newTitle !== item.text.trim()) {
+    const now = files[0]?.after ?? board.text
+    const at = findItem(parseKanban(now), target !== ref.lane ? { lane: target, index: 0 } : ref, item.raw) ?? (target !== ref.lane ? { lane: target, index: 0 } : ref)
+    const renamed = replaceItem(now, at, newTitle)
+    files.splice(0, files.length, { path: board.path, before: board.text, after: renamed })
+  }
+
   const fields: [string, string | null][] = []
   if (a['due'] !== undefined) fields.push(['due', a['due'] as string | null])
   if (a['priority'] !== undefined) fields.push(['priority', a['priority'] as string | null])
   if (checked !== item.checked) fields.push(['completed', checked ? today() : null])
-  const cardNote = item.link === null ? null : scope.resolve(item.link, board.path)
   if (fields.some(([k]) => k !== 'completed') && cardNote === null)
     throw new ToolError('Due dates and priorities belong to a card that is a note; this card is plain text.')
-  if (cardNote !== null && fields.length > 0) {
+  if (cardNote !== null && (fields.length > 0 || a['text'] !== undefined)) {
     const before = await readNote(cardNote)
     let after = before
     for (const [key, value] of fields) after = setCardField(after, key, value)
+    if (typeof a['text'] === 'string') after = withBody(after, a['text'].endsWith('\n') || a['text'] === '' ? a['text'] : `${a['text']}\n`)
     if (after !== before) files.push({ path: cardNote, before, after })
   }
-  if (files.length === 0) throw new ToolError('That changes nothing: the card is already like that.')
-  return { summary: `Update “${titleOf(item.link ?? item.text)}” on ${titleOf(board.path)}`, files, formatted: [] }
+  // A card that is a note renamed: the note, its links following (the board's among them), in its folder.
+  let file: FileOp | undefined
+  if (newTitle !== null && cardNote !== null && newTitle !== titleOf(cardNote)) {
+    const folder = folderOf(cardNote)
+    if (nameProblem(newTitle) !== null) throw new ToolError(`${nameProblem(newTitle)}. Choose another title.`)
+    const to = `${folder === '' ? '' : `${folder}/`}${newTitle}.md`
+    if (to.toLowerCase() !== cardNote.toLowerCase()) freeName(scope, newTitle, folder)
+    file = { kind: 'rename', from: cardNote, to }
+  }
+  if (files.length === 0 && file === undefined) throw new ToolError('That changes nothing: the card is already like that.')
+  const summary = file !== undefined && files.length === 0 ? `Rename “${name}” to “${newTitle}” on ${titleOf(board.path)}` : `Update “${name}” on ${titleOf(board.path)}`
+  return { summary, files, formatted: [], ...(file === undefined ? {} : { file }) }
 }
 
 /**

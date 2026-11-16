@@ -151,7 +151,11 @@ function canvasLabel(op: CanvasOp, names: ReadonlyMap<string, string>): { label:
  * writes several files at once (a card and its board), each file, taken or left together.
  */
 export function itemsOf(p: Proposal): ChangeItem[] {
-  if (p.file !== undefined) return [fileItem(p)]
+  // A rename or archive, and the edits that go with it (a card's board line, its note's fields), taken together.
+  if (p.file !== undefined) {
+    const op = fileItem(p)
+    return [op, ...p.files.map((f) => ({ index: null, state: op.state, file: f.path, rows: fileRows(f) }))]
+  }
   if (p.canvas !== undefined) {
     const names = nodeNames(p)
     return p.canvas.ops.map((op, i) => ({ index: i, state: p.canvas!.states[i] ?? 'pending', ...canvasLabel(op, names), rows: [] }))
@@ -194,7 +198,8 @@ function fileItem(p: Proposal): ChangeItem {
  * a note's changes and how many lines they add and remove.
  */
 export function briefOf(p: Proposal): string {
-  if (p.file !== undefined) return fileItem(p).label!
+  // With edits beside it (a card deleted from its board): what the whole does.
+  if (p.file !== undefined) return p.files.length > 0 ? p.summary : fileItem(p).label!
   if (p.canvas !== undefined) {
     const count = (kind: string, one: string): string[] => {
       const n = p.canvas!.ops.filter((o) => o.op === kind).length

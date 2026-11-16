@@ -4,6 +4,10 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.70.0 — 2026-11-16
+### Added
+- AI can rename a board card, replace what its note says, and delete it, as suggestions you accept: a card that is a note is renamed as a note is, its links following; a deleted card's note goes to the archive, and Undo on the suggestion brings back the card and its note.
+
 ## v0.69.0 — 2026-11-16
 ### Added
 - AI can search the web and read pages, one switch per provider in Settings → AI → Providers (Claude Code, Codex, ChatGPT plan, OpenAI and Anthropic keys), off until turned on, and only while cloud providers are on. Answers say which pages they used, with links.

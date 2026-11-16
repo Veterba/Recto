@@ -395,7 +395,13 @@ main: vault-tools/socket.ts  (first line must carry the token)
   status from its changes (pending while any is; applied when any went in; discarded; stale).
   `propose_rename`, `propose_move` and `propose_delete` make a proposal with no text but an operation
   (`file: { kind, from, to }`, `FileOp` in `shared/ai-access.ts`); boards and their cards stay with the
-  board tools. Accepting one runs the file tree's own `relocate` (`main/ipc.ts`, handed to
+  board tools. `propose_task_update` changes a card: lane, done, due, priority, and its `title` (a plain
+  card's line rewritten; a card note renamed by the same `FileOp`, its board's link following as every
+  link does), its note's `text` (the body below its fields, `withBody`) and `delete` (alone: its line off
+  the board, and a card note to the archive). An operation may carry file edits beside it (a card's
+  board line, its note's fields): the edits are written first, checked as any are, then the operation,
+  the edits taken back if it fails (`withFiles`); `undo` takes the operation back, then each edit whose
+  file is still as it left it. Suggested edits shows the operation and each file beside it, taken whole. Accepting one runs the file tree's own `relocate` (`main/ipc.ts`, handed to
   `proposals.ts` by `setRelocate`), so links (as Obsidian updates them), canvases and version history
   follow; an archive goes to Recto's archive and keeps its id. `undo` takes an applied one back the
   same way - moved back through `relocate`, or restored from the archive - once; the card then says

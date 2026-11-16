@@ -216,7 +216,8 @@ async function applyCanvas(
 /** Write directly: a backup of every file it changes, then the write. */
 export async function applyNow(draft: Draft): Promise<{ ok: true } | { ok: false; error: string }> {
   if (draft.file !== undefined) {
-    const done = await runFileOp(draft.file)
+    backup(draft.files)
+    const done = await withFiles(draft.files, draft.file)
     return 'error' in done ? { ok: false, error: done.error } : { ok: true }
   }
   backup(draft.files)
@@ -387,9 +388,28 @@ async function runFileOp(op: FileOp): Promise<{ path: string } | { archive: stri
   return moved.ok ? { path: moved.path } : { error: moved.error }
 }
 
+/**
+ * A rename or archive with the edits that go with it (a card's: its board's line, its note's fields): the
+ * edits first - checked as any are, nothing written if one file changed since - then the rename or
+ * archive; the edits taken back if that fails.
+ */
+async function withFiles(files: Draft['files'], op: FileOp): ReturnType<typeof runFileOp> {
+  if (files.length > 0) {
+    const written = await write(files)
+    if (!written.ok)
+      return written.stale ? { error: `${titleOf(written.path)} changed since this was suggested.`, stale: true } : { error: written.error }
+  }
+  const done = await runFileOp(op)
+  if ('error' in done)
+    for (const f of [...files].reverse())
+      if (f.before === null) await vaultFs.trash(f.path)
+      else await vaultFs.writeFile(f.path, f.before)
+  return done
+}
+
 async function applyFileProposal(found: Proposal): Promise<Applied> {
   const op = found.file!
-  const done = await runFileOp(op)
+  const done = await withFiles(found.files, op)
   if ('error' in done) {
     if (done.stale === true) update(found.id, (p) => ({ ...p, status: 'stale' }))
     return { ok: false, error: done.error, ...(done.stale === true ? { stale: true } : {}) }
@@ -417,6 +437,12 @@ export async function undo(id: string): Promise<{ ok: true } | { ok: false; erro
     const back = await relocate(op.to, op.from)
     if (!back.ok) return { ok: false, error: back.error }
   }
+  // The edits that went with it, back as they were - each only if no one has changed it since.
+  for (const f of [...found.files].reverse())
+    if ((await current(f.path)) === f.after) {
+      if (f.before === null) await vaultFs.trash(f.path)
+      else await vaultFs.writeFile(f.path, f.before)
+    }
   save(load().map((p) => (p.id === id ? { ...p, file: { ...op, undone: true } } : p)))
   return { ok: true }
 }
