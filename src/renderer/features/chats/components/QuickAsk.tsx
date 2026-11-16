@@ -16,6 +16,9 @@ import { BOT_SIZE, pointOf, useBotArea, type BotArea } from './FloatingBot'
 import { useBotMotion } from '../bot-motion'
 import { canvasSelection, useCanvasSelection } from '../../../app/canvas-selection'
 import { takeQuickAsk, useQuickAskRequest } from '../../../app/quick-ask-request'
+import { withoutPictures } from '@shared/chat-pictures'
+import { isChatMedia, useChatPictures, usePictureDrop } from '../../bots/chat-pictures'
+import { ChatPictures, MediaThumb } from '../../bots/components/ChatPictures'
 
 /**
  * Quick ask: short questions about the note open right now, in a bubble
@@ -188,7 +191,12 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
     },
     [note, model, live, ready, turns, thread],
   )
-  const send = useCallback(() => void sendQuestion(draft), [sendQuestion, draft])
+  const pictures = useChatPictures()
+  const drop = usePictureDrop((files) => void pictures.add(files).then((failed) => failed !== null && setSaveError(`The picture could not be put in the vault: ${failed}`)))
+  const send = useCallback(async () => {
+    if (draft.trim() === '' && pictures.pictures.length === 0) return
+    if (sendQuestion(await pictures.message(draft))) pictures.clear()
+  }, [sendQuestion, draft, pictures])
 
   // A question asked from elsewhere (a canvas command): sent as if typed, once the model is ready.
   const requested = useQuickAskRequest()
@@ -239,7 +247,9 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
       onKeyDown={(ev) => {
         if (ev.key === 'Escape' && !menu) onClose()
       }}
+      {...(note === null ? {} : drop.handlers)}
     >
+      {drop.dropping && <div className="picture-drop">Drop to add it to your question</div>}
       {/* Over the question's first line when there is nothing above it, so it takes no row of its own. */}
       <div className={`quick-ask__head${turns.length === 0 ? ' is-floating' : ''}`}>
         <span className="quick-ask__gap" />
@@ -282,7 +292,10 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
               <div key={i} className="quick-ask__turn">
                 {about && <p className="quick-ask__about">About: {titleOf(turn.note)}</p>}
                 {turn.role === 'user' ? (
-                  <p className="quick-ask__q">{turn.content}</p>
+                  <>
+                    <ChatPictures text={turn.content} />
+                    {withoutPictures(turn.content) !== '' && <p className="quick-ask__q">{withoutPictures(turn.content)}</p>}
+                  </>
                 ) : (
                   <div className="quick-ask__a">
                     {turn.steps !== undefined && <StepsCard steps={turn.steps} running={turn.live === true && turn.content === ''} record={turn.record} />}
@@ -356,10 +369,28 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
           if (ev.key === 'Escape') onClose()
           if (ev.key === 'Enter' && !ev.shiftKey && !ev.nativeEvent.isComposing) {
             ev.preventDefault()
-            send()
+            void send()
           }
         }}
+        onPaste={(ev) => {
+          const files = [...ev.clipboardData.files].filter(isChatMedia)
+          if (files.length === 0) return
+          ev.preventDefault()
+          void pictures.add(files).then((failed) => failed !== null && setSaveError(`The picture could not be put in the vault: ${failed}`))
+        }}
       />
+      {pictures.pictures.length > 0 && (
+        <div className="composer__pictures quick-ask__pictures" aria-label="Pictures to send">
+          {pictures.pictures.map((path) => (
+            <span key={path} className="composer__picture">
+              <MediaThumb path={path} />
+              <button aria-label="Remove the picture" onClick={() => pictures.remove(path)}>
+                <Icon name="x" size={12} strokeWidth={2.4} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="quick-ask__bar">
         {note !== null && (
@@ -386,7 +417,7 @@ export function QuickAsk({ note, place, pointing, area, openFile, onClose }: Pro
             <Icon name="square" size={12} />
           </button>
         ) : (
-          <button className="quick-ask__send" aria-label="Ask" disabled={draft.trim() === '' || note === null || !ready} onClick={send}>
+          <button className="quick-ask__send" aria-label="Ask" disabled={(draft.trim() === '' && pictures.pictures.length === 0) || note === null || !ready} onClick={() => void send()}>
             <Icon name="arrow-up" size={15} />
           </button>
         )}

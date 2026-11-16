@@ -299,7 +299,11 @@
   right: 8px;
   margin: 0;
 }
-.quick-ask__head.is-floating ~ .quick-ask__input {
+.quick-ask__head.is-floating ~ /* Pictures waiting to go with the question, under it. */
+.quick-ask__pictures {
+  margin: 6px 0 0;
+}
+.quick-ask__input {
   padding-right: 32px;
 }
 .quick-ask__gap {

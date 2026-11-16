@@ -183,4 +183,107 @@ describe.skipIf(!RUN)('a bot answer lands once', () => {
     await expect.poll(topicFiles).toEqual([])
     await page.waitForSelector('.chat__welcome')
   }, 60_000)
+
+  it('a pasted picture waits above the text with ✕, goes into the vault and the message, shows in the bubble; a model that cannot see it says so', async () => {
+    // A pasted screenshot, as Chromium hands it over: a File named image.png on the paste's clipboard data
+    // (made here, so the Mac's own clipboard is never touched).
+    const paste = (): Promise<void> =>
+      page.evaluate(async () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = canvas.height = 8
+        const draw = canvas.getContext('2d')!
+        draw.fillStyle = 'red'
+        draw.fillRect(0, 0, 8, 8)
+        const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'))
+        const data = new DataTransfer()
+        data.items.add(new File([blob], 'image.png', { type: 'image/png' }))
+        document.querySelector('.bot-chat .composer__input')!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+      })
+    {
+      await page.locator('.bot-chat .composer__input').click()
+      await paste()
+      await page.waitForSelector('.bot-chat .composer__picture img')
+      // Into the vault's attachments folder at once, as a note's pasted picture is.
+      const attachments = (): string[] =>
+        fs.existsSync(path.join(vault, 'attachments')) ? fs.readdirSync(path.join(vault, 'attachments')).filter((f) => /^pasted-.*\.png$/.test(f)) : []
+      await expect.poll(() => attachments().length).toBe(1)
+      // ✕ takes it off the message (the file stays: it is in the vault now).
+      await page.locator('.bot-chat .composer__picture button').click()
+      expect(await page.locator('.bot-chat .composer__picture').count()).toBe(0)
+      await page.locator('.bot-chat .composer__input').click()
+      await paste()
+      await page.waitForSelector('.bot-chat .composer__picture img')
+      await page.keyboard.type('What is this?')
+      await page.keyboard.press('Enter')
+      // In my bubble as a picture, and in the topic as Obsidian embeds it.
+      await page.waitForSelector('.bot-chat .msg--mine .msg-mine__picture img')
+      expect(await page.locator('.bot-chat .composer__picture').count()).toBe(0)
+      const files = topicFiles()
+      expect(files).toHaveLength(1)
+      const topic = fs.readFileSync(path.join(vault, 'Recto', 'Chats', 'recto', files[0]!), 'utf8')
+      expect(topic).toMatch(/What is this\?\n\n!\[\[pasted-[^\]]+\.png\]\]/)
+      // The stand-in model is a local one that cannot look at pictures: said plainly, not answered blind.
+      await page.waitForFunction(() => document.querySelector('.bot-chat')?.textContent?.includes('cannot look at pictures'))
+    }
+  }, 60_000)
+
+  it('a picture dragged from Finder onto anywhere in the chat - the conversation, not only the box - is taken, with a hint while over it', async () => {
+    const before = await page.locator('.bot-chat .composer__picture').count()
+    // A drag from Finder, as Chromium hands it over: a File on the drag's data, dropped on the messages.
+    await page.evaluate(async () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = canvas.height = 8
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'))
+      const data = new DataTransfer()
+      data.items.add(new File([blob], 'Screenshot 2026-11-16.png', { type: 'image/png' }))
+      const target = document.querySelector('.bot-chat .msg--mine') ?? document.querySelector('.bot-chat')!
+      for (const type of ['dragenter', 'dragover'])
+        target.dispatchEvent(new DragEvent(type, { dataTransfer: data, bubbles: true, cancelable: true }))
+      ;(window as unknown as { hinted: boolean }).hinted = false
+      await new Promise((r) => requestAnimationFrame(r))
+      ;(window as unknown as { hinted: boolean }).hinted = document.querySelector('.bot-chat .picture-drop') !== null
+      target.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }))
+    })
+    expect(await page.evaluate(() => (window as unknown as { hinted: boolean }).hinted)).toBe(true)
+    await expect.poll(() => page.locator('.bot-chat .composer__picture').count()).toBe(before + 1)
+    expect(await page.locator('.bot-chat .picture-drop').count()).toBe(0)
+    expect(fs.existsSync(path.join(vault, 'attachments', 'Screenshot 2026-11-16.png'))).toBe(true)
+  }, 60_000)
+
+  it('a video dropped on the chat waits as its first frame with ▶, goes into the vault and the message, and plays in the bubble', async () => {
+    // Remove the pictures waiting from before: this message is the video alone.
+    while ((await page.locator('.bot-chat .composer__picture button').count()) > 0) await page.locator('.bot-chat .composer__picture button').first().click()
+    await page.evaluate(async () => {
+      // A short WebM made here, as a screen recording would be.
+      const c = document.createElement('canvas')
+      c.width = 160
+      c.height = 90
+      const g = c.getContext('2d')!
+      const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' })
+      const parts: Blob[] = []
+      rec.ondataavailable = (e) => parts.push(e.data)
+      const stopped = new Promise((resolve) => (rec.onstop = resolve))
+      rec.start()
+      for (let i = 0; i < 8; i++) {
+        g.fillStyle = `hsl(${i * 40} 70% 50%)`
+        g.fillRect(0, 0, 160, 90)
+        await new Promise((r) => setTimeout(r, 60))
+      }
+      rec.stop()
+      await stopped
+      const data = new DataTransfer()
+      data.items.add(new File(parts, 'Screen recording.webm', { type: 'video/webm' }))
+      const target = document.querySelector('.bot-chat')!
+      for (const type of ['dragenter', 'dragover', 'drop']) target.dispatchEvent(new DragEvent(type, { dataTransfer: data, bubbles: true, cancelable: true }))
+    })
+    await page.waitForSelector('.bot-chat .composer__picture video')
+    expect(await page.locator('.bot-chat .composer__picture-play').count()).toBe(1)
+    expect(fs.existsSync(path.join(vault, 'attachments', 'Screen recording.webm'))).toBe(true)
+    await page.locator('.bot-chat .composer__input').click()
+    await page.keyboard.type('What happens here?')
+    await page.keyboard.press('Enter')
+    await page.waitForSelector('.bot-chat .msg--mine .msg-mine__picture video[controls]')
+    const topic = fs.readFileSync(path.join(vault, 'Recto', 'Chats', 'recto', topicFiles()[0]!), 'utf8')
+    expect(topic).toMatch(/What happens here\?\n\n!\[\[Screen recording\.webm\]\]/)
+  }, 60_000)
 })

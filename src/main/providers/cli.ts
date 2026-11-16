@@ -2,7 +2,7 @@ import { execFile, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { AiMessage } from '../../shared/ai'
+import type { AiImage, AiMessage } from '../../shared/ai'
 import type { ProviderProblem } from '../../shared/providers'
 import type { CliName } from './detect'
 import { claudeLimits } from './limits'
@@ -62,6 +62,17 @@ export function transcript(messages: AiMessage[]): string {
 
 const toml = (s: string): string => JSON.stringify(s)
 
+/** Claude Code's input with pictures: one message, the prompt then the pictures, as its stream-json takes it. */
+export function claudeInput(prompt: string, images: readonly AiImage[]): string {
+  const content = [
+    { type: 'text', text: prompt },
+    ...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mime, data: i.data } })),
+  ]
+  return `${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`
+}
+
+const EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' }
+
 /**
  * Where Claude Code finds its system prompt: a file in the run's own temp folder, not the command line.
  * The prompt holds the person's AI guide - their words - and a command line can be read by any process
@@ -69,14 +80,20 @@ const toml = (s: string): string => JSON.stringify(s)
  */
 export const SYSTEM_FILE = 'recto-system.md'
 
-/** The command line for one answer. */
+/**
+ * The command line for one answer. Pictures with it: Codex attaches files of
+ * them (`pictures`, in the run's folder); Claude Code takes them in its input
+ * (`pictured`: `--input-format stream-json`, see `claudeInput`).
+ */
 export function cliArgs(
   name: CliName,
-  o: { model: string; system: string; cwd: string; server: { command: string; args: string[] } },
+  o: { model: string; system: string; cwd: string; server: { command: string; args: string[] }; pictures?: string[]; pictured?: boolean },
 ): string[] {
+  const pictures = o.pictures ?? []
   if (name === 'claude')
     return [
       '-p',
+      ...(o.pictured === true ? ['--input-format', 'stream-json'] : []),
       '--output-format',
       'stream-json',
       '--verbose',
@@ -101,6 +118,8 @@ export function cliArgs(
     ]
   return [
     'exec',
+    // Before the flags that follow it: `--image` takes as many files as come after it.
+    ...pictures.flatMap((p) => ['--image', p]),
     '--json',
     '--skip-git-repo-check',
     '--ephemeral',
@@ -221,11 +240,22 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
       }
       const model = request.model.includes(':') ? request.model.slice(request.model.indexOf(':') + 1) : ''
       const prompt = name === 'claude' ? transcript(request.messages) : `${request.system}\n\n---\n\n${transcript(request.messages)}`
+      // The pictures of the whole conversation, in order: the CLI is given it as one prompt.
+      const images = request.messages.flatMap((m) => m.images ?? [])
       try {
         await new Promise<void>((resolve, reject) => {
           // This user's only (0600), in a folder of the run's own, gone when the run is.
           if (name === 'claude') fs.writeFileSync(path.join(cwd, SYSTEM_FILE), request.system, { mode: 0o600 })
-          const child = spawn(file, cliArgs(name, { model, system: request.system, cwd, server }), { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
+          const pictures =
+            name === 'codex'
+              ? images.map((image, i) => {
+                  const at = path.join(cwd, `picture-${i + 1}.${EXT[image.mime] ?? 'png'}`)
+                  fs.writeFileSync(at, Buffer.from(image.data, 'base64'), { mode: 0o600 })
+                  return at
+                })
+              : []
+          const args = cliArgs(name, { model, system: request.system, cwd, server, pictures, pictured: name === 'claude' && images.length > 0 })
+          const child = spawn(file, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
           let stderr = ''
           let failure = ''
           let answered = false
@@ -269,7 +299,7 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
           // A CLI that exits before it has read the whole prompt (a flag it no longer knows, a sign-in gone) closes the
           // pipe under a long write: EPIPE on stdin, unhandled, was an uncaught exception in main. The exit says why.
           child.stdin.on('error', () => undefined)
-          child.stdin.end(prompt)
+          child.stdin.end(name === 'claude' && images.length > 0 ? claudeInput(prompt, images) : prompt)
         })
       } finally {
         fs.rmSync(cwd, { recursive: true, force: true })

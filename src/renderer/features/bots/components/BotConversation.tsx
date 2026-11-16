@@ -18,6 +18,7 @@ import { statusPhrases } from '@shared/bot-status'
 import { StatusText, useStatusText } from './BotStatus'
 import { BotStatusLine } from './BotStatusLine'
 import { Composer, type NoteCandidate } from './Composer'
+import { useChatPictures, usePictureDrop } from '../chat-pictures'
 import { HistoryPanel } from './HistoryPanel'
 import { TopicBlock, TopicDivider, type MessageActions, type Pending } from './Messages'
 import { ModelMenu, modelLabel } from './ModelMenu'
@@ -66,6 +67,12 @@ function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps)
   const model = useMemo(() => new ChatTopics(bot, bot.id === MAIN_BOT ? [bot.name, 'Claude'] : [bot.name]), [bot.id, bot.name])
   useTopics(model)
   const [draft, setDraft] = useState('')
+  const pictures = useChatPictures()
+  const takePictures = (files: File[]): void =>
+    void pictures.add(files).then((failed) => {
+      if (failed !== null) setError(`The picture could not be put in the vault: ${failed}`)
+    })
+  const drop = usePictureDrop(takePictures)
   const lastWarm = useRef(0)
   const [error, setError] = useState<string | null>(null)
   const [typing, setTyping] = useState(false)
@@ -194,14 +201,19 @@ function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps)
 
   /** A question: main writes it into the topic (a new one if none is open) and queues the answer. */
   const send = useCallback(async () => {
-    const text = draft.trim()
-    if (text === '' || !ready) return
+    const typed = draft.trim()
+    if ((typed === '' && pictures.pictures.length === 0) || !ready) return
+    const text = await pictures.message(typed)
+    const kept = pictures.pictures
     setError(null)
     setProblem(null)
     setDraft('')
+    pictures.clear()
     const result = await api.invoke(IPC.botsSend, { botId: bot.id, topic: model.current, text, at: createdStamp(new Date()) })
     if (!result.ok) {
-      setDraft(text)
+      // Kept to send again: the words and the pictures.
+      setDraft(typed)
+      pictures.restore(kept)
       if (result.status !== undefined) recheck()
       else setError(result.error)
       return
@@ -209,7 +221,7 @@ function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps)
     pinned.current = true
     if (model.current === result.topic) await model.reload(result.topic)
     else await model.adopt(result.topic)
-  }, [draft, ready, model, bot.id, recheck])
+  }, [draft, ready, model, bot.id, recheck, pictures])
 
   /** Stop: the answer running in this topic (a question waiting behind it stays). */
   const stop = useCallback(() => {
@@ -373,6 +385,7 @@ function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps)
     <div
       ref={root}
       className="chat bot-chat"
+      {...drop.handlers}
       onKeyDownCapture={(event) => {
         // ⌘N in a chat is a new topic, typed in the composer or not.
         if (event.metaKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'n') {
@@ -382,6 +395,7 @@ function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps)
         }
       }}
     >
+      {drop.dropping && <div className="picture-drop">Drop to add it to your message</div>}
       <header className="bot-chat__head">
         <span className="bot-face bot-face--head">
           <RectoBot id={bot.id} size={64} look={bot.look} personality={bot.personality} state={face} />
@@ -503,10 +517,13 @@ function Conversation({ bot, onOpen, notes, menuExtra = [] }: ConversationProps)
           if (error !== null && pending === null) setError(null)
         }}
         placeholder={`Ask ${bot.name}…`}
-        busy={pending !== null && draft.trim() === ''}
+        busy={pending !== null && draft.trim() === '' && pictures.pictures.length === 0}
         answering={pending !== null}
         canSend={ready}
         onSend={() => void send()}
+        pictures={pictures.pictures}
+        onPictures={takePictures}
+        onRemovePicture={pictures.remove}
         onStop={stop}
         onNewTopic={newTopic}
         status={statusLine}

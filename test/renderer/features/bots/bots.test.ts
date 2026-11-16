@@ -126,4 +126,28 @@ describe('model status', () => {
     })
     expect(String(fetch.mock.calls[0]![0])).toMatch(/^http:\/\/127\.0\.0\.1:11434\//)
   })
+
+  it('says which models can look at pictures, from what Ollama lists', async () => {
+    const tags = { models: [{ name: 'gemma3:4b', capabilities: ['completion', 'vision'] }, { name: 'qwen3.5:9b', capabilities: ['completion', 'tools'] }] }
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify(tags))))
+    const ollama = new OllamaProvider()
+    expect(await ollama.canSee('gemma3:4b')).toBe(true)
+    expect(await ollama.canSee('qwen3.5:9b')).toBe(false)
+    expect(await ollama.canSee('missing')).toBe(false)
+  })
+
+  it('sends a turn’s pictures as Ollama takes them: bare base64 in `images`', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response('{"message":{"content":"A cat."},"done":true}\n'))
+    vi.stubGlobal('fetch', fetch)
+    const said: string[] = []
+    const picture = { mime: 'image/png', data: 'QUJD' }
+    for await (const piece of new OllamaProvider().stream([{ role: 'user', content: 'This? [picture 1: a.png]', images: [picture] }], 'S', {
+      model: 'gemma3:4b',
+      signal: new AbortController().signal,
+    }))
+      said.push(piece)
+    const body = JSON.parse(String((fetch.mock.calls[0]![1] as RequestInit).body)) as { messages: Record<string, unknown>[] }
+    expect(body.messages[1]).toEqual({ role: 'user', content: 'This? [picture 1: a.png]', images: ['QUJD'] })
+    expect(body.messages[0]).toEqual({ role: 'system', content: 'S' })
+  })
 })

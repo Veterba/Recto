@@ -499,6 +499,35 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   and only Recto's chat and Quick ask can use cloud; the other bots stay local. Each answer stores
   the model string with a provider prefix (`codex`, `chatgpt:<slug>`); a provider switch is a
   "Switched to …" line in the chat.
+- **Pictures in a chat** (`shared/chat-pictures.ts`, `main/chat-pictures.ts`). A picture pasted into the
+  chat's composer or Quick ask, or dropped anywhere on either (`usePictureDrop`: the whole chat is the drop
+  target, with a hint while files are over it), is written at once into the vault's attachments folder
+  (`fsImportData`, as a note's pasted picture is) and waits above the text with ✕
+  (`bots/chat-pictures.ts`); Send embeds it after the words as Obsidian links it from the vault's root
+  (`![[pasted-….png]]`), so the topic note shows it in Obsidian too, and the bubble shows it
+  (`ChatPictures`). Nothing else stores pictures: as a question goes, `withPictures` reads the embeds of
+  the person's messages from the vault - the newest 8 pictures, each message its own - into
+  `AiMessage.images` (base64; one longer than 1600 px on its long side, or not PNG/JPEG/GIF/WebP, or
+  over 4 MB, is redrawn as a JPEG by `nativeImage`), and each embed in the text becomes
+  `[picture N: name]`. A person's picture goes whatever folder it is in: they put it there on purpose.
+  A video (mp4, m4v, mov, webm, ogv) goes the same way in, plays in the bubble, and is sent as frames, as
+  no provider takes a video: `main/video-frames.ts` shows it in a hidden offscreen window (its own `data:`
+  page, sound off, web security off so that page may load the vault scheme, navigation refused) and
+  takes the window's picture (`capturePage`, not a canvas: a canvas drawing a video from the vault scheme
+  may not be read back) four times a second, up to 40 spread over all of a longer one, at most 800 px - enough
+  for motion to show from frame to frame (a 3 s clip: 12 frames, 0.7 s, ~450 KB; a minute: 40, 2 s,
+  ~1.5 MB); a WebM a browser recorded states no length, and seeking it to the end tells it. The newest 2
+  videos go (2 × 40 and 8 pictures: under the 100 pictures Claude takes in one request); the text says
+  which pictures are its frames, in order, and when (`framesSaid`: `[video: clip.mov, 0:03.0 long - sent as
+  12 frames in order (pictures 1-12), one every 0.25 s from 0:00.1 to 0:02.8; …]`).
+  Each provider gets them its own way: Anthropic as image blocks after the text, OpenAI and ChatGPT as
+  `input_image`s, Ollama as bare base64 in the turn's `images`, Codex as files in the run's temp folder
+  (`exec --image …`), Claude Code in its input (`--input-format stream-json`, one user message: the
+  transcript, then the pictures). `picturesFor` (`providers/index.ts`) is the one gate, for every run
+  and for the local chat pipeline (which reads the words and puts the question's pictures back on it
+  for the answer): a local model gets pictures only when Ollama lists "vision" for it
+  (`OllamaProvider.canSee`); a question with a picture to one that cannot is refused with what to do,
+  and earlier pictures go to it as their names.
 - **The answer's record** (`shared/answer-record.ts`). A session records, from its tool calls, the
   notes an answer read in full, the ones it only skimmed and the suggestions it made - as the tools
   mark them: a note block without a part, or a file given as data with `whole: true`, is a read; a
@@ -854,6 +883,9 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
 | `src/main/player.ts` | the mini-player window (`IPC.playerOpen`) |
 | `src/main/web-window.ts` | a link's page in Recto's own window (`IPC.webOpen`) |
 | `src/main/web-preview.ts` | a link's preview read from the page as a browser shows it |
+| `src/main/chat-pictures.ts` | the pictures and videos a chat message embeds, read from the vault for a model |
+| `src/main/video-frames.ts` | frames of a vault video, with their times, for a model that sees pictures |
+| `src/shared/chat-pictures.ts` | finding the pictures a chat message embeds, and adding them to one |
 | `src/main/picture-checks.ts` | whether a link's picture is a logo (mostly one colour), and a screenshot's blank top |
 | `src/renderer/features/pdf/PdfView.tsx`, `pdf-highlights.ts`, `pdf.css` | the PDF preview (canvas) and reader (tab), and their highlights |
 | `src/workers/indexer/canvases.ts` | the three tables and their queries |

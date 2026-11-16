@@ -524,3 +524,20 @@ describe('the Responses API with Recto’s tools', () => {
     }
   })
 })
+
+describe('a person’s pictures, for OpenAI', () => {
+  it('go after their words in the same input message, as input images; a turn without any stays text', () => {
+    const state = responsesModel('gpt-test', { token: async () => 'tok', plan: true }, []).start('S', [
+      { role: 'user', content: 'Hi' },
+      { role: 'user', content: 'This? [picture 1: a.jpg]', images: [{ mime: 'image/jpeg', data: 'QUJD' }] },
+    ])
+    expect(state.input[0]).toEqual({ role: 'user', content: 'Hi' })
+    expect(state.input[1]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'input_text', text: 'This? [picture 1: a.jpg]' },
+        { type: 'input_image', image_url: 'data:image/jpeg;base64,QUJD' },
+      ],
+    })
+  })
+})

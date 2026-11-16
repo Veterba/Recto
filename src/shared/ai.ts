@@ -34,8 +34,15 @@ export const MAX_ANSWER_TOKENS = 4096
 export const isAiModel = (value: unknown): value is AiModelId =>
   typeof value === 'string' && AI_MODELS.some((model) => model.id === currentAiModel(value))
 
-/** One turn. The content is plain markdown - the same text the note holds. */
-export type AiMessage = { role: 'user' | 'assistant'; content: string }
+/** A picture going to a model with a message: its type and its bytes in base64. */
+export type AiImage = { mime: string; data: string }
+
+/**
+ * One turn. The content is plain markdown - the same text the note holds.
+ * `images`: the pictures a person's message embeds, read from the vault just
+ * before it is sent (main/chat-pictures.ts); never stored.
+ */
+export type AiMessage = { role: 'user' | 'assistant'; content: string; images?: AiImage[] }
 
 /** What a running stream reports back. `id` matches the `ai:send` request. */
 export type AiDelta = { id: string; text: string }

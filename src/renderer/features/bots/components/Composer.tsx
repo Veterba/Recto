@@ -4,6 +4,8 @@ import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { fuzzyFilter } from '../../../ui/fuzzy'
 import { writeLink } from '../../../app/link-writer'
+import { isChatMedia } from '../chat-pictures'
+import { MediaThumb } from './ChatPictures'
 import { GlassMenu } from './GlassMenu'
 import { ModelChip } from './ModelMenu'
 
@@ -14,7 +16,9 @@ import { ModelChip } from './ModelMenu'
  * card, then scrolls. What keeps Send off (no model, Ollama down, a model
  * loading) is one muted line just above it.
  *
- * Typing `[[` lists notes to link, as in the editor.
+ * Typing `[[` lists notes to link, as in the editor. A picture pasted in (or
+ * dropped on the chat - its drop target is the whole chat, usePictureDrop)
+ * waits above the text, with ✕, and goes with the message.
  */
 
 export type NoteCandidate = { path: string; name: string; folder: string }
@@ -48,7 +52,13 @@ type Props = {
   onBlur: () => void
   /** For snapshots: a menu open from the start. */
   initialMenu?: 'plus' | 'model' | null
+  /** Pictures waiting to go with the message (vault paths), and what takes new ones; none: pictures are not taken here. */
+  pictures?: readonly string[]
+  onPictures?: (files: File[]) => void
+  onRemovePicture?: (path: string) => void
 }
+
+const mediaOf = (list: FileList | undefined | null): File[] => [...(list ?? [])].filter(isChatMedia)
 
 export function Composer(props: Props): React.ReactElement {
   const { draft, onDraft, busy, canSend, inputRef } = props
@@ -89,10 +99,13 @@ export function Composer(props: Props): React.ReactElement {
     })
   }
 
+  const pictures = props.pictures ?? []
+  const something = draft.trim() !== '' || pictures.length > 0
   const send = (): void => {
     if (busy) props.onStop()
-    else if (canSend && draft.trim() !== '') props.onSend()
+    else if (canSend && something) props.onSend()
   }
+  const take = props.onPictures
 
   return (
     <div className="composer">
@@ -159,7 +172,19 @@ export function Composer(props: Props): React.ReactElement {
             ))}
           </div>
         )}
-        <div className={`composer__capsule glass-surface${multi ? ' is-multi' : ''}`}>
+        {pictures.length > 0 && (
+          <div className="composer__pictures" aria-label="Pictures to send">
+            {pictures.map((path) => (
+              <span key={path} className="composer__picture">
+                <MediaThumb path={path} />
+                <button aria-label="Remove the picture" onClick={() => props.onRemovePicture?.(path)}>
+                  <Icon name="x" size={12} strokeWidth={2.4} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className={`composer__capsule glass-surface${multi || pictures.length > 0 ? ' is-multi' : ''}`}>
           <Tip label="Add" placement="top">
             <button
               className={`composer__plus${menu === 'plus' ? ' is-open' : ''}`}
@@ -215,6 +240,12 @@ export function Composer(props: Props): React.ReactElement {
               if (event.key === 'Escape' && (busy || props.answering === true)) props.onStop()
             }}
             onSelect={(event) => checkLink(event.currentTarget)}
+            onPaste={(event) => {
+              const files = mediaOf(event.clipboardData.files)
+              if (take === undefined || files.length === 0) return
+              event.preventDefault()
+              take(files)
+            }}
           />
           <ModelChip model={props.model} open={menu === 'model'} onToggle={() => setMenu((m) => (m === 'model' ? null : 'model'))} />
           {props.answering === true && !busy && (
@@ -231,7 +262,7 @@ export function Composer(props: Props): React.ReactElement {
             <button
               className={`composer__send${busy ? ' is-stop' : ''}`}
               aria-label={busy ? 'Stop' : 'Send'}
-              disabled={!busy && (!canSend || draft.trim() === '')}
+              disabled={!busy && (!canSend || !something)}
               onClick={send}
             >
               {busy ? (

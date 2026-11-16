@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AiMessage } from '../../src/shared/ai'
 
 /**
  * Codex and Claude Code as Recto runs them, against fake CLIs that replay
@@ -157,7 +158,7 @@ describe('a CLI that dies early', () => {
 
 describe('an answer from a fake CLI', () => {
   const session = { id: 's1', client: 'test', tools: null, notes: null, writable: null, vault: null, cloud: true, record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
-  const ask = async (name: 'codex' | 'claude', signal = new AbortController().signal, messages = [{ role: 'user' as const, content: 'Soil?' }]) => {
+  const ask = async (name: 'codex' | 'claude', signal = new AbortController().signal, messages: AiMessage[] = [{ role: 'user', content: 'Soil?' }]) => {
     const file = install('opt/homebrew/bin', name)
     const run = cliRunner(name, { find: async () => file, path: async () => process.env['PATH'] ?? '', launcher: () => '/x/recto-mcp' })
     let text = ''
@@ -174,6 +175,43 @@ describe('an answer from a fake CLI', () => {
       expect(seen.cwd).toMatch(/recto-agent-/)
       expect(fs.existsSync(seen.cwd)).toBe(false)
       expect(seen.prompt).toContain('Soil?')
+    })
+
+    it(`${name}: a picture in the question goes to the CLI as it takes pictures, and nothing of it stays`, async () => {
+      const log = path.join(root, 'log.json')
+      process.env['FAKE_LOG'] = log
+      const picture = { mime: 'image/png', data: Buffer.from('a picture').toString('base64') }
+      expect(await ask(name, undefined, [{ role: 'user', content: 'What is this? [picture 1: shot.png]', images: [picture] }])).toBe(
+        'Your notes say compost, loam and grit.',
+      )
+      const seen = JSON.parse(fs.readFileSync(log, 'utf8')) as { args: string[]; prompt: string; cwd: string; images: string[] }
+      if (name === 'codex') {
+        // Attached as a file of the run's own (gone with it), before the flags that follow `exec`.
+        expect(seen.images).toEqual([picture.data])
+        expect(seen.args.slice(0, 2)).toEqual(['exec', '--image'])
+        expect(path.basename(seen.args[2]!)).toBe('picture-1.png')
+        expect(path.dirname(seen.args[2]!)).toContain('recto-agent-')
+        expect(seen.prompt).toContain('What is this? [picture 1: shot.png]')
+      } else {
+        // In the input, as Claude takes a picture: one message, the words then the picture.
+        expect(seen.args).toContain('--input-format')
+        const input = JSON.parse(seen.prompt) as { type: string; message: { role: string; content: Record<string, unknown>[] } }
+        expect(input.type).toBe('user')
+        expect(input.message.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('What is this? [picture 1: shot.png]') })
+        expect(input.message.content[1]).toEqual({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: picture.data } })
+      }
+      expect(fs.existsSync(seen.cwd)).toBe(false)
+    })
+
+    it(`${name}: with no picture, the command line and the input are as they were`, async () => {
+      const log = path.join(root, 'log.json')
+      process.env['FAKE_LOG'] = log
+      await ask(name)
+      const seen = JSON.parse(fs.readFileSync(log, 'utf8')) as { args: string[]; prompt: string; images: string[] }
+      expect(seen.images).toEqual([])
+      expect(seen.args).not.toContain('--input-format')
+      expect(seen.prompt).toContain('Soil?')
+      expect(seen.prompt.startsWith('{')).toBe(false)
     })
 
     if (name === 'claude')

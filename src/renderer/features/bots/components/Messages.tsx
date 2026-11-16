@@ -6,6 +6,8 @@ import { RectoBot, type BotState } from '../../recto-bot'
 import type { LoadedTopic } from '../chat-topics-model'
 import { groupMessages } from '../grouping'
 import { Markdown } from './Markdown'
+import { withoutPictures } from '@shared/chat-pictures'
+import { ChatPictures } from './ChatPictures'
 import { modelLabel } from './ModelMenu'
 import { StatusText } from './BotStatus'
 import { StepsCard } from './StepsCard'
@@ -73,9 +75,19 @@ function Sources({ sources, onOpen }: { sources: readonly BotSource[]; onOpen: M
   )
 }
 
-/** My message: plain text, with [[links]] as note chips. */
+/** My message: its pictures, then plain text with [[links]] as note chips. */
 function MyText({ text, onOpenNote }: { text: string; onOpenNote: (title: string) => void }): React.ReactElement {
-  const parts = text.split(/(\[\[[^\]\n]+\]\])/)
+  const words = withoutPictures(text)
+  const parts = words.split(/(\[\[[^\]\n]+\]\])/)
+  return (
+    <>
+      <ChatPictures text={text} />
+      {words !== '' && <MyWords parts={parts} onOpenNote={onOpenNote} />}
+    </>
+  )
+}
+
+function MyWords({ parts, onOpenNote }: { parts: string[]; onOpenNote: (title: string) => void }): React.ReactElement {
   return (
     <p className="msg-mine__text">
       {parts.map((part, i) => {

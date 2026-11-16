@@ -88,3 +88,21 @@ describe('the Claude API', () => {
     )
   })
 })
+
+describe('a person’s pictures, for the Claude API', () => {
+  it('go after their words in the same turn, as images; a turn without any stays text', () => {
+    const state = messagesModel('claude-sonnet-5-5', 'sk-test', []).start('S', [
+      { role: 'user', content: 'Hi' },
+      { role: 'assistant', content: 'Hello' },
+      { role: 'user', content: 'This? [picture 1: a.png]', images: [{ mime: 'image/png', data: 'QUJD' }] },
+    ])
+    expect(state.messages[0]).toEqual({ role: 'user', content: 'Hi' })
+    expect(state.messages[2]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'This? [picture 1: a.png]' },
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'QUJD' } },
+      ],
+    })
+  })
+})

@@ -159,6 +159,33 @@
   margin: 0;
   white-space: pre-wrap;
 }
+/* My pictures, above my words in the bubble. */
+.msg-mine__pictures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.msg-mine__pictures:last-child {
+  margin-bottom: 0;
+}
+.msg-mine__picture {
+  display: block;
+  max-width: 280px;
+  max-height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.msg-mine__picture img,
+.msg-mine__picture video {
+  display: block;
+  max-width: 220px;
+  max-height: 180px;
+  object-fit: cover;
+}
+.msg-mine__picture video {
+  max-width: 280px;
+}
 
 /* The time, beside the bubble, on hover. */
 .msg__when {
@@ -557,6 +584,72 @@
 }
 .composer__capsule.is-multi {
   border-radius: 20px;
+}
+/* Files dragged over a chat or Quick ask: the whole of it takes them. */
+.picture-drop {
+  position: absolute;
+  inset: 6px;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: var(--size-6);
+  border: 2px dashed var(--accent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  color: var(--text-primary);
+  font-weight: 500;
+  text-align: center;
+  pointer-events: none;
+}
+/* Pictures waiting to go with the message, above it. */
+.composer__pictures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.composer__picture {
+  position: relative;
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border);
+  background: var(--bg-secondary);
+}
+.composer__picture img,
+.composer__picture video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.composer__picture-play {
+  position: absolute;
+  left: 6px;
+  bottom: 5px;
+  font-size: 11px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+.composer__picture button {
+  all: unset;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+}
+.composer__picture button:hover {
+  background: rgba(0, 0, 0, 0.75);
 }
 .composer__plus,
 .composer__chip {

@@ -16,6 +16,8 @@ import { ProviderError, toolLoop, toolsOf, withSteps, type RunEvent, type RunReq
 import { keychainStore } from './store'
 import { forgetCodexLimits, limitsOf, readCodexLimits, recordLimits, recordUsage, usageOf } from './limits'
 import type { BotModelProvider } from '../bots/provider'
+import type { AiMessage } from '../../shared/ai'
+import { asksWithPicture, withPictures } from '../chat-pictures'
 
 /**
  * Recto's providers, on the main side: which can answer, and one answer from
@@ -176,11 +178,12 @@ export async function* run(
   const id = providerOf(request.model)
   if (id !== 'ollama' && !cloudEnabled())
     throw new ProviderError({ kind: 'cloud-off', message: 'Cloud providers are off for this vault. Turn them on in Settings → AI → Providers.' })
+  const messages = await picturesFor(request.model, request.messages, local)
   const controller = new AbortController()
   const stop = (): void => controller.abort()
   request.signal.addEventListener('abort', stop)
   if (request.signal.aborted) stop()
-  const events = withSteps(runnerFor(request.model, local), { ...request, signal: controller.signal })[Symbol.asyncIterator]()
+  const events = withSteps(runnerFor(request.model, local), { ...request, messages, signal: controller.signal })[Symbol.asyncIterator]()
   try {
     for (;;) {
       let timer: ReturnType<typeof setTimeout> | undefined
@@ -203,6 +206,24 @@ export async function* run(
     if (id === 'codex') forgetCodexLimits()
   }
 }
+
+/**
+ * The conversation with its pictures, for this model. Every cloud provider
+ * looks at them; a local model only when Ollama says it can ("vision"). One
+ * that cannot is not sent them: a question with a picture is refused, plainly,
+ * and earlier pictures go as their names.
+ */
+export async function picturesFor(model: string, messages: AiMessage[], local: BotModelProvider): Promise<AiMessage[]> {
+  const pictured = await withPictures(messages)
+  if (providerOf(model) !== 'ollama' || !pictured.some((m) => m.images !== undefined)) return pictured
+  if ((await local.canSee?.(modelPart(model))) === true) return pictured
+  if (asksWithPicture(messages)) throw new ProviderError({ kind: 'failed', message: cannotSee(modelPart(model)) })
+  return pictured.map(({ images: _images, ...m }) => m)
+}
+
+/** What is said when a model is sent a picture it cannot look at. */
+export const cannotSee = (model: string): string =>
+  `${model} cannot look at pictures. Pick a model that can - a cloud one, or a local one Ollama lists with “vision” - or ask without the picture.`
 
 /** Whether a cloud model can answer now, without asking anything that costs; null when it can. */
 export async function readiness(model: string): Promise<ProviderProblem | null> {

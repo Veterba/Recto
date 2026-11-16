@@ -49,7 +49,13 @@ export interface BotModelProvider {
   warm(model: string): void
   /** The reply with tools offered: text as it comes, or the calls the model asks for. Only local models. */
   streamChat?(turns: ChatTurn[], system: string, tools: ToolSpec[], options: StreamOptions): AsyncIterable<ChatEvent>
+  /** Whether the model can look at pictures (Ollama's "vision"). */
+  canSee?(model: string): Promise<boolean>
 }
+
+/** A turn as Ollama's chat takes it: its pictures as bare base64, in `images`. */
+const wire = (turn: ChatTurn): ChatTurn | Record<string, unknown> =>
+  'images' in turn && turn.images !== undefined ? { ...turn, images: turn.images.map((i) => i.data) } : turn
 
 /** How much the model is asked to hold at once, in tokens: prompt and answer together. */
 export const CONTEXT_TOKENS = 8192
@@ -116,6 +122,14 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
     } catch {
       return null
     }
+  }
+
+  async canSee(model: string): Promise<boolean> {
+    const known = this.capabilities.get(model) ?? this.capabilities.get(`${model}:latest`)
+    if (known !== undefined) return known.includes('vision')
+    const models = await this.tags()
+    const found = models?.find((m) => m.name === model || m.name === `${model}:latest`)
+    return found?.capabilities.includes('vision') ?? false
   }
 
   async installed(): Promise<{ name: string; bytes: number }[] | null> {
@@ -234,7 +248,7 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
         ...fields,
         ...(json ? { format: 'json' } : {}),
         options: { ...fields.options, temperature: 0, num_predict: maxTokens },
-        messages: [{ role: 'system', content: system }, ...messages],
+        messages: [{ role: 'system', content: system }, ...messages.map(wire)],
       }),
     })
     if (!response.ok) throw new Error(`Ollama answered ${response.status}`)
@@ -255,7 +269,7 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
         // How thinking is turned off, the context size, the answer's length: the model's profile.
         ...fields,
         ...(maxTokens === undefined ? {} : { options: { ...fields.options, num_predict: maxTokens } }),
-        messages: [{ role: 'system', content: system }, ...messages],
+        messages: [{ role: 'system', content: system }, ...messages.map(wire)],
       }),
     })
     if (!response.ok || response.body === null) {
@@ -289,7 +303,7 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
         ...fields,
         ...(maxTokens === undefined ? {} : { options: { ...fields.options, num_predict: maxTokens } }),
         tools,
-        messages: [{ role: 'system', content: system }, ...turns],
+        messages: [{ role: 'system', content: system }, ...turns.map(wire)],
       }),
     })
     if (!response.ok || response.body === null) throw new Error(`Ollama answered ${response.status}`)

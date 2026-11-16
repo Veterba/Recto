@@ -31,12 +31,12 @@ const EXT: Record<string, string> = {
 const stamp = (): string => new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
 
 /** A clipboard image arrives as `image.png`, or as nothing at all. */
-function nameFor(file: File): string {
+export function nameFor(file: File): string {
   if (file.name !== '' && file.name !== 'image.png') return file.name
   return `pasted-${stamp()}.${EXT[file.type] ?? 'png'}`
 }
 
-const isImage = (file: File): boolean => file.type.startsWith('image/')
+export const isImage = (file: File): boolean => file.type.startsWith('image/')
 
 async function importAt(view: EditorView, files: readonly File[], at: number, source: string): Promise<void> {
   const markdown: string[] = []

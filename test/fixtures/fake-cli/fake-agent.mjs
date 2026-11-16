@@ -3,8 +3,8 @@
 // in that CLI's JSON stream, and spends nothing. FAKE_SCENARIO picks the script:
 // ok, signed-out, limit, down, slow, retried (an error on the way, then the answer),
 // silent-error (an error, no answer, exit 0). `codex app-server` answers the limits
-// read. FAKE_LOG, when set, gets the arguments and
-// the prompt it received, as JSON, so a test can check what reached the "cloud".
+// read. FAKE_LOG, when set, gets the arguments, the prompt it received and the pictures
+// attached as files, as JSON, so a test can check what reached the "cloud".
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -60,7 +60,9 @@ process.stdin.on('end', async () => {
   const fileAt = args.indexOf('--system-prompt-file')
   const systemFile =
     fileAt === -1 ? null : { text: fs.readFileSync(args[fileAt + 1], 'utf8'), mode: (fs.statSync(args[fileAt + 1]).mode & 0o777).toString(8) }
-  if (process.env.FAKE_LOG) fs.writeFileSync(process.env.FAKE_LOG, JSON.stringify({ name, args, prompt, cwd: process.cwd(), systemFile }))
+  // Pictures attached as files (Codex's --image): each file's bytes as base64, read while the run's folder is there.
+  const images = args.flatMap((a, i) => (a === '--image' ? [fs.readFileSync(args[i + 1]).toString('base64')] : []))
+  if (process.env.FAKE_LOG) fs.writeFileSync(process.env.FAKE_LOG, JSON.stringify({ name, args, prompt, cwd: process.cwd(), systemFile, images }))
   if (scenario === 'limit') {
     if (name === 'codex') out({ type: 'turn.failed', error: { message: 'You have hit your usage limit. Try again later.' } })
     else out({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'Claude usage limit reached' })

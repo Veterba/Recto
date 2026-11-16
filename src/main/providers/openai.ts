@@ -33,7 +33,15 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
   return {
     start: (system, messages: AiMessage[]) => ({
       instructions: system,
-      input: messages.map((m) => ({ role: m.role, content: m.content })),
+      // A person's pictures go after their words, as the input's images.
+      input: messages.map((m) =>
+        m.images === undefined || m.images.length === 0
+          ? { role: m.role, content: m.content }
+          : {
+              role: m.role,
+              content: [{ type: 'input_text', text: m.content }, ...m.images.map((i) => ({ type: 'input_image', image_url: `data:${i.mime};base64,${i.data}` }))],
+            },
+      ),
       tools: tools.map((t) => ({ type: 'function', ...toolSchema(t) })),
     }),
 

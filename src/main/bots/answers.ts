@@ -22,7 +22,7 @@ import { readState } from '../state'
 import { closeSession, openSession, recordOf } from '../vault-tools'
 import { sourcesOf } from '../../shared/answer-record'
 import { proposal } from '../vault-tools/proposals'
-import { run as runProvider } from '../providers'
+import { picturesFor, run as runProvider } from '../providers'
 import { ProviderError } from '../providers/run'
 import { chatSystem, forCloud } from '../providers/prompts'
 
@@ -261,13 +261,21 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
   // you are away (background-gate.ts): here, the notes changed since are
   // brought up to date first, so a question never searches stale ones.
   if (harness.hybridRetrieval) await syncVectors(bot.exclude ?? []).catch((err: unknown) => console.error('[bots] vectors', err))
-  const prepared = await prepare(bot, messages, {
+  // The question's pictures, when the model can look at them (a question with one it cannot is refused here):
+  // the pipeline - router, search - reads the words, and the pictures go back on the question for the answer.
+  const pictured = await picturesFor(job.model, messages, provider)
+  const pictures = pictured.findLast((m) => m.role === 'user')?.images
+  const prepared = await prepare(bot, pictured.map(({ images: _images, ...m }) => m), {
     harness,
     provider,
     model: job.model,
     sticky,
     onSteps: (steps) => controls.update({ steps }),
   })
+  if (pictures !== undefined) {
+    const at = prepared.history.findLastIndex((m) => m.role === 'user')
+    if (at !== -1) prepared.history[at] = { ...prepared.history[at]!, images: pictures }
+  }
   const sources = prepared.sources.map(({ path, heading }) => ({ path, heading }))
   controls.update({ sources })
   if (controls.signal.aborted) throw new Error('cancelled')

@@ -15,7 +15,12 @@ export function messagesModel(model: string, key: string, tools: typeof VAULT_TO
   return {
     start: (system, messages: AiMessage[]) => ({
       system,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      // A person's pictures go after their words, where Claude looks at them.
+      messages: messages.map((m) =>
+        m.images === undefined || m.images.length === 0
+          ? { role: m.role, content: m.content }
+          : { role: m.role, content: [{ type: 'text' as const, text: m.content }, ...m.images.map(imageBlock)] },
+      ),
       tools: tools.map((t) => {
         const s = toolSchema(t)
         return { name: s.name, description: s.description, input_schema: s.parameters as Anthropic.Tool.InputSchema }
@@ -56,16 +61,18 @@ export function messagesModel(model: string, key: string, tools: typeof VAULT_TO
           tool_use_id: r.id,
           content: [
             { type: 'text' as const, text: r.output },
-            ...r.images.map((i) => ({
-              type: 'image' as const,
-              source: { type: 'base64' as const, media_type: i.mime as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp', data: i.data },
-            })),
+            ...r.images.map(imageBlock),
           ],
         })),
       })
     },
   }
 }
+
+const imageBlock = (i: { mime: string; data: string }): Anthropic.ImageBlockParam => ({
+  type: 'image',
+  source: { type: 'base64', media_type: i.mime as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp', data: i.data },
+})
 
 function problemOf(err: unknown): ProviderProblem {
   if (err instanceof Anthropic.APIError) {
