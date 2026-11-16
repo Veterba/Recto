@@ -23,8 +23,8 @@ export function ProvidersGroup({ settings, save }: Props): React.ReactElement {
   const [signingIn, setSigningIn] = useState(false)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [planNotice, setPlanNotice] = useState(false)
-  const refresh = useCallback(() => void api.invoke(IPC.providers).then(setProviders), [])
-  useEffect(refresh, [refresh])
+  const refresh = useCallback((recheck = false) => void api.invoke(IPC.providers, recheck).then(setProviders), [])
+  useEffect(() => refresh(), [refresh])
 
   const open = (url: string): void => void api.invoke(IPC.providersOpenUrl, url)
 
@@ -131,7 +131,7 @@ export function ProvidersGroup({ settings, save }: Props): React.ReactElement {
                 Get {info.name}
               </button>
             )}
-            <button className="btn btn--ghost btn--sm" onClick={refresh}>
+            <button className="btn btn--ghost btn--sm" onClick={() => refresh(true)}>
               Check again
             </button>
           </div>

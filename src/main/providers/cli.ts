@@ -45,8 +45,81 @@ export const INSTALL_URL: Record<CliName, string> = {
 
 const NAME: Record<CliName, string> = { codex: 'Codex', claude: 'Claude Code' }
 
-/** Codex features that reach outside Recto's tools. */
+/**
+ * Codex runs with its features off but for the plumbing a run needs: an allow-list over what this Codex
+ * says it has (`codex features list`), so a feature a new Codex adds - a tool, a browser, an app - is off
+ * too. `CODEX_OFF` is what is turned off when the list cannot be read.
+ */
+export const CODEX_KEEP = new Set([
+  'enable_request_compression',
+  'incremental_tools',
+  'incremental_tools_legacy_gcp',
+  'content_item_kinds',
+  'retain_client_tool_outputs',
+  'deferred_tool_world_state',
+  'prediction_preserve_parent_tools',
+  'reasoning_effort_override',
+  'system_proxy_fallback',
+  'compaction_image_budget',
+  'api_key_model_discovery',
+  'api_key_cyber_access_programs',
+  'auth_elicitation',
+  'mcp_oauth_refresh_coordination',
+  'tool_call_mcp_elicitation',
+  'instant_interrupt',
+  'fast_mode',
+  'ultrafast_mode',
+  'unbounded_connection_retries',
+  'unified_image_budget',
+  // Its own safety: a tool's output taken as untrusted, a write to a process's input asked about.
+  'untrusted_as_tool_output',
+  'write_stdin_approval',
+])
 const CODEX_OFF = ['shell_tool', 'unified_exec', 'view_image', 'apps', 'plugins', 'browser_use', 'computer_use', 'in_app_browser', 'hooks']
+
+/** The features to turn off, from `codex features list`'s lines: on, not removed, not kept. */
+export function codexDisable(listed: string): string[] {
+  const off: string[] = []
+  for (const line of listed.split('\n')) {
+    const m = /^(\S+)\s+(.+?)\s+(true|false)\s*$/.exec(line.trim())
+    if (m === null || m[3] !== 'true' || m[2] === 'removed' || CODEX_KEEP.has(m[1]!)) continue
+    off.push(m[1]!)
+  }
+  return off
+}
+
+const featureCache = new Map<string, { mtime: number; off: string[] }>()
+/** What to turn off for this Codex, asked of it once per install (by its file's time); the fixed list if it will not say. */
+export function codexFeaturesOff(file: string, env: NodeJS.ProcessEnv): Promise<string[]> {
+  let mtime = 0
+  try {
+    mtime = fs.statSync(file).mtimeMs
+  } catch {
+    // Its time unknown: asked each run.
+  }
+  const known = featureCache.get(file)
+  if (known !== undefined && known.mtime === mtime && mtime !== 0) return Promise.resolve(known.off)
+  return new Promise((resolve) =>
+    execFile(file, ['features', 'list'], { env, timeout: 10_000 }, (err, stdout) => {
+      const off = err === null ? codexDisable(stdout) : []
+      if (off.length === 0) return resolve(CODEX_OFF)
+      featureCache.set(file, { mtime, off })
+      resolve(off)
+    }),
+  )
+}
+
+/**
+ * The environment a CLI runs with: Recto's, without the keys and switches that would move it off its
+ * own sign-in - an API key in the environment makes Claude Code and Codex bill the key instead of the plan.
+ */
+export function cliEnv(pathValue: string, from: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const [key, value] of Object.entries(from))
+    if (!/^(ANTHROPIC_|OPENAI_|CODEX_API_KEY$|CLAUDE_CODE_USE_|AWS_|AZURE_OPENAI_|GOOGLE_APPLICATION_CREDENTIALS$|VERTEX_)/.test(key)) env[key] = value
+  env['PATH'] = pathValue
+  return env
+}
 
 /** How long a stopped CLI gets to exit before it is killed. */
 const KILL_AFTER_MS = 2000
@@ -89,7 +162,7 @@ export const SYSTEM_FILE = 'recto-system.md'
  */
 export function cliArgs(
   name: CliName,
-  o: { model: string; system: string; cwd: string; server: { command: string; args: string[] }; pictures?: string[]; pictured?: boolean; web?: boolean },
+  o: { model: string; system: string; cwd: string; server: { command: string; args: string[] }; pictures?: string[]; pictured?: boolean; web?: boolean; disable?: string[] },
 ): string[] {
   const pictures = o.pictures ?? []
   if (name === 'claude')
@@ -141,7 +214,7 @@ export function cliArgs(
     `mcp_servers.recto.command=${toml(o.server.command)}`,
     '-c',
     `mcp_servers.recto.args=[${o.server.args.map(toml).join(', ')}]`,
-    ...CODEX_OFF.flatMap((f) => ['--disable', f]),
+    ...(o.disable ?? CODEX_OFF).flatMap((f) => ['--disable', f]),
     ...(o.model === '' ? [] : ['--model', o.model]),
     '-',
   ]
@@ -190,7 +263,10 @@ export function problemFrom(name: CliName, text: string): ProviderProblem {
     return { kind: 'signed-out', message: `${who} is not signed in. Run \`${name === 'codex' ? 'codex login' : 'claude'}\` in a terminal and sign in.` }
   if (/usage limit|rate limit|quota|\b429\b|limit reached|too many requests/i.test(text))
     return { kind: 'limit', message: `${who} has reached its usage limit. ${said}`.trim() }
-  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network|\b50[234]\b|overloaded|unavailable/i.test(text))
+  // A CLI older than the flags Recto gives it: said as what to do, not as its parser's words.
+  if (/unexpected argument|unknown option|unrecognized option|unknown (?:flag|argument)|invalid value .* for '--/i.test(text))
+    return { kind: 'cli-missing', message: `${who} is older than Recto needs. Update it, then try again.`, url: INSTALL_URL[name] }
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET|network error|\b50[234]\b|overloaded|service unavailable/i.test(text))
     return { kind: 'down', message: `${who} could not reach its service. Try again in a moment.` }
   return { kind: 'failed', message: said === '' ? `${who} stopped without an answer.` : `${who}: ${said}` }
 }
@@ -233,7 +309,7 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
           message: `${NAME[name]} is not installed, or Recto cannot find it.`,
           url: INSTALL_URL[name],
         })
-      const env = { ...process.env, PATH: await deps.path() }
+      const env = cliEnv(await deps.path())
       // Unknown goes ahead: the run says for itself if it is not signed in.
       if ((await signedIn(name, file, env)) === 'no') throw new ProviderError(problemFrom(name, 'not logged in'))
       if (request.signal.aborted) return
@@ -248,6 +324,7 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
       const prompt = name === 'claude' ? transcript(request.messages) : `${request.system}\n\n---\n\n${transcript(request.messages)}`
       // The pictures of the whole conversation, in order: the CLI is given it as one prompt.
       const images = request.messages.flatMap((m) => m.images ?? [])
+      const disable = name === 'codex' ? await codexFeaturesOff(file, env) : null
       try {
         await new Promise<void>((resolve, reject) => {
           // This user's only (0600), in a folder of the run's own, gone when the run is.
@@ -260,15 +337,32 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
                   return at
                 })
               : []
-          const args = cliArgs(name, { model, system: request.system, cwd, server, pictures, pictured: name === 'claude' && images.length > 0, web: request.web === true })
-          const child = spawn(file, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
+          const args = cliArgs(name, {
+            model,
+            system: request.system,
+            cwd,
+            server,
+            pictures,
+            pictured: name === 'claude' && images.length > 0,
+            web: request.web === true,
+            ...(disable === null ? {} : { disable }),
+          })
+          // A process group of its own: Stop ends it and what it started (Recto's tool server among them).
+          const child = spawn(file, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: true })
+          const signal = (sig: NodeJS.Signals): void => {
+            try {
+              if (child.pid !== undefined) process.kill(-child.pid, sig)
+            } catch {
+              child.kill(sig)
+            }
+          }
           let stderr = ''
           let failure = ''
           let answered = false
           let pending = ''
           const stop = (): void => {
-            child.kill('SIGINT')
-            setTimeout(() => child.exitCode === null && child.kill('SIGKILL'), KILL_AFTER_MS).unref()
+            signal('SIGINT')
+            setTimeout(() => child.exitCode === null && signal('SIGKILL'), KILL_AFTER_MS).unref()
           }
           request.signal.addEventListener('abort', stop, { once: true })
           child.stdout.setEncoding('utf8')

@@ -19,7 +19,7 @@ vi.mock('../../src/main/vault-tools', () => ({
 }))
 
 const { ChatGptAuth } = await import('../../src/main/providers/chatgpt-auth')
-const { responsesModel } = await import('../../src/main/providers/openai')
+const { responsesModel, sse: readEvents } = await import('../../src/main/providers/openai')
 const { ProviderError, toolLoop } = await import('../../src/main/providers/run')
 const { VAULT_TOOLS } = await import('../../src/shared/vault-tools')
 
@@ -51,6 +51,8 @@ const mock = {
   scope: 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct' as string | null,
   /** What the browser was shown at the callback. */
   page: Promise.resolve(''),
+  /** A refresh answered only once this settles: a sign-out can happen in between. */
+  hold: null as Promise<void> | null,
 }
 
 const b64 = (o: unknown): string => Buffer.from(JSON.stringify(o)).toString('base64url')
@@ -86,6 +88,7 @@ beforeAll(async () => {
       const form = new URLSearchParams(body)
       if (mock.tokenStatus !== 200) return json(mock.tokenStatus, { error: mock.tokenError })
       if (form.get('grant_type') === 'refresh_token') {
+        if (mock.hold !== null) await mock.hold
         mock.refreshes++
         mock.refreshedWith.push(form.get('refresh_token') ?? '')
       }
@@ -294,6 +297,28 @@ describe('Sign in with ChatGPT', () => {
     expect(auth.signedIn()).toBe(false)
     expect(auth.record()?.clientId).toBe('oaiapp_test123')
     mock.tokenStatus = 200
+  })
+
+  it('a sign-out while a refresh is on its way stays a sign-out: the refreshed tokens are not saved over it', async () => {
+    let now = Date.now()
+    const auth = new ChatGptAuth({
+      store: memoryStore(),
+      authBase: base,
+      now: () => now,
+      open: browser(() => {}, (p) => ({ code: 'c', state: p.get('state')!, client_id: mock.issued })),
+    })
+    await auth.signIn()
+    now += 59 * 60_000
+    let release = (): void => undefined
+    mock.hold = new Promise<void>((r) => (release = r))
+    const refreshing = auth.refresh().catch(() => false)
+    await new Promise((r) => setTimeout(r, 50))
+    await auth.signOut()
+    expect(auth.signedIn()).toBe(false)
+    release()
+    await refreshing
+    mock.hold = null
+    expect(auth.signedIn()).toBe(false)
   })
 
   it('a refresh reply without a new refresh token keeps the old one; each code OpenAI calls unusable signs out', async () => {
@@ -583,5 +608,28 @@ describe('OpenAI on the web', () => {
   it('the pages it cited and did not link are listed under the answer', async () => {
     mock.responses.push(answer('Rain, per https://a.example/rain.', [{ url: 'https://a.example/rain', title: 'Rain' }, { url: 'https://b.example/n', title: 'News' }]))
     expect(await ask(true)).toBe('Rain, per https://a.example/rain.\n\nSources:\n- [News](https://b.example/n)')
+  })
+})
+
+describe('reading OpenAI’s event stream', () => {
+  const stream = (chunks: string[]): ReadableStream<Uint8Array> =>
+    new ReadableStream({
+      start(c) {
+        for (const x of chunks) c.enqueue(new TextEncoder().encode(x))
+        c.close()
+      },
+    })
+  const all = async (chunks: string[]): Promise<unknown[]> => {
+    const out: unknown[] = []
+    for await (const e of readEvents(stream(chunks))) out.push(e)
+    return out
+  }
+
+  it('takes events with \\r\\n line ends, even split between chunks, and the last one without a blank line after it', async () => {
+    expect(await all(['data: {"a":1}\r', '\n\r\ndata: {"b":2}\r\n\r\n', 'data: {"c":3}'])).toEqual([{ a: 1 }, { b: 2 }, { c: 3 }])
+  })
+
+  it('a \\r before the next chunk is not taken for a blank line', async () => {
+    expect(await all(['data: {"a":', '1}\r', '\ndata: x\r\n\r\n'])).toEqual([])
   })
 })

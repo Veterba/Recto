@@ -39,6 +39,9 @@ export function mcpToken(userData = app.getPath('userData')): string {
 const digest = (s: string): Buffer => createHash('sha256').update(s, 'utf8').digest()
 const same = (a: string, b: string): boolean => timingSafeEqual(digest(a), digest(b))
 
+/** Connections open at once, at most. */
+const MAX_CONNECTIONS = 32
+
 /** How long a connection has to send the token before it is closed. */
 const AUTH_MS = 5000
 
@@ -122,6 +125,8 @@ export function startMcpSocket(userData = app.getPath('userData')): Promise<stri
   // A socket file left by a crashed Recto would refuse the listen. Only one Recto runs per user-data folder.
   fs.rmSync(where, { force: true })
   server = net.createServer((socket) => serve(socket, token))
+  // Each AI client's call is one short connection: more than this at once is something gone wrong, not work.
+  server.maxConnections = MAX_CONNECTIONS
   return new Promise((resolve, reject) => {
     server!.once('error', reject)
     server!.listen(where, () => {

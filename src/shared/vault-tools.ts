@@ -19,6 +19,8 @@ export type ToolDef = {
   description: string
   input: z.ZodObject
   write: boolean
+  /** Changes Recto's own state, no file (withdraw_proposal): not read-only, and nothing to undo. */
+  changes?: true
 }
 
 const tool = (name: string, title: string, description: string, input: z.ZodObject, write = false): ToolDef => ({
@@ -322,7 +324,7 @@ export const VAULT_TOOLS: readonly ToolDef[] = [
     'Take back a suggestion of yours the person has not decided on yet - to suggest a better one instead. Changes no file.',
     z.object({ id: z.string() }),
   ),
-]
+].map((t) => (t.name === 'withdraw_proposal' ? { ...t, changes: true as const } : t))
 
 export const toolNamed = (name: string): ToolDef | undefined => VAULT_TOOLS.find((t) => t.name === name)
 

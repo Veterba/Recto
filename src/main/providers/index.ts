@@ -1,4 +1,5 @@
 import { shell } from 'electron'
+import { providerBase } from '../config'
 import os from 'node:os'
 import { AI_ACCESS_STATE, coerceAiAccess, isWebProvider } from '../../shared/ai-access'
 import { AI_MODELS } from '../../shared/ai'
@@ -8,7 +9,7 @@ import { readState } from '../state'
 import { launcherPath } from '../vault-tools/launcher'
 import { messagesModel } from './anthropic'
 import { ChatGptAuth } from './chatgpt-auth'
-import { cliRunner, signedIn, INSTALL_URL } from './cli'
+import { cliEnv, cliRunner, signedIn, INSTALL_URL } from './cli'
 import { findCli, loginShellPath, runPath, type CliName } from './detect'
 import { OPENAI_BASE, responsesModel } from './openai'
 import { ollamaModel } from './ollama'
@@ -66,7 +67,22 @@ const CLI: Record<'codex' | 'claude-code', CliName> = { codex: 'codex', 'claude-
 
 /** What each provider says about itself, for Settings and the picker. Asks nothing that costs. */
 export async function statuses(local: () => Promise<ProviderModel[]>): Promise<ProviderStatus[]> {
-  return Promise.all(PROVIDERS.map((p) => statusOf(p.id, local)))
+  // One that throws says so in its row; the others still show.
+  return Promise.all(
+    PROVIDERS.map((p) =>
+      statusOf(p.id, local).catch(
+        (err: unknown): ProviderStatus => ({
+          id: p.id,
+          ready: false,
+          detail: null,
+          models: [],
+          limits: limitsOf(p.id),
+          usage: usageOf(p.id),
+          problem: { kind: 'down', message: `Recto could not check ${providerInfo(p.id).name}: ${err instanceof Error ? err.message : String(err)}` },
+        }),
+      ),
+    ),
+  )
 }
 
 async function statusOf(id: ProviderId, local: () => Promise<ProviderModel[]>): Promise<ProviderStatus> {
@@ -79,7 +95,7 @@ async function statusOf(id: ProviderId, local: () => Promise<ProviderModel[]>): 
     const name = CLI[id]
     const file = await find(name)
     if (file === null) return { ...base, ready: false, problem: { kind: 'cli-missing', message: 'Not installed, or not found.', url: INSTALL_URL[name] } }
-    const env = { ...process.env, PATH: await cliPath() }
+    const env = cliEnv(await cliPath())
     const signed = await signedIn(name, file, env)
     const ok = signed === 'yes'
     // Codex says its limits on request, for free; Claude Code only with an answer (kept from the last one).
@@ -129,7 +145,24 @@ async function statusOf(id: ProviderId, local: () => Promise<ProviderModel[]>): 
   }
   const key = readKey()
   if (key === null) return { ...base, ready: false, problem: { kind: 'no-key', message: 'No key saved.' } }
+  // A key Anthropic turned away (revoked, deleted) is not "Key saved, ready" - asked with the free model list.
+  if ((await anthropicKeyRejected(key)) === true)
+    return { ...base, ready: false, detail: `sk-ant-…${key.slice(-4)}`, problem: { kind: 'no-key', message: 'Anthropic rejected this key. Save a new one under Advanced.' } }
   return { ...base, ready: true, detail: `sk-ant-…${key.slice(-4)}`, models: AI_MODELS.map((m) => ({ id: m.id, label: m.label })) }
+}
+
+/** True when Anthropic says the key is not good (401); false when it is; null when it could not be asked. Costs nothing. */
+export async function anthropicKeyRejected(key: string): Promise<boolean | null> {
+  try {
+    const base = providerBase('RECTO_ANTHROPIC_BASE') ?? 'https://api.anthropic.com'
+    const response = await fetch(`${base}/v1/models?limit=1`, {
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      signal: AbortSignal.timeout(5000),
+    })
+    return response.status === 401 ? true : response.ok ? false : null
+  } catch {
+    return null
+  }
 }
 
 /** The key's chat models, newest first; none when the list could not be had, 'rejected' when OpenAI refused the key. */
@@ -248,7 +281,7 @@ export async function readiness(model: string): Promise<ProviderProblem | null> 
     const name = CLI[id]
     const file = await find(name)
     if (file === null) return { kind: 'cli-missing', message: `${providerInfo(id).name} is not installed, or Recto cannot find it.`, url: INSTALL_URL[name] }
-    if ((await signedIn(name, file, { ...process.env, PATH: await cliPath() })) === 'no')
+    if ((await signedIn(name, file, cliEnv(await cliPath()))) === 'no')
       return { kind: 'signed-out', message: `${providerInfo(id).name} is not signed in. Run \`${name === 'codex' ? 'codex login' : 'claude'}\` in a terminal.` }
     return null
   }

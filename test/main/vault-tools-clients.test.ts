@@ -109,7 +109,7 @@ describe('Codex: TOML, edited as text', () => {
     put(CODEX, ORIGINAL)
     expect(await connectClient('codex', env)).toEqual({ ok: true })
     expect(read(CODEX)).toBe(
-      `${ORIGINAL}\n[mcp_servers.recto]\ncommand = ${JSON.stringify(env.launcher)}\nargs = ["--client","codex"]\nstartup_timeout_sec = 20\n`,
+      `${ORIGINAL}\n[mcp_servers.recto]\ncommand = ${JSON.stringify(env.launcher)}\nargs = ["--client","codex"]\nstartup_timeout_sec = 20\ntool_timeout_sec = 90\n`,
     )
     expect(clientStatus('codex', env).state).toBe('connected')
     expect(backups()).toEqual(['config.toml'])
@@ -170,5 +170,44 @@ describe('Claude Code: through its own CLI', () => {
     expect(clientStatus('claude-code', env).installed).toBe(
       fs.existsSync('/opt/homebrew/bin/claude') || fs.existsSync('/usr/local/bin/claude'),
     )
+  })
+})
+
+describe('hand-edited configs and moved settings folders', () => {
+  it('Codex: Connect leaves one table of Recto’s, whatever way the old ones were written, and the person’s settings', async () => {
+    put(
+      '.codex/config.toml',
+      'model = "o5"\n\n[mcp_servers.recto]\ncommand = "/old/recto-mcp"\n\n[ mcp_servers."recto" ]\ncommand = "/older"\n[mcp_servers."recto".env]\nX = "1"\n\n[mcp_servers.other]\ncommand = "other"\n',
+    )
+    expect(await connectClient('codex', env)).toEqual({ ok: true })
+    const text = read('.codex/config.toml')
+    expect(text.match(/mcp_servers\s*\.\s*"?recto"?\s*\]/g)).toHaveLength(1)
+    expect(text).not.toContain('/old')
+    expect(text).toContain('model = "o5"')
+    expect(text).toContain('[mcp_servers.other]\ncommand = "other"')
+    expect(text).toContain(`command = ${JSON.stringify(env.launcher)}`)
+  })
+
+  it('a “recto” server of the person’s own is named before Connect replaces it', () => {
+    put('.cursor/mcp.json', JSON.stringify({ mcpServers: { recto: { command: '/my/own/recto-thing' } } }))
+    const plan = clientPlan('cursor', 'connect', env)
+    expect(plan.ok && plan.note).toMatch(/replaces the “recto” server there now, which runs \/my\/own\/recto-thing/)
+    put('.codex/config.toml', '[mcp_servers.recto]\ncommand = "/my/codex-recto"\n')
+    expect(clientPlan('codex', 'connect', env)).toMatchObject({ ok: true, note: expect.stringContaining('/my/codex-recto') })
+  })
+
+  it('Recto’s own entry is not called the person’s', () => {
+    put('.cursor/mcp.json', JSON.stringify({ mcpServers: { recto: { command: env.launcher } } }))
+    const plan = clientPlan('cursor', 'connect', env)
+    expect(plan.ok && (plan.note ?? '')).not.toMatch(/replaces/)
+  })
+
+  it('follows CODEX_HOME and CLAUDE_CONFIG_DIR where the person moved them', async () => {
+    const moved = { ...env, codexHome: file('elsewhere/codex'), claudeConfigDir: file('elsewhere/claude') }
+    put('elsewhere/codex/config.toml', 'model = "o5"\n')
+    expect(await connectClient('codex', moved)).toEqual({ ok: true })
+    expect(read('elsewhere/codex/config.toml')).toContain('[mcp_servers.recto]')
+    expect(fs.existsSync(file('.codex/config.toml'))).toBe(false)
+    expect(clientStatus('codex', moved)).toMatchObject({ state: 'connected', detail: file('elsewhere/codex/config.toml') })
   })
 })

@@ -24,7 +24,9 @@ import * as z from 'zod'
 import { imagesOf, renderBlocks, SERVER_INSTRUCTIONS, VAULT_PROMPTS, VAULT_TOOLS, type ToolOutcome } from '../shared/vault-tools'
 import { CLOSED_MESSAGE, DROPPED_MESSAGE, socketPath, TIMEOUT_MESSAGE, TOKEN_FILE, TOO_LARGE_MESSAGE, type BridgeRequest, type BridgeResponse } from './bridge'
 
-const VERSION = '1'
+declare const __RECTO_VERSION__: string | undefined
+/** This Recto's version (set at build), as the server tells AI clients. */
+const VERSION = typeof __RECTO_VERSION__ === 'string' ? __RECTO_VERSION__ : 'dev'
 
 function arg(name: string): string | null {
   const at = process.argv.indexOf(name)
@@ -42,7 +44,13 @@ type Request = BridgeRequest extends infer R ? (R extends { id: number } ? Omit<
 /** Why no answer came: Recto is not running, it took too long, or it closed the connection after taking it. */
 type NoAnswer = { failed: string }
 
-function ask(request: Request, timeoutMs = 55_000): Promise<BridgeResponse | NoAnswer> {
+/**
+ * Longer than Recto's own limit on a call (60 s, vault-tools/read.ts): the bridge never gives up while Recto
+ * may still finish - and write - what was asked; Recto answers first, with its own reason, when it cannot.
+ */
+const ANSWER_MS = 75_000
+
+function ask(request: Request, timeoutMs = ANSWER_MS): Promise<BridgeResponse | NoAnswer> {
   return new Promise((resolve) => {
     if (data === null) return resolve({ failed: CLOSED_MESSAGE })
     let token: string
@@ -108,9 +116,13 @@ function server(): McpServer {
         title: def.title,
         description: def.description,
         inputSchema: def.input,
+        // A write suggests (or, in Write directly, writes after a backup; a delete goes to the archive): not
+        // destructive. Taking back a suggestion changes Recto's own state, not a file.
         annotations: def.write
-          ? { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
-          : { readOnlyHint: true, openWorldHint: false },
+          ? { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
+          : def.changes === true
+            ? { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+            : { readOnlyHint: true, openWorldHint: false },
       },
       async (args: unknown) => {
         const outcome = await call(def.name, args)

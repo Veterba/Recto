@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import { build, type Plugin } from 'vite'
@@ -19,6 +20,8 @@ function mcpProgram(): Plugin {
         configFile: false,
         logLevel: 'warn',
         ssr: { noExternal: true, target: 'node' },
+        // The version it tells AI clients: this Recto's, not a number of its own.
+        define: { __RECTO_VERSION__: JSON.stringify((JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as { version: string }).version) },
         build: {
           ssr: resolve('src/mcp/index.ts'),
           outDir: resolve('out/mcp'),

@@ -1,3 +1,4 @@
+import type { ProviderStatus } from '../../shared/providers'
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import { IPC, IPC_EVENT, type IpcApi } from '../../shared/ipc'
 import { PROBLEM_TEXT } from '../../shared/providers'
@@ -18,13 +19,21 @@ type Handle = <C extends keyof IpcApi>(
 /** The only pages a provider link may open: the providers' own. */
 const ALLOWED = [...Object.values(INSTALL_URL), 'https://chatgpt.com/settings/usage', 'https://platform.openai.com/api-keys', 'https://console.anthropic.com/']
 
+/** The providers being looked at now: a second look while one runs gets the same answer. */
+let listing: Promise<ProviderStatus[]> | null = null
+
 export function registerProvidersIpc(handle: Handle): void {
-  handle(IPC.providers, async () => {
-    // Asked again each time Settings or the picker opens: a CLI just installed or signed in shows up.
-    forgetAuth()
+  handle(IPC.providers, async (recheck) => {
+    // Settings and the picker opening at once ask once, together; Check again asks the CLIs anew (a sign-in
+    // is otherwise kept a minute, and each look would start every CLI again).
+    if (recheck === true) {
+      forgetAuth()
+      listing = null
+    }
     const local = async (): Promise<{ id: string; label: string }[]> =>
       (await bots.models()).local.filter((m) => m.installed).map((m) => ({ id: m.name, label: m.name.replace(':', ' · ') }))
-    return statuses(local)
+    listing ??= statuses(local).finally(() => (listing = null))
+    return listing
   })
   handle(IPC.providersSetOpenAiKey, (key) => setOpenAiKey(key))
   handle(IPC.providersChatGptSignIn, async () => {

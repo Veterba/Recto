@@ -17,7 +17,8 @@ const run = promisify(execFile)
 
 /** `dev`: a development build, whose launcher must never end up in the person's real AI apps. */
 /** `version`: this Recto's, which an installed Claude Desktop extension must match - it carries its own copy of the program. */
-export type ClientEnv = { home: string; launcher: string; backups: string; dev?: boolean; version?: string }
+/** `claudeConfigDir`, `codexHome`: where the person moved those apps' settings (CLAUDE_CONFIG_DIR, CODEX_HOME). */
+export type ClientEnv = { home: string; launcher: string; backups: string; dev?: boolean; version?: string; claudeConfigDir?: string; codexHome?: string }
 
 const DEV_REFUSED = 'A development build of Recto does not change your AI apps’ settings: it would point them at this build. Connect from the installed Recto.'
 
@@ -35,11 +36,12 @@ const URLS: Record<ClientId, string> = {
 }
 export const CLIENT_IDS: readonly ClientId[] = ['claude-code', 'codex', 'claude-desktop', 'cursor']
 
-const files = (home: string): Record<ClientId, string> => ({
-  'claude-code': path.join(home, '.claude.json'),
-  codex: path.join(home, '.codex', 'config.toml'),
-  'claude-desktop': path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'),
-  cursor: path.join(home, '.cursor', 'mcp.json'),
+/** Each app's settings file - where the app itself looks, its own folder variable followed. */
+const files = (env: Pick<ClientEnv, 'home' | 'claudeConfigDir' | 'codexHome'>): Record<ClientId, string> => ({
+  'claude-code': path.join(env.claudeConfigDir ?? env.home, '.claude.json'),
+  codex: path.join(env.codexHome ?? path.join(env.home, '.codex'), 'config.toml'),
+  'claude-desktop': path.join(env.home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'),
+  cursor: path.join(env.home, '.cursor', 'mcp.json'),
 })
 
 /** A GUI app's PATH is minimal, so the CLIs are looked for where their installers put them. */
@@ -54,14 +56,15 @@ const binaryIn = (home: string, name: string): string | null =>
 
 const exists = (p: string): boolean => fs.existsSync(p)
 
-function installed(id: ClientId, home: string): boolean {
+function installed(id: ClientId, env: ClientEnv): boolean {
+  const home = env.home
   if (id === 'claude-code') return binaryIn(home, 'claude') !== null
-  if (id === 'codex') return exists(path.join(home, '.codex')) || binaryIn(home, 'codex') !== null
+  if (id === 'codex') return exists(path.dirname(files(env).codex)) || binaryIn(home, 'codex') !== null
   if (id === 'claude-desktop')
     return (
       exists('/Applications/Claude.app') ||
       exists(path.join(home, 'Applications', 'Claude.app')) ||
-      exists(path.dirname(files(home)['claude-desktop']))
+      exists(path.dirname(files(env)['claude-desktop']))
     )
   return exists(path.join(home, '.cursor')) || exists('/Applications/Cursor.app')
 }
@@ -102,7 +105,10 @@ function entryState(entry: unknown, launcher: string): ClientStatus['state'] | '
 // ---------------------------------------------------------------------------
 // Codex: TOML, edited as text so comments and order survive
 
-const CODEX_HEADER = /^\s*\[mcp_servers\.recto\]\s*$/
+/** Recto's table however it is written - `[mcp_servers.recto]`, `[ mcp_servers."recto" ]` - and its sub-tables. */
+const RECTO_KEY = `\\s*mcp_servers\\s*\\.\\s*(?:recto|"recto"|'recto')\\s*`
+const CODEX_HEADER = new RegExp(`^\\s*\\[${RECTO_KEY}\\]\\s*(?:#.*)?$`)
+const CODEX_SUB = new RegExp(`^\\s*\\[${RECTO_KEY}\\.`)
 
 function codexBlock(launcher: string, id: ClientId): string {
   return [
@@ -110,16 +116,49 @@ function codexBlock(launcher: string, id: ClientId): string {
     `command = ${JSON.stringify(launcher)}`,
     `args = ${JSON.stringify(entryArgs(id))}`,
     `startup_timeout_sec = 20`,
+    // Longer than Recto's own limit on a call, so Codex does not give up on one Recto is still finishing.
+    `tool_timeout_sec = 90`,
   ].join('\n')
 }
 
-/** The line range of Recto's table (with its own sub-tables), or null. */
-function codexRange(lines: readonly string[]): { start: number; end: number } | null {
-  const start = lines.findIndex((l) => CODEX_HEADER.test(l))
-  if (start === -1) return null
-  let end = start + 1
-  while (end < lines.length && !(/^\s*\[/.test(lines[end]!) && !/^\s*\[mcp_servers\.recto\./.test(lines[end]!))) end++
-  return { start, end }
+/** The line ranges of Recto's tables (each with its own sub-tables), in order: a hand-edited file may hold two. */
+function codexRanges(lines: readonly string[]): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = []
+  for (let start = 0; start < lines.length; start++) {
+    if (!CODEX_HEADER.test(lines[start]!)) continue
+    let end = start + 1
+    while (end < lines.length && !(/^\s*\[/.test(lines[end]!) && !CODEX_SUB.test(lines[end]!))) end++
+    ranges.push({ start, end })
+    start = end - 1
+  }
+  return ranges
+}
+const codexRange = (lines: readonly string[]): { start: number; end: number } | null => codexRanges(lines)[0] ?? null
+
+/** Every one of Recto's tables taken out, the blank lines where each was joined. */
+function withoutRecto(lines: readonly string[]): string {
+  let out = [...lines]
+  for (const range of codexRanges(out).reverse()) {
+    const before = out.slice(0, range.start)
+    const after = out.slice(range.end)
+    // Only the blank lines where Recto's table was are joined: elsewhere - inside a multi-line string - they are the person's.
+    while (before.at(-1) === '' && (after.length === 0 || after[0] === '')) before.pop()
+    out = [...before, ...after]
+  }
+  return out.join('\n').replace(/\n+$/, '')
+}
+
+/** The command of a "recto" server that is not Recto's own launcher (the person's), or null when there is none. */
+function ownRecto(id: ClientId, file: string, launcher: string): string | null {
+  if (id === 'codex') {
+    const command = exists(file) ? codexCommand(fs.readFileSync(file, 'utf8')) : null
+    return command === null || command === launcher ? null : command
+  }
+  const read = readJson(file)
+  const entry = read.ok ? servers(read.value)['recto'] : undefined
+  if (entry === undefined) return null
+  const command = (entry as { command?: unknown } | null)?.command
+  return command === launcher ? null : typeof command === 'string' ? command : ''
 }
 
 function codexCommand(text: string): string | null {
@@ -158,8 +197,8 @@ function extensionVersion(home: string, folder: string): string | null {
 }
 
 export function clientStatus(id: ClientId, env: ClientEnv): ClientStatus {
-  const base = { id, name: NAMES[id], url: URLS[id], installed: installed(id, env.home) }
-  const file = files(env.home)[id]
+  const base = { id, name: NAMES[id], url: URLS[id], installed: installed(id, env) }
+  const file = files(env)[id]
   if (id === 'codex') {
     const text = exists(file) ? fs.readFileSync(file, 'utf8') : ''
     const command = codexCommand(text)
@@ -204,7 +243,10 @@ const claudeArgs = (env: ClientEnv): string[] => [
 
 /** What Connect or Disconnect will do, as it will be done. */
 export function clientPlan(id: ClientId, action: 'connect' | 'disconnect', env: ClientEnv): ClientPlan {
-  const file = files(env.home)[id]
+  const file = files(env)[id]
+  // A "recto" server there now that is not Recto's (the person's own, by that name): said before it is replaced.
+  const theirs = action === 'connect' ? ownRecto(id, file, env.launcher) : null
+  const replacing = theirs === null ? '' : ` It replaces the “recto” server there now, which runs ${theirs === '' ? 'nothing' : theirs}.`
   const entry = { command: env.launcher, args: entryArgs(id) }
   if (id === 'claude-code') {
     const bin = binaryIn(env.home, 'claude')
@@ -214,11 +256,11 @@ export function clientPlan(id: ClientId, action: 'connect' | 'disconnect', env: 
       ok: true,
       file,
       lines: `claude ${args.map((a) => (/[\s'"]/.test(a) ? JSON.stringify(a) : a)).join(' ')}`,
-      note: `Recto runs this command; Claude Code writes the entry to ${file}.`,
+      note: `Recto runs this command; Claude Code writes the entry to ${file}.${replacing}`,
     }
   }
   if (id === 'codex') {
-    if (action === 'connect') return { ok: true, file, lines: codexBlock(env.launcher, id), note: `Added at the end of ${file}.` }
+    if (action === 'connect') return { ok: true, file, lines: codexBlock(env.launcher, id), note: `Added at the end of ${file}.${replacing}` }
     const text = exists(file) ? fs.readFileSync(file, 'utf8') : ''
     const range = codexRange(text.split('\n'))
     if (range === null) return { ok: false, error: 'Codex has no Recto entry.' }
@@ -227,7 +269,8 @@ export function clientPlan(id: ClientId, action: 'connect' | 'disconnect', env: 
   const read = readJson(file)
   if (!read.ok) return { ok: false, error: read.error }
   const restart = id === 'claude-desktop' ? 'Quit and reopen Claude Desktop for it to take effect.' : null
-  if (action === 'connect') return { ok: true, file, lines: JSON.stringify({ mcpServers: { recto: entry } }, null, 2), note: restart }
+  if (action === 'connect')
+    return { ok: true, file, lines: JSON.stringify({ mcpServers: { recto: entry } }, null, 2), note: replacing === '' ? restart : `${replacing.trim()}${restart === null ? '' : ` ${restart}`}` }
   if (servers(read.value)['recto'] === undefined)
     return id === 'claude-desktop' && desktopExtension(env.home) !== null
       ? { ok: false, error: 'Recto is installed as a Claude Desktop extension: remove it in Claude Desktop → Settings → Extensions.' }
@@ -287,10 +330,8 @@ export async function connectClient(id: ClientId, env: ClientEnv): Promise<{ ok:
   }
   if (id === 'codex') {
     const text = exists(plan.file) ? fs.readFileSync(plan.file, 'utf8') : ''
-    const lines = text.split('\n')
-    const range = codexRange(lines)
-    const rest = range === null ? lines : [...lines.slice(0, range.start), ...lines.slice(range.end)]
-    const body = rest.join('\n').replace(/\n+$/, '')
+    // Every table of Recto's out first, however written: a second would make Codex refuse the file.
+    const body = withoutRecto(text.split('\n'))
     writeText(plan.file, `${body === '' ? '' : `${body}\n\n`}${codexBlock(env.launcher, id)}\n`)
     return { ok: true }
   }
@@ -318,13 +359,7 @@ export async function disconnectClient(id: ClientId, env: ClientEnv): Promise<{ 
     return { ok: true }
   }
   if (id === 'codex') {
-    const lines = fs.readFileSync(plan.file, 'utf8').split('\n')
-    const range = codexRange(lines)!
-    // Only the blank lines where Recto's table was are joined: elsewhere - inside a multi-line string - they are the person's.
-    const before = lines.slice(0, range.start)
-    const after = lines.slice(range.end)
-    while (before.at(-1) === '' && (after.length === 0 || after[0] === '')) before.pop()
-    const kept = [...before, ...after].join('\n').replace(/\n+$/, '')
+    const kept = withoutRecto(fs.readFileSync(plan.file, 'utf8').split('\n'))
     writeText(plan.file, kept === '' ? '' : `${kept}\n`)
     return { ok: true }
   }

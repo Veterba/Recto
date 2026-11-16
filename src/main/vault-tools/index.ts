@@ -25,7 +25,7 @@ import { unifiedDiff } from '../../shared/line-diff'
 type Args = Record<string, unknown>
 type Run = (scope: Scope, args: Args) => ResultBlock[] | Promise<ResultBlock[]>
 
-const READERS: Record<string, Run> = {
+export const READERS: Record<string, Run> = {
   get_ai_guide: (s) => read.getAiGuide(s),
   get_vault_profile: async (s) => [{ kind: 'data', data: await vaultProfile(s) }],
   search_notes: read.searchNotes,
@@ -63,7 +63,7 @@ const READERS: Record<string, Run> = {
   },
 }
 
-const WRITERS: Record<string, (scope: Scope, args: Args) => write.Draft | Promise<write.Draft>> = {
+export const WRITERS: Record<string, (scope: Scope, args: Args) => write.Draft | Promise<write.Draft>> = {
   propose_new_note: write.proposeNewNote,
   canvas_propose_nodes: canvas.proposeCanvasNodes,
   canvas_propose_edges: canvas.proposeCanvasEdges,

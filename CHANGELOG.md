@@ -4,6 +4,19 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.72.0 — 2026-11-16
+### Fixed
+- Codex and Claude Code no longer run with API keys from your environment, which could make them bill an API key instead of your plan.
+- Stop ends a Codex or Claude Code answer completely, Recto's tool server with it.
+- Codex runs with its features off but for what an answer needs - image generation, multi-agent, apps, browsers, plugins, skills and others were on - and a feature a new Codex adds is off too.
+- A Codex or Claude Code too old for Recto says to update it, instead of an "unexpected argument" error.
+- Settings → AI → Providers no longer hangs on "Looking for providers…" when one provider fails, and no longer starts every CLI each time it opens; Check again asks them anew.
+- A revoked Anthropic key shows as refused instead of ready.
+- Signing out of ChatGPT while a token refresh was on its way no longer signs you back in.
+- OpenAI answers no longer fail on tool definitions under strict mode, nor lose an event at the end of a stream.
+- Connecting an AI app names a "recto" server of your own before replacing it, removes every old Recto entry from Codex's settings, and finds the settings where CLAUDE_CONFIG_DIR and CODEX_HOME put them.
+- A slow tool call from a connected app is no longer reported as "Recto isn't answering" while it still finishes.
+
 ## v0.71.0 — 2026-11-16
 ### Changed
 - The local AI chat reads notes, files and searches with the same tools as the cloud chats and connected apps: the same exclusions, a note found by its exact name (asking "Unit 4" no longer opens "Unit 5"), long notes read on from where they were cut, and a search that says why it found nothing. What it reads shows in the answer's steps and sources.

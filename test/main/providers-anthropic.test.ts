@@ -168,3 +168,17 @@ describe('the Claude API on the web', () => {
     expect(text).toBe('Looking. It rained in Kyoto, see https://a.example/rain.\n\nSources:\n- [Kyoto news](https://b.example/news)')
   })
 })
+
+describe('the saved Anthropic key, checked without spending', () => {
+  it('a key Anthropic refuses is said to be refused; a good one is not; one that could not be asked is neither', async () => {
+    vi.doMock('../../src/main/state', () => ({ readState: () => null, writeState: () => ({ ok: true }) }))
+    const { anthropicKeyRejected } = await import('../../src/main/providers')
+    reply = { status: 401, body: '{"type":"error","error":{"type":"authentication_error"}}', sse: false }
+    bodies.length = 0
+    expect(await anthropicKeyRejected('sk-ant-gone')).toBe(true)
+    reply = { status: 200, body: '{"data":[]}', sse: false }
+    expect(await anthropicKeyRejected('sk-ant-good')).toBe(false)
+    reply = { status: 503, body: '{}', sse: false }
+    expect(await anthropicKeyRejected('sk-ant-x')).toBe(null)
+  })
+})

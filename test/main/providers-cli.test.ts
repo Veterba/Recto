@@ -15,7 +15,7 @@ import type { AiMessage } from '../../src/shared/ai'
 vi.mock('../../src/main/vault-tools', () => ({ callTool: async () => ({ ok: true, blocks: [] }) }))
 
 const { findCli, searchDirs } = await import('../../src/main/providers/detect')
-const { cliArgs, cliRunner, forgetAuth, parseLine, problemFrom, signedIn, transcript } = await import('../../src/main/providers/cli')
+const { cliArgs, cliEnv, cliRunner, codexDisable, CODEX_KEEP, forgetAuth, parseLine, problemFrom, signedIn, transcript } = await import('../../src/main/providers/cli')
 const { ProviderError } = await import('../../src/main/providers/run')
 const { forCloud, quickAskCanvasSystem, quickAskSystem } = await import('../../src/main/providers/prompts')
 
@@ -205,6 +205,9 @@ describe('an answer from a fake CLI', () => {
         // Attached as a file of the run's own (gone with it), before the flags that follow `exec`.
         expect(seen.images).toEqual([picture.data])
         expect(seen.args.slice(0, 2)).toEqual(['exec', '--image'])
+        // The features this Codex said it has on, off; its plumbing kept.
+        expect(seen.args.join(' ')).toContain('--disable shell_tool')
+        expect(seen.args.join(' ')).not.toContain('enable_request_compression')
         expect(path.basename(seen.args[2]!)).toBe('picture-1.png')
         expect(path.dirname(seen.args[2]!)).toContain('recto-agent-')
         expect(seen.prompt).toContain('What is this? [picture 1: shot.png]')
@@ -353,5 +356,36 @@ describe('switching provider mid-conversation', () => {
     // Skimmed counts too: an excerpt can be quoted.
     const skimmed = forCloud([turns[0]!, { ...turns[1]!, record: { read: [], skimmed: ['Private/Diary.md'], proposals: [] } }, turns[2]!], ['Private'], () => null)
     expect(JSON.stringify(skimmed)).not.toContain('SECRET-DIARY-LINE')
+  })
+})
+
+describe('what a CLI runs with', () => {
+  it('none of the keys that would move it off its own sign-in onto API billing', () => {
+    const env = cliEnv('/bin', { HOME: '/h', ANTHROPIC_API_KEY: 'a', ANTHROPIC_BASE_URL: 'b', OPENAI_API_KEY: 'o', CODEX_API_KEY: 'c', CLAUDE_CODE_USE_BEDROCK: '1', AWS_PROFILE: 'p', LANG: 'en' })
+    expect(env).toEqual({ HOME: '/h', LANG: 'en', PATH: '/bin' })
+  })
+
+  it('Codex: every feature this Codex has on is turned off but the plumbing kept - one a new Codex adds too', () => {
+    const listed = [
+      'shell_tool                               stable             true',
+      'image_generation                         stable             true',
+      'brand_new_tool                           under development  true',
+      'enable_request_compression               stable             true',
+      'sqlite                                   removed            true',
+      'goals                                    stable             false',
+    ].join('\n')
+    expect(codexDisable(listed)).toEqual(['shell_tool', 'image_generation', 'brand_new_tool'])
+    expect(CODEX_KEEP.has('enable_request_compression')).toBe(true)
+    // Given a list, the command line turns those off; none given, the fixed list.
+    const server = { command: '/x', args: [] }
+    expect(cliArgs('codex', { model: '', system: 'S', cwd: '/t', server, disable: ['brand_new_tool'] }).join(' ')).toContain('--disable brand_new_tool')
+    expect(cliArgs('codex', { model: '', system: 'S', cwd: '/t', server }).join(' ')).toContain('--disable shell_tool')
+  })
+
+  it('a CLI too old for Recto’s flags says to update it, with the way to', () => {
+    for (const said of ["error: unexpected argument '--ignore-user-config' found", 'error: unknown option --setting-sources'])
+      expect(problemFrom('claude', said)).toMatchObject({ kind: 'cli-missing', message: expect.stringMatching(/older than Recto needs\. Update it/), url: expect.any(String) })
+    // A word like "unavailable" in an answer's failure is not taken for the service being down.
+    expect(problemFrom('codex', 'that model is unavailable on your plan').kind).toBe('failed')
   })
 })

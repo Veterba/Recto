@@ -559,7 +559,8 @@ export type IpcApi = Exhaustive<
     [IPC.botsPull]: (name: string) => { ok: boolean; error?: string }
     [IPC.botsPullCancel]: () => { ok: boolean }
     /** Every provider: ready or why not, where it was found, its models. Asks nothing that costs. */
-    [IPC.providers]: () => ProviderStatus[]
+    /** `recheck`: sign-ins asked again now (Check again), not taken from the last minute's answer. */
+    [IPC.providers]: (recheck?: boolean) => ProviderStatus[]
     /** The OpenAI key (null forgets it); kept in main, never sent back. */
     [IPC.providersSetOpenAiKey]: (key: string | null) => { ok: boolean; error?: string }
     /** Sign in with ChatGPT in the browser; resolves when it is done, cancelled or failed. */

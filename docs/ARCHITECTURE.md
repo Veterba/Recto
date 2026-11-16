@@ -480,7 +480,14 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   (`store: false` on the Responses API). A *CLI agent* (Codex CLI, Claude Code) runs its own agent
   loop, so Recto locks it down: Codex gets `exec --json`, a read-only sandbox, its shell and other
   built-in tools disabled, `--ignore-user-config`, `--ephemeral` and an empty temp working
-  directory; Claude Code gets `-p` with `--tools ""`, `--allowedTools mcp__recto`,
+  directory - its features turned off by an allow-list over what this Codex says it has (`codex features
+  list`, read once per install: everything on but `CODEX_KEEP`'s plumbing is `--disable`d, so a feature a
+  new Codex adds is off too; the fixed `CODEX_OFF` when the list cannot be read). Codex 0.169 keeps
+  `unified_exec` on whatever it is told; the read-only sandbox is what holds it. Both CLIs run with Recto's
+  environment less the keys that would move them off their own sign-in (`cliEnv`: `ANTHROPIC_*`,
+  `OPENAI_*`, `CODEX_API_KEY`, cloud-provider switches), in a process group of their own, which Stop ends
+  whole (the tool server they started with it); a CLI that does not know a flag Recto gives it is said to
+  need an update; Claude Code gets `-p` with `--tools ""`, `--allowedTools mcp__recto`,
   `--strict-mcp-config`, `--permission-mode dontAsk` and `--no-session-persistence`. Their only tool
   server is `recto-mcp --session <id> --tools …`. CLI runs are stateless: each question carries the
   transcript. Codex answers arrive whole (steps stream live); Claude Code streams.
@@ -494,10 +501,24 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   asks: every call checks both, so an answer stops when the vault changes or cloud is turned off
   mid-answer; a vault switch or close also stops running answers, Quick ask runs and the background
   jobs (`windDownAi` in `ipc.ts`).
+- **Settings' list** (`statuses`, `IPC.providers`): looked at once by whoever asks while a look runs; a
+  provider that throws is a row saying so, the others still show; the CLIs' sign-ins are asked again on
+  Check again, and otherwise kept a minute. The Anthropic key is checked with the model list (free); a
+  key it refuses is said, as an OpenAI one is. A ChatGPT refresh that comes back after a sign-out is not
+  saved. OpenAI functions go with `strict: false` (strict mode wants every field required); the event
+  stream takes `\r\n` line ends and an event left without its blank line at the end.
 - **Detection** (`providers/detect.ts`). A Mac app does not inherit the shell PATH, so the CLI is
   looked for through the login shell's PATH (asked once), the app PATH, Homebrew, npm, bun, volta,
   pnpm, `~/.local/bin`, `~/.claude/local`, nvm Node bins and inside ChatGPT.app (which ships the
   Codex CLI). Pre-flight is `codex login status` / `claude auth status`; nothing that spends usage.
+- **Connecting apps** (`vault-tools/clients.ts`). The settings files are where each app looks, its own
+  folder variable followed (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). Connect names a "recto" server of the
+  person's own before it replaces it; in Codex's TOML every table of Recto's is taken out, however it is
+  written (`[ mcp_servers."recto" ]`), so there is never a second, and its tool timeout is 90 s. The MCP
+  server tells clients Recto's version, marks writes as not destructive (a suggestion; in Write directly a
+  backed-up write, an archived delete) and `withdraw_proposal` as changing state; the bridge waits 75 s,
+  longer than Recto's own 60 s per call, and the socket takes 32 connections at most. A test holds the
+  catalogue and its handlers to one another.
 - **Credentials.** Recto stores none for the CLIs; they keep their own logins. ChatGPT sign-in
   (`chatgpt-auth.ts`) is OAuth with PKCE in the browser, a callback on 127.0.0.1, dynamic client
   registration and an ID token verified against OpenAI's keys; the ChatGPT tokens and the OpenAI key are

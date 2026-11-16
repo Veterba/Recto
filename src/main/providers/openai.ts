@@ -50,7 +50,9 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
               content: [{ type: 'input_text', text: m.content }, ...m.images.map((i) => ({ type: 'input_image', image_url: `data:${i.mime};base64,${i.data}` }))],
             },
       ),
-      tools: [...tools.map((t) => ({ type: 'function', ...toolSchema(t) })), ...(web ? [{ type: 'web_search' }] : [])],
+      // Not strict: the Responses API holds a function to strict mode unless told otherwise, and strict mode wants
+      // every field required and no others allowed - Recto's tools have optional fields.
+      tools: [...tools.map((t) => ({ type: 'function', ...toolSchema(t), strict: false })), ...(web ? [{ type: 'web_search' }] : [])],
       cited: new Map(),
       said: '',
     }),
@@ -174,26 +176,36 @@ async function* events(body: ReadableStream<Uint8Array>, signal: AbortSignal): A
 export async function* sse(body: ReadableStream<Uint8Array>): AsyncIterable<Item> {
   const decoder = new TextDecoder()
   let pending = ''
-  for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
-    pending += decoder.decode(chunk, { stream: true })
-    let end = pending.indexOf('\n\n')
-    while (end !== -1) {
-      const block = pending.slice(0, end)
-      pending = pending.slice(end + 2)
-      end = pending.indexOf('\n\n')
-      const data = block
-        .split('\n')
-        .filter((l) => l.startsWith('data:'))
-        .map((l) => l.slice(5).trimStart())
-        .join('\n')
-      if (data === '' || data === '[DONE]') continue
-      try {
-        yield JSON.parse(data) as Item
-      } catch {
-        // A line that is not JSON is not an event.
-      }
+  /** One event's block: its `data:` lines, as JSON - null when it is none. */
+  const eventOf = (block: string): Item | null => {
+    const data = block
+      .split('\n')
+      .filter((l) => l.startsWith('data:'))
+      .map((l) => l.slice(5).trimStart())
+      .join('\n')
+    if (data === '' || data === '[DONE]') return null
+    try {
+      return JSON.parse(data) as Item
+    } catch {
+      // A line that is not JSON is not an event.
+      return null
     }
   }
+  for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
+    // Lines may end in \r\n as well as \n (the spec allows both): one kind, so an event's end is found either way.
+    // A \r at a chunk's very end waits for the next chunk: it may be half of a \r\n.
+    pending = (pending + decoder.decode(chunk, { stream: true })).replace(/\r\n|\r(?!$)/g, '\n')
+    let end = pending.indexOf('\n\n')
+    while (end !== -1) {
+      const event = eventOf(pending.slice(0, end))
+      pending = pending.slice(end + 2)
+      end = pending.indexOf('\n\n')
+      if (event !== null) yield event
+    }
+  }
+  // The last event, when the stream ends without the blank line after it.
+  const last = eventOf((pending + decoder.decode()).replace(/\r\n?/g, '\n').trim())
+  if (last !== null) yield last
 }
 
 /**

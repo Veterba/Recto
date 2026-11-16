@@ -30,7 +30,16 @@ const DETECT_NOTES = 400
 
 const clientEnv = (): ClientEnv => {
   const userData = app.getPath('userData')
-  return { home: os.homedir(), launcher: launcherPath(userData), backups: path.join(userData, 'backup', 'clients'), dev: !app.isPackaged, version: app.getVersion() }
+  return {
+    home: os.homedir(),
+    launcher: launcherPath(userData),
+    backups: path.join(userData, 'backup', 'clients'),
+    dev: !app.isPackaged,
+    version: app.getVersion(),
+    // Where the person keeps those apps' settings, when they moved them.
+    ...(process.env['CLAUDE_CONFIG_DIR'] ? { claudeConfigDir: process.env['CLAUDE_CONFIG_DIR'] } : {}),
+    ...(process.env['CODEX_HOME'] ? { codexHome: process.env['CODEX_HOME'] } : {}),
+  }
 }
 
 const readJson = (file: string): unknown => {

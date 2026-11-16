@@ -97,14 +97,19 @@ let loginPathCache: Promise<string | null> | null = null
 /**
  * The PATH a login shell sets up, asked once per run: `$SHELL -lic` prints it
  * between markers, so a noisy profile (a greeting, a version manager's
- * message) cannot get mixed into it. Null after 5 s or on any failure.
+ * message) cannot get mixed into it. Null after 5 s or on any failure - and
+ * then asked again next time: a shell slow once (a busy Mac at start) is not
+ * kept as "no PATH" until Recto quits.
  */
 export function loginShellPath(shell = process.env['SHELL'] ?? '/bin/zsh'): Promise<string | null> {
-  loginPathCache ??= new Promise((resolve) => {
+  loginPathCache ??= new Promise<string | null>((resolve) => {
     execFile(shell, ['-lic', 'printf "__RECTO_PATH__%s__RECTO_PATH__" "$PATH"'], { timeout: 5000 }, (err, stdout) => {
       const match = /__RECTO_PATH__(.*?)__RECTO_PATH__/s.exec(stdout ?? '')
       resolve(err !== null && match === null ? null : (match?.[1] ?? null))
     })
+  }).then((found) => {
+    if (found === null) loginPathCache = null
+    return found
   })
   return loginPathCache
 }

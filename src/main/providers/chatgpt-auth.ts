@@ -294,8 +294,12 @@ export class ChatGptAuth {
     if (r === null || r.refreshToken === null) return
     try {
       const t = await this.tokenRequest({ grant_type: 'refresh_token', client_id: r.clientId, refresh_token: r.refreshToken, resource: RESOURCE })
+      // Signed out while it was asked (the tokens gone, or another sign-in since): the new tokens are not saved
+      // over that - a sign-out stays a sign-out.
+      const now = this.record()
+      if (now === null || now.refreshToken !== r.refreshToken) return
       this.save({
-        ...r,
+        ...now,
         accessToken: t.accessToken,
         // OpenAI rotates refresh tokens, so a reply carries a new one; one that leaves it out keeps the old,
         // rather than saving nothing and signing the person out at the next refresh.
@@ -307,7 +311,10 @@ export class ChatGptAuth {
       })
     } catch (err) {
       // The refresh token is spent or revoked: the tokens go, the registration and the hint stay for the next sign-in.
-      if (err instanceof ProviderError && err.problem.kind === 'expired') this.save({ ...r, accessToken: null, refreshToken: null })
+      if (err instanceof ProviderError && err.problem.kind === 'expired') {
+        const now = this.record()
+        if (now !== null && now.refreshToken === r.refreshToken) this.save({ ...now, accessToken: null, refreshToken: null })
+      }
       throw err
     }
   }

@@ -24,6 +24,12 @@ if ((args[0] === 'login' && args[1] === 'status') || (args[0] === 'auth' && args
   process.exit(0)
 }
 
+// Codex's features, as `codex features list` prints them: one it has on is turned off for the run.
+if (name === 'codex' && args[0] === 'features' && args[1] === 'list') {
+  process.stdout.write('shell_tool                               stable             true\nenable_request_compression               stable             true\ngoals                                    stable             false\n')
+  process.exit(0)
+}
+
 // Codex's app server, asked only for the plan's limits (the shape a real one gave, free plan).
 if (name === 'codex' && args[0] === 'app-server') {
   let pending = ''
