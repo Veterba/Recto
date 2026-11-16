@@ -15,10 +15,12 @@ import { Channel, ProviderError, toolsOf, type RunEvent, type Runner } from './r
  * server as its one server and everything of its own that touches files or
  * runs commands switched off:
  *
- * - Claude Code: `--tools ""` (no built-in tools), only `mcp__recto` allowed,
+ * - Claude Code: `--tools ""` (no built-in tools; only WebSearch and WebFetch when the web is on), only
+ *   `mcp__recto` allowed (and those two),
  *   `--strict-mcp-config` (no other MCP servers), `dontAsk` (anything not
  *   allowed is refused, nothing waits for a prompt), no session kept.
- * - Codex: read-only sandbox, its shell and other built-in tools turned off,
+ * - Codex: read-only sandbox, its shell and other built-in tools turned off, its web search off (or live
+ *   when the web is on),
  *   the person's config and rules not loaded, nothing kept (`--ephemeral`).
  *
  * The conversation goes in as text each time, so switching providers in the
@@ -87,7 +89,7 @@ export const SYSTEM_FILE = 'recto-system.md'
  */
 export function cliArgs(
   name: CliName,
-  o: { model: string; system: string; cwd: string; server: { command: string; args: string[] }; pictures?: string[]; pictured?: boolean },
+  o: { model: string; system: string; cwd: string; server: { command: string; args: string[] }; pictures?: string[]; pictured?: boolean; web?: boolean },
 ): string[] {
   const pictures = o.pictures ?? []
   if (name === 'claude')
@@ -101,10 +103,11 @@ export function cliArgs(
       '--strict-mcp-config',
       '--mcp-config',
       JSON.stringify({ mcpServers: { recto: { type: 'stdio', command: o.server.command, args: o.server.args } } }),
+      // Its built-in tools off - but for its web search and web fetch, when this vault lets it on the web.
       '--tools',
-      '',
+      o.web === true ? 'WebSearch,WebFetch' : '',
       '--allowedTools',
-      'mcp__recto',
+      o.web === true ? 'mcp__recto,WebSearch,WebFetch' : 'mcp__recto',
       '--permission-mode',
       'dontAsk',
       '--no-session-persistence',
@@ -131,6 +134,9 @@ export function cliArgs(
     o.cwd,
     '-c',
     'approval_policy="never"',
+    // Its web search said every time, on (live) or off: left alone, it searches a cached copy of the web.
+    '-c',
+    `web_search="${o.web === true ? 'live' : 'disabled'}"`,
     '-c',
     `mcp_servers.recto.command=${toml(o.server.command)}`,
     '-c',
@@ -254,7 +260,7 @@ export function cliRunner(name: CliName, deps: CliDeps): Runner {
                   return at
                 })
               : []
-          const args = cliArgs(name, { model, system: request.system, cwd, server, pictures, pictured: name === 'claude' && images.length > 0 })
+          const args = cliArgs(name, { model, system: request.system, cwd, server, pictures, pictured: name === 'claude' && images.length > 0, web: request.web === true })
           const child = spawn(file, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
           let stderr = ''
           let failure = ''

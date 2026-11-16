@@ -541,3 +541,47 @@ describe('a person’s pictures, for OpenAI', () => {
     })
   })
 })
+
+describe('OpenAI on the web', () => {
+  const session = { id: 'w', client: 't', tools: null, notes: null, writable: null, vault: null, cloud: true, record: { read: new Set<string>(), skimmed: new Set<string>(), proposals: [] } }
+  const ask = async (web: boolean): Promise<string> => {
+    let text = ''
+    for await (const e of toolLoop(responsesModel('gpt-test', { token: async () => 'tok', plan: true }, VAULT_TOOLS, web), {
+      model: 'chatgpt:gpt-test',
+      system: 'S',
+      messages: [{ role: 'user', content: 'News?' }],
+      session,
+      signal: new AbortController().signal,
+    }))
+      if (e.type === 'text') text += e.text
+    return text
+  }
+  const answer = (text: string, cites: { url: string; title: string }[]) => () => ({
+    status: 200,
+    sse: true,
+    body: sse([
+      { type: 'response.output_item.done', item: { type: 'web_search_call', id: 'ws_1', status: 'completed', action: { type: 'search', query: 'kyoto' } } },
+      { type: 'response.output_text.delta', delta: text },
+      {
+        type: 'response.output_item.done',
+        item: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text, annotations: cites.map((c) => ({ type: 'url_citation', ...c, start_index: 0, end_index: 1 })) }] },
+      },
+      { type: 'response.completed', response: {} },
+    ]),
+  })
+
+  it('gets OpenAI’s web search only when the vault lets it', async () => {
+    mock.responses.push(answer('Fine.', []), answer('Fine.', []))
+    mock.requests.length = 0
+    await ask(false)
+    await ask(true)
+    const tools = mock.requests.filter((r) => 'tools' in r).map((r) => (r['tools'] as { type: string }[]).filter((t) => t.type === 'web_search'))
+    expect(tools.at(-2)).toEqual([])
+    expect(tools.at(-1)).toEqual([{ type: 'web_search' }])
+  })
+
+  it('the pages it cited and did not link are listed under the answer', async () => {
+    mock.responses.push(answer('Rain, per https://a.example/rain.', [{ url: 'https://a.example/rain', title: 'Rain' }, { url: 'https://b.example/n', title: 'News' }]))
+    expect(await ask(true)).toBe('Rain, per https://a.example/rain.\n\nSources:\n- [News](https://b.example/n)')
+  })
+})

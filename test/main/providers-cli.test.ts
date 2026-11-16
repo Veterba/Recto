@@ -119,6 +119,22 @@ describe('the command line', () => {
     expect(args[args.indexOf('--model') + 1]).toBe('gpt-x')
     expect(args.join(' ')).not.toMatch(/dangerously|bypass/i)
   })
+
+  it('the web, only when the vault lets this provider on it: Claude Code’s two web tools, Codex’s live search - and Codex’s off by name otherwise', () => {
+    const off = { claude: cliArgs('claude', { model: '', system: 'S', cwd: '/tmp/x', server }), codex: cliArgs('codex', { model: '', system: 'S', cwd: '/tmp/x', server }) }
+    const on = {
+      claude: cliArgs('claude', { model: '', system: 'S', cwd: '/tmp/x', server, web: true }),
+      codex: cliArgs('codex', { model: '', system: 'S', cwd: '/tmp/x', server, web: true }),
+    }
+    expect(off.claude.join(' ')).not.toMatch(/WebSearch|WebFetch/)
+    expect(on.claude[on.claude.indexOf('--tools') + 1]).toBe('WebSearch,WebFetch')
+    expect(on.claude[on.claude.indexOf('--allowedTools') + 1]).toBe('mcp__recto,WebSearch,WebFetch')
+    // Still nothing that touches files or runs commands.
+    expect(on.claude.join(' ')).not.toMatch(/Bash|Edit|Write|Read\b/)
+    // Codex searches a cached web by itself: off is said, not left to its default.
+    expect(off.codex).toContain('web_search="disabled"')
+    expect(on.codex).toContain('web_search="live"')
+  })
 })
 
 describe('reading their streams', () => {

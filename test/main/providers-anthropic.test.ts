@@ -12,6 +12,9 @@ vi.mock('electron', () => ({ app: { isPackaged: false, on: () => undefined, getP
 
 type Reply = { status: number; body: string; sse: boolean }
 let reply: Reply = { status: 200, body: '', sse: true }
+/** Replies for the requests to come, in order (then `reply`), and the requests' bodies as they came. */
+let queued: Reply[] = []
+const bodies: Record<string, unknown>[] = []
 let server: http.Server
 
 const sse = (events: [string, unknown][]): string => events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join('')
@@ -41,10 +44,17 @@ const message = (stop: string, text: string): string =>
 
 beforeAll(async () => {
   server = http.createServer((req, res) => {
-    req.resume()
+    let body = ''
+    req.on('data', (chunk: Buffer) => (body += chunk.toString()))
     req.on('end', () => {
-      res.writeHead(reply.status, { 'content-type': reply.sse ? 'text/event-stream' : 'application/json' })
-      res.end(reply.body)
+      try {
+        bodies.push(JSON.parse(body) as Record<string, unknown>)
+      } catch {
+        bodies.push({})
+      }
+      const now = queued.shift() ?? reply
+      res.writeHead(now.status, { 'content-type': now.sse ? 'text/event-stream' : 'application/json' })
+      res.end(now.body)
     })
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -104,5 +114,57 @@ describe('a person’s pictures, for the Claude API', () => {
         { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'QUJD' } },
       ],
     })
+  })
+})
+
+/** A streamed message: `text` citing `cites` (web search results), stopping for `stop`. */
+const citing = (stop: string, text: string, cites: { url: string; title: string }[]): string =>
+  sse([
+    ['message_start', { type: 'message_start', message: { id: 'm2', type: 'message', role: 'assistant', model: 'claude-test', content: [], stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } }],
+    ['content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '', citations: [] } }],
+    ['content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } }],
+    ...cites.map((c): [string, unknown] => [
+      'content_block_delta',
+      { type: 'content_block_delta', index: 0, delta: { type: 'citations_delta', citation: { type: 'web_search_result_location', url: c.url, title: c.title, cited_text: 'x', encrypted_index: 'e' } } },
+    ]),
+    ['content_block_stop', { type: 'content_block_stop', index: 0 }],
+    ['message_delta', { type: 'message_delta', delta: { stop_reason: stop }, usage: { output_tokens: 5 } }],
+    ['message_stop', { type: 'message_stop' }],
+  ])
+
+describe('the Claude API on the web', () => {
+  const ask = async (web: boolean): Promise<string> => {
+    const model = messagesModel('claude-sonnet-5-5', 'sk-test', [], web)
+    const state = model.start('S', [{ role: 'user', content: 'News?' }])
+    let text = ''
+    for await (const event of model.turn(state, new AbortController().signal)) if (event.type === 'text') text += event.text
+    return text
+  }
+
+  it('gets Anthropic’s web search and web fetch only when the vault lets it', async () => {
+    reply = { status: 200, body: message('end_turn', 'Fine.'), sse: true }
+    bodies.length = 0
+    await ask(false)
+    expect(JSON.stringify(bodies.at(-1)!['tools'])).not.toContain('web_')
+    await ask(true)
+    expect(bodies.at(-1)!['tools']).toEqual(
+      expect.arrayContaining([
+        { type: 'web_search_20250305', name: 'web_search', max_uses: 5 },
+        { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5 },
+      ]),
+    )
+  })
+
+  it('a turn paused mid-search goes on, as it is; the pages cited and not linked are listed under the answer', async () => {
+    bodies.length = 0
+    queued = [
+      { status: 200, body: citing('pause_turn', 'Looking. ', []), sse: true },
+      { status: 200, body: citing('end_turn', 'It rained in Kyoto, see https://a.example/rain.', [{ url: 'https://a.example/rain', title: 'Rain' }, { url: 'https://b.example/news', title: 'Kyoto [news]' }]), sse: true },
+    ]
+    const text = await ask(true)
+    expect(bodies).toHaveLength(2)
+    // The paused turn's content goes back as the assistant's, for it to carry on from.
+    expect((bodies[1]!['messages'] as { role: string }[]).at(-1)!.role).toBe('assistant')
+    expect(text).toBe('Looking. It rained in Kyoto, see https://a.example/rain.\n\nSources:\n- [Kyoto news](https://b.example/news)')
   })
 })

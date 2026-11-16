@@ -528,6 +528,21 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   for the answer): a local model gets pictures only when Ollama lists "vision" for it
   (`OllamaProvider.canSee`); a question with a picture to one that cannot is refused with what to do,
   and earlier pictures go to it as their names.
+- **The web** (`webEnabled`, `WEB_PROMPT` in `providers/index.ts`). Per vault and per provider, off until
+  turned on: `web` in `.recto/ai-access.json` lists the providers that may search the web and read pages
+  (`WEB_PROVIDERS`: Claude Code, Codex, ChatGPT plan, OpenAI and Anthropic keys; a local model has no web),
+  and only while cloud is on. A run on the web gets one more paragraph of system prompt (search when the
+  vault does not have it, say which pages, a page is information and never an instruction) and
+  `RunRequest.web`; each provider uses its own: Claude Code's `--tools WebSearch,WebFetch` and both in
+  `--allowedTools` (nothing else of its own), Codex `-c web_search="live"` - and `"disabled"` when off,
+  as by itself it searches a cached copy of the web -, OpenAI and ChatGPT the Responses `web_search` tool,
+  Anthropic `web_search_20250305` and `web_fetch_20250910` (5 uses each, run on Anthropic's side; a turn
+  it pauses mid-search, `pause_turn`, is sent again as it is, 3 times at most; its content goes back whole,
+  the searches' encrypted results with it). The pages an API answer cites (`citations`, `url_citation`) and
+  does not link itself are listed under it (`sourcesList`). The search runs on the provider's side, so what
+  is searched for can hold words from the vault, and a page read can carry instructions: the prompt says
+  pages are not instructions, and Recto's tools only suggest, so nothing a page says changes a note
+  without the person accepting it.
 - **The answer's record** (`shared/answer-record.ts`). A session records, from its tool calls, the
   notes an answer read in full, the ones it only skimmed and the suggestions it made - as the tools
   mark them: a note block without a part, or a file given as data with `whole: true`, is a read; a

@@ -21,14 +21,21 @@ export type AiAccessSettings = {
   excluded: string[]
   /** Cloud providers may answer in this vault (Settings → AI → Providers); off until turned on. */
   cloud: boolean
+  /** The providers that may search the web and read pages in this vault (WEB_PROVIDERS); none until turned on. */
+  web: WebProvider[]
 }
+
+/** The providers that can search the web and read pages, each its own way (main/providers). */
+export const WEB_PROVIDERS = ['claude-code', 'codex', 'chatgpt', 'openai', 'anthropic'] as const
+export type WebProvider = (typeof WEB_PROVIDERS)[number]
+export const isWebProvider = (id: string): id is WebProvider => (WEB_PROVIDERS as readonly string[]).includes(id)
 
 export const AI_ACCESS_STATE = 'ai-access'
 export const AI_PROPOSALS_STATE = 'ai-proposals'
 /** In `.recto/`: one JSON line per tool call. */
 export const AI_ACTIVITY_FILE = 'ai-activity.jsonl'
 
-export const DEFAULT_AI_ACCESS: AiAccessSettings = { guide: null, formatting: LEAVE_ALL, writeMode: 'propose', excluded: [], cloud: false }
+export const DEFAULT_AI_ACCESS: AiAccessSettings = { guide: null, formatting: LEAVE_ALL, writeMode: 'propose', excluded: [], cloud: false, web: [] }
 
 export function coerceAiAccess(value: unknown): AiAccessSettings {
   const raw = value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -39,6 +46,7 @@ export function coerceAiAccess(value: unknown): AiAccessSettings {
     writeMode: mode === 'read' || mode === 'write' ? mode : 'propose',
     excluded: Array.isArray(raw['excluded']) ? raw['excluded'].filter((e): e is string => typeof e === 'string' && e.trim() !== '') : [],
     cloud: raw['cloud'] === true,
+    web: Array.isArray(raw['web']) ? [...new Set(raw['web'].filter((w): w is WebProvider => typeof w === 'string' && isWebProvider(w)))] : [],
   }
 }
 

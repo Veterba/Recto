@@ -28,6 +28,8 @@ export type RunRequest = {
   messages: AiMessage[]
   session: ToolSession
   signal: AbortSignal
+  /** The provider may search the web and read pages (Settings → AI → Providers, per vault); set by index.ts. */
+  web?: boolean
 }
 
 export type Runner = (request: RunRequest) => AsyncIterable<RunEvent>
@@ -60,6 +62,10 @@ export async function runCallSeen(session: ToolSession, name: string, args: unkn
   const outcome = await callTool(name, args, session.client, session.id)
   return outcome.ok ? { output: renderBlocks(outcome.blocks).join('\n\n'), images: imagesOf(outcome.blocks) } : { output: `Error: ${outcome.error}`, images: [] }
 }
+
+/** Pages a web answer drew on and did not link itself, as links under it. */
+export const sourcesList = (pages: readonly [string, string][]): string =>
+  `\n\nSources:\n${pages.map(([url, title]) => `- [${title.replace(/[[\]]/g, '')}](${url})`).join('\n')}`
 
 /** A picture a tool returned: what the model sees, in base64. */
 export type ToolImage = { mime: string; data: string }

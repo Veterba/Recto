@@ -4,6 +4,12 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.69.0 — 2026-11-16
+### Added
+- AI can search the web and read pages, one switch per provider in Settings → AI → Providers (Claude Code, Codex, ChatGPT plan, OpenAI and Anthropic keys), off until turned on, and only while cloud providers are on. Answers say which pages they used, with links.
+### Fixed
+- Codex no longer searches the web on its own: by default it searched a cached copy of the web in every answer; now it searches only when its web switch is on.
+
 ## v0.68.0 — 2026-11-16
 ### Added
 - Pictures and videos in AI chats and Quick ask: paste one into the message box or drop one anywhere on the chat (from Finder or a browser), it waits above the text (✕ takes it off), and goes with the message. It is kept in the vault's attachments folder and the chat's note shows it, in Recto and in Obsidian; a video plays in the chat. Claude, ChatGPT, OpenAI, Codex and Claude Code look at pictures; a local model does when Ollama says it can see them, and one that cannot says so instead of answering without them. No provider takes a video, so a video goes as its frames, four a second (up to 40, spread over a longer one), in order and with their times, so the model sees what moves.

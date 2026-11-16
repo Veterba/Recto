@@ -2,7 +2,7 @@ import { providerBase } from '../config'
 import type { AiMessage } from '../../shared/ai'
 import { USAGE_URL, type ProviderProblem } from '../../shared/providers'
 import { logProvider } from './log'
-import { ProviderError, toolSchema, type ToolModel } from './run'
+import { ProviderError, sourcesList, toolSchema, type ToolModel } from './run'
 import type { VAULT_TOOLS } from '../../shared/vault-tools'
 
 /**
@@ -19,7 +19,14 @@ import type { VAULT_TOOLS } from '../../shared/vault-tools'
 export const OPENAI_BASE = (): string => providerBase('RECTO_OPENAI_BASE') ?? 'https://api.openai.com/v1'
 
 type Item = Record<string, unknown>
-type State = { instructions: string; input: Item[]; tools: Item[] }
+type State = {
+  instructions: string
+  input: Item[]
+  tools: Item[]
+  /** The pages cited so far, by address, and the answer's text so far: the ones not linked in it are listed at its end. */
+  cited: Map<string, string>
+  said: string
+}
 
 export type OpenAiAuth = {
   /** The bearer token: a key, or a fresh ChatGPT access token. */
@@ -29,7 +36,8 @@ export type OpenAiAuth = {
   plan: boolean
 }
 
-export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VAULT_TOOLS): ToolModel<State> {
+/** With the web (`web`), OpenAI's own web search goes beside Recto's tools: it runs on OpenAI's side, within a turn. */
+export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VAULT_TOOLS, web = false): ToolModel<State> {
   return {
     start: (system, messages: AiMessage[]) => ({
       instructions: system,
@@ -42,7 +50,9 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
               content: [{ type: 'input_text', text: m.content }, ...m.images.map((i) => ({ type: 'input_image', image_url: `data:${i.mime};base64,${i.data}` }))],
             },
       ),
-      tools: tools.map((t) => ({ type: 'function', ...toolSchema(t) })),
+      tools: [...tools.map((t) => ({ type: 'function', ...toolSchema(t) })), ...(web ? [{ type: 'web_search' }] : [])],
+      cited: new Map(),
+      said: '',
     }),
 
     async *turn(state, signal) {
@@ -75,10 +85,18 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
       let finished = false
       for await (const event of events(response.body, signal)) {
         const type = event['type']
-        if (type === 'response.output_text.delta' && typeof event['delta'] === 'string') yield { type: 'text', text: event['delta'] }
+        if (type === 'response.output_text.delta' && typeof event['delta'] === 'string') {
+          state.said += event['delta']
+          yield { type: 'text', text: event['delta'] }
+        }
         else if (type === 'response.output_item.done' && typeof event['item'] === 'object' && event['item'] !== null) {
           const item = event['item'] as Item
           output.push(item)
+          // The pages a message cites (`url_citation` on its text).
+          if (item['type'] === 'message' && Array.isArray(item['content']))
+            for (const part of item['content'] as Item[])
+              for (const a of Array.isArray(part['annotations']) ? (part['annotations'] as Item[]) : [])
+                if (a['type'] === 'url_citation' && typeof a['url'] === 'string') state.cited.set(a['url'], typeof a['title'] === 'string' ? a['title'] : a['url'])
           if (item['type'] === 'function_call')
             yield { type: 'call', id: String(item['call_id']), name: String(item['name']), args: String(item['arguments'] ?? '') }
         } else if (type === 'response.completed') {
@@ -100,6 +118,11 @@ export function responsesModel(model: string, auth: OpenAiAuth, tools: typeof VA
       if (!finished) throw new ProviderError({ kind: 'down', message: 'The connection to OpenAI dropped before the answer was finished. Try again.' })
       // What the model said and asked, back into the conversation for its next turn.
       state.input.push(...output.map(withoutStatus))
+      // The answer's end: the pages it drew on that it did not link itself.
+      if (!output.some((i) => i['type'] === 'function_call')) {
+        const unlinked = [...state.cited].filter(([url]) => !state.said.includes(url))
+        if (unlinked.length > 0) yield { type: 'text', text: sourcesList(unlinked) }
+      }
     },
 
     answer(state, results) {

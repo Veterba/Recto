@@ -424,6 +424,24 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
     await page.waitForSelector('.settings-panel', { state: 'detached' })
   })
 
+  it('each cloud provider has its own web switch, off until turned on, kept with the vault', async () => {
+    const web = (): string[] => (JSON.parse(fs.readFileSync(path.join(vault, '.recto/ai-access.json'), 'utf8')) as { web?: string[] }).web ?? []
+    await page.keyboard.press('Meta+,')
+    await page.waitForSelector('.settings-panel')
+    await page.locator('.settings-panel .settings__tab', { hasText: 'AI' }).click()
+    const codex = page.getByRole('switch', { name: 'Codex on the web' })
+    await codex.scrollIntoViewIfNeeded()
+    expect(await codex.getAttribute('aria-checked')).toBe('false')
+    for (const id of ['Claude Code', 'ChatGPT', 'OpenAI', 'Anthropic'])
+      expect(await page.getByRole('switch', { name: new RegExp(`^${id}.* on the web$`) }).getAttribute('aria-checked')).toBe('false')
+    await codex.click()
+    await expect.poll(web).toEqual(['codex'])
+    await codex.click()
+    await expect.poll(web).toEqual([])
+    await page.locator('.settings-panel').getByRole('button', { name: 'Close settings' }).click()
+    await page.waitForSelector('.settings-panel', { state: 'detached' })
+  })
+
   it('the picker groups the cloud by maker; Codex’s page shows its plan’s limits, read for free', async () => {
     await page.locator('.tabs__chats').click()
     await page.locator('.chats .composer__chip').click()

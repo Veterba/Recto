@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AiAccessSettings } from '@shared/ai-access'
+import { WEB_PROVIDERS, type AiAccessSettings, type WebProvider } from '@shared/ai-access'
 import { IPC } from '@shared/ipc'
 import { limitsLine, providerInfo, usageLine, USAGE_URL, type ProviderStatus } from '@shared/providers'
 import { api } from '../../../app/api'
@@ -158,6 +158,7 @@ export function ProvidersGroup({ settings, save }: Props): React.ReactElement {
         <Toggle on={settings.cloud} onChange={() => save({ ...settings, cloud: !settings.cloud })} />
       </SettingRow>
       {providers === null ? <SettingRow label="Looking for providers…">{null}</SettingRow> : providers.filter((p) => !providerInfo(p.id).advanced).map(row)}
+      <WebRows settings={settings} save={save} />
       {message !== null && (
         <p className={`setting__note${message.ok ? '' : ' setting__note--bad'}`}>
           <Icon name={message.ok ? 'check' : 'alert-triangle'} size={13} />
@@ -176,6 +177,44 @@ export function ProvidersGroup({ settings, save }: Props): React.ReactElement {
       )}
     </SettingGroup>
   )
+}
+
+/**
+ * Each cloud provider may search the web and read pages, one switch each, off until turned on - and only
+ * while cloud providers are on in the vault. A local model has no web of its own, so no switch.
+ */
+function WebRows({ settings, save }: Props): React.ReactElement {
+  const toggle = (id: WebProvider): void =>
+    save({ ...settings, web: settings.web.includes(id) ? settings.web.filter((w) => w !== id) : [...settings.web, id] })
+  return (
+    <>
+      <SettingRow
+        label="Web search"
+        hint={
+          settings.cloud
+            ? 'Which providers may search the web and read pages for an answer. Each answer lists the pages it used.'
+            : 'Turn on cloud providers first: the web is reached only by them.'
+        }
+        more="What the AI searches for - which can include words from your question and from the notes it read - goes to that provider’s web search, and the pages it reads come back into the answer. A page cannot change your notes: the AI still only suggests changes, and you accept them. Claude’s search costs $10 per 1,000 searches on the Anthropic API key; on the plans it counts toward their usage."
+      >
+        {null}
+      </SettingRow>
+      {WEB_PROVIDERS.map((id) => (
+        <SettingRow key={id} label={`${providerInfo(id).name} on the web`} hint={webHow[id]}>
+          <Toggle on={settings.cloud && settings.web.includes(id)} disabled={!settings.cloud} label={`${providerInfo(id).name} on the web`} onChange={() => toggle(id)} />
+        </SettingRow>
+      ))}
+    </>
+  )
+}
+
+/** How each provider reaches the web. */
+const webHow: Record<WebProvider, string> = {
+  'claude-code': 'Its own WebSearch and WebFetch, beside Recto’s tools.',
+  codex: 'Its live web search. Off, Recto turns it off: by itself it searches a cached copy of the web.',
+  chatgpt: 'OpenAI’s web search, on your ChatGPT plan.',
+  openai: 'OpenAI’s web search, billed to the key.',
+  anthropic: 'Anthropic’s web search and web fetch, billed to the key.',
 }
 
 /** The OpenAI key, under Advanced: kept in the login keychain, never shown again. */
