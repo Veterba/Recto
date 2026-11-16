@@ -166,3 +166,19 @@ describe('suggesting a rename, a move, an archive', () => {
   })
 })
 
+
+describe('calls a model gets wrong', () => {
+  it('an unknown tool is answered with the tools there are', async () => {
+    const out = await callTool('make_coffee', {}, 'claude-code')
+    expect(out).toMatchObject({ ok: false, error: expect.stringMatching(/Recto has no tool “make_coffee”\. The tools are: get_ai_guide, .*read_note/) })
+  })
+
+  it('an argument the tool does not take is said back, not dropped unseen; a note name starting with a dot is refused', async () => {
+    const out = await callTool('propose_rename', { note: 'Basil', name: 'Sweet basil', folder: 'Herbs' }, 'claude-code')
+    expect(out.ok).toBe(true)
+    const said = out.ok ? (out.blocks[0] as { data: { ignored_arguments: string[]; note: string } }).data : null
+    expect(said).toMatchObject({ ignored_arguments: ['folder'], note: expect.stringMatching(/propose_rename takes note, name; these were left out/) })
+    const hidden = await callTool('propose_rename', { note: 'Basil', name: '.basil' }, 'claude-code')
+    expect(hidden).toMatchObject({ ok: false, error: expect.stringMatching(/starting with a dot/) })
+  })
+})

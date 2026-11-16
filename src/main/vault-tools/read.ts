@@ -1,3 +1,4 @@
+import { vaultFiles } from '../vault-fs'
 import fs from 'node:fs'
 import path from 'node:path'
 import { groupTasks } from '../../shared/tasks'
@@ -83,13 +84,26 @@ export async function getAiGuide(scope: Scope): Promise<ResultBlock[]> {
 }
 
 export async function searchNotes(scope: Scope, a: Args): Promise<ResultBlock[]> {
-  const query = String(a['query'])
+  const query = typeof a['query'] === 'string' ? a['query'] : null
   const mode = a['mode'] as 'text' | 'semantic' | 'both'
   const meta = await visibleMeta(scope)
   const mtime = new Map(meta.notes.map((n) => [n.path, n.mtime]))
+  // A tag takes its nested tags too: "project" finds "project/recto", as Obsidian's tag search does.
+  const wantTag = typeof a['tag'] === 'string' ? String(a['tag']).replace(/^#/, '').toLowerCase() : null
   const tagged =
-    typeof a['tag'] === 'string'
-      ? new Set(meta.tags.filter((t) => t.tag.toLowerCase() === String(a['tag']).replace(/^#/, '').toLowerCase()).map((t) => t.path))
+    wantTag !== null
+      ? new Set(meta.tags.filter((t) => t.tag.toLowerCase() === wantTag || t.tag.toLowerCase().startsWith(`${wantTag}/`)).map((t) => t.path))
+      : null
+  const wantKey = typeof a['property'] === 'string' ? a['property'].trim().toLowerCase() : null
+  const wantValue = typeof a['value'] === 'string' ? a['value'].trim().toLowerCase() : null
+  if (wantValue !== null && wantKey === null) throw new ToolError('Give property with value: the key whose value it is.')
+  const owned =
+    wantKey !== null
+      ? new Set(
+          meta.properties
+            .filter((p) => p.key.toLowerCase() === wantKey && (wantValue === null || valuesOf(p.value).includes(wantValue)))
+            .map((p) => p.path),
+        )
       : null
   const after = typeof a['modified_after'] === 'string' ? a['modified_after'] : null
   const before = typeof a['modified_before'] === 'string' ? a['modified_before'] : null
@@ -97,6 +111,7 @@ export async function searchNotes(scope: Scope, a: Args): Promise<ResultBlock[]>
     if (!mtime.has(p)) return false
     if (typeof a['folder'] === 'string' && !inFolder(p, a['folder'])) return false
     if (tagged !== null && !tagged.has(p)) return false
+    if (owned !== null && !owned.has(p)) return false
     const day = isoDate(mtime.get(p)!)
     return (after === null || day >= after) && (before === null || day <= before)
   }
@@ -111,7 +126,20 @@ export async function searchNotes(scope: Scope, a: Args): Promise<ResultBlock[]>
   }
   // The filters go to the index with the query: filtered after its top 200 of the whole vault, a folder's
   // notes past those 200 were never found.
-  const filtered = typeof a['folder'] === 'string' || tagged !== null || after !== null || before !== null
+  const filtered = typeof a['folder'] === 'string' || tagged !== null || owned !== null || after !== null || before !== null
+  // No query: the notes the filters pick, newest first - "every note tagged #book" needs no words to search for.
+  if (query === null) {
+    if (!filtered) throw new ToolError('Give a query, or a filter (folder, tag, property, a date) to list the notes it picks.')
+    const picked = meta.notes.filter((n) => keep(n.path)).sort((x, y) => y.mtime - x.mtime)
+    const { items, next_cursor } = page(picked, Number(a['limit']), a['cursor'])
+    return [
+      data({
+        notes: items.map((n) => ({ path: n.path, title: titleOf(n.path), modified: isoDate(n.mtime) })),
+        total: picked.length,
+        ...(next_cursor === undefined ? {} : { next_cursor }),
+      }),
+    ]
+  }
   if (mode !== 'semantic') {
     const paths = meta.notes.map((n) => n.path).filter(keep)
     const { hits: text } = await ask({ kind: 'search', query, limit: 200, paths }, 'search-result')
@@ -237,38 +265,52 @@ export async function noteContext(scope: Scope, a: Args): Promise<ResultBlock[]>
   ]
 }
 
-export function listFolder(scope: Scope, a: Args): ResultBlock[] {
+export async function listFolder(scope: Scope, a: Args): Promise<ResultBlock[]> {
   const folder = String(a['folder']).replace(/^\/+|\/+$/g, '')
   if (folder !== '' && scope.hidden(`${folder}/x.md`)) throw new ToolError(`No folder “${folder}”.`)
-  const inside = scope.notes.filter((p) => inFolder(p, folder))
+  const withFiles = a['files'] === true
+  // Files that are not notes, when asked for: the ones AI may see (not excluded, not Recto's chats).
+  const others = withFiles ? vaultFiles().filter((p) => !p.toLowerCase().endsWith('.md') && !scope.fileHidden(p)) : []
+  const inside = [...scope.notes, ...others].filter((p) => inFolder(p, folder))
   const subfolders = new Map<string, number>()
-  const notes: string[] = []
+  const here: string[] = []
   for (const p of inside) {
     const rest = folder === '' ? p : p.slice(folder.length + 1)
     if (rest.includes('/')) {
       const sub = `${folder === '' ? '' : `${folder}/`}${rest.slice(0, rest.indexOf('/'))}`
       subfolders.set(sub, (subfolders.get(sub) ?? 0) + 1)
-    } else notes.push(p)
+    } else here.push(p)
   }
-  if (folder !== '' && inside.length === 0) throw new ToolError(`No folder “${folder}” with notes in it.`)
+  if (folder !== '' && inside.length === 0) throw new ToolError(`No folder “${folder}” with ${withFiles ? 'anything' : 'notes'} in it.`)
+  // Modified times from the index, not a disk read of every entry before the page is cut.
+  const modified = new Map((await visibleMeta(scope)).notes.map((n) => [n.path, n.mtime]))
   const entries = [
-    ...[...subfolders.entries()].sort().map(([p, n]) => ({ type: 'folder', path: p, notes: n })),
-    ...notes
-      .sort()
-      .map((p) => ({ type: 'note', path: p, title: titleOf(p), modified: isoDate(fs.statSync(path.join(scope.vault, p)).mtimeMs) })),
+    ...[...subfolders.entries()].sort().map(([p, n]) => ({ type: 'folder', path: p, [withFiles ? 'items' : 'notes']: n })),
+    ...here.sort().map((p) =>
+      p.toLowerCase().endsWith('.md')
+        ? { type: 'note', path: p, title: titleOf(p), ...(modified.has(p) ? { modified: isoDate(modified.get(p)!) } : {}) }
+        : { type: 'file', path: p },
+    ),
   ]
   const { items, next_cursor } = page(entries, Number(a['limit']), a['cursor'])
-  return [data({ folder, entries: items, ...(next_cursor === undefined ? {} : { next_cursor }) })]
+  return [data({ folder, entries: items, total: entries.length, ...(next_cursor === undefined ? {} : { next_cursor }) })]
 }
 
 export async function recentNotes(scope: Scope, a: Args): Promise<ResultBlock[]> {
   const meta = await visibleMeta(scope)
   const since = typeof a['since'] === 'string' ? a['since'] : null
+  const folder = typeof a['folder'] === 'string' ? a['folder'] : null
   const notes = meta.notes
-    .filter((n) => since === null || isoDate(n.mtime) >= since)
+    .filter((n) => (since === null || isoDate(n.mtime) >= since) && (folder === null || inFolder(n.path, folder)))
     .sort((x, y) => y.mtime - x.mtime)
-    .slice(0, Number(a['limit']))
-  return [data(notes.map((n) => ({ path: n.path, title: titleOf(n.path), modified: new Date(n.mtime).toISOString() })))]
+  const { items, next_cursor } = page(notes, Number(a['limit']), a['cursor'])
+  return [
+    data({
+      notes: items.map((n) => ({ path: n.path, title: titleOf(n.path), modified: new Date(n.mtime).toISOString() })),
+      total: notes.length,
+      ...(next_cursor === undefined ? {} : { next_cursor }),
+    }),
+  ]
 }
 
 export async function listTags(scope: Scope, a: Args): Promise<ResultBlock[]> {
@@ -276,14 +318,25 @@ export async function listTags(scope: Scope, a: Args): Promise<ResultBlock[]> {
   const prefix = typeof a['prefix'] === 'string' ? a['prefix'].replace(/^#/, '').toLowerCase() : ''
   const counts = new Map<string, number>()
   for (const t of meta.tags) if (t.tag.toLowerCase().startsWith(prefix)) counts.set(t.tag, (counts.get(t.tag) ?? 0) + 1)
-  return [
-    data(
-      [...counts.entries()]
-        .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
-        .slice(0, Number(a['limit']))
-        .map(([tag, count]) => ({ tag, count })),
-    ),
-  ]
+  const all = [...counts.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).map(([tag, count]) => ({ tag, count }))
+  const { items, next_cursor } = page(all, Number(a['limit']), a['cursor'])
+  return [data({ tags: items, total: all.length, ...(next_cursor === undefined ? {} : { next_cursor }) })]
+}
+
+/** A property's value as the words it holds, lower-cased: a list's items each, a scalar alone. */
+function valuesOf(value: string | null): string[] {
+  if (value === null) return []
+  const t = value.trim()
+  if (t.startsWith('[') && t.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(t) as unknown
+      if (Array.isArray(parsed)) return parsed.map((v) => String(v).trim().toLowerCase())
+    } catch {
+      // Not JSON: a YAML flow list, split by hand.
+      return t.slice(1, -1).split(',').map((v) => v.trim().replace(/^["']|["']$/g, '').toLowerCase())
+    }
+  }
+  return [t.replace(/^["']|["']$/g, '').toLowerCase()]
 }
 
 /** A date argument (YYYY-MM-DD) or today, at local noon so no time zone moves it a day. */
@@ -401,6 +454,24 @@ export async function listTasks(scope: Scope, a: Args): Promise<ResultBlock[]> {
   const { rows } = await ask({ kind: 'task-rows', since: '0000-01-01', to: '9999-12-31' }, 'task-rows-result')
   const wantBoard = typeof a['board'] === 'string' ? a['board'].toLowerCase() : null
   const tasks = []
+  // Each note read once per call, however many of its tasks are listed: a card's fields, a task's line.
+  const texts = new Map<string, Promise<string | null>>()
+  const textOf = (p: string): Promise<string | null> => {
+    let t = texts.get(p)
+    if (t === undefined) texts.set(p, (t = readNote(p).catch(() => null)))
+    return t
+  }
+  /** The 1-based line of a "- [ ]" task with this text in its note: what propose_task_update takes to tick it. */
+  const lineOf = async (p: string, text: string): Promise<number | null> => {
+    const content = await textOf(p)
+    if (content === null) return null
+    const lines = content.split(/\r?\n/)
+    const at = lines.findIndex((l) => {
+      const m = /^\s*(?:[-*+]|\d+[.)])\s+\[[ xX]\]\s+(.*)$/.exec(l)
+      return m !== null && m[1]!.trim() === text.trim()
+    })
+    return at === -1 ? null : at + 1
+  }
   // A task carried from daily note to daily note is one task, as the person's task views count it (shared/tasks.ts):
   // open or done as its latest copy says, listed at that copy.
   for (const group of groupTasks(rows.filter((r) => !scope.hidden(r.path)))) {
@@ -413,14 +484,17 @@ export async function listTasks(scope: Scope, a: Args): Promise<ResultBlock[]> {
     if (typeof a['due_after'] === 'string' && (row.due === null || row.due.slice(0, 10) < a['due_after'])) continue
     let priority: string | null = null
     if (row.source === 'card' || a['priority'] !== undefined) {
-      const content = row.source === 'card' ? await readNote(row.path).catch(() => null) : null
+      const content = row.source === 'card' ? await textOf(row.path) : null
       priority = content === null ? null : readPriority(cardFields(content).priority)
     }
     if (a['priority'] !== undefined && priority !== a['priority']) continue
+    const line = row.source === 'card' ? null : await lineOf(row.path, row.text)
     tasks.push({
       text: row.text,
       path: row.path,
       source: row.source === 'card' ? 'card' : 'note',
+      // How to change it with propose_task_update: a card by its board and name, a note's task by its note and line.
+      ...(row.source === 'card' ? { card: titleOf(row.path) } : line === null ? {} : { line }),
       ...(row.board === null ? {} : { board: row.board }),
       status: row.done ? 'done' : 'open',
       ...(row.due === null ? {} : { due: row.due }),

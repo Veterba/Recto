@@ -127,8 +127,16 @@ async function editable(scope: Scope, target: string): Promise<{ path: string; t
  * A new note's name in `folder`: allowed, and not taken in that folder - one
  * note of a name per folder, as in Obsidian; other folders may have it.
  */
-function freeName(scope: Scope, name: string, folder: string): void {
+/** Why an AI may not give a note or canvas this name: Obsidian's rules, and no name starting with a dot - such a file is hidden. */
+export function aiNameProblem(name: string): string | null {
   const problem = nameProblem(name)
+  if (problem !== null) return problem
+  if (name.trim().startsWith('.')) return 'A name starting with a dot makes a hidden file, which Obsidian and Recto do not show'
+  return null
+}
+
+function freeName(scope: Scope, name: string, folder: string): void {
+  const problem = aiNameProblem(name)
   if (problem !== null) throw new ToolError(`${problem}. Choose another name.`)
   const want = (folder === '' ? `${name}.md` : `${folder}/${name}.md`).toLowerCase()
   const taken = scope.allNotes.find((p) => p.toLowerCase() === want)
@@ -415,7 +423,7 @@ export async function proposeTaskUpdate(scope: Scope, a: Args): Promise<Draft> {
   let file: FileOp | undefined
   if (newTitle !== null && cardNote !== null && newTitle !== titleOf(cardNote)) {
     const folder = folderOf(cardNote)
-    if (nameProblem(newTitle) !== null) throw new ToolError(`${nameProblem(newTitle)}. Choose another title.`)
+    if (aiNameProblem(newTitle) !== null) throw new ToolError(`${aiNameProblem(newTitle)}. Choose another title.`)
     const to = `${folder === '' ? '' : `${folder}/`}${newTitle}.md`
     if (to.toLowerCase() !== cardNote.toLowerCase()) freeName(scope, newTitle, folder)
     file = { kind: 'rename', from: cardNote, to }
@@ -445,7 +453,7 @@ function freePath(scope: Scope, name: string, folder: string, from: string): str
   if (scope.hidden(p)) throw new ToolError(`${folder}/ is excluded from AI in Recto's settings. Choose another folder.`)
   // A different case of its own name is the same note on this Mac's disk, not another one.
   if (p.toLowerCase() !== from.toLowerCase()) freeName(scope, name, folder)
-  else if (nameProblem(name) !== null) throw new ToolError(`${nameProblem(name)}. Choose another name.`)
+  else if (aiNameProblem(name) !== null) throw new ToolError(`${aiNameProblem(name)}. Choose another name.`)
   return p
 }
 

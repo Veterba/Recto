@@ -200,7 +200,7 @@ describe.skipIf(!RUN)('recto-mcp, against a running Recto', () => {
     expect((await client.call('list_folder', { folder: 'Kitchen' })).isError).toBe(true)
 
     expect(allText(await client.call('recent_notes', { limit: 100 }))).not.toContain('Kitchen/')
-    const tags = await client.data<{ tag: string }[]>('list_tags')
+    const { tags } = await client.data<{ tags: { tag: string }[] }>('list_tags')
     expect(tags.map((t) => t.tag)).toContain('garden')
     expect(tags.map((t) => t.tag)).not.toContain('baking')
   }, 30_000)

@@ -4,6 +4,17 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.73.0 — 2026-11-16
+### Added
+- AI can list the notes with a tag - nested tags too - or with a property or one of its values, without words to search for; the other files in a folder (PDFs, pictures); recent notes in one folder.
+### Fixed
+- AI can tick a task in a note reliably: listing tasks now gives each one's line, and each card's name to change it by.
+- AI is told when an argument it gave is not one the tool takes, instead of the argument being quietly ignored.
+- AI's errors and instructions no longer send it to tools it does not have here (Quick ask), and it is no longer told to fetch the AI guide it was already given.
+- A note read through read_file is no longer cut at 24,000 characters with no way to read on.
+- A long AI answer that uses many tools ends with an answer instead of "Stopped after too many steps", and calls still queued when you press Stop are no longer made.
+- Lists of tags and recent notes say when there are more; AI may no longer name a note or a canvas with a leading dot (a hidden file).
+
 ## v0.72.0 — 2026-11-16
 ### Fixed
 - Codex and Claude Code no longer run with API keys from your environment, which could make them bill an API key instead of your plan.

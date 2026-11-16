@@ -335,10 +335,23 @@ main: vault-tools/socket.ts  (first line must carry the token)
   An error the AI reads is Recto's own words: a system error's text (it names paths on this Mac) goes
   to the console, and any vault or home path left in a message is cut (`withoutPaths`, `vault-tools/index.ts`).
 - **Reading tools** (`vault-tools/read.ts`). `search_notes` gives the index the notes it may return
-  (visible, and in the folder, tag and dates asked for), so its limit counts only those; by meaning it
-  casts a wider net when filters will thin it. `list_tasks` groups a task carried from daily note to
+  (visible, and in the folder, tag, property and dates asked for), so its limit counts only those; by
+  meaning it casts a wider net when filters will thin it. With no query it lists the notes the filters
+  pick, newest first; a tag takes its nested tags (`book` finds `book/scifi`), a property its key or one
+  of its values (a list's items each). `list_folder` takes its modified times from the index, and with
+  `files: true` lists the files that are not notes too; `recent_notes`, `list_tags` and the listings say
+  `total` and page with a cursor. `list_tasks` groups a task carried from daily note to
   daily note into one (`groupTasks`, `shared/tasks.ts`), open or done as its latest copy says, with
-  `copies` and `carried_since`. `read_note` reads the file even while the index rebuilds, with
+  `copies` and `carried_since`, and says how to change each with `propose_task_update`: a card's name,
+  a note task's line (each note read once per call). `read_file` on a note reads on from `offset` as
+  `read_note` does. Every argument has a description and each read tool says when to use it.
+- **What a model is told for its tools** (`serverInstructions`, `forTools` in `shared/vault-tools.ts`).
+  The instructions name only the tools the session has (and not the AI guide, when it is already in the
+  prompt); an error's sentence or aside sending the model to a tool it lacks is left out, and an unknown
+  tool is answered with the tools there are. Arguments a tool does not take are said back
+  (`ignored_arguments`), not dropped unseen. The loop (`toolLoop`) tells the model when its last round of
+  calls came and gives it a turn to answer; a Stop between calls ends it there. An AI may not name a
+  note or canvas with a leading dot (`aiNameProblem`). `read_note` reads the file even while the index rebuilds, with
   `backlinks: null` and a note saying why. `canvas_read` gives text cards up to 2000 characters and
   marks a longer one `cut`, the canvas then not `whole`.
 - **Any file, not only notes.** `read_file` (`vault-tools/files.ts`) reads what is not a note: a PDF's

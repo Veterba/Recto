@@ -28,7 +28,7 @@ vi.mock('../../src/main/index-client', () => ({
 }))
 
 const { buildScope } = await import('../../src/main/vault-tools/scope')
-const { listTasks, readNoteTool, searchNotes } = await import('../../src/main/vault-tools/read')
+const { listFolder, listTags, listTasks, readNoteTool, recentNotes, searchNotes } = await import('../../src/main/vault-tools/read')
 
 const put = (relative: string, content: string): void => {
   fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true })
@@ -116,5 +116,70 @@ describe('read_note', () => {
     const blocks = await readNoteTool(buildScope('test'), { note: 'Garden/Basil.md', offset: 0, max_chars: 4000 })
     expect(dataOf(blocks)).toMatchObject({ path: 'Garden/Basil.md', backlinks: null, backlinks_note: expect.stringMatching(/not ready/) })
     expect((blocks[1] as { text: string }).text).toContain('Pinch the tops')
+  })
+})
+
+/** The index's view of the vault: every note, its tags and properties (as vault-meta answers). */
+const meta = () => ({
+  kind: 'vault-meta-result',
+  meta: {
+    notes: [
+      { path: 'Books/Dune.md', title: 'Dune', mtime: Date.parse('2026-11-14'), size: 1 },
+      { path: 'Books/Emma.md', title: 'Emma', mtime: Date.parse('2026-11-12'), size: 1 },
+      { path: 'Garden/Basil.md', title: 'Basil', mtime: Date.parse('2026-11-13'), size: 1 },
+      { path: 'Private/Diary.md', title: 'Diary', mtime: Date.parse('2026-11-15'), size: 1 },
+    ],
+    tags: [
+      { path: 'Books/Dune.md', tag: 'book/scifi' },
+      { path: 'Books/Emma.md', tag: 'book' },
+      { path: 'Garden/Basil.md', tag: 'bookish' },
+      { path: 'Private/Diary.md', tag: 'book' },
+    ],
+    properties: [
+      { path: 'Books/Dune.md', key: 'status', value: 'reading' },
+      { path: 'Books/Emma.md', key: 'status', value: '["done", "loved"]' },
+    ],
+  },
+})
+
+describe('finding notes without words to search for', () => {
+  beforeEach(() => {
+    for (const p of ['Books/Dune.md', 'Books/Emma.md', 'Books/cover.png', 'Books/Notes.pdf']) put(p, 'x')
+    answer = async (r) => (r.kind === 'vault-meta' ? meta() : {})
+  })
+  const notes = async (a: Record<string, unknown>): Promise<string[]> =>
+    (dataOf(await searchNotes(buildScope('test'), { mode: 'both', limit: 20, ...a }))['notes'] as { path: string }[]).map((n) => n.path)
+
+  it('a tag lists its notes, newest first, its nested tags with it - never a tag that only starts the same, never an excluded note', async () => {
+    expect(await notes({ tag: 'book' })).toEqual(['Books/Dune.md', 'Books/Emma.md'])
+  })
+
+  it('a property lists the notes that have it, or that value of it - a list’s items each', async () => {
+    expect(await notes({ property: 'status' })).toEqual(['Books/Dune.md', 'Books/Emma.md'])
+    expect(await notes({ property: 'Status', value: 'loved' })).toEqual(['Books/Emma.md'])
+  })
+
+  it('no query and no filter is asked for again, plainly', async () => {
+    await expect(searchNotes(buildScope('test'), { mode: 'both', limit: 20 })).rejects.toThrow(/Give a query, or a filter/)
+  })
+
+  it('a folder’s other files when asked for; lists say how many there are in all', async () => {
+    const entries = (dataOf(await listFolder(buildScope('test'), { folder: 'Books', files: true, limit: 100 }))['entries'] as { path: string; type: string }[]).map((e) => `${e.type}:${e.path}`)
+    expect(entries).toEqual(['note:Books/Dune.md', 'note:Books/Emma.md', 'file:Books/Notes.pdf', 'file:Books/cover.png'])
+    const tags = dataOf(await listTags(buildScope('test'), { limit: 1 }))
+    expect(tags).toMatchObject({ total: 3, next_cursor: '1' })
+    const recent = dataOf(await recentNotes(buildScope('test'), { folder: 'Books', limit: 20 }))
+    expect((recent['notes'] as { path: string }[]).map((n) => n.path)).toEqual(['Books/Dune.md', 'Books/Emma.md'])
+  })
+})
+
+describe('list_tasks gives what changing a task takes', () => {
+  it('a note’s task its line; a card its name', async () => {
+    put('Daily/2026-11-12.md', '# Today\n\n- [x] Water basil\n- [ ] Buy compost\n')
+    answer = async () => ({ kind: 'task-rows-result', rows: [row('Daily/2026-11-12.md', 'Buy compost', false, '2026-11-12'), { ...row('Recto/Boards/Launch/Ship it.md', 'Ship it', false, '2026-11-12'), source: 'card', board: 'Launch' }] })
+    put('Recto/Boards/Launch/Ship it.md', '---\npriority: high\n---\n')
+    const tasks = dataOf(await listTasks(buildScope('test'), { status: 'open', limit: 50 }))['tasks'] as Record<string, unknown>[]
+    expect(tasks).toContainEqual(expect.objectContaining({ text: 'Buy compost', path: 'Daily/2026-11-12.md', line: 4 }))
+    expect(tasks).toContainEqual(expect.objectContaining({ text: 'Ship it', card: 'Ship it', board: 'Launch', priority: 'high' }))
   })
 })

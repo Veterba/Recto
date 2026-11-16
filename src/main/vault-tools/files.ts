@@ -140,10 +140,15 @@ export async function readAnyFile(scope: Scope, a: Args): Promise<ResultBlock[]>
   const head = { path: p, name, kind, size: kb(size) }
 
   // `whole`: all of it was given, or only a part - what the answer's record calls a read in full (vault-tools/index.ts).
+  // A note given to read_file: read on from offset as read_note does, saying where the next part starts - never cut
+  // at the budget with no way on.
   if (kind === 'note') {
     const text = await readNote(p)
-    const whole = text.length <= BUDGET_CHARS
-    return withText(p, head, whole, whole ? text : `${text.slice(0, BUDGET_CHARS)}…`)
+    const offset = Math.max(0, Number(a['offset'] ?? 0))
+    const part = text.slice(offset, offset + BUDGET_CHARS)
+    const end = offset + part.length
+    const whole = offset === 0 && end >= text.length
+    return withText(p, { ...head, ...(end < text.length ? { next_offset: end, note: 'More follows: read_note reads notes, with next_offset as offset.' } : {}) }, whole, part)
   }
   if (kind === 'canvas') {
     const context = await canvasContext(scope, p, [], BUDGET_CHARS / 4)

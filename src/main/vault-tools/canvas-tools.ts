@@ -22,7 +22,7 @@ import type { ResultBlock } from '../../shared/vault-tools'
 import * as vaultFs from '../vault-fs'
 import { ToolError, titleOf, type Scope } from './scope'
 import { proposal } from './proposals'
-import type { Draft } from './write'
+import { aiNameProblem, type Draft } from './write'
 
 /**
  * The canvas tools: read a canvas, and propose changes to it - new cards,
@@ -561,7 +561,9 @@ export async function proposeCanvasRemove(scope: Scope, a: Args): Promise<Draft>
 /** A new canvas in Recto/Canvas with these nodes, arrows and groups - a new file, proposed whole. */
 export async function proposeCanvasNew(scope: Scope, a: Args): Promise<Draft> {
   const name = String(a['name'] ?? '').trim().replace(/\.canvas$/i, '')
-  if (name === '' || /[\\/:]/.test(name)) throw new ToolError('A canvas needs a name without \\ / or :.')
+  // The same rules as a note's name, by the same check.
+  const problem = aiNameProblem(name)
+  if (problem !== null) throw new ToolError(`${problem}. Choose another name for the canvas.`)
   const p = `${CANVAS_FOLDER}/${name}.canvas`
   // Recto/Canvas excluded from AI: no new canvas there - and, checked first, nothing said about the ones it holds.
   if (scope.fileHidden(p)) throw new ToolError(`${CANVAS_FOLDER}/ is excluded from AI in Recto's settings, so a new canvas cannot be made there.`)

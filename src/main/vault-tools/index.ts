@@ -1,5 +1,5 @@
 import os from 'node:os'
-import { toolNamed, type ResultBlock, type ToolOutcome } from '../../shared/vault-tools'
+import { forTools, toolNamed, VAULT_TOOLS, type ResultBlock, type ToolOutcome } from '../../shared/vault-tools'
 import { readAnyFile } from './files'
 import * as canvas from './canvas-tools'
 import { AI_ACCESS_STATE, coerceAiAccess, type ActivityEntry } from '../../shared/ai-access'
@@ -154,7 +154,8 @@ export async function callTool(name: string, rawArgs: unknown, client: string, s
   }
   if (def === undefined || (session?.tools != null && !session.tools.has(name))) {
     logCall({ ...entry, outcome: 'error', error: 'unknown tool' })
-    return { ok: false, error: `Recto has no tool “${name}”${def === undefined ? '' : ' here'}.` }
+    const have = VAULT_TOOLS.filter((t) => session?.tools == null || session.tools.has(t.name)).map((t) => t.name)
+    return { ok: false, error: `Recto has no tool “${name}”${def === undefined ? '' : ' here'}. The tools are: ${have.join(', ')}.` }
   }
   const parsed = def.input.safeParse(rawArgs ?? {})
   if (!parsed.success) {
@@ -165,7 +166,20 @@ export async function callTool(name: string, rawArgs: unknown, client: string, s
   const args = parsed.data as Args
   const n = ++calls
   session?.onCall?.({ n, tool: name, args, phase: 'start' })
-  const outcome = await run(def.write, name, args, who, session, entry)
+  const ran = await run(def.write, name, args, who, session, entry)
+  // An error names only tools this session has; arguments the tool does not take are said back, not dropped unseen.
+  const ignored = rawArgs !== null && typeof rawArgs === 'object' ? Object.keys(rawArgs).filter((k) => !(k in def.input.shape)) : []
+  const outcome: ToolOutcome = !ran.ok
+    ? { ok: false, error: forTools(ran.error, session?.tools ?? null) }
+    : ignored.length === 0
+      ? ran
+      : {
+          ok: true,
+          blocks: [
+            { kind: 'data', data: { ignored_arguments: ignored, note: `${name} takes ${Object.keys(def.input.shape).join(', ') || 'no arguments'}; these were left out.` } },
+            ...ran.blocks,
+          ],
+        }
   session?.onCall?.({ n, tool: name, args, phase: 'end', ok: outcome.ok, ...(outcome.ok ? {} : { error: outcome.error }) })
   if (session !== null && outcome.ok) noteInRecord(session, outcome.blocks)
   return outcome

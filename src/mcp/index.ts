@@ -21,7 +21,7 @@ import path from 'node:path'
 import { McpServer } from '@modelcontextprotocol/server'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import * as z from 'zod'
-import { imagesOf, renderBlocks, SERVER_INSTRUCTIONS, VAULT_PROMPTS, VAULT_TOOLS, type ToolOutcome } from '../shared/vault-tools'
+import { imagesOf, renderBlocks, serverInstructions, VAULT_PROMPTS, VAULT_TOOLS, type ToolOutcome } from '../shared/vault-tools'
 import { CLOSED_MESSAGE, DROPPED_MESSAGE, socketPath, TIMEOUT_MESSAGE, TOKEN_FILE, TOO_LARGE_MESSAGE, type BridgeRequest, type BridgeResponse } from './bridge'
 
 declare const __RECTO_VERSION__: string | undefined
@@ -107,7 +107,7 @@ async function call(tool: string, args: unknown): Promise<ToolOutcome> {
 const asText = (outcome: ToolOutcome): string => (outcome.ok ? renderBlocks(outcome.blocks).join('\n\n') : outcome.error)
 
 function server(): McpServer {
-  const mcp = new McpServer({ name: 'recto', version: VERSION }, { instructions: SERVER_INSTRUCTIONS })
+  const mcp = new McpServer({ name: 'recto', version: VERSION }, { instructions: serverInstructions(only) })
   for (const def of VAULT_TOOLS) {
     if (only !== null && !only.includes(def.name)) continue
     mcp.registerTool(

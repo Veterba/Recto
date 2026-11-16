@@ -194,28 +194,43 @@ export interface ToolModel<State> {
 /** How many model turns one answer may take before it must answer with what it has. */
 export const MAX_TURNS = 12
 
-/** Recto's loop: ask, run the calls the model asks for, give it the results, until it answers. */
+/** Said with the results of the last calls an answer may make: it answers with what it has. */
+export const LAST_CALLS = '(That was the last round of tool calls for this answer: answer now with what you have. Further calls will not run.)'
+
+/**
+ * Recto's loop: ask, run the calls the model asks for, give it the results, until it answers. The last round's
+ * results tell it so, and it gets one more turn to answer; calls it makes then do not run. A Stop between
+ * calls stops there - the calls after it are not made.
+ */
 export async function* toolLoop<S>(model: ToolModel<S>, request: RunRequest): AsyncIterable<RunEvent> {
   const state = model.start(request.system, request.messages)
-  for (let turn = 0; turn < MAX_TURNS; turn++) {
+  for (let turn = 0; turn <= MAX_TURNS; turn++) {
     const calls: { id: string; name: string; args: string }[] = []
     for await (const event of model.turn(state, request.signal)) {
       if (event.type === 'call') calls.push(event)
       else yield event
     }
     if (calls.length === 0 || request.signal.aborted) return
+    if (turn === MAX_TURNS) {
+      yield { type: 'text', text: '\n\n(Stopped after too many steps. Ask again more narrowly.)' }
+      return
+    }
     const results = []
     for (const call of calls) {
+      if (request.signal.aborted) return
       let parsed: unknown = {}
       try {
         parsed = call.args.trim() === '' ? {} : JSON.parse(call.args)
       } catch {
         parsed = null
       }
-      const done = parsed === null ? { output: 'Error: the arguments were not valid JSON.', images: [] } : await runCallSeen(request.session, call.name, parsed)
+      const done =
+        parsed === null
+          ? { output: `Error: the arguments were not valid JSON. Call ${call.name} again with its arguments as a JSON object.`, images: [] }
+          : await runCallSeen(request.session, call.name, parsed)
       results.push({ ...call, ...done })
     }
+    if (turn === MAX_TURNS - 1) results[results.length - 1]!.output += `\n\n${LAST_CALLS}`
     model.answer(state, results)
   }
-  yield { type: 'text', text: '\n\n(Stopped after too many steps. Ask again more narrowly.)' }
 }

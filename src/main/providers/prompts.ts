@@ -2,7 +2,7 @@ import { isExcludedPath, type ProposalStatus } from '../../shared/ai-access'
 import type { AiMessage } from '../../shared/ai'
 import { withRecords, type RecordedMessage } from '../../shared/answer-record'
 import type { BotSource } from '../../shared/bots'
-import { SERVER_INSTRUCTIONS } from '../../shared/vault-tools'
+import { serverInstructions } from '../../shared/vault-tools'
 import { runCall } from './run'
 import type { ToolSession } from '../vault-tools'
 
@@ -11,7 +11,7 @@ import type { ToolSession } from '../vault-tools'
 const COMMON = [
   'Answer in the language the person writes in. Be brief and concrete.',
   'Name notes as [[Note name]] links so the person can open them.',
-  'You cannot change notes yourself: the propose_* tools make suggestions the person applies in Recto (Suggested edits).',
+  'You cannot change notes yourself: the propose tools (propose_*, canvas_propose_*) make suggestions the person applies in Recto (Suggested edits).',
   'After proposing, say what you suggested and that it waits for Apply. Never say a note was changed.',
   'Say a suggestion waits for Apply only when a propose_* tool returned outcome "proposed" in this answer; describing an edit does not make one.',
 ].join(' ')
@@ -45,7 +45,8 @@ export async function chatSystem(session: ToolSession): Promise<string> {
   return [
     'You are Recto, the assistant inside the person’s notes app, answering in its chat panel.',
     `Today is ${today()}.`,
-    SERVER_INSTRUCTIONS,
+    // The guide is below, when there is one: not to be fetched again.
+    serverInstructions(session.tools === null ? null : [...session.tools], true),
     'Look things up with the tools before answering about the vault; do not guess what a note says.',
     COMMON,
     RECORDS,
