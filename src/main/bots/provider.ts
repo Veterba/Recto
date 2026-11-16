@@ -235,22 +235,35 @@ export class OllamaProvider implements BotModelProvider, LocalModels {
     }
   }
 
+  /** Models Ollama said cannot hold to a JSON format ("structured output is unavailable", 501): asked in words. */
+  private readonly noFormat = new Set<string>()
+
   async complete(messages: AiMessage[], system: string, { model, signal, json = false, maxTokens }: CompleteOptions): Promise<string> {
     const fields = requestFields(model, this.capabilities.get(model) ?? null)
-    const response = await fetch(`${OLLAMA}/api/chat`, {
-      method: 'POST',
-      signal,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        stream: false,
-        keep_alive: this.keepAlive(),
-        ...fields,
-        ...(json ? { format: 'json' } : {}),
-        options: { ...fields.options, temperature: 0, num_predict: maxTokens },
-        messages: [{ role: 'system', content: system }, ...messages.map(wire)],
-      }),
-    })
+    const ask = (format: boolean): Promise<Response> =>
+      fetch(`${OLLAMA}/api/chat`, {
+        method: 'POST',
+        signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          stream: false,
+          keep_alive: this.keepAlive(),
+          ...fields,
+          ...(format ? { format: 'json' } : {}),
+          options: { ...fields.options, temperature: 0, num_predict: maxTokens },
+          messages: [{ role: 'system', content: system }, ...messages.map(wire)],
+        }),
+      })
+    let response = await ask(json && !this.noFormat.has(model))
+    // A model with no structured output (qwen3.5 on some Ollama builds): the same question without the format -
+    // the callers ask for JSON in their prompt and read it out of the text.
+    if (json && response.status === 501) {
+      const said = await response.text().catch(() => '')
+      if (!/structured output/i.test(said)) throw new Error(`Ollama answered 501: ${said.slice(0, 200)}`)
+      this.noFormat.add(model)
+      response = await ask(false)
+    }
     if (!response.ok) throw new Error(`Ollama answered ${response.status}`)
     const body = (await response.json()) as { message?: { content?: unknown } }
     return typeof body.message?.content === 'string' ? body.message.content : ''

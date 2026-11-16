@@ -1,5 +1,5 @@
 import type { AiMessage } from '../../shared/ai'
-import type { VAULT_TOOLS } from '../../shared/vault-tools'
+import { NOT_SEEN, type VAULT_TOOLS } from '../../shared/vault-tools'
 import type { BotModelProvider, ChatTurn, ToolSpec } from '../bots/provider'
 import { toolSchema, type ToolModel } from './run'
 
@@ -10,7 +10,8 @@ import { toolSchema, type ToolModel } from './run'
  * - one note and its links - for plain tool calls.)
  */
 
-type State = { system: string; turns: ChatTurn[]; tools: ToolSpec[] }
+/** `sees`: the model looks at pictures (asked of Ollama at the first turn). */
+type State = { system: string; turns: ChatTurn[]; tools: ToolSpec[]; sees?: boolean }
 
 export function ollamaModel(model: string, provider: BotModelProvider, tools: typeof VAULT_TOOLS): ToolModel<State> {
   let next = 0
@@ -25,6 +26,7 @@ export function ollamaModel(model: string, provider: BotModelProvider, tools: ty
     }),
 
     async *turn(state, signal) {
+      state.sees ??= (await provider.canSee?.(model)) === true
       // Without tool calls (the snapshot run's stand-in), it answers from the note's text it was given.
       if (provider.streamChat === undefined) {
         const plain = state.turns.filter((t): t is AiMessage => (t.role === 'user' || t.role === 'assistant') && !('tool_calls' in t))
@@ -47,7 +49,12 @@ export function ollamaModel(model: string, provider: BotModelProvider, tools: ty
     },
 
     answer(state, results) {
-      for (const r of results) state.turns.push({ role: 'tool', content: r.output, tool_name: r.name })
+      // A tool's pictures: to a model that sees, in a turn of their own after the results (Ollama takes pictures on
+      // a message); to one that does not, a line saying they were not sent - the answer's text speaks of them.
+      for (const r of results)
+        state.turns.push({ role: 'tool', content: r.images.length > 0 && state.sees !== true ? `${r.output}\n\n${NOT_SEEN}` : r.output, tool_name: r.name })
+      const images = results.flatMap((r) => r.images)
+      if (images.length > 0 && state.sees === true) state.turns.push({ role: 'user', content: 'The pictures the tools returned:', images })
     },
   }
 }

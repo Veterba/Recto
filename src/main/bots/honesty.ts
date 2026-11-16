@@ -45,8 +45,19 @@ export const HONEST: Record<AnswerLang, string> = {
   no: 'Jeg kan ikke endre notater – dette er et forslag, og du må gjøre endringen selv.',
 }
 
-/** Does this sentence claim that Recto changed a note? */
-export const claimsAction = (sentence: string): boolean => CLAIMS.some((re) => re.test(sentence.trim()))
+/** About what is in the answer itself - "a table below", "here is" - not about a note. */
+const IN_THE_ANSWER = new RegExp(`${START}(?:below|above|here|in this (?:answer|reply|message)|ниже|выше|здесь|вот|nedenfor|ovenfor|her)${END}`, 'iu')
+const A_NOTE = new RegExp(`${START}(?:notes?|files?|vault|заметк\\p{L}*|файл\\p{L}*|notat\\p{L}*|fil(?:a|en)?)${END}`, 'iu')
+
+/**
+ * Does this sentence claim that Recto changed a note? "I created a table below" is about the answer, not a note:
+ * a sentence that points into the answer and names no note, file or vault is not a claim.
+ */
+export const claimsAction = (sentence: string): boolean => {
+  const s = sentence.trim()
+  if (!CLAIMS.some((re) => re.test(s))) return false
+  return !(IN_THE_ANSWER.test(s) && !A_NOTE.test(s))
+}
 
 /** The language to say it in: the question's. */
 export function answerLang(question: string): AnswerLang {

@@ -112,7 +112,9 @@ export async function makeCard(
         maxTokens: 160,
       },
     )
-  } catch {
+  } catch (err) {
+    // Said, not swallowed: a card that cannot be built leaves a line in the log.
+    if (!signal.aborted) console.error(`[cards] ${notePath}: ${err instanceof Error ? err.message : String(err)}`)
     return null
   }
   try {

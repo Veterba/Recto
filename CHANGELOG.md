@@ -4,6 +4,16 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.71.0 — 2026-11-16
+### Changed
+- The local AI chat reads notes, files and searches with the same tools as the cloud chats and connected apps: the same exclusions, a note found by its exact name (asking "Unit 4" no longer opens "Unit 5"), long notes read on from where they were cut, and a search that says why it found nothing. What it reads shows in the answer's steps and sources.
+### Fixed
+- The local chat is told when it has used its last lookup, instead of the tools quietly disappearing; its own views of the vault say when they cut a list and check the dates they are given.
+- A local model that can see pictures now gets the pictures a tool returns (a canvas, a picture file); one that cannot is told they were not sent, instead of being asked to look at them.
+- Note cards are built on qwen3.5:9b: Ollama's "structured output is unavailable" no longer stops them, and a card that cannot be built is logged.
+- An answer saying "I created a table below" is no longer replaced by "I can't change notes".
+- The bots' default model can only be a model on this Mac, as the background jobs it runs need.
+
 ## v0.70.0 — 2026-11-16
 ### Added
 - AI can rename a board card, replace what its note says, and delete it, as suggestions you accept: a card that is a note is renamed as a note is, its links following; a deleted card's note goes to the archive, and Undo on the suggestion brings back the card and its note.

@@ -70,7 +70,9 @@ export function settings(): BotSettings {
 
 export function setSettings(patch: Partial<BotSettings>): BotSettings {
   const model = patch.defaultModel?.trim()
-  if (model !== undefined) writeState({ botDefaultModel: model === '' ? undefined : model })
+  // The default runs the background jobs too (note cards, tasks, titles), which are always on this Mac: a local model
+  // only - a cloud one would send Ollama "codex" to load.
+  if (model !== undefined && !isCloudModel(model)) writeState({ botDefaultModel: model === '' ? undefined : model })
   if (patch.harness !== undefined) writeState({ botHarness: { ...readState().botHarness, ...patch.harness } })
   if (patch.notify !== undefined) writeState({ botNotify: patch.notify })
   if (patch.unloadAfterMinutes !== undefined && (UNLOAD_CHOICES as readonly number[]).includes(patch.unloadAfterMinutes)) {

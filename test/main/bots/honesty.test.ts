@@ -57,6 +57,13 @@ describe('the honest answer', () => {
     expect(honestAnswer('I updated the note.', 'en', true)).toBe('I updated the note.')
   })
 
+  it('what the answer itself holds is not a claim about a note - unless it names one', () => {
+    for (const fine of ['I created a table below.', 'I added a summary here:', 'Я создал таблицу ниже.', 'Jeg har lagt til en liste nedenfor.'])
+      expect(honestAnswer(fine, answerLang(fine))).toBe(fine)
+    expect(honestAnswer('I updated the note below.', 'en')).toBe(HONEST.en)
+    expect(honestAnswer('Я обновил заметку, вот она:', 'ru')).toBe(HONEST.ru)
+  })
+
   it('answers in the question’s language', () => {
     expect(answerLang('Обнови таблицу в заметке')).toBe('ru')
     expect(answerLang('Can you edit the table?')).toBe('en')

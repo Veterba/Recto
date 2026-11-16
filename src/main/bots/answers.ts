@@ -12,7 +12,7 @@ import * as vaultFs from '../vault-fs'
 import { currentVault } from '../vault'
 import { ensureReadme } from '../boards'
 import { Jobs, type RunControls } from './jobs'
-import { answerWithTools } from './model-tools'
+import { answerWithTools, type ToolLoopResult } from './model-tools'
 import { prepare } from './prepare'
 import type { BotModelProvider } from './provider'
 import type { BotHarness, BotModelStatus, BotSettings } from '../../shared/bots'
@@ -308,13 +308,20 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
   }
   try {
     const options = { model: job.model, signal: controls.signal, maxTokens: prepared.maxTokens }
+    const looked: ToolLoopResult = { calls: [], parseFailures: 0 }
     const reply =
       harness.tools && prepared.toolContext !== null
         ? answerWithTools(provider, prepared.history, prepared.system, {
             ...options,
             advisor: prepared.advisor,
             context: prepared.toolContext,
-            result: { calls: [], parseFailures: 0 },
+            result: looked,
+            // What the model looked up itself: a step as it goes, and what it read among the sources.
+            onStep: (step) => {
+              prepared.steps.push(step)
+              for (const p of looked.read ?? []) if (!sources.some((x) => x.path === p)) sources.push({ path: p, heading: null })
+              controls.update({ steps: prepared.steps.map((x) => ({ ...x })), sources: [...sources] })
+            },
           })
         : provider.stream(prepared.history, prepared.system, options)
     let joined = prepared.preface === null

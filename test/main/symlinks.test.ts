@@ -132,14 +132,15 @@ describe('the index and symlinks', () => {
 })
 
 describe('bot retrieval and symlinks', () => {
-  it('read_note cannot read a note through an outside symlink', async () => {
+  // read_note is the vault tools' own now, with their symlink rules; the local views still read notes themselves.
+  it('a local view (note_outline) cannot read a note through an outside symlink', async () => {
     const note = { path: 'pw.md', title: 'pw', mtime: 0, size: 0, noteDate: null, linksOut: 0, linksIn: 0, properties: {} }
     const context = {
       catalog: [note],
       vaultNotes: [{ path: 'pw.md', title: 'pw', aliases: [] }],
       budget: 10_000,
     } as unknown as Parameters<typeof runTool>[2]
-    const result = await runTool('read_note', { title: 'pw' }, context)
+    const result = await runTool('note_outline', { note: 'pw' }, context)
     expect(result.text).not.toContain('root:x')
     expect(result.text).toMatch(/could not be read/)
   })

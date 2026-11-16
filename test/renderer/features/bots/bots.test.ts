@@ -127,6 +127,23 @@ describe('model status', () => {
     expect(String(fetch.mock.calls[0]![0])).toMatch(/^http:\/\/127\.0\.0\.1:11434\//)
   })
 
+  it('a model with no structured output (qwen3.5, 501) is asked again in words, and from then on without the format', async () => {
+    const bodies: Record<string, unknown>[] = []
+    const fetch = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>
+      bodies.push(body)
+      if ('format' in body) return new Response('{"error":"structured output is unavailable"}', { status: 501 })
+      return new Response(JSON.stringify({ message: { content: 'Here: {"summary":"Soil mix","kind":"reference"}' } }))
+    })
+    vi.stubGlobal('fetch', fetch)
+    const ollama = new OllamaProvider()
+    const ask = () => ollama.complete([{ role: 'user', content: 'Card?' }], 'S', { model: 'qwen3.5:9b', signal: new AbortController().signal, json: true, maxTokens: 50 })
+    expect(await ask()).toContain('"summary":"Soil mix"')
+    expect(bodies.map((b) => 'format' in b)).toEqual([true, false])
+    await ask()
+    expect(bodies.map((b) => 'format' in b)).toEqual([true, false, false])
+  })
+
   it('says which models can look at pictures, from what Ollama lists', async () => {
     const tags = { models: [{ name: 'gemma3:4b', capabilities: ['completion', 'vision'] }, { name: 'qwen3.5:9b', capabilities: ['completion', 'tools'] }] }
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify(tags))))

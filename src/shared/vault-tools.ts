@@ -358,6 +358,9 @@ export function renderBlocks(blocks: readonly ResultBlock[]): string[] {
   )
 }
 
+/** Said after a tool's answer to a model that cannot see: its pictures were not sent, whatever the answer says of them. */
+export const NOT_SEEN = '(The pictures in this answer are not shown to you: this model cannot look at pictures. Work from the text.)'
+
 /** The pictures in a tool's answer. */
 export const imagesOf = (blocks: readonly ResultBlock[]): { mime: string; data: string }[] =>
   blocks.flatMap((b) => (b.kind === 'image' ? [{ mime: b.mime, data: b.data }] : []))

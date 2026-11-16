@@ -130,7 +130,16 @@ Each step is reported as it happens (`BotStep`: action, result, kind, subject): 
 ("Searching notes → “Recto plan”") and the status text beside the face, in the header and in the
 sidebar ("Reading Tutta…", `shared/bot-status.ts`) are both drawn from them, in the question's
 language. The steps are saved with the answer. Model tool calls (`model-tools.ts`) exist behind a
-setting, off; the harness's own calls are always on.
+setting, off; the harness's own calls are always on. With them on, the model reads with the vault
+tools every other AI has - `search_notes`, `read_note`, `read_file`, their definitions and handlers
+from `vault-tools`, run through a session `answerWithTools` opens for the answer (the bot's exclusions
+on it, read-only), so the same exact note names, exclusions and "more from offset N" - and with the
+local views of its own (`tasks_in_period`, `notes_in_period`, `open_tasks`, `vault_map`, `read_scope`,
+`note_outline`, `structure_patterns`, `link_status`: notes by exact name or path, never the closest one;
+dates checked; a cut said, with how to read on). Each call is a step as it happens, and the notes it
+read join the answer's sources. Three calls, five for a review or a plan; the last one's result says it
+was the last, and tools are no longer offered. A picture a tool returned goes to a model Ollama lists
+with "vision" as a turn of its own; one that cannot see is told the picture was not sent (`NOT_SEEN`).
 
 **Evals** (`npm run bots:eval`, `scripts/evals/`, `src/main/bots/eval-mode.ts`) run the same
 `prepare` headless against the fixture vault (`tests/bots/eval/fixture-vault`) or, with `--private`,
@@ -341,7 +350,8 @@ main: vault-tools/socket.ts  (first line must carry the token)
   goes as an `image` block (scaled with Electron's `nativeImage` to 1568 px, as JPEG) besides its text:
   `providers/run.ts` passes it to the model - inside the tool result for Anthropic, as a following
   `input_image` message for OpenAI's Responses - and `src/mcp/index.ts` as MCP `image` content; Ollama
-  and the local bots get the text only.
+  (Quick ask and the local chat) as a turn with `images` after the results when the model can see, and
+  otherwise a line saying the picture was not sent (`NOT_SEEN`).
 - **Canvas tools** (`vault-tools/canvas-tools.ts`): `canvas_list`, `canvas_read` (nodes by short ids
   `n1`… in file order with their places and sizes, a note AI may not see only as a place; and a picture of
   the canvas - `shared/canvas-picture.ts` draws it as SVG, each node with its id and first lines, frames
