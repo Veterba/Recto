@@ -1,3 +1,4 @@
+import { nativeImage } from 'electron'
 import { appendLine } from '../shared/text-changes'
 import { IPC, type IpcApi } from '../shared/ipc'
 import { publicUrl } from './public-url'
@@ -8,7 +9,9 @@ import * as vaultFs from './vault-fs'
 import { queue } from './vault-tools/proposals'
 import { readState, writeState } from './state'
 import type { LinkPreview } from '../shared/canvas'
-import { youTubeId } from '../shared/youtube'
+import { vimeoId, youTubeId } from '../shared/youtube'
+import { asJpeg, renderedPreview } from './web-preview'
+import { mostlyOneColour } from './picture-checks'
 
 /**
  * What a canvas asks of main.
@@ -56,9 +59,21 @@ export function registerCanvasIpc(handle: Handle): void {
 }
 
 const LINKS = 'canvas-links'
+/**
+ * Kept previews made since a page's own picture is used only when it is a real
+ * one (`cover`) and the page's top is the picture otherwise (web-preview.ts).
+ * Older ones are asked for again, once.
+ */
+const KEPT_VERSION = 3
+type Kept = LinkPreview & { v?: number }
 /** How much of a page is read for its tags, and how big a picture is kept. */
 const PAGE_BYTES = 512 * 1024
 const IMAGE_BYTES = 200 * 1024
+/** A page's own picture is fetched up to this, then made a JPEG the card's size. */
+const COVER_BYTES = 5 * 1024 * 1024
+/** Smaller than this, or not wider than tall, a page's picture is a logo or an icon, not its picture. */
+const COVER_MIN_WIDTH = 600
+const COVER_MIN_RATIO = 1.2
 const TIMEOUT_MS = 6000
 
 const decode = (s: string): string =>
@@ -138,6 +153,28 @@ async function picture(url: string | null, base: string): Promise<string | null>
 }
 
 /**
+ * A page's own picture (og:image) as the card's, only when it is a real one:
+ * big enough, wider than tall and not mostly one colour - a site's logo or
+ * icon (Reddit's, The Verge's) is not a picture of the page, and the page's top is the better one then. Fetched
+ * whole and kept as a JPEG the card's size; null when it is not one.
+ */
+async function cover(url: string | null, base: string): Promise<string | null> {
+  if (url === null) return null
+  try {
+    const response = await fetchPublic(new URL(url, base))
+    if (response === null || !response.ok || !(response.headers.get('content-type') ?? '').startsWith('image/')) return null
+    const bytes = await readCapped(response, COVER_BYTES)
+    if (bytes === null || bytes.byteLength >= COVER_BYTES) return null
+    const image = nativeImage.createFromBuffer(Buffer.from(bytes))
+    const { width, height } = image.getSize()
+    if (image.isEmpty() || width < COVER_MIN_WIDTH || width < height * COVER_MIN_RATIO || mostlyOneColour(image.resize({ width: 48 }).toBitmap())) return null
+    return asJpeg(image)
+  } catch {
+    return null
+  }
+}
+
+/**
  * A YouTube video's preview from YouTube's own published ways in: its
  * oEmbed answer for the title and channel, and the thumbnail every video has
  * at a known address. Its page is no use - a plain fetch of it often gets a
@@ -160,9 +197,42 @@ async function youTubePreview(id: string, url: string): Promise<LinkPreview | nu
   }
 }
 
+/** A Vimeo video's preview from Vimeo's oEmbed: its title, maker and thumbnail. */
+async function vimeoPreview(url: string): Promise<LinkPreview | null> {
+  try {
+    const answer = await fetchPublic(new URL(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`))
+    if (answer === null || !answer.ok) return null
+    const info = (await answer.json()) as { title?: unknown; author_name?: unknown; thumbnail_url?: unknown }
+    return {
+      title: typeof info.title === 'string' ? info.title : null,
+      description: typeof info.author_name === 'string' ? info.author_name : null,
+      image: await picture(typeof info.thumbnail_url === 'string' ? info.thumbnail_url : null, url),
+      icon: null,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A link's preview: a video's from its site's own published ways in; a page's
+ * from its HTML - and when that gives no title or no picture, from the page as
+ * a browser shows it (web-preview.ts), what the plain read found kept first.
+ */
 async function preview(url: string): Promise<LinkPreview | null> {
   const video = youTubeId(url)
   if (video !== null) return youTubePreview(video, url)
+  if (vimeoId(url) !== null) return vimeoPreview(url)
+  const read = await pagePreview(url)
+  if (read !== null && read.title !== null && read.image !== null) return read
+  const shown = await renderedPreview(url, cover, picture)
+  if (shown === null) return read
+  return read === null
+    ? shown
+    : { title: read.title ?? shown.title, description: read.description ?? shown.description, image: read.image ?? shown.image, icon: read.icon ?? shown.icon }
+}
+
+async function pagePreview(url: string): Promise<LinkPreview | null> {
   let target: URL
   try {
     target = new URL(url)
@@ -182,7 +252,7 @@ async function preview(url: string): Promise<LinkPreview | null> {
     return {
       title,
       description: meta(html, 'og:description') ?? meta(html, 'description'),
-      image: await picture(meta(html, 'og:image'), response.url),
+      image: await cover(meta(html, 'og:image'), response.url),
       icon: await picture(icon, response.url),
     }
   } catch {
@@ -191,14 +261,18 @@ async function preview(url: string): Promise<LinkPreview | null> {
 }
 
 export function registerLinkPreviews(handle: Handle): void {
-  handle(IPC.canvasLinkPreview, async (url) => {
-    const kept = (readState(LINKS) ?? {}) as Record<string, LinkPreview>
-    // A YouTube preview kept from before without its picture is asked for again.
-    if (kept[url] !== undefined && (youTubeId(url) === null || kept[url]!.image !== null)) return kept[url]!
+  handle(IPC.canvasLinkPreview, async (url, fresh) => {
+    const kept = (readState(LINKS) ?? {}) as Record<string, Kept>
+    // One kept from before is asked for again, once (KEPT_VERSION), and any on "Refresh preview";
+    // kept still, if that finds nothing.
+    const old = kept[url]
+    if (fresh !== true && old !== undefined && old.v === KEPT_VERSION) return old
     const found = await preview(url)
-    if (found === null) return null
-    writeState(LINKS, { ...((readState(LINKS) ?? {}) as Record<string, LinkPreview>), [url]: found })
-    return found
+    // Refreshed and found nothing: null says so (the card keeps the one it shows).
+    if (found === null) return fresh === true ? null : (old ?? null)
+    const next: Kept = { ...found, v: KEPT_VERSION }
+    writeState(LINKS, { ...((readState(LINKS) ?? {}) as Record<string, Kept>), [url]: next })
+    return next
   })
 }
 

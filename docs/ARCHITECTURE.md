@@ -66,7 +66,7 @@ signature disagree.
 | `fs:` | tree, read, read text, read bytes (a PDF), write, create, rename, move, trash, reveal, open with the system's app, import images / files (an open dialog; each file copied into attachments, paths returned) / dropped bytes |
 | `state:` | read and write one `.recto/<feature>.json` |
 | `index:` | search, backlinks, canvases a file is on, stats, vault usage, link resolution (`index:resolve-link(s)` take the note the link is in), unresolved, graph, boards (`index:board-cards` takes the board), context |
-| canvas | `IPC.canvasLinkPreview` (a link node's preview), `IPC.canvasProposeLink` ("Make it a link": queues a Suggested edit) and `IPC.playerOpen` (plays a YouTube video or vault video in the mini-player window) |
+| canvas | `IPC.canvasLinkPreview` (a link node's preview), `IPC.canvasProposeLink` ("Make it a link": queues a Suggested edit) and `IPC.playerOpen` (plays a YouTube, Vimeo or vault video in the mini-player window), `IPC.webOpen` (a link's page in Recto's own window) |
 | `links:` | undo the link rewrite of a rename; `links:settings` (Obsidian's link settings for the vault), `links:format` (main writes a link with `formatLink`), `links:answer` with the event `links:ask` (the Update links dialog); `fs:same-named` lists every file of a name, read from disk |
 | `history:` | a note's stored versions, and restoring one |
 | `archive:` | archive, list, restore, purge, retention |
@@ -665,18 +665,50 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
 - **Media.** Pictures and videos have no frame; `actions.fitMedia` corrects a node whose shape is not its
   picture's when it loads (one change). The vault protocol (`main/vault-protocol.ts`) answers `Range`
   requests with 206 parts, so a player can read a movie's index at its end.
-- **Video.** Nothing plays inside the canvas. A YouTube node (`YouTubeNode`) and a video file node
+- **Video.** Nothing plays inside the canvas. A YouTube or Vimeo node (`VideoNode`) and a video file node
   (`AttachmentBody`) are a still with a ▶ button; ▶ calls `actions.play(PlayerItem)` → `IPC.playerOpen`
-  (`PlayerItem` in `shared/ipc.ts`: `{kind: 'youtube', id, title}` or `{kind: 'file', path, title, ratio?}`).
-  `main/player.ts` keeps one `BrowserWindow`, reused, always on top (floating level, on all workspaces),
-  bottom right of the primary display, 480 px wide, movable and resizable, with its aspect ratio set to the
-  video's (16:9 when unknown). It is sandboxed with no preload, and a link out of it goes to the browser.
-  YouTube is the `youtube-nocookie.com/embed/<id>` page loaded as the window's own page, with a referrer
-  (`https://recto.app/`) because the embed refuses to play without one; the id must be 11 characters of
-  `[\w-]`. A vault video is a small `data:` page holding one `<video>` whose `src` is the `recto-file://`
-  URL, after `resolveInVault` has checked the path. The YouTube picture and title come from the link
-  preview (above), so the canvas still loads nothing from YouTube and the renderer's CSP has no `frame-src`.
-  A video node is dragged like any node; only the ▶ button and title are `nodrag`.
+  (`PlayerItem` in `shared/ipc.ts`: `{kind: 'youtube' | 'vimeo', id, title}` or `{kind: 'file', path, title, ratio?}`;
+  `youTubeId`, `vimeoId` in `shared/youtube.ts`). `main/player.ts` keeps one `BrowserWindow`, reused,
+  always on top (floating level, on all workspaces), bottom right of the primary display, 480 px wide,
+  movable and resizable, with its aspect ratio set to the video's (16:9 when unknown). It is sandboxed
+  with no preload, in its own in-memory session (`recto-player`: full screen is the only permission, every
+  request to YouTube and Vimeo carries the referrer `https://recto.app/` their embeds want, and the vault
+  protocol is registered there too, with the same `vaultResponse`). A link out of it goes to the browser.
+  YouTube plays in a small `data:` page of Recto's: the `youtube-nocookie.com` embed with its controls off
+  (`controls=0`, `rel=0`, `iv_load_policy=3`, `enablejsapi=1`), under a layer that takes the mouse - so
+  YouTube's title and buttons do not come back on hover - with Recto's own title and channel on top
+  (`PlayerItem.by`, from the preview) and play, time, seek, sound, YouTube's logo and full screen below
+  (line icons), fading a second after the mouse stops. They drive the embed with its published
+  `postMessage` commands (`playVideo`, `seekTo`…) and read its `infoDelivery` messages, as YouTube's IFrame
+  API does. The embed still draws its own title and "More videos" at the top and bottom edges of its box
+  (paused, and for 3-4 s each time it starts playing - measured): its box is taller than the window by a
+  band above and below (`--band`, at least 110 px or a third of the height), so the video, fitted to the
+  width, fills the window and those are in the bands, out of sight. Its own play/pause sign in the middle
+  (on pause, and about 4 s after each start - nothing it is sent shortens that) is left as it is. With subtitles on, the box is the
+  window's again once it has played 4.5 s since its last start or jump (YouTube draws subtitles at its box's
+  bottom), and banded again the moment it is paused. A settings menu (⚙) holds speed (the embed's
+  `availablePlaybackRates`, `setPlaybackRate`), subtitles (the captions module's `tracklist` and
+  `translationLanguages` from `apiInfoDelivery`, after `addEventListener('onApiChange')` and `loadModule`;
+  chosen with `setOption('captions','track')`, off with `unloadModule`), auto-translate, subtitle size
+  (`fontSize`) and loop. Quality is not offered: the embed lists its levels but `setPlaybackQuality` has
+  done nothing since 2019 (checked: the quality stayed where it was); YouTube picks it by the box's size. Before the first start and at the end the
+  video's thumbnail (`i.ytimg.com/vi/<id>/hqdefault.jpg`) is in front, with ▶. The logo is a link to the video on youtube.com at the current second, opened in the browser (and the player
+  pauses). Vimeo is its `player.vimeo.com/video/<id>` embed as it
+  is. A vault video is a `data:` page holding one `<video>` whose `src` is the `recto-file://` URL, after
+  `resolveInVault` has checked the path. The pictures and titles come from the link preview (below), so
+  the canvas still loads nothing from either site and the renderer's CSP has no `frame-src`. A video node
+  is dragged like any node; only the ▶ button and title are `nodrag`.
+- **Web pages** (`main/web-window.ts`, `IPC.webOpen`). A link card double-clicked (or its hover button) opens its page in Recto's own
+  window (↗ on the card, or the menu's "Open in browser", sends it to the browser instead). One window,
+  reused, a normal one (not on top): a `BaseWindow` with two `WebContentsView`s - a bar (back, forward,
+  reload/stop, the address, "Open in browser") and the page. The bar is a `data:` page with no bridge; its
+  buttons are links to `https://bar.recto.invalid/<command>`, caught in `will-navigate` and cancelled (a
+  scheme of Recto's own would go to the OS instead). Its session and the hidden preview window's send the
+  browser's user agent without `Electron/…` and Recto's name (`asBrowser`): some sites (japan.travel, behind
+  CloudFront) answer those with a 403. The page has its own persistent session
+  (`persist:recto-web`), so sites stay signed in apart from the app and the browser; it may ask only for
+  full screen and clipboard writes; a download goes to the browser; a new window opens in the same view;
+  anything but http(s) goes nowhere. ⌘[ ⌘] ⌘R work as in a browser.
 - **PDFs.** `features/pdf/PdfView.tsx` (its styles in `pdf.css`) has two modes: `preview` on a canvas (pages and
   highlights, no text layer; a double-click calls `openReader`, which shows it in `PdfPanel.tsx`: a panel
   docked in `VaultShell` beside the AI panel, its PDF in a small store (`showPdf`), its width in localStorage) and `reader` in a tab (`FileView` in the editor
@@ -727,9 +759,25 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
 - **Recto-only state** stays out of the file. `.recto/canvas.json` (by canvas path): which groups and
   notes are folded (`canvas-state.ts`; folding is only drawn, the file keeps every size).
   `.recto/canvas-links.json` (by URL): link previews, fetched once by main (`main/canvas.ts`: 6 s timeout,
-  the page read up to 512 KB, pictures up to 200 KB) and stored as data URLs, so drawing a canvas loads
-  nothing from the web and the renderer's CSP, which blocks remote images, never matters. A page that
-  can't be fetched stores nothing and is asked again next time. `.recto/canvas-notes.json`: the folder
+  the page read up to 512 KB, icons up to 200 KB) and stored as data URLs, so drawing a canvas loads
+  nothing from the web and the renderer's CSP, which blocks remote images, never matters. YouTube and
+  Vimeo previews come from their oEmbed. A page's own picture (og:image, up to 5 MB) is used only when it
+  is a real one (`cover`): at least 600 px wide, wider than tall, and not mostly one colour
+  (`main/picture-checks.ts`: a site's logo on a plain ground - Reddit's, The Verge's - is not a picture
+  of the page); it is kept as a JPEG at most 1000 px wide. When a page's HTML gives no title or no real
+  picture (a consent wall, a page its scripts build, a site that turns away anything but a browser),
+  `main/web-preview.ts` loads it in a hidden offscreen window (1280×1080) - one at a time, 12 s at most,
+  sound off, its own in-memory session (`recto-preview`) with no permissions and every request checked by
+  `publicUrl`, so a page cannot reach this Mac or its network - reads its title, description and icon,
+  and, with no real picture of its own, keeps a screenshot: what covers the page (anything fixed on
+  screen but a header bar across its top - cookie banners, sign-up boxes - and dialogs, shadow roots
+  included) hidden first, blank rows at the top (an empty ad slot) left out, 16:9, a 1000 px JPEG. A
+  consent page is not taken for the preview. A kept preview is marked `v: 3`; older ones are asked for
+  once more (kept as they were if that finds nothing). `canvasLinkPreview(url, fresh)` with `fresh` reads
+  the page again (null when that finds nothing; the kept one stays): "Refresh preview" in a link card's menu,
+  and quietly whenever the link is opened in Recto's window. In the renderer, `features/canvas/link-previews.ts`
+  hands each card its preview and every card with that link the refreshed one. A page that can't be fetched
+  stores nothing and is asked again next time. `.recto/canvas-notes.json`: the folder
   last chosen for "Make it a note". `.recto/pdf-highlights.json` (by PDF path): see PDFs above. A renamed
   or moved canvas or PDF takes its folds and highlights with it (`moveCanvasState`, called from `relocate`).
 - **Make it a note** (`MakeNoteBar`, a glass card with the name and a searchable folder list) makes the note
@@ -804,6 +852,9 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
 | `src/renderer/features/canvas/` | the view, its hooks, its bars and its pure edit, shape and arrow code (above) |
 | `src/main/canvas.ts` | "Make it a link", link previews, folds and PDF highlights moved with their file |
 | `src/main/player.ts` | the mini-player window (`IPC.playerOpen`) |
+| `src/main/web-window.ts` | a link's page in Recto's own window (`IPC.webOpen`) |
+| `src/main/web-preview.ts` | a link's preview read from the page as a browser shows it |
+| `src/main/picture-checks.ts` | whether a link's picture is a logo (mostly one colour), and a screenshot's blank top |
 | `src/renderer/features/pdf/PdfView.tsx`, `pdf-highlights.ts`, `pdf.css` | the PDF preview (canvas) and reader (tab), and their highlights |
 | `src/workers/indexer/canvases.ts` | the three tables and their queries |
 | `src/main/vault-fs.ts` `rewriteCanvasesTo` | the rename rewrite |

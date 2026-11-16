@@ -3,8 +3,9 @@ import { Handle, NodeResizer, Position, useStore, type NodeProps } from '@xyflow
 import { fileKind, extensionOf } from '@shared/file-kind'
 import { IPC } from '@shared/ipc'
 import { isPresetColor, type LinkPreview } from '@shared/canvas'
-import { youTubeId } from '@shared/youtube'
+import { vimeoId, youTubeId } from '@shared/youtube'
 import { api } from '../../../app/api'
+import { watchPreview } from '../link-previews'
 import { vaultFileUrl } from '../../../app/vault-url'
 import { useNoteBus } from '../../../app/note-bus'
 import { Icon } from '../../../ui/Icon'
@@ -650,26 +651,30 @@ export const LinkNode = memo(function LinkNode(props: NodeProps<FlowNode>): Reac
   const actions = useCanvasActions()
   const url = props.data.node.url ?? ''
   const [card, setCard] = useState<LinkPreview | null>(null)
-  useEffect(() => {
-    let live = true
-    void api.invoke(IPC.canvasLinkPreview, url).then((found) => {
-      if (live) setCard(found)
-    })
-    return () => {
-      live = false
-    }
-  }, [url])
+  useEffect(() => watchPreview(url, setCard), [url])
   let host = url
   try {
     host = new URL(url).host
   } catch {
     // Not a URL Recto can read: shown as written.
   }
-  const video = youTubeId(url)
-  if (video !== null) return <YouTubeNode props={props} id={video} url={url} card={card} />
+  const youTube = youTubeId(url)
+  if (youTube !== null) return <VideoNode props={props} kind="youtube" id={youTube} url={url} card={card} />
+  const vimeo = vimeoId(url)
+  if (vimeo !== null) return <VideoNode props={props} kind="vimeo" id={vimeo} url={url} card={card} />
+  // Dragged like any card; double-clicked, the page opens in Recto's own window. On hover, the
+  // same in one click, and ↗ to the browser. Resized, it keeps its proportions, as a picture does.
   return (
-    <Frame props={props} className={`canvas-node--link${card?.image != null ? ' has-image' : ''}`}>
-      <button className="canvas-link nodrag" onClick={() => actions.openUrl(url)} title={url}>
+    <Frame props={props} className={`canvas-node--link${card?.image != null ? ' has-image' : ''}`} keepAspect>
+      <div className="canvas-link__open">
+        <button className="canvas-link__out nodrag" aria-label="Open in Recto window" title="Open in Recto window" onClick={() => actions.openWeb(url)}>
+          <Icon name="app-window" size={13} />
+        </button>
+        <button className="canvas-link__out nodrag" aria-label="Open in browser" title="Open in browser" onClick={() => actions.openUrl(url)}>
+          <Icon name="external-link" size={13} />
+        </button>
+      </div>
+      <div className="canvas-link" onDoubleClick={() => actions.openWeb(url)} title={url}>
         {card?.image != null && <img className="canvas-link__image" src={card.image} alt="" draggable={false} />}
         <span className="canvas-link__host">
           {card?.icon != null ? <img className="canvas-link__icon" src={card.icon} alt="" /> : <Icon name="external-link" size={13} />}
@@ -678,19 +683,31 @@ export const LinkNode = memo(function LinkNode(props: NodeProps<FlowNode>): Reac
         {card?.title != null && <span className="canvas-link__title">{card.title}</span>}
         {card?.description != null && <span className="canvas-link__text">{card.description}</span>}
         <span className="canvas-link__url">{url}</span>
-      </button>
+      </div>
     </Frame>
   )
 })
 
 
 /**
- * A YouTube link as a video on the canvas: its picture and title (the preview
- * Recto fetched once, a data URL - nothing is loaded from YouTube to draw it)
- * with a play button that plays it in the mini-player window, beside the
- * canvas rather than in it.
+ * A YouTube or Vimeo link as a video on the canvas: its picture and title (the
+ * preview Recto fetched once, a data URL - nothing is loaded from the site to
+ * draw it) with a play button that plays it in the mini-player window, beside
+ * the canvas rather than in it.
  */
-function YouTubeNode({ props, id, url, card }: { props: NodeProps<FlowNode>; id: string; url: string; card: LinkPreview | null }): React.ReactElement {
+function VideoNode({
+  props,
+  kind,
+  id,
+  url,
+  card,
+}: {
+  props: NodeProps<FlowNode>
+  kind: 'youtube' | 'vimeo'
+  id: string
+  url: string
+  card: LinkPreview | null
+}): React.ReactElement {
   const actions = useCanvasActions()
   return (
     <Frame props={props} className="canvas-node--link canvas-node--video" keepAspect>
@@ -698,7 +715,13 @@ function YouTubeNode({ props, id, url, card }: { props: NodeProps<FlowNode>; id:
         <button
           className="canvas-video__play nodrag"
           aria-label="Play the video"
-          onClick={() => actions.play({ kind: 'youtube', id, title: card?.title ?? 'YouTube' })}
+          onClick={() =>
+            actions.play(
+              kind === 'youtube'
+                ? { kind, id, title: card?.title ?? 'YouTube', ...(card?.description != null ? { by: card.description } : {}) }
+                : { kind, id, title: card?.title ?? 'Vimeo' },
+            )
+          }
         >
           <Icon name="play" size={22} />
         </button>

@@ -38,6 +38,8 @@ export type CanvasActions = {
   /** A note opened in the pane beside the canvas, the canvas staying in view. */
   openBeside: (path: string) => void
   openUrl: (url: string) => void
+  /** A web page in Recto's own window (main/web-window.ts). */
+  openWeb: (url: string) => void
   /** A video played in the mini-player window. */
   play: (item: PlayerItem) => void
   /** A picture or a video read at this size: its node made the same shape (once, if it is not). */
@@ -82,6 +84,7 @@ export const CanvasActionsContext = createContext<CanvasActions>({
   editingDrawing: null,
   editDrawing: noop,
   openUrl: noop,
+  openWeb: noop,
   play: noop,
   setCaption: noop,
   fitMedia: noop,

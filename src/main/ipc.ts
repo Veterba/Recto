@@ -33,6 +33,7 @@ import { registerAiAccessIpc } from './vault-tools/ipc'
 import { setRelocate } from './vault-tools/proposals'
 import { moveCanvasState, registerCanvasIpc, registerLinkPreviews } from './canvas'
 import { registerPlayer } from './player'
+import { registerWebWindow } from './web-window'
 import { registerProvidersIpc } from './providers/ipc'
 import { flushed } from './flush'
 
@@ -229,6 +230,7 @@ export function registerIpc(): void {
   registerCanvasIpc(handle)
   registerLinkPreviews(handle)
   registerPlayer(handle)
+  registerWebWindow(handle)
   handle(IPC.fsTree, () => vaultFs.listTree())
   handle(IPC.fsOutsideLinks, () => vaultFs.takeOutsideLinks())
   handle(IPC.fsRead, (p) => vaultFs.readFile(p))

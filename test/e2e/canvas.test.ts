@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron, type ElectronApplication, type Page } from 'playwright'
@@ -803,6 +804,119 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     const made = (JSON.parse(read(PLAN)) as { nodes: { url?: string; width: number; height: number }[] }).nodes.find((n) => n.url?.includes('dQw4w9WgXcQ'))!
     expect(made).toMatchObject({ width: 480, height: 270 })
     await expect.poll(() => page.locator('.canvas-node--video [aria-label="Play the video"]').count()).toBeGreaterThan(0)
+  })
+
+  it('a web link opens in Recto’s own window - back, forward and Open in browser above the page - or in the browser; a Vimeo link is a video with ▶', async () => {
+    // A page of its own on this Mac, two pages deep, so back has somewhere to go.
+    const server = http.createServer((req, res) => {
+      res.setHeader('content-type', 'text/html')
+      res.end(req.url === '/two' ? '<title>Second page</title><p>two' : '<title>Soil guide</title><a id="next" href="/two">next</a>')
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/`
+    // Its preview as kept from before (a page on this Mac gets none of its own), with a tall picture:
+    // a picture's own height must not push the title out of the card.
+    const picture = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900"><rect width="600" height="900" fill="teal"/></svg>')}`
+    fs.mkdirSync(path.join(vault, '.recto'), { recursive: true })
+    fs.writeFileSync(path.join(vault, '.recto', 'canvas-links.json'), JSON.stringify({ [url]: { title: 'Soil guide', description: 'How to mix it', image: picture, icon: null, v: 3 } }))
+    try {
+      await openPlan()
+      const theirs = await app.evaluate(({ clipboard }) => clipboard.readText())
+      const paste = async (link: string): Promise<void> => {
+        await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), link)
+        await page.locator('.canvas-view').first().focus()
+        await page.keyboard.press('Meta+v')
+        await expect.poll(() => read(PLAN)).toContain(`"url":"${link}"`)
+        await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), theirs)
+      }
+      await paste(url)
+
+      const card = page.locator('.canvas-node--link:not(.canvas-node--video)', { hasText: '127.0.0.1' })
+      const pageIn = async (): Promise<{ url: string; title: string; windows: number }> =>
+        app.evaluate(({ BaseWindow, webContents }, u) => {
+          const shown = webContents.getAllWebContents().find((w) => w.getURL().startsWith(u))
+          return { url: shown?.getURL() ?? '', title: shown?.getTitle() ?? '', windows: BaseWindow.getAllWindows().length }
+        }, url)
+      // One click selects and a drag moves it, like any card; neither opens the page.
+      const at = (JSON.parse(read(PLAN)) as { nodes: { url?: string; x: number }[] }).nodes.find((n) => n.url === url)!.x
+      await card.locator('.canvas-link').click()
+      const box = (await card.boundingBox())!
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2, { steps: 6 })
+      await page.mouse.up()
+      await expect.poll(() => (JSON.parse(read(PLAN)) as { nodes: { url?: string; x: number }[] }).nodes.find((n) => n.url === url)!.x).toBeGreaterThan(at)
+      expect((await pageIn()).url).toBe('')
+      // Double-clicked: the page in Recto's window.
+      await card.locator('.canvas-link').dblclick()
+      await expect.poll(async () => (await pageIn()).title).toBe('Soil guide')
+      // The page sees a browser: some sites turn Electron away.
+      expect(await app.evaluate(({ webContents }, u) => webContents.getAllWebContents().find((w) => w.getURL().startsWith(u))!.executeJavaScript('navigator.userAgent'), url)).not.toMatch(/electron|recto/i)
+      const windows = (await pageIn()).windows
+      // On to the second page, and back with the bar's ←.
+      // As a click: Chromium leaves a page a script went to without one out of back.
+      await app.evaluate(({ webContents }, u) => webContents.getAllWebContents().find((w) => w.getURL() === u)!.executeJavaScript('document.getElementById("next").click()', true), url)
+      await expect.poll(async () => (await pageIn()).title).toBe('Second page')
+      await app.evaluate(({ webContents }) =>
+        webContents.getAllWebContents().find((w) => w.getURL().startsWith('data:text/html') && w.getURL().includes('bar.recto.invalid'))!.executeJavaScript('document.getElementById("back").click()'),
+      )
+      await expect.poll(async () => (await pageIn()).url).toBe(url)
+      // Opened again (the hover button), in the same window, not a new one.
+      await card.hover()
+      await card.getByRole('button', { name: 'Open in Recto window' }).click()
+      expect((await pageIn()).windows).toBe(windows)
+      // The menu has both ways out.
+      await card.click({ button: 'right' })
+      const menu = page.getByRole('menu')
+      expect(await menu.getByRole('menuitem', { name: 'Open in Recto window' }).count()).toBe(1)
+      expect(await menu.getByRole('menuitem', { name: 'Open in browser' }).count()).toBe(1)
+      // Refreshed: read from the page again - this one, on this Mac, gives none, so the card keeps its picture.
+      await menu.getByRole('menuitem', { name: 'Refresh preview' }).click()
+      await expect.poll(() => page.getByText('the card keeps the one it had').count()).toBeGreaterThan(0)
+      expect(await card.locator('.canvas-link__image').count()).toBe(1)
+      expect((JSON.parse(read('.recto/canvas-links.json')) as Record<string, { title: string }>)[url]!.title).toBe('Soil guide')
+
+      // At its usual size, and resized taller and back shorter (its proportions kept): the title stays in the card.
+      const title = card.locator('.canvas-link__title')
+      {
+        const c = (await card.boundingBox())!
+        const t = (await title.boundingBox())!
+        expect(t.y + t.height).toBeLessThanOrEqual(c.y + c.height)
+      }
+      for (const dy of [40, -60]) {
+        await card.locator('.canvas-link').click()
+        const b = (await card.boundingBox())!
+        // By its bottom edge, as a hand does it (off the middle, where the arrow handle is).
+        const edge = (await card.locator('.canvas-resize__line.bottom').boundingBox())!
+        const from = { x: edge.x + edge.width / 4, y: edge.y + edge.height / 2 }
+        await page.mouse.move(from.x, from.y)
+        await page.mouse.down()
+        await page.mouse.move(from.x, from.y + dy, { steps: 8 })
+        await page.mouse.up()
+        await expect.poll(async () => Math.round((await card.boundingBox())!.height) !== Math.round(b.height)).toBe(true)
+        const c = (await card.boundingBox())!
+        const t = (await title.boundingBox())!
+        expect(t.y + t.height).toBeLessThanOrEqual(c.y + c.height)
+        // Its proportions kept: wider as it gets taller.
+        expect(c.width / c.height).toBeCloseTo(b.width / b.height, 1)
+      }
+
+      // Deleted by key with its menu open: the card and the menu both go.
+      await card.click({ button: 'right' })
+      await expect.poll(() => menu.count()).toBe(1)
+      await page.keyboard.press('Backspace')
+      await expect.poll(() => read(PLAN)).not.toContain(`"url":"${url}"`)
+      await expect.poll(() => menu.count()).toBe(0)
+
+      // A Vimeo link: a video, sized as one, with ▶.
+      await paste('https://vimeo.com/76979871')
+      const vimeo = (JSON.parse(read(PLAN)) as { nodes: { url?: string; width: number; height: number }[] }).nodes.find((n) => n.url?.includes('vimeo'))!
+      expect(vimeo).toMatchObject({ width: 480, height: 270 })
+      await expect.poll(() => page.locator('.canvas-node--video [aria-label="Play the video"]').count()).toBeGreaterThan(0)
+
+    } finally {
+      server.close()
+    }
   })
 
   it('the pen draws a drawing, kept as an SVG Obsidian can show; each stroke is a drawing of its own; a drawing double-clicked opens to edit its strokes and to draw more in it; the eraser cuts, or takes whole strokes; pen panel; draw and hold', async () => {

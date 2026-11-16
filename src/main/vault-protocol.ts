@@ -81,33 +81,36 @@ export function registerVaultScheme(): void {
 
 /** Must run after ready. */
 export function handleVaultScheme(): void {
-  protocol.handle(SCHEME, async (request) => {
-    const url = new URL(request.url)
-    if (url.hostname !== 'vault') return new Response('bad host', { status: 400 })
+  protocol.handle(SCHEME, vaultResponse)
+}
 
-    const vault = currentVault()
-    if (vault === null) return new Response('no vault', { status: 404 })
+/** A file from the vault for a `recto-file://vault/…` request; also the player's (player.ts), in its own storage. */
+export async function vaultResponse(request: Request): Promise<Response> {
+  const url = new URL(request.url)
+  if (url.hostname !== 'vault') return new Response('bad host', { status: 400 })
 
-    let relative: string
-    try {
-      relative = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
-    } catch {
-      return new Response('bad path', { status: 400 })
-    }
-    if (relative === '') return new Response('bad path', { status: 400 })
+  const vault = currentVault()
+  if (vault === null) return new Response('no vault', { status: 404 })
 
-    let absolute: string
-    try {
-      absolute = resolveInVault(vault.path, relative)
-    } catch {
-      return new Response('forbidden', { status: 403 })
-    }
+  let relative: string
+  try {
+    relative = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
+  } catch {
+    return new Response('bad path', { status: 400 })
+  }
+  if (relative === '') return new Response('bad path', { status: 400 })
 
-    const range = request.headers.get('Range')
-    if (range !== null) {
-      const part = await partOf(absolute, range).catch(() => null)
-      if (part !== null) return part
-    }
-    return net.fetch(pathToFileURL(absolute).toString())
-  })
+  let absolute: string
+  try {
+    absolute = resolveInVault(vault.path, relative)
+  } catch {
+    return new Response('forbidden', { status: 403 })
+  }
+
+  const range = request.headers.get('Range')
+  if (range !== null) {
+    const part = await partOf(absolute, range).catch(() => null)
+    if (part !== null) return part
+  }
+  return net.fetch(pathToFileURL(absolute).toString())
 }

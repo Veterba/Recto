@@ -1,6 +1,6 @@
 {
   "name": "recto",
-  "version": "0.66.0",
+  "version": "0.67.0",
   "description": "Local-first, markdown-on-disk knowledge app",
   "license": "MIT",
   "private": true,

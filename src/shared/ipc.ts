@@ -58,7 +58,9 @@ export type VibrancyMaterial = (typeof VIBRANCY_MATERIALS)[number]
 /** Invoke channels: renderer -> main, request/response. */
 /** What the mini-player plays: a YouTube video by its id, or a video in the vault by its path; `ratio` is width / height. */
 export type PlayerItem =
-  | { kind: 'youtube'; id: string; title: string; ratio?: number }
+  /** `by`: the channel, shown under the title. */
+  | { kind: 'youtube'; id: string; title: string; by?: string; ratio?: number }
+  | { kind: 'vimeo'; id: string; title: string; ratio?: number }
   | { kind: 'file'; path: string; title: string; ratio?: number }
 
 export const IPC = {
@@ -187,6 +189,7 @@ export const IPC = {
   canvasProposeLink: 'canvas:propose-link',
   canvasLinkPreview: 'canvas:link-preview',
   playerOpen: 'player:open',
+  webOpen: 'web:open',
   aiProposals: 'ai-proposals:list',
   aiProposalApply: 'ai-proposals:apply',
   aiProposalDiscard: 'ai-proposals:discard',
@@ -525,9 +528,12 @@ export type IpcApi = Exhaustive<
     /** An edge between two notes made a [[link]] in the first: queued as a Suggested edit, never written directly. */
     [IPC.canvasProposeLink]: (from: string, to: string) => { ok: true; proposal: string | null } | { ok: false; error: string }
     /** A link node's card: the page's title, description, image and icon, fetched once and kept; null offline or when the page will not say. */
-    [IPC.canvasLinkPreview]: (url: string) => LinkPreview | null
+    /** `fresh`: read from the page again, not the one kept - null when that found nothing. */
+    [IPC.canvasLinkPreview]: (url: string, fresh?: boolean) => LinkPreview | null
     /** A video played in the mini-player window: a YouTube video, or one from the vault. */
     [IPC.playerOpen]: (item: PlayerItem) => { ok: true } | { ok: false; error: string }
+    /** A web page in Recto's own window (main/web-window.ts). */
+    [IPC.webOpen]: (url: string) => { ok: true } | { ok: false; error: string }
     [IPC.aiProposals]: () => Proposal[]
     /** `picks`: which of its changes (or a canvas's edits) to apply; all pending ones when left out. */
     [IPC.aiProposalApply]: (id: string, picks?: number[]) => { ok: boolean; error?: string; stale?: boolean }

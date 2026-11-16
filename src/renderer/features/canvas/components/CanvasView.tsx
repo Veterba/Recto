@@ -34,6 +34,7 @@ import { connect, dropLoosePoints, nodeAt, rectOf, setBend, setEnd } from '../ca
 import { anchorAt, CENTRE, type Point } from '../arrow-geometry'
 import type { EndTarget } from '../canvas-arrows'
 import { edgeMenu, nodeMenu, paneMenu, type CanvasAsk, type MenuCommands } from '../canvas-menus'
+import { refreshPreview } from '../link-previews'
 import type { CanvasChange } from '../canvas-change'
 import { useCanvas } from '../use-canvas'
 import { useCollapsed, useRawBoards } from '../canvas-state'
@@ -47,7 +48,7 @@ import { CanvasSearch } from './CanvasSearch'
 import { MakeNoteBar } from './MakeNoteBar'
 import { CanvasToolbar, TOOL_KEYS, type PickItem, type Tool } from './CanvasToolbar'
 import { StyleBar } from './StyleBar'
-import { youTubeId } from '@shared/youtube'
+import { vimeoId, youTubeId } from '@shared/youtube'
 import { CanvasCardPanel } from './CanvasCardPanel'
 import { showPdf } from '../../pdf/PdfPanel'
 import { cut, erase, HIGHLIGHT_OPACITY, strokePath, type Pt, type Stroke } from '../drawing'
@@ -178,6 +179,8 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
   const [editing, setEditing] = useState<string | null>(null)
   const [editingEdge, setEditingEdge] = useState<string | null>(null)
   const [menu, setMenu] = useState<Menu | null>(null)
+  // A menu is about the canvas as it was: once that changes (a card deleted by key, say), it goes.
+  useEffect(() => setMenu(null), [doc])
   const [search, setSearch] = useState<{ query: string; index: number } | null>(null)
   const [guides, setGuides] = useState<Guide[]>([])
   /** What a click on the plane does: select, pan, or put something down (once). */
@@ -375,7 +378,7 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
   /** A link card at a point: the page's preview is fetched by the node; a YouTube video gets a video's shape. */
   const addLink = useCallback(
     async (url: string, at: { x: number; y: number }) => {
-      const size = youTubeId(url) !== null ? LINK_VIDEO : LINK_CARD
+      const size = youTubeId(url) !== null || vimeoId(url) !== null ? LINK_VIDEO : LINK_CARD
       let id = ''
       await edit((d) => {
         id = id === '' ? newCanvasId(d) : id
@@ -889,6 +892,12 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
       newText: (at) => addNode(at, 'text'),
       newGroup: (at) => addNode(at, 'group'),
       openFile: open,
+      openWeb: (url) => actions.openWeb(url),
+      openUrl: (url) => actions.openUrl(url),
+      refreshPreview: (url) =>
+        void refreshPreview(url).then((found) => {
+          if (!found) setSaid('The page gave no preview this time; the card keeps the one it had.')
+        }),
       makeNote: (id) => setMaking(id),
       toggleFold,
       folded: collapsed,
@@ -948,6 +957,15 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
       editingDrawing: editingDrawing?.id ?? null,
       editDrawing: (id) => void openDrawingEditor(id),
       openUrl: (url) => void api.invoke(IPC.shellOpenExternal, url),
+      openWeb: (url) =>
+        void api
+          .invoke(IPC.webOpen, url)
+          .then((done) => {
+            if (!done.ok) setSaid(done.error)
+            // The page as it is now: its card's preview read again, quietly, beside it.
+            else void refreshPreview(url).catch(() => undefined)
+          })
+          .catch((err: unknown) => setSaid(`The page could not open: ${err instanceof Error ? err.message : String(err)}`)),
       play: (item) =>
         void api
           .invoke(IPC.playerOpen, item)

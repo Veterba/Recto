@@ -4,6 +4,16 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.67.0 — 2026-11-16
+### Added
+- A web link on a canvas opens in Recto's own window - back, forward, reload and "Open in browser" above the page - on a double-click, or from the buttons that show on hover or its menu; or in the browser. One click selects the card and it drags like any other. Sites you sign in to there stay signed in, apart from the app and your browser. Sites that turn apps away (japan.travel) open there as in a browser.
+- Every web link on a canvas gets a preview - its title and a sharp picture of the page, which fills the card at its usual size; resized, the card keeps its proportions - including pages that showed only their address before (sites that build themselves with scripts, or turn away anything but a browser): Recto reads them as a browser shows them. A page's own picture is used when it is a real one; when it is only the site's logo, or there is none, the picture is the top of the page itself, without cookie banners and sign-up boxes over it. Links already on a canvas get theirs again once; a link opened in Recto's window gets its preview read again, and "Refresh preview" in its menu does it any time.
+- Vimeo links are videos on the canvas, with ▶ in the player, as YouTube links are.
+### Changed
+- YouTube videos play under Recto's own controls - the title and channel on top; play, time, sound, full screen and YouTube's logo, which opens the video on YouTube in the browser where you are, below - that fade a second after the mouse stops. YouTube's own title and "More videos" no longer show, paused or playing, and pausing or playing takes no extra wait. Its settings menu has speed, subtitles in the video's languages or auto-translated into any other, subtitle size and loop.
+### Fixed
+- A canvas card's right-click menu no longer stays open after the card is deleted with a key.
+
 ## v0.66.0 — 2026-11-15
 ### Added
 - AI sees a canvas as a picture: reading one gives it a drawing of the canvas - every card where it is, with its first lines, groups and labelled arrows - as well as each node's place and size, so it can tell crowded, overlapping or tangled from tidy. It can also look at its own canvas suggestion as it would be before you do, and tidy it. Notes AI may not see are blank boxes in the picture. Local models that cannot see pictures get the places and sizes.

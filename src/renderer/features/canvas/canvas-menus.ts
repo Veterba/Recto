@@ -34,6 +34,11 @@ export type MenuCommands = {
   newText: (at: { x: number; y: number }) => void
   newGroup: (at: { x: number; y: number }) => void
   openFile: (path: string) => void
+  /** A link's page in Recto's own window, and in the browser. */
+  openWeb?: (url: string) => void
+  openUrl?: (url: string) => void
+  /** The link's preview read from its page again. */
+  refreshPreview?: (url: string) => void
   /** "Make it a note" on a text node. */
   makeNote?: (id: string) => void
   toggleFold?: (id: string) => void
@@ -71,6 +76,12 @@ export function nodeMenu(doc: CanvasDoc, ids: ReadonlySet<string>, run: MenuComm
   if (one?.type === 'group') items.push({ kind: 'item', label: 'Rename group', icon: 'pencil', run: () => run.startEditing(one.id) })
   if (one?.type === 'file' && typeof one.file === 'string')
     items.push({ kind: 'item', label: 'Open', icon: 'external-link', run: () => run.openFile(one.file!) })
+  if (one?.type === 'link' && typeof one.url === 'string') {
+    const url = one.url
+    if (run.openWeb !== undefined) items.push({ kind: 'item', label: 'Open in Recto window', icon: 'app-window', run: () => run.openWeb!(url) })
+    if (run.openUrl !== undefined) items.push({ kind: 'item', label: 'Open in browser', icon: 'external-link', run: () => run.openUrl!(url) })
+    if (run.refreshPreview !== undefined) items.push({ kind: 'item', label: 'Refresh preview', icon: 'refresh-cw', run: () => run.refreshPreview!(url) })
+  }
   if (one?.type === 'text' && run.makeNote !== undefined)
     items.push({ kind: 'item', label: 'Make it a note', icon: 'file-plus', run: () => run.makeNote!(one.id) })
   const foldable =

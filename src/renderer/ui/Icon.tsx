@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   BetweenHorizontalStart,
   BetweenHorizontalEnd,
   BetweenVerticalStart,
@@ -241,6 +242,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   copy: Copy,
   'clipboard-copy': ClipboardCopy,
   'external-link': ExternalLink,
+  'app-window': AppWindow,
   trash: Trash2,
   'chevron-down': ChevronDown,
   'chevron-up': ChevronUp,
