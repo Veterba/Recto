@@ -4,6 +4,12 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.73.6 — 2026-11-17
+### Fixed
+- ⌘G on a canvas with cards selected groups them and no longer opens the graph as well; with nothing selected it opens the graph as before.
+- Note cards on a canvas show `==highlighted==` text highlighted, without the `==` marks; chat answers do too.
+- A canvas opened from the file tree opens in Data with the tree beside it, so notes can be dragged from the tree onto it as note cards. It used to jump to the Canvas section, where there is no tree, when no tab was open.
+
 ## v0.73.4 — 2026-11-17
 ### Fixed
 - Pictures embedded with `![[name]]` show the same file a click on the link opens: the one near the note first, and a partial path such as `![[sub/pic.png]]` is found. A chat shows the picture that is sent to the AI.

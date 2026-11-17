@@ -970,7 +970,9 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
     doesn't have, for "Needs attention". A missing note is also drawn as a placeholder on the canvas
     (its read fails), and the node stays until removed.
 - **Opening.** `fileKind` calls `.canvas` a canvas. `use-shell-navigation.ts` opens one as a `canvas` view
-  in the tab you are in, else in the Canvas section, so it is a step in the tab's history like a note.
+  in the tab you are in; from Data, else in a new tab of Data, the file tree beside it (a row dragged
+  onto the canvas carries `TREE_DRAG` and becomes a file node); else in the Canvas section. So it is a
+  step in the tab's history like a note.
 
 | where | what |
 |---|---|

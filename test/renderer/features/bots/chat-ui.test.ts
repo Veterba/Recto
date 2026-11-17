@@ -63,6 +63,16 @@ describe('markdown in answers', () => {
     expect(parseInline('Rectoplan', ['Recto'])).toEqual([{ kind: 'text', text: 'Rectoplan' }])
   })
 
+  it('reads ==highlights== as the editor shows them, marks taken off', () => {
+    expect(parseInline('Water ==every **other** day== now')).toEqual([
+      { kind: 'text', text: 'Water ' },
+      { kind: 'mark', children: [{ kind: 'text', text: 'every ' }, { kind: 'bold', children: [{ kind: 'text', text: 'other' }] }, { kind: 'text', text: ' day' }] },
+      { kind: 'text', text: ' now' },
+    ])
+    // Not a highlight: spaces inside the marks, or a lone pair.
+    expect(parseInline('a == b == c')).toEqual([{ kind: 'text', text: 'a == b == c' }])
+  })
+
   it('reads links and inline code', () => {
     expect(parseInline('Run `npm test`, see [docs](https://example.com).')).toEqual([
       { kind: 'text', text: 'Run ' },

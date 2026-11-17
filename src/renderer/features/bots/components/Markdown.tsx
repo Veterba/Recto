@@ -61,6 +61,12 @@ function Inlines({ inline, onOpenNote }: { inline: readonly Inline[]; onOpenNote
             )
           case 'code':
             return <code key={i}>{piece.text}</code>
+          case 'mark':
+            return (
+              <mark key={i} className="md-mark">
+                <Inlines inline={piece.children} onOpenNote={onOpenNote} />
+              </mark>
+            )
           case 'link':
             return (
               <a key={i} href={piece.href} target="_blank" rel="noreferrer">

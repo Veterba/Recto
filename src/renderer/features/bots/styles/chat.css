@@ -329,6 +329,18 @@
   font-weight: 600;
 }
 
+/* `==text==`, highlighted as the editor draws it (blocks.css .cm-highlight). */
+.md-mark {
+  color: inherit;
+  background: var(--highlight-bg);
+  border-radius: 3px;
+  box-shadow:
+    -2px 0 0 var(--highlight-bg),
+    2px 0 0 var(--highlight-bg);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 /* A note, named in a message: a chip that opens it. */
 .note-chip {
   all: unset;

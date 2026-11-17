@@ -70,9 +70,14 @@ export function useShellNavigation(
         sections?.tasks.openView('board', state)
         return
       }
-      // A canvas opens as a canvas: in the tab you are in, else in Canvas.
+      // A canvas opens as a canvas: in the tab you are in; from Data, in a tab of Data, the tree beside it to drag
+      // notes onto it; else in Canvas.
       if (fileKind(path) === 'canvas') {
         if (showHere(activeSection, 'canvas', { path }, via)) return
+        if (activeSection === 'data') {
+          sections?.data.openView('canvas', { path })
+          return
+        }
         setActiveSection('canvas')
         sections?.canvas.openView('canvas', { path })
         return

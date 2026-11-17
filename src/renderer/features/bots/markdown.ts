@@ -11,6 +11,8 @@ export type Inline =
   | { kind: 'bold'; children: Inline[] }
   | { kind: 'italic'; children: Inline[] }
   | { kind: 'code'; text: string }
+  /** `==text==`: highlighted, as the editor shows it. */
+  | { kind: 'mark'; children: Inline[] }
   | { kind: 'link'; text: string; href: string }
   /** A note: from a [[link]], or a title the answer mentions. */
   | { kind: 'note'; title: string; label: string }
@@ -125,7 +127,7 @@ export function parseBlocks(text: string, titles: readonly string[] = []): Block
 }
 
 const INLINE =
-  /(\*\*|__)(.+?)\1|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?!\w)|(?<![\w_])_(?!\s)(.+?)(?<!\s)_(?!\w)|`([^`]+)`|\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]|\[([^\]]+)\]\(([^)\s]+)\)/
+  /(\*\*|__)(.+?)\1|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?!\w)|(?<![\w_])_(?!\s)(.+?)(?<!\s)_(?!\w)|`([^`]+)`|\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]|\[([^\]]+)\]\(([^)\s]+)\)|==(?=\S)(.+?)(?<=\S)==/
 
 /**
  * Inline markdown. `titles` are notes the answer may mention by name (its
@@ -148,6 +150,7 @@ export function parseInline(text: string, titles: readonly string[] = []): Inlin
     else if (match[5] !== undefined) out.push({ kind: 'code', text: match[5] })
     else if (match[6] !== undefined) out.push({ kind: 'note', title: match[6].trim(), label: (match[7] ?? match[6]).trim() })
     else if (match[8] !== undefined) out.push({ kind: 'link', text: match[8], href: match[9]! })
+    else if (match[10] !== undefined) out.push({ kind: 'mark', children: parseInline(match[10], titles) })
     rest = rest.slice(match.index + match[0].length)
   }
   return out

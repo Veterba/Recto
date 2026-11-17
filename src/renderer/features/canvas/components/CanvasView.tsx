@@ -1164,8 +1164,10 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
       } else if (ev.metaKey && key === 'a') {
         ev.preventDefault()
         if (doc !== null) select(doc.nodes.map((n) => n.id))
-      } else if (ev.metaKey && key === 'g') {
+      } else if (ev.metaKey && key === 'g' && selected.size > 0) {
+        // Groups what is selected, and only that: the app's ⌘G (the graph) is for when nothing is.
         ev.preventDefault()
+        ev.stopPropagation()
         group()
       } else if (ev.metaKey && key === 'f') {
         ev.preventDefault()
