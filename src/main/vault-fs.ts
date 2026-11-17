@@ -156,10 +156,16 @@ export const isTempWrite = (name: string): boolean => /\.tmp-\d+-\d+$/.test(name
  * written in place after a full temp copy (see writeNow). Callers are
  * expected to have registered the path as a self-write first (see watcher).
  */
-export function writeFile(relative: string, content: string): Promise<{ ok: boolean; error?: string }> {
+/**
+ * `expect`: only over the file as the caller read it - checked in this file's turn of the queue, so nothing
+ * written between the caller's read and this write is lost (`changed`).
+ */
+export type WriteOptions = { expect?: string }
+
+export function writeFile(relative: string, content: string, opts: WriteOptions = {}): Promise<{ ok: boolean; error?: string; changed?: boolean }> {
   // One write per file at a time: an existing file is written in place, and two at once would interleave.
   const before = lastWrite.get(relative) ?? Promise.resolve()
-  const write = before.then(() => writeNow(relative, content))
+  const write = before.then(() => writeNow(relative, content, opts))
   lastWrite.set(relative, write)
   inFlight.add(write)
   void write.finally(() => {
@@ -180,10 +186,12 @@ export async function writesSettled(): Promise<void> {
   await Promise.allSettled([...inFlight])
 }
 
-async function writeNow(relative: string, content: string): Promise<{ ok: boolean; error?: string }> {
+async function writeNow(relative: string, content: string, opts: WriteOptions = {}): Promise<{ ok: boolean; error?: string; changed?: boolean }> {
   try {
     const absolute = resolveInVault(requireVault(), relative)
     const existing = await fsp.readFile(absolute).catch(() => null)
+    if (opts.expect !== undefined && (existing === null || existing.toString('utf8') !== opts.expect))
+      return { ok: false, changed: true, error: 'The note changed since it was read; it was not written over.' }
     // The last line of defence for the bug above: text is never written over a
     // file that holds binary data, whatever the renderer asks for.
     const notText = existing === null ? null : notTextReason(existing)
@@ -360,20 +368,27 @@ export async function create(
     if (problem !== null) return { ok: false, error: problem }
     const bare = sanitiseName(name)
     if (bare.length === 0) return { ok: false, error: 'Name cannot be empty.' }
-    let target = resolveInVault(root, path.join(parentRelative, bare))
+    const target = resolveInVault(root, path.join(parentRelative, bare))
     // Only this folder counts: another folder may have a file of the same name, as in Obsidian. Names that
     // differ only in case are the same file here (the Mac's disk, and Obsidian, say so).
-    if (kind === 'file') {
-      if (onTaken === 'number') target = uniquePath(target)
-      else if (fs.existsSync(target)) return { ok: false, error: `“${bare}” is already in this folder.` }
-    } else target = uniquePath(target)
-    if (kind === 'folder') {
-      await fsp.mkdir(target, { recursive: true })
-    } else {
-      await fsp.mkdir(path.dirname(target), { recursive: true })
-      await fsp.writeFile(target, '', { encoding: 'utf8', flag: 'wx' })
+    if (kind === 'file' && onTaken === 'refuse' && fs.existsSync(target)) return { ok: false, error: `“${bare}” is already in this folder.` }
+    await fsp.mkdir(path.dirname(target), { recursive: true })
+    // Made only where nothing is (`wx`, a folder made on its own): two creates at once, which both found the same
+    // name free, do not end up as one - the second takes the next number.
+    for (let tries = 0; ; tries++) {
+      const at = kind === 'folder' || onTaken === 'number' ? uniquePath(target) : target
+      try {
+        if (kind === 'folder') await fsp.mkdir(at)
+        else await fsp.writeFile(at, '', { encoding: 'utf8', flag: 'wx' })
+        return { ok: true, path: toRelative(root, at) }
+      } catch (err) {
+        const taken = (err as NodeJS.ErrnoException).code === 'EEXIST'
+        if (!taken || tries >= 20 || (kind === 'file' && onTaken === 'refuse')) {
+          if (taken) return { ok: false, error: `“${bare}” is already in this folder.` }
+          throw err
+        }
+      }
     }
-    return { ok: true, path: toRelative(root, target) }
   } catch (err) {
     return { ok: false, error: message(err) }
   }

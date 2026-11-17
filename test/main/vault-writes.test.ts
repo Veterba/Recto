@@ -10,7 +10,7 @@ let root = ''
 vi.mock('electron', () => ({ shell: {} }))
 vi.mock('../../src/main/vault', () => ({ currentVault: () => ({ path: root, name: 'v' }) }))
 
-const { writeFile, readFile, rename, rewriteCanvasesTo, undoRelocate, rewriteLinksTo, restoreContents } = await import('../../src/main/vault-fs')
+const { create, writeFile, readFile, rename, rewriteCanvasesTo, undoRelocate, rewriteLinksTo, restoreContents } = await import('../../src/main/vault-fs')
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'recto-writes-'))
@@ -125,5 +125,22 @@ describe('a saved note stays the same file', () => {
     expect(await writeFile('Link.md', 'through the link')).toEqual({ ok: true })
     expect(fs.lstatSync(file('Link.md')).isSymbolicLink()).toBe(true)
     expect(fs.readFileSync(file('Real/Target.md'), 'utf8')).toBe('through the link')
+  })
+})
+
+describe('writes that must not land somewhere else', () => {
+  it('a write over the note as it was read is refused when the note changed since', async () => {
+    fs.writeFileSync(file('n.md'), 'one')
+    expect(await writeFile('n.md', 'two', { expect: 'zero' })).toMatchObject({ ok: false, changed: true })
+    expect(fs.readFileSync(file('n.md'), 'utf8')).toBe('one')
+    expect(await writeFile('n.md', 'two', { expect: 'one' })).toEqual({ ok: true })
+  })
+
+  it('two creates at once that found the same name free each get their own - a note and a folder alike', async () => {
+    const notes = await Promise.all([create('', 'Untitled.md', 'file', 'number'), create('', 'Untitled.md', 'file', 'number')])
+    expect(notes.every((r) => r.ok)).toBe(true)
+    expect(new Set(notes.map((r) => (r.ok ? r.path : '')))).toEqual(new Set(['Untitled.md', 'Untitled 2.md']))
+    const folders = await Promise.all([create('', 'New folder', 'folder'), create('', 'New folder', 'folder')])
+    expect(new Set(folders.map((r) => (r.ok ? r.path : '')))).toEqual(new Set(['New folder', 'New folder 2']))
   })
 })

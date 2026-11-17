@@ -40,6 +40,19 @@ export function useDrawing(path: string): Drawn | null | undefined {
   return useSyncExternalStore(subscribe, () => drawings.get(path))
 }
 
+const turns = new Map<string, Promise<unknown>>()
+/**
+ * One change to a drawing at a time, each starting from the drawing as the one before left it: two quick strokes
+ * both read the drawing before either was saved, and the second save dropped the first stroke.
+ */
+export function inTurn<T>(path: string, change: () => Promise<T>): Promise<T> {
+  const run = (turns.get(path) ?? Promise.resolve()).then(change, change)
+  const settled = run.catch(() => undefined)
+  turns.set(path, settled)
+  void settled.then(() => turns.get(path) === settled && turns.delete(path))
+  return run
+}
+
 /** A drawing as it is, read if it has not been (for adding to it). */
 export async function drawingOf(path: string): Promise<Drawn | null> {
   if (drawings.has(path)) return drawings.get(path) ?? null

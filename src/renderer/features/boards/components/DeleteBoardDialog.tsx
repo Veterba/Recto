@@ -133,7 +133,16 @@ function DeleteBoardDialog({ path, onClose }: { path: string; onClose: (deleted:
     const kind: BoardDeleteChoice =
       choice === 'board' ? { kind: 'board', to: target } : choice === 'trash' ? { kind: 'trash' } : { kind: 'unsorted' }
     const result = await api.invoke(IPC.boardsDelete, path, kind)
-    if (!result.ok) return setError(result.error)
+    if (!result.ok) {
+      // Failed partway, after the board was gone: its Undo is offered as a whole delete's is.
+      if (result.undoId !== undefined) {
+        undo = { name, id: result.undoId, count: 0 }
+        emit()
+        noteIndexChanged()
+        refreshBoards()
+      }
+      return setError(result.error)
+    }
     if (result.undoId !== undefined) {
       undo = { name, id: result.undoId, count: result.trashed.length }
       emit()

@@ -514,6 +514,15 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   asks: every call checks both, so an answer stops when the vault changes or cloud is turned off
   mid-answer; a vault switch or close also stops running answers, Quick ask runs and the background
   jobs (`windDownAi` in `ipc.ts`).
+- **Writes that must not lose anything.** `vaultFs.writeFile` takes `expect`: written only over the file as
+  the caller read it, checked in that file's turn of the write queue (`changed` otherwise) - the topics'
+  writes use it, and those made at once read again and retry (`editLinks`). Board files go through
+  `writeFile` too. A board delete trashes the board first and merges into another board only after, and
+  from there keeps its undo whatever step fails. The archive never writes over a manifest that is there
+  but unreadable (`assertWritable`: a copy kept as `archive.json.bad-<time>`), and checks before it moves
+  anything in. Creating with a number (`create`) makes the file with `wx` and a folder on its own, taking
+  the next number when two creates found the same name free. A drawing's changes run one at a time per
+  file (`inTurn` in `drawing-store.ts`), each from the drawing as the last one saved it.
 - **Smaller rules.** A retry after an interrupted answer takes that answer out of the topic first
   (`withoutLastAnswer`, fence-aware); the jobs keep the newest 20 ended ones (`KEEP_ENDED`). An apply
   stops writing when another vault opens meanwhile (`write` in `proposals.ts`), and opening a vault tells

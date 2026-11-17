@@ -14,9 +14,12 @@ import { boardText, parseKanban } from '../../src/shared/kanban'
 
 let root = ''
 let trash = ''
+/** A file the Trash refuses (a test sets it): the delete fails there. */
+let refuse: (file: string) => boolean = () => false
 vi.mock('electron', () => ({
   shell: {
     trashItem: async (file: string) => {
+      if (refuse(file)) throw new Error('The Trash refused it.')
       fs.mkdirSync(trash, { recursive: true })
       fs.renameSync(file, path.join(trash, path.basename(file)))
     },
@@ -196,5 +199,29 @@ describe('one name check, on disk', () => {
   it('finds every note that has a name, in any folder and any case', () => {
     expect(vaultFs.sameNamed('basil.md')).toEqual(['Garden/Basil.md'])
     expect(vaultFs.sameNamed('Nothing.md')).toEqual([])
+  })
+})
+
+describe('a board delete that fails partway', () => {
+  afterEach(() => (refuse = () => false))
+
+  it('a board the Trash refuses leaves the other board it was to merge into as it was', async () => {
+    const before = read(B)
+    refuse = (file) => file.endsWith('A.md')
+    const result = await ops.deleteBoard(A, { kind: 'board', to: B })
+    expect(result.ok).toBe(false)
+    expect(read(B)).toBe(before)
+    expect(exists(A)).toBe(true)
+  })
+
+  it('a card the Trash refuses: said, with an undo that puts back the board and what was done', async () => {
+    const board = read(A)
+    refuse = (file) => file.endsWith('Only A.md')
+    const result = await ops.deleteBoard(A, { kind: 'trash' })
+    expect(result).toMatchObject({ ok: false, undoId: expect.any(String) })
+    expect(exists(A)).toBe(false)
+    refuse = () => false
+    expect(await ops.undoDelete((result as { undoId: string }).undoId)).toEqual({ ok: true })
+    expect(read(A)).toBe(board)
   })
 })

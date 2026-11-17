@@ -368,12 +368,12 @@ async function removeOldRelatedLinks(ctx: Context, state: TopicsState): Promise<
     })
     if (drop.length === 0) continue
     if (
-      await writeNote(
+      (await writeNote(
         p,
         read.content,
         OLD_PROPERTY,
         entries.filter((e) => !drop.includes(e)),
-      )
+      )) === true
     ) {
       for (const link of drop) changes.push({ path: p, property: OLD_PROPERTY, link, op: 'remove' })
     }

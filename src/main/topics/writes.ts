@@ -34,11 +34,31 @@ export async function writeAll(writes: ReadonlyMap<string, string>): Promise<voi
   }
 }
 
-export async function writeNote(p: string, text: string, property: string, entries: string[]): Promise<boolean> {
+/**
+ * A note's links under `property` changed by `edit`, read and written at once - read again when the note changed
+ * between the two (a few times at most). True when it was written.
+ */
+export async function editLinks(p: string, property: string, edit: (entries: string[]) => string[]): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const read = await vaultFs.readFile(p)
+    if (!read.ok) return false
+    const wrote = await writeNote(p, read.content, property, edit(linksIn(read.content, property)))
+    if (wrote !== 'changed') return wrote
+  }
+  return false
+}
+
+/**
+ * The note with its topics written: true when written, false when there was nothing to change, 'changed' when the
+ * note changed since `text` was read (the person typed, a save landed) - then nothing is written, and it is tried
+ * again on the next run.
+ */
+export async function writeNote(p: string, text: string, property: string, entries: string[]): Promise<boolean | 'changed'> {
   const next = writeLinks(text, property, entries)
   if (next === text) return false
   // Not marked as a self-write: if the note is open, the editor should reload.
-  const written = await vaultFs.writeFile(p, next)
+  const written = await vaultFs.writeFile(p, next, { expect: text })
+  if (written.changed === true) return 'changed'
   if (!written.ok) throw new Error(written.error ?? `could not write ${p}`)
   notes.delete(p)
   return true
@@ -70,7 +90,10 @@ export async function writePending(ctx: Context, state: TopicsState): Promise<{ 
       .flatMap((id) => (name(id) === undefined ? [] : [topicLink(name(id)!)]))
       .filter((l) => !entries.some((e) => sameLink(e, l)))
     entries = [...entries, ...add]
-    if (await writeNote(p, read.content, TOPICS_PROPERTY, entries)) {
+    const wrote = await writeNote(p, read.content, TOPICS_PROPERTY, entries)
+    // Changed under it: left for the next run, as if not yet written.
+    if (wrote === 'changed') continue
+    if (wrote) {
       written++
       for (const link of add) {
         const topic = want.find((id) => sameLink(topicLink(name(id) ?? ''), link))
@@ -115,14 +138,7 @@ export async function dissolvePass(state: TopicsState): Promise<TopicsState> {
     const link = topicLink(topic.name)
     for (const [p, ids] of Object.entries(next.owned)) {
       if (!ids.includes(id)) continue
-      const read = await vaultFs.readFile(p)
-      if (read.ok)
-        await writeNote(
-          p,
-          read.content,
-          TOPICS_PROPERTY,
-          linksIn(read.content, TOPICS_PROPERTY).filter((e) => !sameLink(e, link)),
-        )
+      await editLinks(p, TOPICS_PROPERTY, (entries) => entries.filter((e) => !sameLink(e, link)))
     }
     next = dissolve(next, id)
     console.log(`[topics] dissolved "${topic.name}": removed by hand from most of its notes`)

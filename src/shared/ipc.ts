@@ -238,7 +238,8 @@ export const IPC_EVENT = {
 export type BoardDeleteChoice = { kind: 'unsorted' } | { kind: 'board'; to: string } | { kind: 'trash' }
 export type BoardDeleteResult =
   | { ok: true; moved: { from: string; to: string }[]; trashed: string[]; undoId?: string }
-  | { ok: false; error: string }
+  /** `undoId`: it failed partway; Undo puts back what was done. */
+  | { ok: false; error: string; undoId?: string }
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
 export type IpcEventChannel = (typeof IPC_EVENT)[keyof typeof IPC_EVENT]

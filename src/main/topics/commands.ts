@@ -23,8 +23,7 @@ import {
 import { topicLink, byName, TOPICS_PROPERTY, pending, allowed, renamePath } from './state'
 import * as vaultFs from '../vault-fs'
 import { sameLink, undoLast } from './runs'
-import { linksIn } from '../../shared/link-property'
-import { writeNote, reconcile, writeAll } from './writes'
+import { editLinks, reconcile, writeAll } from './writes'
 import { quiet } from './note-cache'
 import { build, membership } from './grouping'
 import { modelPresent } from './model'
@@ -94,17 +93,7 @@ async function removeNow(id: string): Promise<void> {
   if (topic === undefined) return
   const link = topicLink(topic.name)
   const carriers = await linkSources(link)
-  for (const p of carriers) {
-    const read = await vaultFs.readFile(p)
-    if (!read.ok) continue
-    const entries = linksIn(read.content, TOPICS_PROPERTY)
-    await writeNote(
-      p,
-      read.content,
-      TOPICS_PROPERTY,
-      entries.filter((e) => !sameLink(e, link)),
-    )
-  }
+  for (const p of carriers) await editLinks(p, TOPICS_PROPERTY, (entries) => entries.filter((e) => !sameLink(e, link)))
   const strip = (m: Record<string, string[]>): Record<string, string[]> =>
     Object.fromEntries(
       Object.entries(m)

@@ -35,19 +35,52 @@ const manifestFile = (): string => {
   return path.join(vault.path, VAULT_STATE_DIR, 'archive.json')
 }
 
-function readManifest(): ArchiveState {
+/** The manifest as it is on disk: none yet, read, or there but unreadable (cut short, edited by hand). */
+function manifestOnDisk(): { state: ArchiveState | null; bad: boolean } {
+  let raw: string
   try {
-    const parsed = JSON.parse(fs.readFileSync(manifestFile(), 'utf8')) as Partial<ArchiveState>
+    raw = fs.readFileSync(manifestFile(), 'utf8')
+  } catch (err) {
+    // No manifest yet is an empty archive; one that is there and cannot be read is not.
+    return { state: null, bad: (err as NodeJS.ErrnoException).code !== 'ENOENT' }
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<ArchiveState>
     return {
-      retentionDays: typeof parsed.retentionDays === 'number' && parsed.retentionDays >= 0 ? parsed.retentionDays : DEFAULT_RETENTION_DAYS,
-      entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+      state: {
+        retentionDays: typeof parsed.retentionDays === 'number' && parsed.retentionDays >= 0 ? parsed.retentionDays : DEFAULT_RETENTION_DAYS,
+        entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+      },
+      bad: false,
     }
   } catch {
-    return { retentionDays: DEFAULT_RETENTION_DAYS, entries: [] }
+    return { state: null, bad: true }
   }
 }
 
+function readManifest(): ArchiveState {
+  return manifestOnDisk().state ?? { retentionDays: DEFAULT_RETENTION_DAYS, entries: [] }
+}
+
+/**
+ * Nothing is written over a manifest that is there but unreadable: read as empty, the next write wiped where
+ * every archived note came from. A copy of it is kept beside it (archive.json.bad-<time>), and the archive
+ * refuses until it is mended or removed.
+ */
+function assertWritable(): void {
+  if (!manifestOnDisk().bad) return
+  const file = manifestFile()
+  const copy = `${file}.bad-${new Date().toISOString().replace(/[:.]/g, '-')}`
+  try {
+    if (!fs.readdirSync(path.dirname(file)).some((f) => f.startsWith('archive.json.bad-'))) fs.copyFileSync(file, copy)
+  } catch {
+    // Could not be copied: still nothing is written over it.
+  }
+  throw new Error(`Recto's archive list (.recto/archive.json) could not be read, so nothing was changed in the archive. A copy of it is kept beside it; mend or remove it.`)
+}
+
 function writeManifest(state: ArchiveState): void {
+  assertWritable()
   const file = manifestFile()
   fs.mkdirSync(path.dirname(file), { recursive: true })
   // Write-then-rename: losing this file means losing the map back to where a
@@ -90,6 +123,8 @@ export async function archive(relative: string): Promise<{ ok: true; id: string 
 
     const from = resolveInVault(vault.path, relative)
     const stat = await fsp.stat(from)
+    // Before anything moves: a note moved into the archive with no list to write it in is lost to Undo.
+    assertWritable()
     const id = newId()
     const dir = archiveDir()
     await fsp.mkdir(dir, { recursive: true })

@@ -64,11 +64,14 @@ const readText = (relative: string): string | null => {
   }
 }
 
-function writeText(relative: string, text: string): void {
+/**
+ * A board's text written as every note is (vault-fs): one write per file at a time, its whole new text in a
+ * temp file beside it first - not an in-place write of its own that a crash could leave cut short.
+ */
+async function writeText(relative: string, text: string): Promise<void> {
   markSelfWrite(relative)
-  const file = resolveInVault(root(), relative)
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, text, 'utf8')
+  const written = await vaultFs.writeFile(relative, text)
+  if (!written.ok) throw new Error(written.error ?? `Could not write ${relative}.`)
 }
 
 /** The note each `[[link]]` on a board names, read from the board it is on - Obsidian's rules, as the index reads it. */
@@ -180,7 +183,7 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
       const renamedFolder = await relocate(own, () => vaultFs.rename(own, clean), asked)
       if (renamedFolder.ok) board = `${folder}/${nameOf(board)}`
     }
-    setNewNoteFolder(board, folder)
+    await setNewNoteFolder(board, folder)
     return { ok: true, path: board }
   }
 
@@ -223,10 +226,8 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
           next = insertItem(next, index, Number.MAX_SAFE_INTEGER, line.replace(/\n/g, '\n    '), item.checked)
         }
       }
-      if (next !== target) {
-        writeText(choice.to, next)
-        merged = { path: choice.to, before: target, after: next }
-      }
+      // Written once the board is safely in the Trash (below): a board that could not be trashed leaves the other as it was.
+      if (next !== target) merged = { path: choice.to, before: target, after: next }
       extra.push(choice.to)
     }
 
@@ -243,29 +244,44 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
       return { ok: false, error: `The board could not be moved to the Trash. ${err instanceof Error ? err.message : String(err)}` }
     }
 
-    const boards = await boardTexts(extra, [boardPath])
-    const stillListed = new Set([...boards].flatMap(([b, t]) => cardsOn(t, b, resolve)))
-    if (choice.kind === 'trash') for (const card of cards) if (isPlacedCard(card) && !stillListed.has(card)) await toTrash(card)
-    const rest = cards.filter((c) => !trashed.some((t) => t.path === c))
-    const moved = await placeCards(rest, extra, [boardPath])
-
-    const own = ownFolderOf(boardPath)
-    if (own !== null) {
-      // Whatever is left in its folder that is Recto's - cards that were on no
-      // board - goes to Unsorted rather than holding the folder open.
-      for (const left of fs.readdirSync(resolveInVault(root(), own))) {
-        const relative = `${own}/${left}`
-        if (!left.toLowerCase().endsWith('.md')) continue
-        const to = await moveTo(relative, UNSORTED_FOLDER)
-        if (to !== null) moved.push({ from: relative, to })
-      }
-      removeIfEmpty(own)
+    // From here every step is undone by the one undo, kept whatever happens: a step that fails partway (a card
+    // that will not go to the Trash, a folder that cannot be read) leaves what was done undoable, not stranded.
+    const moved: { from: string; to: string }[] = []
+    const keepUndo = (): string => {
+      const undoId = `board-${Date.now().toString(36)}`
+      undos.set(undoId, { trashed, moved, merged })
+      if (undos.size > 10) undos.delete([...undos.keys()][0] ?? '')
+      return undoId
     }
+    try {
+      if (merged !== null) await writeText(merged.path, merged.after)
+      const boards = await boardTexts(extra, [boardPath])
+      const stillListed = new Set([...boards].flatMap(([b, t]) => cardsOn(t, b, resolve)))
+      if (choice.kind === 'trash') for (const card of cards) if (isPlacedCard(card) && !stillListed.has(card)) await toTrash(card)
+      const rest = cards.filter((c) => !trashed.some((t) => t.path === c))
+      moved.push(...(await placeCards(rest, extra, [boardPath])))
 
-    const undoId = `board-${Date.now().toString(36)}`
-    undos.set(undoId, { trashed, moved, merged })
-    if (undos.size > 10) undos.delete([...undos.keys()][0] ?? '')
-    return { ok: true, moved, trashed: trashed.map((t) => t.path).filter((p) => p !== boardPath), undoId }
+      const own = ownFolderOf(boardPath)
+      if (own !== null) {
+        // Whatever is left in its folder that is Recto's - cards that were on no
+        // board - goes to Unsorted rather than holding the folder open.
+        for (const left of fs.readdirSync(resolveInVault(root(), own))) {
+          const relative = `${own}/${left}`
+          if (!left.toLowerCase().endsWith('.md')) continue
+          const to = await moveTo(relative, UNSORTED_FOLDER)
+          if (to !== null) moved.push({ from: relative, to })
+        }
+        removeIfEmpty(own)
+      }
+    } catch (err) {
+      const undoId = keepUndo()
+      return {
+        ok: false,
+        error: `The board was deleted, but not all of it went where it should: ${err instanceof Error ? err.message : String(err)} Undo puts back what was done.`,
+        undoId,
+      }
+    }
+    return { ok: true, moved, trashed: trashed.map((t) => t.path).filter((p) => p !== boardPath), undoId: keepUndo() }
   }
 
   /**
@@ -280,15 +296,13 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
     for (const file of entry.trashed) {
       const absolute = resolveInVault(root(), file.path)
       if (fs.existsSync(absolute)) continue
-      markSelfWrite(file.path)
-      fs.mkdirSync(path.dirname(absolute), { recursive: true })
-      fs.writeFileSync(absolute, file.data)
+      await writeText(file.path, file.data.toString('utf8'))
     }
     for (const move of [...entry.moved].reverse()) {
       if (!fs.existsSync(resolveInVault(root(), move.to)) || fs.existsSync(resolveInVault(root(), move.from))) continue
       await moveTo(move.to, path.posix.dirname(move.from))
     }
-    if (entry.merged !== null && readText(entry.merged.path) === entry.merged.after) writeText(entry.merged.path, entry.merged.before)
+    if (entry.merged !== null && readText(entry.merged.path) === entry.merged.after) await writeText(entry.merged.path, entry.merged.before)
     return { ok: true }
   }
 
@@ -296,7 +310,7 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
 }
 
 /** Point a board's `new-note-folder` at its folder; nothing else in its settings changes. */
-export function setNewNoteFolder(boardPath: string, folder: string): void {
+export async function setNewNoteFolder(boardPath: string, folder: string): Promise<void> {
   const text = readText(boardPath)
   if (text === null || !isKanban(text)) return
   let next: string
@@ -306,7 +320,7 @@ export function setNewNoteFolder(boardPath: string, folder: string): void {
     // A settings block that does not parse is left as it is.
     return
   }
-  if (next !== text) writeText(boardPath, next)
+  if (next !== text) await writeText(boardPath, next)
 }
 
 function removeIfEmpty(folder: string): void {

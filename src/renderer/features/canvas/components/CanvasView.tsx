@@ -54,7 +54,7 @@ import { showPdf } from '../../pdf/PdfPanel'
 import { cut, erase, HIGHLIGHT_OPACITY, strokePath, type Pt, type Stroke } from '../drawing'
 import { pen, strokeStyle } from '../pen'
 import { recognise, type InkShape } from '../ink-shapes'
-import { drawingOf, saveDrawing, type Drawn } from '../drawing-store'
+import { drawingOf, inTurn, saveDrawing, type Drawn } from '../drawing-store'
 import type { Shape } from '../shapes'
 import type { FileNode } from '@shared/vault'
 import { CANVAS_FOLDER, noteFolderBeside } from '@shared/recto-paths'
@@ -574,13 +574,22 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
         chosen.y - DRAW_REACH < box.y + box.height &&
         chosen.y + chosen.height + DRAW_REACH > box.y
       const target: CanvasNode | undefined = near ? chosen : undefined
-      const drawn: Drawn | null = target?.file === undefined ? null : await drawingOf(target.file)
-      if (target !== undefined && drawn !== null) {
+      if (target?.file !== undefined) {
         const id = target.id
-        const saved = await saveDrawing(target.file!, [...strokesOn(drawn, target), stroke])
-        if (!saved.ok) return setSaid(saved.error)
-        run((d) => ({ ...d, nodes: d.nodes.map((n) => (n.id === id ? patchNode(n, saved.box) : n)) }))
-        return
+        const file = target.file
+        // In the drawing's turn: from the drawing - and its node's place - as the stroke before left them.
+        const added = await inTurn(file, async () => {
+          const drawn = await drawingOf(file)
+          const node = docRef.current?.nodes.find((n) => n.id === id) ?? target
+          if (drawn === null) return null
+          const saved = await saveDrawing(file, [...strokesOn(drawn, node), stroke])
+          if (saved.ok) run((d) => ({ ...d, nodes: d.nodes.map((n) => (n.id === id ? patchNode(n, saved.box) : n)) }))
+          return saved
+        })
+        if (added !== null) {
+          if (!added.ok) setSaid(added.error)
+          return
+        }
       }
       // A new drawing: an SVG beside the canvas, in "<canvas> drawings".
       const folder = `${path.includes('/') ? `${path.slice(0, path.lastIndexOf('/'))}/` : ''}${nameOf(path)} drawings`
@@ -629,7 +638,7 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
         run((d) => ({ ...d, nodes: d.nodes.filter((x) => x.id !== id), edges: d.edges.filter((e) => e.fromNode !== id && e.toNode !== id) }))
         return
       }
-      const saved = await saveDrawing(n.file, strokes)
+      const saved = await inTurn(n.file, () => saveDrawing(n.file!, strokes))
       if (!saved.ok) return setSaid(saved.error)
       run((d) => ({ ...d, nodes: d.nodes.map((x) => (x.id === id ? patchNode(x, saved.box) : x)) }))
     },
@@ -643,21 +652,23 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
       const box = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }
       // Its reach is on the screen, so it is the same size however far the canvas is zoomed.
       const reach = ERASER_REACH / zoom
-      for (const n of drawingsNear(box, reach)) {
-        const drawn = await drawingOf(n.file!)
-        if (drawn === null) continue
-        const before = strokesOn(drawn, n)
-        // Cutting, it takes out only what it passed over; else every stroke it touched, whole.
-        const after = pen().eraser === 'cut' ? cut(before, trail, reach) : erase(before, trail, reach)
-        if (after.length === before.length && after.every((s, i) => s === before[i])) continue
-        // Every stroke gone: the drawing goes from the canvas (its file stays, as a note's does).
-        if (after.length === 0) {
-          run((d) => ({ ...d, nodes: d.nodes.filter((x) => x.id !== n.id), edges: d.edges.filter((e) => e.fromNode !== n.id && e.toNode !== n.id) }))
-          continue
-        }
-        const saved = await saveDrawing(n.file!, after)
-        if (saved.ok) run((d) => ({ ...d, nodes: d.nodes.map((x) => (x.id === n.id ? patchNode(x, saved.box) : x)) }))
-      }
+      for (const near of drawingsNear(box, reach))
+        await inTurn(near.file!, async () => {
+          const n = docRef.current?.nodes.find((x) => x.id === near.id) ?? near
+          const drawn = await drawingOf(n.file!)
+          if (drawn === null) return
+          const before = strokesOn(drawn, n)
+          // Cutting, it takes out only what it passed over; else every stroke it touched, whole.
+          const after = pen().eraser === 'cut' ? cut(before, trail, reach) : erase(before, trail, reach)
+          if (after.length === before.length && after.every((s, i) => s === before[i])) return
+          // Every stroke gone: the drawing goes from the canvas (its file stays, as a note's does).
+          if (after.length === 0) {
+            run((d) => ({ ...d, nodes: d.nodes.filter((x) => x.id !== n.id), edges: d.edges.filter((e) => e.fromNode !== n.id && e.toNode !== n.id) }))
+            return
+          }
+          const saved = await saveDrawing(n.file!, after)
+          if (saved.ok) run((d) => ({ ...d, nodes: d.nodes.map((x) => (x.id === n.id ? patchNode(x, saved.box) : x)) }))
+        })
     },
     [drawingsNear, run, zoom],
   )

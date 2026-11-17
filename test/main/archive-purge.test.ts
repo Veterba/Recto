@@ -66,3 +66,20 @@ describe('purging from the archive', () => {
     expect(list().entries.map((e) => e.originalPath)).toEqual(['New.md'])
   })
 })
+
+describe('an archive list that cannot be read', () => {
+  it('is not read as empty and written over: nothing is archived, a copy of it is kept, the note stays where it is', async () => {
+    fs.mkdirSync(path.join(root, '.recto'), { recursive: true })
+    const bad = '{"retentionDays": 30, "entries": [{"id": "abc-123", "originalPath": "Old.md"'
+    fs.writeFileSync(path.join(root, '.recto', 'archive.json'), bad)
+    fs.writeFileSync(path.join(root, 'Plan.md'), '# Plan')
+    const done = await archive('Plan.md')
+    expect(done).toMatchObject({ ok: false, error: expect.stringMatching(/could not be read/) })
+    expect(fs.existsSync(path.join(root, 'Plan.md'))).toBe(true)
+    expect(fs.readFileSync(path.join(root, '.recto', 'archive.json'), 'utf8')).toBe(bad)
+    expect(fs.readdirSync(path.join(root, '.recto')).some((f) => f.startsWith('archive.json.bad-'))).toBe(true)
+    // Listing it does not write over it either.
+    list()
+    expect(fs.readFileSync(path.join(root, '.recto', 'archive.json'), 'utf8')).toBe(bad)
+  })
+})

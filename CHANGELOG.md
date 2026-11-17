@@ -4,6 +4,15 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.73.2 — 2026-11-17
+### Fixed
+- Deleting a board that fails partway (a card the Trash will not take) no longer leaves it half done with no way back: it says so, and Undo puts back what was done. A board that could not go to the Trash leaves the board it was to merge into as it was.
+- Board files are written as notes are, one write at a time and never left cut short by a crash mid-write.
+- A damaged archive list (.recto/archive.json) is no longer read as empty and written over, which lost where every archived note came from: the archive refuses until it is mended, and keeps a copy of it.
+- Two quick strokes on one drawing both stay: the second no longer saves over the first.
+- Topics are no longer written into a note that changed since Recto read it (typing, a sync); they wait for the next run.
+- Two notes or folders made at the same moment with the same name each get their own, instead of an error or one folder for both.
+
 ## v0.73.1 — 2026-11-17
 ### Fixed
 - Retry after an answer that stopped before its end replaces it, instead of leaving the cut answer above the new one in the chat.
