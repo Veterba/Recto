@@ -135,8 +135,15 @@
 .md > .note-title {
   max-height: 240px;
 }
-.md .cm-props,
+.md .cm-props {
+  max-height: 100vh;
+}
+/* Open, at most 40% of the note (backlinks.css): a limit here too, or this rule, there for the fold
+   into focus mode, let linked mentions take the whole pane and the text none. Folded, only its head. */
 .md > .backlinks {
+  max-height: 40%;
+}
+.md > .backlinks.is-collapsed {
   max-height: 100vh;
 }
 

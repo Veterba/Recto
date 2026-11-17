@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SuggestionBar } from './SuggestionBar'
 import { DrawingEditor } from './DrawingEditor'
+import { CanvasPeek } from './CanvasPeek'
 import { setCanvasSelection } from '../../../app/canvas-selection'
 import {
   applyEdgeChanges,
@@ -80,8 +81,8 @@ export type CanvasShell = {
   folders: () => readonly string[]
   /** The vault's tree, for the toolbar's note picker. */
   roots: () => readonly FileNode[]
-  /** A note opened in the pane beside this canvas's tab. */
-  openBeside: (leafId: string, path: string) => void
+  /** The sidebar folded away: a side peek takes the room. */
+  hideSidebar: () => void
 }
 
 /** The space left between nodes put down one under another. */
@@ -194,6 +195,8 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
   const [drawing, setDrawing] = useState<{ from: Point; to: Point } | null>(null)
   /** A task opened from the canvas: its card on the right, as on its board. */
   const [card, setCard] = useState<string | null>(null)
+  /** The file open in the side peek, if any. */
+  const [peek, setPeek] = useState<string | null>(null)
   /** A file opened from the canvas: a task opens beside it as its card; anything else as it always does. */
   const open = useCallback(
     (file: string) => {
@@ -959,8 +962,14 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
       canvas: path,
       openLink,
       openFile: open,
-      openBeside: (file) => shell.openBeside(leafId, file),
-      openReader: (file) => showPdf(file),
+      peek: (file) => {
+        setPeek(file)
+        shell.hideSidebar()
+      },
+      openReader: (file) => {
+        showPdf(file)
+        shell.hideSidebar()
+      },
       drawOn: (id) => {
         drawTarget.current = id
         setTool('draw')
@@ -1138,6 +1147,8 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
   const onKeyDown = useCallback(
     (ev: React.KeyboardEvent) => {
       const target = ev.target as HTMLElement
+      // The side peek's keys are its own: ⌘C there copies its text, not the canvas's cards.
+      if (target.closest('.canvas-peek') !== null) return
       // Typing in a node or a label: its own keys, except Escape, which ends the editing.
       if (target.closest('.cm-editor, input, textarea') !== null) {
         if (ev.key === 'Escape' && target.closest('.cm-editor') !== null) {
@@ -1216,7 +1227,7 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
       tabIndex={-1}
       onKeyDown={onKeyDown}
       onPaste={(ev) => {
-        if ((ev.target as HTMLElement).closest('.cm-editor, input, textarea') !== null) return
+        if ((ev.target as HTMLElement).closest('.cm-editor, input, textarea, .canvas-peek') !== null) return
         ev.preventDefault()
         const files = [...ev.clipboardData.files]
         const at =
@@ -1471,6 +1482,17 @@ function CanvasBoard({ path, leafId, shell, preview }: { path: string; leafId: s
           </svg>
         )}
       </div>
+      {peek !== null && (
+        <CanvasPeek
+          path={peek}
+          onOpen={setPeek}
+          onExpand={() => {
+            setPeek(null)
+            shell.openFile(peek)
+          }}
+          onClose={() => setPeek(null)}
+        />
+      )}
       {menu !== null && <ContextMenu items={menu.items} at={menu.at} onClose={() => setMenu(null)} />}
     </div>
   )

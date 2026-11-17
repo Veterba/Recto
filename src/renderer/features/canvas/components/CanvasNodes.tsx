@@ -60,6 +60,7 @@ export function Frame({
   minWidth = 60,
   minHeight = 40,
   keepAspect = false,
+  onOpen,
 }: {
   props: NodeProps<FlowNode>
   className: string
@@ -68,6 +69,8 @@ export function Frame({
   minHeight?: number
   /** Pictures and videos: resized with their proportions kept. */
   keepAspect?: boolean
+  /** What a double-click anywhere on it opens - a click only selects it. */
+  onOpen?: () => void
 }): React.ReactElement {
   const actions = useCanvasActions()
   const node = props.data.node
@@ -77,6 +80,14 @@ export function Frame({
       className={`canvas-node ${className}${props.selected ? ' is-selected' : ''}`}
       style={color === undefined ? undefined : ({ '--node-color': color } as React.CSSProperties)}
       {...styleData(node)}
+      onDoubleClick={
+        onOpen === undefined
+          ? undefined
+          : (ev) => {
+              ev.stopPropagation()
+              onOpen()
+            }
+      }
     >
       <NodeResizer
         isVisible={props.selected}
@@ -293,9 +304,17 @@ function MediaNode(props: NodeProps<FlowNode>): React.ReactElement {
   const node = props.data.node
   const file = node.file ?? ''
   const kind = fileKind(file)
-  const media = kind === 'image' || VIDEO.has(extensionOf(file))
+  const actions = useCanvasActions()
+  const video = VIDEO.has(extensionOf(file))
+  const media = kind === 'image' || video
+  // A video plays; a sound plays in its own controls; anything else opens in the side peek.
+  const open = video
+    ? () => actions.play({ kind: 'file', path: file, title: nameOf(file) })
+    : AUDIO.has(extensionOf(file))
+      ? undefined
+      : () => actions.peek(file)
   return (
-    <Frame props={props} className={`canvas-node--file is-${VIDEO.has(extensionOf(file)) ? 'video' : kind}`} keepAspect={media}>
+    <Frame props={props} className={`canvas-node--file is-${video ? 'video' : kind}`} keepAspect={media} {...(open === undefined ? {} : { onOpen: open })}>
       <AttachmentBody path={file} id={node.id} />
       {media && <Caption id={node.id} text={typeof node['caption'] === 'string' ? node['caption'] : ''} selected={props.selected} />}
     </Frame>
@@ -509,17 +528,12 @@ function NoteNode(props: NodeProps<FlowNode> & { board?: boolean }): React.React
       props={props}
       className={`canvas-node--note${text === null ? ' is-missing' : ''}${props.data.folded === true ? ' is-folded' : ''}`}
     >
-      <header className="canvas-note__title" onDoubleClick={() => actions.openFile(path)}>
+      <header className="canvas-note__title" onDoubleClick={() => text !== null && actions.peek(path)}>
         <Icon name={text === null ? 'alert-triangle' : 'file-text'} size={13} />
         <span>{nameOf(path)}</span>
         {props.board === true && (
           <button className="canvas-fold canvas-note__beside nodrag" aria-label="Show as a board" onClick={() => actions.toggleRaw(node.id)}>
             <Icon name="square-kanban" size={12} />
-          </button>
-        )}
-        {text !== null && (
-          <button className="canvas-fold canvas-note__beside nodrag" aria-label="Open beside the canvas" onClick={() => actions.openBeside(path)}>
-            <Icon name="panel-right-open" size={12} />
           </button>
         )}
         <button
@@ -537,7 +551,8 @@ function NoteNode(props: NodeProps<FlowNode> & { board?: boolean }): React.React
         onWheelCapture={scrollOrPan}
         onDoubleClick={(ev) => {
           ev.stopPropagation()
-          if (text !== null && text !== undefined) actions.startEditing(node.id)
+          // Opened in the side peek; Enter on a selected note writes in it here.
+          if (text !== null && text !== undefined && !editing) actions.peek(path)
         }}
       >
         {text === null ? (
@@ -665,7 +680,7 @@ export const LinkNode = memo(function LinkNode(props: NodeProps<FlowNode>): Reac
   // Dragged like any card; double-clicked, the page opens in Recto's own window. On hover, the
   // same in one click, and ↗ to the browser. Resized, it keeps its proportions, as a picture does.
   return (
-    <Frame props={props} className={`canvas-node--link${card?.image != null ? ' has-image' : ''}`} keepAspect>
+    <Frame props={props} className={`canvas-node--link${card?.image != null ? ' has-image' : ''}`} keepAspect onOpen={() => actions.openWeb(url)}>
       <div className="canvas-link__open">
         <button className="canvas-link__out nodrag" aria-label="Open in Recto window" title="Open in Recto window" onClick={() => actions.openWeb(url)}>
           <Icon name="app-window" size={13} />
@@ -674,7 +689,7 @@ export const LinkNode = memo(function LinkNode(props: NodeProps<FlowNode>): Reac
           <Icon name="external-link" size={13} />
         </button>
       </div>
-      <div className="canvas-link" onDoubleClick={() => actions.openWeb(url)} title={url}>
+      <div className="canvas-link" title={url}>
         {card?.image != null && <img className="canvas-link__image" src={card.image} alt="" draggable={false} />}
         <span className="canvas-link__host">
           {card?.icon != null ? <img className="canvas-link__icon" src={card.icon} alt="" /> : <Icon name="external-link" size={13} />}
@@ -709,25 +724,22 @@ function VideoNode({
   card: LinkPreview | null
 }): React.ReactElement {
   const actions = useCanvasActions()
+  const play = (): void =>
+    actions.play(
+      kind === 'youtube'
+        ? { kind, id, title: card?.title ?? 'YouTube', ...(card?.description != null ? { by: card.description } : {}) }
+        : { kind, id, title: card?.title ?? 'Vimeo' },
+    )
   return (
-    <Frame props={props} className="canvas-node--link canvas-node--video" keepAspect>
+    <Frame props={props} className="canvas-node--link canvas-node--video" keepAspect onOpen={play}>
       <div className="canvas-video__cover" style={card?.image != null ? { backgroundImage: `url(${card.image})` } : undefined}>
-        <button
-          className="canvas-video__play nodrag"
-          aria-label="Play the video"
-          onClick={() =>
-            actions.play(
-              kind === 'youtube'
-                ? { kind, id, title: card?.title ?? 'YouTube', ...(card?.description != null ? { by: card.description } : {}) }
-                : { kind, id, title: card?.title ?? 'Vimeo' },
-            )
-          }
-        >
+        <button className="canvas-video__play nodrag" aria-label="Play the video" onClick={play}>
           <Icon name="play" size={22} />
         </button>
-        <button className="canvas-video__title nodrag" onClick={() => actions.openUrl(url)} title={url}>
+        {/* Its title only: a click selects the card, a double-click plays it. */}
+        <span className="canvas-video__title" title={url}>
           {card?.title ?? url}
-        </button>
+        </span>
       </div>
     </Frame>
   )

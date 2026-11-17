@@ -749,9 +749,14 @@ CanvasView ── use-canvas ──▶ fs:read / fs:write ──▶ main/vault-f
   Mark done writes the board exactly as dragging does); any other note, a board note too, is read with
   `fs:read` (again on each note bus revision) and edited with `note-body.ts`, which waits 600 ms, re-reads
   the note and writes the new body under the frontmatter as it is on disk. A board is thus shown as its
-  Markdown; Obsidian `%%` comments (its settings block) are cut from what is shown. A note node's header
-  has "Open beside the canvas": `VaultShell`'s `openBeside` opens the note in another tab group of the
-  workspace, or splits the canvas's leaf when there is none. Images and audio load by `vaultFileUrl`
+  Markdown; Obsidian `%%` comments (its settings block) are cut from what is shown. A click selects a
+  node; a double-click opens it (`Frame`'s `onOpen` in `CanvasNodes.tsx`): a note or another file in the
+  side peek, a video in the player, a web link as its page, a PDF in the PDF panel. Enter on a selected
+  note writes in it on the canvas. The side peek (`components/CanvasPeek.tsx`) sits over the canvas's
+  right with no tab of its own; it draws the file as a tab would (`renderPeek` in
+  `editor/components/MarkdownView.tsx`), its links opening in it, ↗ opening the file in the canvas's tab.
+  The canvas's keys and paste ignore what happens in it. Opening it, or a PDF, folds the sidebar away
+  (`hideSidebar`, given by `VaultShell`). Images and audio load by `vaultFileUrl`
   (the vault file scheme); a video file shows its first frame (a muted `<video>` with `preload="metadata"`
   at `#t=0.1`) under a ▶ button. Pictures and videos are
   resized with their proportions kept, are put down in their own (read from the file, a second at most),

@@ -4,6 +4,18 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.74.0 — 2026-11-17
+### Added
+- A note, picture or other file on a canvas opens in a side peek beside the canvas, as in Notion: no new tab, the canvas staying where it was. Links in it open in it; ↗ opens it as a page in the canvas's tab (← comes back), » closes it.
+
+### Changed
+- On a canvas, one click selects a card and a double-click opens it: a note or a file in the side peek, a video in the player, a web link as its page, a PDF in the PDF panel. A note is written in on the canvas by selecting it and pressing Enter.
+- Opening a file or a PDF from a canvas folds the sidebar away.
+- The "Open beside the canvas" button on a note card is gone.
+
+### Fixed
+- Linked mentions, opened under a long list, take at most 40% of the note again, instead of all of it and leaving the text no room.
+
 ## v0.73.6 — 2026-11-17
 ### Fixed
 - ⌘G on a canvas with cards selected groups them and no longer opens the graph as well; with nothing selected it opens the graph as before.

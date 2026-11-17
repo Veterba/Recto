@@ -521,18 +521,29 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await expect.poll(() => read(PLAN)).toContain('"caption":"First sketch"')
   })
 
-  it('a note on the canvas opens beside it, the canvas staying in its own pane', async () => {
+  it('a note double-clicked on the canvas opens in a side peek: no new tab, the sidebar folded away, its links followed in it', async () => {
     const before = await page.locator('.tabs').count()
     await page.locator('.board__tool', { hasText: 'Zoom to fit' }).click()
     await page.waitForTimeout(200)
-    await nodeOf('a0b0c0d0e0f00044').hover()
-    await nodeOf('a0b0c0d0e0f00044').locator('[aria-label="Open beside the canvas"]').click()
-    await expect.poll(() => page.locator('.tabs').count()).toBe(before + 1)
-    await expect.poll(() => page.getByRole('tab', { name: 'Basil' }).count()).toBe(1)
-    expect(await page.locator('.canvas-view').count()).toBe(1)
-    // Closed again, so the tests after this have the one canvas.
-    await page.getByRole('button', { name: 'Close Basil' }).click()
-    await expect.poll(() => page.locator('.tabs').count()).toBe(before)
+    // One click selects it, and opens nothing.
+    await nodeOf('a0b0c0d0e0f00044').locator('.canvas-node__body').click()
+    expect(await page.locator('.canvas-peek').count()).toBe(0)
+    await nodeOf('a0b0c0d0e0f00044').locator('.canvas-node__body').dblclick()
+    const peek = page.getByRole('complementary', { name: 'Side peek' })
+    await peek.locator('.cm-content').waitFor()
+    expect(await peek.textContent()).toContain('Basil')
+    expect(await page.locator('.tabs').count()).toBe(before)
+    expect(await page.locator('.canvas-view .react-flow__node').count()).toBeGreaterThan(0)
+    await expect.poll(() => page.locator('.sidebar').count()).toBe(0)
+    // ⌘A in the peek selects its text, not the canvas's cards.
+    await peek.locator('.cm-line').first().click()
+    await page.keyboard.press('Meta+a')
+    expect(await page.locator('.canvas-node.is-selected').count()).toBeLessThanOrEqual(1)
+    await peek.getByRole('button', { name: 'Close side peek' }).click()
+    await peek.waitFor({ state: 'detached' })
+    // The sidebar back, for the tests after this.
+    await page.getByRole('button', { name: 'Show sidebar' }).click()
+    await page.waitForSelector('.sidebar')
   })
 
   it('a task opened from the canvas shows its card on the right of the canvas, as on its board, without leaving the canvas', async () => {
@@ -581,12 +592,12 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
 
   it('a note grows while it is edited on the canvas and goes back to its size after', async () => {
     const before = (JSON.parse(read(PLAN)) as { nodes: { id: string; height: number }[] }).nodes.find((n) => n.id === 'a0b0c0d0e0f00044')!.height
-    await nodeOf('a0b0c0d0e0f00044').locator('.canvas-node__body').dblclick()
+    // Written in on the canvas: selected, then Enter (a double-click opens it in the side peek).
+    await nodeOf('a0b0c0d0e0f00044').locator('.canvas-note__title').click()
+    await page.keyboard.press('Enter')
     await page.waitForFunction(() => document.activeElement?.closest('.canvas-node .cm-editor') !== null)
     for (let i = 0; i < 14; i++) await page.keyboard.type(`More ${i}\n`)
-    await expect.poll(async () => (await nodeOf('a0b0c0d0e0f00044').boundingBox())!.height).toBeGreaterThan(0)
-    const grown = await nodeOf('a0b0c0d0e0f00044').evaluate((el) => (el as HTMLElement).offsetHeight)
-    expect(grown).toBeGreaterThan(before)
+    await expect.poll(() => nodeOf('a0b0c0d0e0f00044').evaluate((el) => (el as HTMLElement).offsetHeight), { timeout: 5_000 }).toBeGreaterThan(before)
     await page.keyboard.press('Escape')
     await expect.poll(() => nodeOf('a0b0c0d0e0f00044').evaluate((el) => (el as HTMLElement).offsetHeight)).toBe(before)
     expect((JSON.parse(read(PLAN)) as { nodes: { id: string; height: number }[] }).nodes.find((n) => n.id === 'a0b0c0d0e0f00044')!.height).toBe(before)
@@ -747,6 +758,8 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     const reader = page.locator('.pdf-panel .pdf-view.is-reader')
     await expect.poll(() => reader.locator('.textLayer').first().textContent(), { timeout: 8000 }).toContain('knowledge')
     expect(await page.locator('.canvas-view').count()).toBeGreaterThan(0)
+    // The sidebar folds away to give it room.
+    await expect.poll(() => page.locator('.sidebar').count()).toBe(0)
     // Select a word in the reader, as the mouse would, and highlight it.
     await reader.evaluate((el) => {
       const span = [...el.querySelectorAll('.textLayer span')].find((s) => s.textContent?.includes('knowledge'))!
@@ -780,6 +793,9 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     expect((await page.locator('.pdf-panel').boundingBox())!.width).toBeGreaterThan(before.width + 60)
     await page.locator('.pdf-panel [aria-label="Close the PDF"]').click()
     await expect.poll(() => page.locator('.pdf-panel').count()).toBe(0)
+    // The sidebar back, for the tests after this.
+    await page.getByRole('button', { name: 'Show sidebar' }).click()
+    await page.waitForSelector('.sidebar')
   })
 
   it('a canvas outside Recto/Canvas is offered a move there, and moved only when asked', async () => {

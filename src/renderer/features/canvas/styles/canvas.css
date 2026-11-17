@@ -1063,7 +1063,7 @@
   opacity: 0;
   cursor: pointer;
 }
-/* "Open beside the canvas" first, then fold: one pushed right, the other next to it. */
+/* "Show Markdown" or "Show as a board" first, then fold: one pushed right, the other next to it. */
 .canvas-note__title .canvas-note__beside + .canvas-fold {
   margin-left: 2px;
 }
@@ -1188,7 +1188,55 @@
   background: linear-gradient(transparent, rgb(0 0 0 / 0.7));
   color: #fff;
   font-size: var(--font-size-12-5);
+}
+
+/* A file opened from the canvas, as Notion's side peek: over the canvas's right, no tab bar, the canvas left as it was. */
+.canvas-view {
+  position: relative;
+}
+.canvas-peek {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(46%, 720px);
+  min-width: 360px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -12px 0 32px rgb(0 0 0 / 0.18);
+}
+.canvas-peek__bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--size-2) var(--size-3);
+  flex: none;
+}
+.canvas-peek__button {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-s);
+  color: var(--text-secondary);
   cursor: pointer;
+}
+.canvas-peek__button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+/* As a tab holds a view (tabs.css .tabs__content > .leaf): a box of its own height, the view filling it. */
+.canvas-peek__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.canvas-peek__leaf {
+  height: 100%;
 }
 
 /* A task opened from the canvas: its card on the right, over the canvas, as beside a board's lanes. */

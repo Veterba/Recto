@@ -36,7 +36,7 @@ export function useRegisterViews(refs: {
   newCanvas: React.RefObject<() => void>
   createNamed: React.RefObject<(parent: string, name: string) => Promise<string | null>>
   /** A canvas's note opened in the pane beside it. */
-  openBeside: React.RefObject<(leafId: string, path: string) => void>
+  hideSidebar: React.RefObject<() => void>
 }): void {
   // Registered here rather than at module scope because the markdown view needs
   // a callback into the shell to follow a wikilink.
@@ -81,7 +81,7 @@ export function useRegisterViews(refs: {
     newCanvas: () => refs.newCanvas.current(),
     folders: () => allFolderPaths(refs.roots.current).filter((f) => f !== 'Recto' && !f.startsWith('Recto/')),
     roots: () => refs.roots.current,
-    openBeside: (leafId, path) => refs.openBeside.current(leafId, path),
+    hideSidebar: () => refs.hideSidebar.current(),
   })
   registerNewTabView({
     section: () => refs.section.current,

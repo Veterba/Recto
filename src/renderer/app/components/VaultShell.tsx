@@ -404,18 +404,10 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
   const newCanvasRef = useRef<() => void>(() => {})
   newCanvasRef.current = () => setAddingCanvas(true)
   const createNamedRef = useRef<(parent: string, name: string) => Promise<string | null>>(async () => null)
-  /** A note beside the canvas in `leafId`: in the pane next to it, made by splitting when there is none - as Heptabase opens a card. */
-  const openBesideRef = useRef<(leafId: string, path: string) => void>(() => {})
-  openBesideRef.current = (leafId, path) => {
-    if (active === null) return
-    const here = active.tabsContaining(leafId)
-    const other = active.allTabs().find((t) => t.id !== here?.id)
-    if (other !== undefined) {
-      active.openView('markdown', { path }, { inTabs: other.id })
-      return
-    }
-    const copy = active.splitLeaf(leafId, 'vertical')
-    if (copy !== null) active.navigate(copy.id, { type: 'markdown', state: { path } })
+  /** A canvas's side peek takes the sidebar's room. */
+  const hideSidebarRef = useRef<() => void>(() => {})
+  hideSidebarRef.current = () => {
+    if (appearance.sidebarOpen) update({ sidebarOpen: false })
   }
   useRegisterViews({
     openFile: openFileRef,
@@ -430,7 +422,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
     section: sectionRef,
     newCanvas: newCanvasRef,
     createNamed: createNamedRef,
-    openBeside: openBesideRef,
+    hideSidebar: hideSidebarRef,
   })
 
   const openPeriodicSettings = useCallback(() => openSettings('periodic'), [openSettings])

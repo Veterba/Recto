@@ -35,8 +35,8 @@ export type CanvasActions = {
   editDrawing: (id: string) => void
   /** A PDF read in the PDF panel, docked on the window's right as the AI panel is. */
   openReader: (path: string) => void
-  /** A note opened in the pane beside the canvas, the canvas staying in view. */
-  openBeside: (path: string) => void
+  /** A file opened in the side peek beside the canvas (CanvasPeek.tsx), the canvas staying in view. */
+  peek: (path: string) => void
   openUrl: (url: string) => void
   /** A web page in Recto's own window (main/web-window.ts). */
   openWeb: (url: string) => void
@@ -78,7 +78,7 @@ export const CanvasActionsContext = createContext<CanvasActions>({
   setEdgeLabel: noop,
   openLink: noop,
   openFile: noop,
-  openBeside: noop,
+  peek: noop,
   openReader: noop,
   drawOn: noop,
   editingDrawing: null,

@@ -21,7 +21,7 @@ import { headingOf, previewOf, previewTarget } from '../suggestion-model'
  */
 
 /** A canvas in a preview opens nothing and offers nothing: the shell it would use, with nothing behind it. */
-const STILL_SHELL: CanvasShell = { openFile: () => {}, openLink: () => {}, folders: () => [], roots: () => [], openBeside: () => {} }
+const STILL_SHELL: CanvasShell = { openFile: () => {}, openLink: () => {}, folders: () => [], roots: () => [], hideSidebar: () => {} }
 
 /** Everything but looking: kept from the view under it. A canvas's empty plane may still be dragged, to look around. */
 function still(ev: React.SyntheticEvent): void {

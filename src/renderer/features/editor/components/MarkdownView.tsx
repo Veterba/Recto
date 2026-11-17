@@ -527,6 +527,19 @@ export function renderNoteEditor(path: string, onRenamed: (next: string) => void
   return editorFor?.(path, onRenamed) ?? <div className="pane-empty" />
 }
 
+/** Where a file shown outside a tab - a canvas's side peek - sends what is opened from it, and a rename. */
+export type PeekRoutes = { onOpenPath: (path: string) => void; onRenamed: (next: string) => void }
+
+let peekFor: ((path: string, routes: PeekRoutes) => React.ReactElement) | null = null
+
+/**
+ * A file as a tab shows it - a note, a picture, a PDF, a text file - for a side peek. Links followed in it
+ * go to `routes.onOpenPath` (the peek itself), not to the tab the peek sits in.
+ */
+export function renderPeek(path: string, routes: PeekRoutes): React.ReactElement {
+  return peekFor?.(path, routes) ?? <div className="pane-empty" />
+}
+
 /** A note, or what its feature draws for it. A component, so the feature's hook can run. */
 function NoteHost({ path, editor, hosts }: { path: string; editor: React.ReactElement; hosts: NoteHosts }): React.ReactElement {
   return hosts.useHosted(path) ? hosts.render(path, editor) : editor
@@ -558,6 +571,30 @@ export function registerMarkdownView(
     />
   )
   editorFor = (path, onRenamed) => editor(path, null, onRenamed)
+  peekFor = (path, routes) => {
+    const kind = fileKind(path)
+    if (kind === 'image' || kind === 'pdf') return <FileView key={path} path={path} />
+    if (kind !== 'note') return <CodeView key={path} path={path} />
+    const peeked = (
+      <MarkdownEditor
+        key={path}
+        path={path}
+        heading={null}
+        onOpenLink={(target) => {
+          void api.invoke(IPC.indexResolveLink, target, path).then((resolved) => {
+            if (resolved !== null) routes.onOpenPath(resolved)
+          })
+        }}
+        onOpenPath={(p) => routes.onOpenPath(p)}
+        getLinkCandidates={getLinkCandidates}
+        livePreview={getLivePreview()}
+        vim={getVim()}
+        showTitle={getShowTitle()}
+        onRenamed={routes.onRenamed}
+      />
+    )
+    return <NoteHost key={path} path={path} hosts={hosts} editor={peeked} />
+  }
   linkCandidatesFor = getLinkCandidates
   return registerView({
     type: 'markdown',
