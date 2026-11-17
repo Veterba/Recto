@@ -10,6 +10,7 @@ import {
   percentile,
   saysNotFound,
   score,
+  ungroundedClaims,
   type Answered,
   type QuickTurn,
 } from '../../scripts/evals/metrics.ts'
@@ -419,5 +420,14 @@ describe('writing in the vault', () => {
     expect(newRunId(vault, 'baseline', new Date(2026, 9, 3, 9, 5))).toBe('2026-10-03 09-05 — baseline (2)')
     expect(newRunId(vault, 'taken', new Date(2026, 9, 3, 9, 6))).toBe('2026-10-03 09-06 — taken (2)')
     expect(noteNames(vault).has('eval 2026-10-03 09-05 — baseline')).toBe(true)
+  })
+})
+
+describe('a made-up title around one it had', () => {
+  it('“Tokyo trip” is not hidden by “Tokyo”, which it had; a reference to “Tokyo” itself is grounded', () => {
+    const context = [{ path: 'Travel/Tokyo.md', title: 'Tokyo', heading: '', score: 1 }]
+    const vault = ['Tokyo', 'Tokyo trip', 'Kyoto']
+    expect(ungroundedClaims('See **Tokyo trip** for the plan.', context, vault)).toEqual(['Tokyo trip'])
+    expect(ungroundedClaims('See **Tokyo** and [[Tokyo]].', context, vault)).toEqual([])
   })
 })

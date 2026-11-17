@@ -120,3 +120,19 @@ describe('the job registry', () => {
     expect(h.jobs.list().filter((j) => j.topic === 'a.md')).toHaveLength(1)
   })
 })
+
+describe('ended jobs', () => {
+  it('only the newest twenty are kept: a topic never asked again does not keep its answer in memory for good', async () => {
+    const h = harness()
+    const ids: string[] = []
+    for (let i = 0; i < 25; i++) {
+      const job = h.jobs.enqueue(input(`topic-${i}.md`))
+      ids.push(job.id)
+      h.runs.get(job.id)!.finish()
+      await h.tick()
+    }
+    expect(h.jobs.list()).toHaveLength(20)
+    expect(h.jobs.get(ids[0]!)).toBeUndefined()
+    expect(h.state(ids.at(-1)!)).toBe('done')
+  })
+})

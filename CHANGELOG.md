@@ -4,6 +4,16 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.73.1 — 2026-11-17
+### Fixed
+- Retry after an answer that stopped before its end replaces it, instead of leaving the cut answer above the new one in the chat.
+- The chat panel says "No edit was created" when an answer claims an edit waits but made none, as Quick ask does.
+- Accept all and Reject all in Suggested edits show they are working and cannot be clicked twice.
+- Opening another vault while a suggestion is being applied no longer writes the rest of it into the new vault; Suggested edits shows the new vault's suggestions at once.
+- Search by meaning from cloud chats and connected apps includes notes changed since the background last read them.
+- A note that could not be read for a moment (syncing, locked) no longer loses its topics.
+- Finished answers no longer pile up in memory while Recto runs.
+
 ## v0.73.0 — 2026-11-16
 ### Added
 - AI can list the notes with a tag - nested tags too - or with a property or one of its values, without words to search for; the other files in a folder (PDFs, pictures); recent notes in one folder.

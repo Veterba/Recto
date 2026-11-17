@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fromFileName, topicPaths } from '../../../../src/renderer/features/bots/chat-topics-model'
-import { appendTurns, parseTopic, topicFile } from '../../../../src/shared/chat-topics'
+import { appendTurns, parseTopic, topicFile, withoutLastAnswer } from '../../../../src/shared/chat-topics'
 import { describeStatus } from '../../../../src/renderer/features/bots/hooks/use-bots'
 import { OllamaProvider } from '../../../../src/main/bots/provider'
 import type { BotMessage } from '../../../../src/shared/bots'
@@ -166,5 +166,15 @@ describe('model status', () => {
     const body = JSON.parse(String((fetch.mock.calls[0]![1] as RequestInit).body)) as { messages: Record<string, unknown>[] }
     expect(body.messages[1]).toEqual({ role: 'user', content: 'This? [picture 1: a.png]', images: ['QUJD'] })
     expect(body.messages[0]).toEqual({ role: 'system', content: 'S' })
+  })
+})
+
+describe('a retry after an interrupted answer', () => {
+  it('takes the last answer out, and only an answer - not a question, nor a heading in a code block', () => {
+    const body = '## You\n\nSoil?\n\n## Recto\n\nCompost and\n\n<!-- recto:meta {"interrupted":true} -->'
+    expect(withoutLastAnswer(body, ['Recto'])).toBe('## You\n\nSoil?')
+    expect(withoutLastAnswer('## You\n\nSoil?', ['Recto'])).toBe('## You\n\nSoil?')
+    const fenced = '## You\n\nShow it\n\n## Recto\n\n```md\n## Recto\n```\nDone'
+    expect(withoutLastAnswer(fenced, ['Recto'])).toBe('## You\n\nShow it')
   })
 })

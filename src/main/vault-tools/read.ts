@@ -13,7 +13,7 @@ import { periodNotePath } from '../../shared/periodic'
 import { type Period } from '../../shared/templates'
 import type { ResultBlock } from '../../shared/vault-tools'
 import { send } from '../index-client'
-import { searchVectors } from '../bots/vectors'
+import { searchVectors, syncVectors } from '../bots/vectors'
 import { folderOf, readNote, titleOf, ToolError, type Scope } from './scope'
 
 /**
@@ -83,6 +83,9 @@ export async function getAiGuide(scope: Scope): Promise<ResultBlock[]> {
   return [data({ path: guide }), noteBlock(guide, await readNote(guide), 'guide')]
 }
 
+/** How long a search by meaning waits for notes changed since to be embedded. */
+const SYNC_MS = 5000
+
 export async function searchNotes(scope: Scope, a: Args): Promise<ResultBlock[]> {
   const query = typeof a['query'] === 'string' ? a['query'] : null
   const mode = a['mode'] as 'text' | 'semantic' | 'both'
@@ -147,6 +150,9 @@ export async function searchNotes(scope: Scope, a: Args): Promise<ResultBlock[]>
   }
   let semantic = false
   if (mode !== 'text') {
+    // Notes changed since the background last embedded them, brought up to date first - for a few seconds at most;
+    // what is left goes on, and the search runs on what is there by then.
+    await Promise.race([syncVectors(scope.settings.excluded).catch(() => undefined), new Promise((r) => setTimeout(r, SYNC_MS))])
     // By meaning, the nearest chunks are taken first and filtered after: a wider net when filters will thin it.
     const found = await searchVectors(query, filtered ? 400 : 60, scope.settings.excluded)
     semantic = found.length > 0

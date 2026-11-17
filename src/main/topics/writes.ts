@@ -57,7 +57,8 @@ export async function writePending(ctx: Context, state: TopicsState): Promise<{ 
     if (written >= NOTES_PER_RUN) break
     const read = await vaultFs.readFile(p)
     if (!read.ok) {
-      next = setOwned(setAssigned(next, p, []), p, [])
+      // Gone: what it was given goes with it. Only unreadable now (synced, locked): kept, and tried at the next run.
+      if (vaultFs.existing([p]).length === 0) next = setOwned(setAssigned(next, p, []), p, [])
       continue
     }
     const want = (next.assigned[p] ?? []).filter((id) => allowed(next, p, id))

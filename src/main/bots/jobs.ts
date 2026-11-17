@@ -39,6 +39,9 @@ const STALLED = 'No sign of the answer for three minutes, so it was stopped.'
 let counter = 0
 const newId = (): string => `job-${Date.now().toString(36)}-${(++counter).toString(36)}`
 
+/** Ended jobs kept, newest first, for what their chats show (an error's Retry, the last steps). */
+const KEEP_ENDED = 20
+
 export class Jobs {
   private readonly jobs = new Map<string, BotJob>()
   private readonly queue: string[] = []
@@ -179,6 +182,15 @@ export class Jobs {
   }
 
   /** The one way a job ends. Frees the queue if it was the running one, and starts the next. */
+  /**
+   * Ended jobs past the newest `KEEP_ENDED`, forgotten: their answer is in its topic's file, and a topic never
+   * asked again kept its last job - with the whole answer's text - for as long as Recto ran.
+   */
+  private forgetOld(): void {
+    const ended = [...this.jobs.values()].filter((j) => !isActive(j))
+    for (const j of ended.slice(0, Math.max(0, ended.length - KEEP_ENDED))) this.jobs.delete(j.id)
+  }
+
   private end(id: string, state: Extract<JobState, 'done' | 'error' | 'cancelled'>, error: string | null): void {
     const job = this.jobs.get(id)
     if (job !== undefined && isActive(job)) {
@@ -186,6 +198,7 @@ export class Jobs {
       job.error = state === 'error' ? (error ?? job.error ?? 'The answer failed.') : null
       job.position = 0
       this.o.onChange({ ...job })
+      this.forgetOld()
     }
     if (this.running?.id === id) {
       this.running = null

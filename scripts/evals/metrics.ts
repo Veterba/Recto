@@ -167,9 +167,10 @@ const mentions = (answer: string, item: string): boolean => item.split('|').some
 /**
  * Notes the answer refers to without having had them: a [[link]] to anything
  * not in its context, or a vault note's title set off as a reference - in
- * quotes, «», bold or brackets. Titles of notes it did have are taken out of
- * the text first ("2026-09-28" inside "2026-09-28 — v0.9" is not a claim), and
- * a title merely used as words in a sentence ("weekly goals") is not one either.
+ * quotes, «», bold or brackets. A reference to a note it did have is
+ * grounded, compared whole (a title it had inside a longer one it did not -
+ * "Tokyo" in "Tokyo trip" - does not hide the longer one), and a title merely
+ * used as words in a sentence ("weekly goals") is not a claim either.
  */
 export function ungroundedClaims(
   answer: string,
@@ -178,22 +179,23 @@ export function ungroundedClaims(
   contextText = '',
 ): string[] {
   const given = fold(contextText)
-  const had = [...new Set(context.flatMap((c) => [fold(noteName(c.path)), fold(c.title)]))].sort((a, b) => b.length - a.length)
-  let text = fold(answer)
-  for (const h of had) if (h !== '') text = text.split(h).join(' ')
+  // The notes it had, by name and title: a reference to one of them is grounded. Compared whole - taken out of the
+  // text first, a note it had ("Tokyo") hid one it did not, written around it ("Tokyo trip").
+  const had = new Set(context.flatMap((c) => [fold(noteName(c.path)), fold(c.title)]).filter((h) => h !== ''))
+  const text = fold(answer)
   const titles = new Map(vaultTitles.map((t) => [fold(t), t]))
   const out = new Set<string>()
   for (const m of text.matchAll(/\[\[([^\]|#]+)/g)) {
     const t = m[1]!.trim()
     // A link copied from a note it was given is that note's claim, not the answer's.
-    if (t !== '' && !given.includes(`[[${t}`)) out.add(titles.get(t) ?? t)
+    if (t !== '' && !had.has(t) && !given.includes(`[[${t}`)) out.add(titles.get(t) ?? t)
   }
   const quoted = /[«“"„]([^»”"\n]{2,80})[»”"]|\*\*([^*\n]{2,80})\*\*|\*([^*\n]{2,80})\*|\(([^)\n]{2,80})\)/g
   for (const m of text.matchAll(quoted)) {
     const inner = (m[1] ?? m[2] ?? m[3] ?? m[4] ?? '').trim().replace(/\.md$/, '')
     const title = titles.get(inner)
     // Words quoted from the notes it was given ("Weekly goals — asked by 7 of 12") are not a claim about another note.
-    if (title !== undefined && !given.includes(inner)) out.add(title)
+    if (title !== undefined && !had.has(inner) && !given.includes(inner)) out.add(title)
   }
   if (contextText !== '') {
     for (const n of numberClaims(answer, contextText)) out.add(`number ${n}`)

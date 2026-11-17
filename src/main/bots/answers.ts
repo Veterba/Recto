@@ -2,7 +2,7 @@ import { syncVectors } from './vectors'
 import { BrowserWindow, Notification, powerSaveBlocker } from 'electron'
 import type { AiMessage } from '../../shared/ai'
 import { botThreadFolder, isActive, type Bot, type BotJob, type BotMessage, type BotSource, type BotStep } from '../../shared/bots'
-import { appendTurns, cleanTitle, createdStamp, parseTopic, topicFile, topicFileName, type ChatTopicMeta } from '../../shared/chat-topics'
+import { appendTurns, withoutLastAnswer, cleanTitle, createdStamp, parseTopic, topicFile, topicFileName, type ChatTopicMeta } from '../../shared/chat-topics'
 import { langOfText } from '../../shared/bot-status'
 import { answerLang, honestAnswer } from './honesty'
 import { IPC_EVENT } from '../../shared/ipc'
@@ -236,6 +236,14 @@ async function runJob(job: BotJob, controls: RunControls): Promise<void> {
     topic = { ...topic, body: appendTurns(topic.body, [{ role: 'user', content: job.question, at: createdStamp(new Date()) }], bot.name) }
     await writeTopic(job.topic, topic)
     controls.update({ question: null })
+  }
+  // A retry after an answer that stopped before its end: the new answer takes its place, not a second one after it.
+  if (job.question === null) {
+    const before = parseTopic(topicFile(topic.meta, topic.extra, topic.body), assistantsOf(bot)).messages.at(-1)
+    if (before?.role === 'assistant' && (before.interrupted === true || before.job !== undefined)) {
+      topic = { ...topic, body: withoutLastAnswer(topic.body, assistantsOf(bot)) }
+      await writeTopic(job.topic, topic)
+    }
   }
   const parsed = parseTopic(topicFile(topic.meta, topic.extra, topic.body), assistantsOf(bot))
   const excluded = coerceAiAccess(readState(AI_ACCESS_STATE)).excluded

@@ -17,7 +17,7 @@ const state: Record<string, unknown> = {}
 vi.mock('electron', () => ({ app: { on: () => undefined, getPath: () => os.tmpdir() } }))
 vi.mock('../../src/main/vault', () => ({ currentVault: () => ({ path: root, name: 'v' }) }))
 vi.mock('../../src/main/state', () => ({ readState: (feature: string) => state[feature] ?? null, writeState: () => ({ ok: true }) }))
-vi.mock('../../src/main/bots/vectors', () => ({ searchVectors: async () => [] }))
+vi.mock('../../src/main/bots/vectors', () => ({ searchVectors: async () => [], syncVectors: async () => ({}) }))
 vi.mock('../../src/main/topics/storage', () => ({
   readSettings: () => ({ enabled: topicsOn }),
   readTopics: () => ({ topics: [{ id: 't1', name: 'Gardening' }, { id: 't2', name: 'Divorce' }], deleted: [] }),

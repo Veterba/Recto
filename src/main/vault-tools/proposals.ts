@@ -45,6 +45,11 @@ function save(list: Proposal[]): void {
     .sort((a, b) => b.created - a.created)
     .slice(0, KEEP_SETTLED)
   writeState(AI_PROPOSALS_STATE, { proposals: [...pending, ...settled] })
+  proposalsChanged()
+}
+
+/** Tell the window the suggestions changed - or that another vault's are the ones now (a vault opened). */
+export function proposalsChanged(): void {
   const window = BrowserWindow.getAllWindows()[0]
   if (window !== undefined) sendEvent(window, IPC_EVENT.aiProposalsChanged)
 }
@@ -175,11 +180,16 @@ export function pruneBackups(root: string, cutoff: number): void {
 async function write(
   files: Draft['files'],
 ): Promise<{ ok: true } | { ok: false; stale: true; path: string } | { ok: false; stale: false; error: string }> {
+  // The vault it was asked in: another opened meanwhile, nothing more is written - its notes are not these.
+  const vault = currentVault()?.path ?? null
+  const moved = (): boolean => (currentVault()?.path ?? null) !== vault
   for (const f of files) if ((await current(f.path)) !== f.before) return { ok: false, stale: true, path: f.path }
   const done: Draft['files'] = []
   for (const f of files) {
+    if (moved()) return { ok: false, stale: false, error: 'Another vault was opened while this was being applied; nothing more was written.' }
     const written = await vaultFs.writeFile(f.path, f.after)
     if (!written.ok) {
+      if (moved()) return { ok: false, stale: false, error: 'Another vault was opened while this was being applied.' }
       for (const back of done.reverse())
         if (back.before === null) await vaultFs.trash(back.path)
         else await vaultFs.writeFile(back.path, back.before)

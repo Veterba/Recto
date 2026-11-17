@@ -116,8 +116,14 @@ function Panel({ shown, waiting, onClose }: { shown: Proposal[]; waiting: Propos
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
+  // One at a time, the buttons off until all are done: a second click does not send them all again.
+  const [busy, setBusy] = useState<'accept' | 'reject' | null>(null)
   const every = (channel: typeof IPC.aiProposalApply | typeof IPC.aiProposalDiscard): void => {
-    for (const p of waiting) void api.invoke(channel, p.id).catch(() => undefined)
+    if (busy !== null) return
+    setBusy(channel === IPC.aiProposalApply ? 'accept' : 'reject')
+    void (async () => {
+      for (const p of [...waiting]) await api.invoke(channel, p.id).catch(() => undefined)
+    })().finally(() => setBusy(null))
   }
   return (
     <>
@@ -135,11 +141,11 @@ function Panel({ shown, waiting, onClose }: { shown: Proposal[]; waiting: Propos
           </h2>
           {waiting.length > 1 && (
             <>
-              <button className="btn btn--ghost btn--sm" onClick={() => every(IPC.aiProposalDiscard)}>
-                Reject all
+              <button className="btn btn--ghost btn--sm" disabled={busy !== null} onClick={() => every(IPC.aiProposalDiscard)}>
+                {busy === 'reject' ? 'Rejecting…' : 'Reject all'}
               </button>
-              <button className="btn btn--sm" onClick={() => every(IPC.aiProposalApply)}>
-                Accept all
+              <button className="btn btn--sm" disabled={busy !== null} onClick={() => every(IPC.aiProposalApply)}>
+                {busy === 'accept' ? 'Accepting…' : 'Accept all'}
               </button>
             </>
           )}

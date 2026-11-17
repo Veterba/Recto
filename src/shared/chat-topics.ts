@@ -205,6 +205,32 @@ export function turnText(message: BotMessage & { label?: string }, botName: stri
   return `${heading}\n\n${message.content.trim()}${comment === '' ? '' : `\n\n${comment}`}\n`
 }
 
+/**
+ * The body without its last turn, when that turn is an assistant's (`## <name>` for a name in
+ * `assistants`); unchanged otherwise. Fence-aware, as `parseTopic` is: a heading inside a code block in
+ * an answer is not a turn.
+ */
+export function withoutLastAnswer(body: string, assistants: readonly string[]): string {
+  const lines = body.split('\n')
+  const answerHeadings = new Set(assistants.map((name) => `## ${name}`))
+  let fence: Fence = null
+  let last = -1
+  let lastIsAnswer = false
+  lines.forEach((line, i) => {
+    const next = nextFence(line, fence)
+    const fenceLine = next !== fence
+    fence = next
+    if (fence !== null || fenceLine) return
+    const t = line.trim()
+    if (t === '## You' || answerHeadings.has(t)) {
+      last = i
+      lastIsAnswer = answerHeadings.has(t)
+    }
+  })
+  if (last === -1 || !lastIsAnswer) return body
+  return lines.slice(0, last).join('\n').replace(/\s+$/, '')
+}
+
 /** A body with turns added at the end; what was there is left untouched. */
 export function appendTurns(body: string, turns: readonly BotMessage[], botName: string): string {
   const base = body.replace(/\s+$/, '')

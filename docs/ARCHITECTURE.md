@@ -514,6 +514,13 @@ renderer chat / Quick ask ──IPC──▶ main/bots/answers.ts  runCloudJob (
   asks: every call checks both, so an answer stops when the vault changes or cloud is turned off
   mid-answer; a vault switch or close also stops running answers, Quick ask runs and the background
   jobs (`windDownAi` in `ipc.ts`).
+- **Smaller rules.** A retry after an interrupted answer takes that answer out of the topic first
+  (`withoutLastAnswer`, fence-aware); the jobs keep the newest 20 ended ones (`KEEP_ENDED`). An apply
+  stops writing when another vault opens meanwhile (`write` in `proposals.ts`), and opening a vault tells
+  the window its suggestions changed (`proposalsChanged`). `search_notes` by meaning brings changed notes'
+  vectors up to date first, for 5 s at most (`syncVectors`). A topic writer that cannot read a note keeps
+  what it gave it unless the note is gone. Eval rescoring writes a new run in the vault's evals folder,
+  saying what it was rescored from - the run itself, and the repo's older runs, are never edited.
 - **Settings' list** (`statuses`, `IPC.providers`): looked at once by whoever asks while a look runs; a
   provider that throws is a row saying so, the others still show; the CLIs' sign-ins are asked again on
   Check again, and otherwise kept a minute. The Anthropic key is checked with the model list (free); a

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  */
 
 let root = ''
+const vectorOrder: string[] = []
 type Request = { kind: string; paths?: string[] }
 let answer: (request: Request) => Promise<unknown> = async () => ({})
 const asked: Request[] = []
@@ -19,7 +20,7 @@ vi.mock('../../src/main/state', () => ({
   readState: (n: string) => (n.includes('ai-access') ? { excluded: ['Private'] } : null),
   writeState: () => ({ ok: true }),
 }))
-vi.mock('../../src/main/bots/vectors', () => ({ searchVectors: async () => [] }))
+vi.mock('../../src/main/bots/vectors', () => ({ searchVectors: async () => { vectorOrder.push('search'); return [] }, syncVectors: async () => { vectorOrder.push('sync'); return {} } }))
 vi.mock('../../src/main/index-client', () => ({
   send: async (request: Request) => {
     asked.push(request)
@@ -181,5 +182,14 @@ describe('list_tasks gives what changing a task takes', () => {
     const tasks = dataOf(await listTasks(buildScope('test'), { status: 'open', limit: 50 }))['tasks'] as Record<string, unknown>[]
     expect(tasks).toContainEqual(expect.objectContaining({ text: 'Buy compost', path: 'Daily/2026-11-12.md', line: 4 }))
     expect(tasks).toContainEqual(expect.objectContaining({ text: 'Ship it', card: 'Ship it', board: 'Launch', priority: 'high' }))
+  })
+})
+
+describe('search by meaning', () => {
+  it('brings the notes changed since up to date before it searches', async () => {
+    vectorOrder.length = 0
+    answer = async (r) => (r.kind === 'vault-meta' ? meta() : r.kind === 'search' ? { kind: 'search-result', hits: [] } : {})
+    await searchNotes(buildScope('test'), { query: 'soil', mode: 'semantic', limit: 10 })
+    expect(vectorOrder).toEqual(['sync', 'search'])
   })
 })

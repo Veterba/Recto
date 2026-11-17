@@ -6,6 +6,7 @@ import { RectoBot, type BotState } from '../../recto-bot'
 import type { LoadedTopic } from '../chat-topics-model'
 import { groupMessages } from '../grouping'
 import { Markdown } from './Markdown'
+import { claimsPendingEdit } from '@shared/answer-record'
 import { withoutPictures } from '@shared/chat-pictures'
 import { ChatPictures } from './ChatPictures'
 import { modelLabel } from './ModelMenu'
@@ -152,6 +153,8 @@ export function TopicBlock({
   const groups = groupMessages(topic.messages)
   // The edits an answer suggested, as they stand now: shown under it, to apply right there.
   const proposals = useProposals()
+  // A suggestion of the topic's that still waits for Apply: then an answer saying one waits is not a false claim.
+  const waiting = topic.messages.some((m) => (m.record?.proposals ?? []).some((id) => proposals.get(id)?.status === 'pending'))
   // The face goes beside the latest answer: the one coming, or else the last one written.
   const lastBot = pending !== null ? -1 : groups.findLastIndex((g) => g.role === 'assistant')
   return (
@@ -175,6 +178,14 @@ export function TopicBlock({
                     const proposal = proposals.get(id)
                     return proposal === undefined ? null : <SuggestionCard key={id} proposal={proposal} inChat />
                   })}
+                  {/* Says an edit waits, made none, and none of the topic's waits either - as Quick ask says it. */}
+                  {message.role === 'assistant' &&
+                    message.interrupted !== true &&
+                    message.job === undefined &&
+                    message.record !== undefined &&
+                    message.record.proposals.length === 0 &&
+                    !waiting &&
+                    claimsPendingEdit(message.content) && <p className="msg-aside">No edit was created</p>}
                   {message.sources !== undefined && <Sources sources={message.sources} onOpen={actions.onOpen} />}
                   {/* Stopped before its end: marked so, or left with the id of a job no longer running (the app was killed). */}
                   {(message.interrupted === true || message.job !== undefined) && (

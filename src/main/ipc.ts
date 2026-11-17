@@ -30,7 +30,7 @@ import { chooseVaultFolder, closeVault, currentVault, forgetRecentVault, openVau
 import { clearKey, keyStatus, writeKey } from './secrets'
 import { markSelfWrite, startWatching, stopWatching } from './watcher'
 import { registerAiAccessIpc } from './vault-tools/ipc'
-import { setRelocate } from './vault-tools/proposals'
+import { proposalsChanged, setRelocate } from './vault-tools/proposals'
 import { moveCanvasState, registerCanvasIpc, registerLinkPreviews } from './canvas'
 import { registerPlayer } from './player'
 import { registerWebWindow } from './web-window'
@@ -212,6 +212,8 @@ export function registerIpc(): void {
     // Success or not, something is open now - the new vault, or the old one
     // still - and it needs its watcher, index and sync back.
     if (result.ok || previous !== null) rewatch()
+    // Its suggestions are the ones to show now, not the last vault's.
+    if (result.ok) proposalsChanged()
     return result
   })
   handle(IPC.vaultClose, () => {
