@@ -13,6 +13,8 @@ const name = path.basename(process.argv[1])
 const args = process.argv.slice(2)
 const scenario = process.env.FAKE_SCENARIO ?? 'ok'
 const out = (event) => process.stdout.write(`${JSON.stringify(event)}\n`)
+/** A reset time this far from now, in seconds: a fixed date passes, and a window that has reset is left out. */
+const inSeconds = (from) => Math.floor(Date.now() / 1000) + from
 
 // Pre-flight: signed in?
 if ((args[0] === 'login' && args[1] === 'status') || (args[0] === 'auth' && args[1] === 'status')) {
@@ -45,7 +47,7 @@ if (name === 'codex' && args[0] === 'app-server') {
           result: {
             rateLimits: {
               limitId: 'codex',
-              primary: { usedPercent: 6, windowDurationMins: 43200, resetsAt: 1794917533 },
+              primary: { usedPercent: 6, windowDurationMins: 43200, resetsAt: inSeconds(30 * 24 * 3600) },
               secondary: null,
               planType: 'free',
               rateLimitReachedType: null,
@@ -97,7 +99,7 @@ process.stdin.on('end', async () => {
       type: 'rate_limit_event',
       rate_limit_info: {
         status: 'allowed',
-        unifiedWindows: { five_hour: { utilization: 0.38, resetsAt: 1794917533 }, seven_day: { utilization: 0.12, resetsAt: 1795417533 } },
+        unifiedWindows: { five_hour: { utilization: 0.38, resetsAt: inSeconds(5 * 3600) }, seven_day: { utilization: 0.12, resetsAt: inSeconds(7 * 24 * 3600) } },
       },
     })
     out({ type: 'result', subtype: 'success', is_error: false, result: 'Your notes say compost, loam and grit.', usage: { input_tokens: 1200, output_tokens: 80 } })

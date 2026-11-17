@@ -439,7 +439,8 @@ describe.skipIf(!RUN)('boards as notes', () => {
     // The board note moves first, its cards one by one after it, the old folder last.
     await until(() => fs.existsSync(path.join(vault, boardPath)) && !fs.existsSync(path.join(vault, DIR)))
     expect(fs.existsSync(path.join(vault, 'Recto/Boards/Launch plan/Record the demo.md'))).toBe(true)
-    expect(parseKanban(board()).settings['new-note-folder']).toBe('Recto/Boards/Launch plan')
+    // Its new-note-folder is written once the moves are done.
+    await expect.poll(() => parseKanban(board()).settings['new-note-folder'], { timeout: 10_000 }).toBe('Recto/Boards/Launch plan')
     await page.locator('.board__name', { hasText: 'Launch plan' }).waitFor()
     // The note that linked the board links it under its new name.
     await until(() => read('Plans.md').includes('[[Launch plan]]'))

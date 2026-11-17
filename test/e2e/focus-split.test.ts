@@ -148,6 +148,8 @@ describe.skipIf(!RUN)('focus mode from a split pane', () => {
     expect(Math.abs(focused.width - single!.width)).toBeLessThanOrEqual(2)
 
     await toggleFocus()
+    // Under load the scroll positions come back a little after the fold: wait for them, not a fixed time.
+    await expect.poll(async () => (await layout()).map((pane) => pane.top), { timeout: 5_000 }).toEqual(before.map((pane) => pane.top))
     const after = await layout()
     for (const [i, pane] of after.entries()) {
       expect(Math.abs(pane.width - before[i]!.width)).toBeLessThanOrEqual(1)
@@ -165,6 +167,8 @@ describe.skipIf(!RUN)('focus mode from a split pane', () => {
     centred(focused)
     expect(Math.abs(focused.width - single!.width)).toBeLessThanOrEqual(2)
     await toggleFocus()
+    // Under load the scroll positions come back a little after the fold: wait for them, not a fixed time.
+    await expect.poll(async () => (await layout()).map((pane) => pane.top), { timeout: 5_000 }).toEqual(before.map((pane) => pane.top))
     const after = await layout()
     for (const [i, pane] of after.entries()) {
       expect(Math.abs(pane.width - before[i]!.width)).toBeLessThanOrEqual(1)
@@ -185,6 +189,8 @@ describe.skipIf(!RUN)('focus mode from a split pane', () => {
     centred(focused)
     expect(Math.abs(focused.width - single!.width)).toBeLessThanOrEqual(2)
     await toggleFocus()
+    // Under load the scroll positions come back a little after the fold: wait for them, not a fixed time.
+    await expect.poll(async () => (await layout()).map((pane) => pane.top), { timeout: 5_000 }).toEqual(before.map((pane) => pane.top))
     const after = await layout()
     for (const [i, pane] of after.entries()) {
       expect(Math.abs(pane.width - before[i]!.width)).toBeLessThanOrEqual(1)

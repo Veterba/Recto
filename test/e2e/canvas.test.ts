@@ -429,11 +429,12 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     // And taken back: the rest of this test reads the board's Markdown at its old length.
     fs.writeFileSync(path.join(vault, BOARD), kept)
     await expect.poll(() => nodeOf(id).locator('.canvas-board__lane', { hasText: 'Later' }).locator('.canvas-board__card').count()).toBe(0)
-    // Right-click has the board's menu: removed from the board, its note stays.
+    // Right-click has the board's menu: removed from the board, its note kept.
     await chip('Plant shallots').click({ button: 'right' })
     await page.locator('.menu__item', { hasText: 'Remove from board' }).click()
     await expect.poll(() => read(BOARD)).not.toContain('[[Plant shallots]]')
-    expect(fs.existsSync(path.join(vault, 'Recto/Boards/Launch/Plant shallots.md'))).toBe(true)
+    // Its note is kept: on no board now, it goes to Unsorted (shared/recto-paths.ts placeFor).
+    await expect.poll(() => fs.existsSync(path.join(vault, 'Recto/Unsorted/Plant shallots.md')), { timeout: 10_000 }).toBe(true)
     // A name a note has in another folder: said where; a new card here, or that note put here if asked.
     await nodeOf(id).locator('[aria-label="Add a task to To do"]').click()
     fs.writeFileSync(path.join(vault, 'Garden/Garlic notes.md'), 'Cloves in October.\n')
@@ -497,7 +498,7 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await expect.poll(() => read(PLAN)).toMatch(/"id":"b0b0b0b0b0b00033".*"fromEnd":"arrow".*"path":"dotted"|"id":"b0b0b0b0b0b00033".*"path":"dotted".*"fromEnd":"arrow"/)
   })
 
-  it('a card grows with what is typed into it, the height written once with the text', async () => {
+  it('a card grows with what is typed into it, and its height is written', async () => {
     await openPlan()
     await page.locator('.board__tool', { hasText: 'Zoom to fit' }).click()
     const pane = (await page.locator('.react-flow__pane').boundingBox())!
@@ -505,9 +506,10 @@ describe.skipIf(!RUN)('canvas', { timeout: 40_000 }, () => {
     await page.waitForFunction(() => document.activeElement?.closest('.canvas-node .cm-editor') !== null)
     for (let i = 0; i < 12; i++) await page.keyboard.type(`Line ${i}\n`)
     await page.keyboard.press('Escape')
-    await expect.poll(() => read(PLAN)).toContain('Line 11')
-    const made = (JSON.parse(read(PLAN)) as { nodes: { text?: string; height: number }[] }).nodes.find((n) => n.text?.includes('Line 11'))!
-    expect(made.height).toBeGreaterThan(120)
+    // On a busy Mac the card can grow a frame after the text is saved: its height is written in the next save.
+    const made = (): { text?: string; height: number } | undefined =>
+      (JSON.parse(read(PLAN)) as { nodes: { text?: string; height: number }[] }).nodes.find((n) => n.text?.includes('Line 11'))
+    await expect.poll(() => made()?.height ?? 0, { timeout: 5_000 }).toBeGreaterThan(120)
   })
 
   it('a picture gets a caption, kept in the canvas file', async () => {

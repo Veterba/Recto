@@ -164,7 +164,8 @@ describe.skipIf(!RUN)('suggested edits', { timeout: 60_000 }, () => {
     await card.getByRole('button', { name: 'Preview' }).click()
     const preview = page.getByRole('dialog', { name: 'Preview of the suggestion' })
     await expect.poll(() => preview.locator('.react-flow__node').allTextContents()).toEqual([expect.stringContaining('Soil'), expect.stringContaining('Compost')])
-    expect(await preview.locator('.react-flow__edge').count()).toBe(1)
+    // An arrow is drawn once both its cards are measured, a frame or more after the cards.
+    await expect.poll(() => preview.locator('.react-flow__edge').count()).toBe(1)
     expect(await preview.locator('.suggestion-preview__notes').textContent()).toBe('1 card added · 1 arrow added')
     expect(await preview.textContent()).not.toContain('"nodes"')
     await preview.getByRole('button', { name: 'Close', exact: true }).click()

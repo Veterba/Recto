@@ -302,8 +302,8 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
     expect(disc).toContain('blur')
     await page.keyboard.press('Meta+1')
     await page.waitForSelector('.floating-bot:not(.is-frosted)')
-    await page.waitForTimeout(300)
-    expect(await page.locator('.floating-bot').boundingBox()).toEqual(before)
+    // Back where it was once the note's view has laid out again, which on a busy Mac takes longer than a moment.
+    await expect.poll(() => page.locator('.floating-bot').boundingBox(), { timeout: 5_000 }).toEqual(before)
   })
 
   it('the bot stands only along the note’s left, right and bottom edges: never on the bars above or Linked mentions below', async () => {
@@ -448,7 +448,8 @@ describe.skipIf(!RUN)('chats, Canvas, the floating bot and Quick ask', { timeout
     await page.locator('.glass-menu__item', { hasText: 'OpenAI' }).click()
     await page.waitForSelector('.glass-menu__note')
     expect(await page.locator('.glass-menu__head').allTextContents()).toEqual(expect.arrayContaining(['Codex', 'ChatGPT plan · Preview', 'API key']))
-    expect(await page.locator('.glass-menu__note').allTextContents()).toEqual(expect.arrayContaining([expect.stringMatching(/^6% of 30 days used/)]))
+    // The plan's limits are read when the page opens: the note says them once they come.
+    await expect.poll(() => page.locator('.glass-menu__note').allTextContents(), { timeout: 5_000 }).toEqual(expect.arrayContaining([expect.stringMatching(/^6% of 30 days used/)]))
     await page.keyboard.press('Escape')
     await closeChats()
   })

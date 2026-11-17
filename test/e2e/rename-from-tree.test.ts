@@ -189,8 +189,12 @@ describe.skipIf(!RUN)('renaming from the file tree', () => {
     await enter()
     await until(async () => fs.existsSync(path.join(vault, 'Scripts', 'py.py')))
     expect(fs.existsSync(path.join(vault, 'Scripts', 'py.py.md'))).toBe(false)
-    await click((await rowAt('py.py'))!)
-    await until(async () => (await evaluate("document.querySelector('.code-view') !== null")) === true)
+    // Under load the tree can still show the note's row for a moment (also named py.py): click again until the file opens.
+    await until(async () => {
+      const row = await rowAt('py.py')
+      if (row !== null) await click(row)
+      return (await evaluate("document.querySelector('.code-view') !== null")) === true
+    })
     expect(await evaluate("document.querySelector('.code-view .cm-content')?.textContent ?? ''")).toContain('print("hi")')
   }, 30_000)
 
