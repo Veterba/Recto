@@ -154,7 +154,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
 
   // `![[image.png]]` embeds find a file by name anywhere in the vault, the way
   // Obsidian does, so the editor needs every file's path - not just notes.
-  useEffect(() => setVaultFiles(allFilePaths(tree.roots)), [tree.roots])
+  useEffect(() => setVaultFiles(tree.roots), [tree.roots])
 
   // Bot definitions are per vault, and edited by hand outside the watched notes.
   useEffect(() => reloadBots(), [vault.path])

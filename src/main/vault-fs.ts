@@ -77,14 +77,16 @@ export function listTree(): FileNode[] {
       } else if (entry.isFile()) {
         let mtime = 0
         let size = 0
+        let ctime = 0
         try {
           const stat = fs.statSync(absolute)
           mtime = stat.mtimeMs
           size = stat.size
+          ctime = stat.birthtimeMs > 0 ? stat.birthtimeMs : stat.ctimeMs
         } catch {
           continue // vanished between readdir and stat
         }
-        nodes.push({ path: relative, name: entry.name, kind: 'file', mtime, size })
+        nodes.push({ path: relative, name: entry.name, kind: 'file', mtime, size, ctime })
       }
     }
     return sortNodes(nodes)

@@ -14,14 +14,9 @@
  *    indexer ignores them: that is code, not a reference.
  */
 
+import { MARKDOWN_LINK, markdownTarget, WIKILINK } from '../shared/link-syntax'
 import { nextFence, type Fence } from '../shared/parse'
 import { isCrlf } from '../shared/line-endings'
-
-const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
-/** `[text](target)`, the other way to write a link. `!` in front is an embed. */
-const MARKDOWN_LINK = /(?<!!)(\[[^\]]*\])\(([^)\n]*)\)/g
-/** Schemes and shapes that are not a note in this vault. */
-const NOT_A_NOTE = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i
 
 const normalize = (value: string): string => value.normalize('NFC').toLowerCase().replace(/\.md$/, '')
 
@@ -61,35 +56,6 @@ function replacementTarget(original: string, oldPath: string, newPath: string): 
   return hadExtension ? `${kept}.md` : kept
 }
 
-/**
- * Take a markdown link's `(...)` apart: the note it points at, and everything
- * around it that has to come back untouched - angle brackets, a `#heading`, a
- * `"title"`. Returns null when it does not point at a note in this vault.
- */
-function splitUrl(url: string): { path: string; prefix: string; suffix: string; encoded: boolean } | null {
-  const angled = /^<(.*)>$/.exec(url.trim())
-  const inner = angled?.[1] ?? url
-  const title = /\s+"[^"]*"$/.exec(inner)
-  const withoutTitle = title === null ? inner : inner.slice(0, title.index)
-  const hash = withoutTitle.indexOf('#')
-  const raw = hash === -1 ? withoutTitle : withoutTitle.slice(0, hash)
-  const heading = hash === -1 ? '' : withoutTitle.slice(hash)
-  const trimmed = raw.trim()
-  if (trimmed === '' || NOT_A_NOTE.test(trimmed)) return null
-  let decoded = trimmed
-  try {
-    decoded = decodeURIComponent(trimmed)
-  } catch {
-    // A stray '%' is not an escape; take the path as written.
-  }
-  return {
-    path: decoded,
-    prefix: angled === null ? '' : '<',
-    suffix: `${heading}${title?.[0] ?? ''}${angled === null ? '' : '>'}`,
-    encoded: trimmed.includes('%20'),
-  }
-}
-
 type RewriteResult = { text: string; count: number }
 
 /**
@@ -119,8 +85,9 @@ export function rewriteWikiLinks(text: string, oldPath: string, newPath: string,
       return `[[${leading}${replacementTarget(target, oldPath, newPath)}${trailing}${heading}${alias}]]`
     })
 
-    return wiki.replace(MARKDOWN_LINK, (whole, text: string, url: string) => {
-      const parsed = splitUrl(url)
+    return wiki.replace(MARKDOWN_LINK, (whole, bang: string, text: string, url: string) => {
+      // `![alt](image.png)` is an embed, not a link to a note.
+      const parsed = bang === '!' ? null : markdownTarget(url)
       if (parsed === null || !pointsAt(parsed.path, oldPath, exact)) return whole
       count++
       const replaced = replacementTarget(parsed.path, oldPath, newPath)
@@ -128,7 +95,7 @@ export function rewriteWikiLinks(text: string, oldPath: string, newPath: string,
       // spaces keeps those. Either is valid markdown, and the smaller edit is
       // the one that does not change how the rest of the note is written.
       const encoded = parsed.encoded ? replaced.replace(/ /g, '%20') : replaced
-      return `${text}(${parsed.prefix}${encoded}${parsed.suffix})`
+      return `[${text}](${parsed.prefix}${encoded}${parsed.suffix})`
     })
   })
 
@@ -163,14 +130,14 @@ export function mapLinkTargets(
       const trailing = /\s*$/.exec(target)?.[0] ?? ''
       return `[[${leading}${next}${trailing}${heading}${alias}]]`
     })
-    return wiki.replace(MARKDOWN_LINK, (whole, label: string, url: string) => {
-      const parsed = splitUrl(url)
+    return wiki.replace(MARKDOWN_LINK, (whole, bang: string, label: string, url: string) => {
+      const parsed = bang === '!' ? null : markdownTarget(url)
       if (parsed === null) return whole
       const next = map(parsed.path, 'markdown')
       if (next === null) return whole
       changes.push({ from: parsed.path, to: next })
       const encoded = parsed.encoded ? next.replace(/ /g, '%20') : next
-      return `${label}(${parsed.prefix}${encoded}${parsed.suffix})`
+      return `[${label}](${parsed.prefix}${encoded}${parsed.suffix})`
     })
   })
   return { text: out.join(isCrlf(text) ? '\r\n' : '\n'), changes }

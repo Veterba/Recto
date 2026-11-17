@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { coerceAiAccess, isExcludedPath, AI_ACCESS_STATE, type AiAccessSettings } from '../../shared/ai-access'
-import { formatLink, resolveLinkpath, splitSubpath } from '../../shared/obsidian-links'
+import { formatLink, linkVault, resolveLinkpath, splitSubpath } from '../../shared/obsidian-links'
 import { isChatPath } from '../../shared/recto-paths'
 import { coerceTemplateSettings, type TemplateSettings } from '../../shared/templates'
 import { readState } from '../state'
@@ -30,8 +30,10 @@ export type Scope = {
   /** Not for any tool: excluded by the person, Recto's chats, or not a note. */
   hidden: (p: string) => boolean
   /**
-   * The visible note a link means, read from the note it is in (`source`, ''
-   * for none), by Obsidian's rules (shared/obsidian-links.ts) - or null.
+   * The visible note a link means, read from the note it is in (`source`), by
+   * Obsidian's rules (shared/obsidian-links.ts) - or null. Without `source`, a
+   * name a tool was given: the visible note of that name when the vault's pick
+   * is hidden.
    */
   resolve: (target: string, source?: string) => string | null
   /**
@@ -43,7 +45,7 @@ export type Scope = {
   linkTo: (p: string, source: string) => string
   /** Not for any tool, as a file of any kind: excluded by the person, Recto's chats, or outside what the call may see. */
   fileHidden: (p: string) => boolean
-  /** The visible file of any kind a link or a name means, read from `source` ('' for none) - or null. */
+  /** The visible file of any kind a link (from `source`) or a name (no `source`) means - or null, as `resolve`. */
   resolveFile: (target: string, source?: string) => string | null
   /** The file a tool is given, as a path or a name with its extension: its path, or a ToolError - none, or a name several files have. */
   needFile: (target: string) => string
@@ -90,17 +92,25 @@ export function buildScope(client: string, limit: ScopeLimit = { notes: null }):
   const files = currentLinkVault()
   const format = { newLinkFormat: currentLinkSettings().newLinkFormat, useMarkdownLinks: false }
 
-  const clean = (target: string): string => splitSubpath(target.trim().replace(/^\[\[|\]\]$/g, '').split('|')[0]!).path.trim()
-  const resolve = (target: string, source = ''): string | null => {
-    const found = resolveLinkpath(clean(target), source, files)
-    return found === null || hidden(found) ? null : found
-  }
+  const clean = (target: string): string => splitSubpath(target.trim().replace(/^\[\[|\]\]$/g, '').split('|')[0]!.replace(/\\$/, '')).path.trim()
   const fileHidden = (p: string): boolean =>
     isChatPath(p) || isExcludedPath(p, settings.excluded) || (limit.notes !== null && !limit.notes.has(p))
-  const resolveFile = (target: string, source = ''): string | null => {
-    const found = resolveLinkpath(clean(target), source, files)
-    return found === null || fileHidden(found) ? null : found
+  /** The files a tool may see, to find a name in when the vault's pick for it is one it may not. */
+  const seen = linkVault([...files.byPath.values()].filter((f) => !fileHidden(f.path)))
+  /**
+   * A link in a note (`source` given) means what it opens for the person: a hidden file is no file. A name a
+   * tool was given (no `source`) is looked for among what the tool may see when the vault's pick is hidden -
+   * `Plan` is the visible Work/Plan.md, though [[Plan]] opens an excluded A/Plan.md.
+   */
+  const find = (target: string, source: string | undefined, isHidden: (p: string) => boolean): string | null => {
+    const found = resolveLinkpath(clean(target), source ?? '', files)
+    if (found !== null && !isHidden(found)) return found
+    if (source !== undefined) return null
+    const named = resolveLinkpath(clean(target), '', seen)
+    return named === null || isHidden(named) ? null : named
   }
+  const resolve = (target: string, source?: string): string | null => find(target, source, hidden)
+  const resolveFile = (target: string, source?: string): string | null => find(target, source, fileHidden)
 
   return {
     vault: vault.path,

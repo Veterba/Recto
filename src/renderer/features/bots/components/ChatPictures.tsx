@@ -8,7 +8,7 @@ export function ChatPictures({ text }: { text: string }): React.ReactElement | n
   return (
     <div className="msg-mine__pictures">
       {pictures.map((p, i) => {
-        const path = p.target.includes('/') ? p.target : (resolveVaultFile(p.target) ?? p.target)
+        const path = resolveVaultFile(p.target) ?? p.target
         return (
           <span key={i} className="msg-mine__picture">
             {p.kind === 'video' ? (

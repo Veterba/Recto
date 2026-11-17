@@ -8,6 +8,7 @@
  * (`formatLink`).
  */
 
+import { aliasOf, MARKDOWN_LINK, markdownTarget, WIKILINK } from './link-syntax'
 import { nextFence, type Fence } from './parse'
 
 /** A file as the rules see it: its vault path, and when it was made (Obsidian's order among equals). */
@@ -285,21 +286,18 @@ export function rewriteForRename(
   }
   const next = outsideCode(text, (line) =>
     line
-      // Wikilinks and embeds: [[target]], [[target|alias]], ![[...]].
-      .replace(/(!?)\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (whole, bang: string, target: string, alias: string | undefined) => {
-        const hit = retarget(target)
-        return hit === null ? whole : write(hit, false, bang === '!', alias)
+      // Wikilinks and embeds: [[target]], [[target|alias]], ![[...]]; a table's [[target\|alias]] keeps its \|.
+      .replace(new RegExp(`(!?)${WIKILINK.source}`, 'g'), (whole, bang: string, target: string, subpath = '', alias: string | undefined) => {
+        const hit = retarget(target + subpath)
+        if (hit === null) return whole
+        const link = write(hit, false, bang === '!', aliasOf(alias))
+        return alias?.startsWith('\\') === true ? link.replace('|', '\\|') : link
       })
       // Markdown links: [text](target), ![text](target); targets with a scheme (https:, mailto:) are not files.
-      .replace(/(!?)\[([^\]]*)\]\(([^)\s]+)\)/g, (whole, bang: string, label: string, raw: string) => {
-        if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return whole
-        let target: string
-        try {
-          target = decodeURI(raw)
-        } catch {
-          target = raw
-        }
-        const hit = retarget(target)
+      .replace(MARKDOWN_LINK, (whole, bang: string, label: string, url: string) => {
+        const parsed = markdownTarget(url)
+        if (parsed === null) return whole
+        const hit = retarget(parsed.path + parsed.subpath)
         return hit === null ? whole : write(hit, true, bang === '!', label)
       }),
   )

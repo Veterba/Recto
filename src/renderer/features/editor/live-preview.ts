@@ -11,6 +11,7 @@ import { bullet, mdLink, hidden, TaskBox, ImageWidget, LinkLabel } from './live-
 import { blockHiding } from './block-hiding'
 import { inlineTag, InlineHtmlWidget } from './html-blocks'
 import { linkKindOf, onLinkKinds } from '../../app/link-kinds'
+import { aliasOf, WIKILINK } from '@shared/link-syntax'
 
 /** The boards' link icons changed (a card moved, a board was made): redraw the links. */
 const linkKindsChanged = StateEffect.define<null>()
@@ -43,8 +44,8 @@ const MARKERS = new Set([
 ])
 
 const IMAGE = /!\[([^\]]*)\]\(([^)\s]+)\)/g
-const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g
-const EMBED = /!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g
+/** `![[target|size]]`; in a table the pipe is `\|`. */
+const EMBED = /!\[\[([^\]|]+?)\\?(?:\|([^\]]+))?\]\]/g
 /** `> [!type]` with an optional fold sign and title. */
 export const CALLOUT_HEAD = /^(\s*>\s*)\[!([\w-]+)\]([+-]?)(.*)$/
 const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
@@ -274,7 +275,7 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
         const start = line.from + (match.index ?? 0)
         const end = start + match[0].length
         const target = match[1]?.trim() ?? ''
-        const alias = match[3]?.slice(1).trim()
+        const alias = aliasOf(match[3])?.trim()
         // A canvas shows as its name, as Obsidian shows it; the text keeps `.canvas`.
         const label = alias !== undefined && alias !== '' ? alias : target.replace(/\.canvas$/i, '')
         const heading = match[2]?.trim() ?? ''

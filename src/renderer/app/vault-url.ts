@@ -1,3 +1,6 @@
+import { linkVault, resolveLinkpath, type LinkFile, type LinkVault } from '@shared/obsidian-links'
+import type { FileNode } from '@shared/vault'
+
 /**
  * Turning a vault-relative path into something an `<img>` can load.
  *
@@ -41,28 +44,25 @@ export function vaultFileUrl(relative: string): string {
 }
 
 /**
- * Every file in the vault by lower-cased name, for resolving `![[name]]`.
- *
- * Obsidian embeds find a file by its NAME, anywhere in the vault, not by path -
- * so a note copied out of Obsidian says `![[diagram.png]]` and expects that to
- * work wherever the image lives. Set from the file tree whenever it changes.
+ * The vault's files, for resolving `![[name]]` the way a click on a link
+ * resolves it: by Obsidian's rules, from the note the embed is in
+ * (shared/obsidian-links.ts). Set from the file tree whenever it changes.
  */
-let byName = new Map<string, string>()
+let files: LinkVault = linkVault([])
 
-export function setVaultFiles(paths: readonly string[]): void {
-  const next = new Map<string, string>()
-  for (const path of paths) {
-    const name = path.slice(path.lastIndexOf('/') + 1).toLowerCase()
-    // Shortest path wins on a clash, the way Obsidian prefers the nearer file.
-    const existing = next.get(name)
-    if (existing === undefined || path.length < existing.length) next.set(name, path)
+export function setVaultFiles(roots: readonly FileNode[]): void {
+  const out: LinkFile[] = []
+  const walk = (nodes: readonly FileNode[]): void => {
+    for (const node of nodes) {
+      if (node.kind === 'folder') walk(node.children ?? [])
+      else out.push({ path: node.path, ctime: node.ctime ?? 0 })
+    }
   }
-  byName = next
+  walk(roots)
+  files = linkVault(out)
 }
 
-/** A vault-relative path for `![[name]]`, or null. A path-like name is taken as written. */
-export function resolveVaultFile(name: string): string | null {
-  const clean = name.trim()
-  if (clean.includes('/')) return clean
-  return byName.get(clean.toLowerCase()) ?? null
+/** The vault path `![[target]]` in the note at `source` ('' for none) means, or null. */
+export function resolveVaultFile(target: string, source = ''): string | null {
+  return resolveLinkpath(target.trim(), source, files)
 }

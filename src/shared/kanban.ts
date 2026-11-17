@@ -1,4 +1,5 @@
 import { parseFrontmatter, withoutBom } from './frontmatter'
+import { MARKDOWN_LINK, markdownTarget, WIKILINK } from './link-syntax'
 
 /**
  * Boards as notes, in the file format of the Obsidian Kanban plugin
@@ -36,7 +37,7 @@ export type KanbanItem = {
   checkChar: string
   /** The text after the checkbox, continuation lines joined with \n and unindented. */
   text: string
-  /** The note it names, when the text starts with a `[[link]]`: then it is a card that is a note. */
+  /** The note it names, when the text starts with a `[[link]]` or a `[text](link.md)`: then it is a card that is a note. */
   link: string | null
   /** The item's lines exactly as written, to find it again after the file changed. */
   raw: string
@@ -84,7 +85,17 @@ const ITEM = /^( {0,3})([-*+])[ \t]+(?:\[(.)\](?:[ \t]+|$))?(.*)$/
 const FENCE = /^ {0,3}(```|~~~)/
 const BREAK = /^ {0,3}(?:\*[ \t]*){3,}$|^ {0,3}(?:-[ \t]*){3,}$|^ {0,3}(?:_[ \t]*){3,}$/
 const COMPLETE = /^(?:\*\*Complete\*\*|Complete)$/
-const LINK = /^\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|[^\]\n]*)?\]\]/
+const LINK = new RegExp(`^${WIKILINK.source}`)
+const MD_LINK = new RegExp(`^${MARKDOWN_LINK.source}`)
+
+/** The note a card's first line starts with a link to; a Markdown link's `.md` is left off, as a wikilink leaves it. */
+function linkOfCard(first: string): string | null {
+  const wiki = LINK.exec(first)?.[1]?.trim()
+  if (wiki !== undefined) return wiki
+  const markdown = MD_LINK.exec(first)
+  const parsed = markdown === null || markdown[1] === '!' ? null : markdownTarget(markdown[3] ?? '')
+  return parsed === null ? null : parsed.path.replace(/\.md$/i, '')
+}
 const SETTINGS_OPEN = '%% kanban:settings'
 
 const lineBreak = (text: string): string => (text.includes('\r\n') ? '\r\n' : '\n')
@@ -146,7 +157,7 @@ function readItem(lines: readonly string[], at: number, limit: number): KanbanIt
     checked: checkChar !== ' ',
     checkChar,
     text,
-    link: LINK.exec(first)?.[1]?.trim() ?? null,
+    link: linkOfCard(first),
     raw: lines.slice(at, end).join('\n'),
   }
 }

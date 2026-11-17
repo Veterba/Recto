@@ -1,3 +1,4 @@
+import { WIKILINK } from '../../shared/link-syntax'
 import { isCrlf, toLf, withEndings } from '../../shared/line-endings'
 import fs from 'node:fs'
 import type { CanvasOp } from '../../shared/canvas-ops'
@@ -30,7 +31,7 @@ type Args = Record<string, unknown>
 /** What a write tool proposes; `canvas`: a canvas's edits (shared/canvas-ops.ts), `files` the canvas with all of them. */
 export type Draft = { summary: string; files: FileChange[]; formatted: string[]; canvas?: { path: string; ops: CanvasOp[] }; file?: FileOp }
 
-const WIKI = /(?<!!)\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|[^\]\n]*)?\]\]/g
+const WIKI = new RegExp(`(?<!!)${WIKILINK.source}`, 'g')
 const MD_NOTE = /(?<!!)\[[^\]\n]*\]\(([^()\s]+\.md)(?:#[^)\s]*)?\)/g
 
 const count = (text: string, re: RegExp): Map<string, number> => {
@@ -68,10 +69,14 @@ function checkLinks(scope: Scope, p: string, before: string, after: string, newL
       throw new ToolError(
         `[[${target}]] could mean ${same.length} notes (${same.join(', ')}). Write the one you mean: ${same.map((other) => `[[${scope.linkTo(other, p)}]]`).join(' or ')}.`,
       )
-    if (scope.resolve(target, p) === null)
+    if (scope.resolve(target, p) === null) {
+      // The name is a visible note's, but from here the link opens another one it may not see.
+      const meant = scope.resolve(target)
+      if (meant !== null) throw new ToolError(`[[${target}]] does not lead to “${meant}” from this note. Write [[${scope.linkTo(meant, p)}]].`)
       throw new ToolError(
         `[[${target}]] links to no note in this vault. Link an existing note by its exact name (search_notes finds it), or list "${target}" in new_links if a note of that name is meant to be made later.`,
       )
+    }
   }
   if (scope.settings.formatting.linkForm === 'markdown') return
   const oldMd = count(before, MD_NOTE)

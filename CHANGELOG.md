@@ -4,6 +4,14 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.73.4 — 2026-11-17
+### Fixed
+- Pictures embedded with `![[name]]` show the same file a click on the link opens: the one near the note first, and a partial path such as `![[sub/pic.png]]` is found. A chat shows the picture that is sent to the AI.
+- Renaming a note updates Markdown links to it written with spaces, `<angle brackets>` or a title, such as `[see](<Old note.md>)`, which were counted as links but left pointing at nothing.
+- A link in a table, `[[Note\|alias]]`, links to Note: it no longer shows as broken, counts in backlinks and the graph, and is updated when Note is renamed, its `\|` kept.
+- A board card that starts with a Markdown link, `[text](note.md)`, is a card for that note, as a `[[note]]` card is, and keeps pointing at it when its board is merged into another.
+- The AI finds a note you can see when an excluded note has the same name, instead of saying there is no such note; a link it writes that would open the excluded one is refused with the link to write instead.
+
 ## v0.73.3 — 2026-11-17
 ### Fixed
 - A damaged search index (.recto/index.db, after a crash or a sync conflict) no longer leaves search, backlinks, boards, the graph and topics empty on every launch: Recto moves it aside as index.db.corrupt-<time> and builds a new one from your notes. Version history from before stays only in that copy.

@@ -44,6 +44,8 @@ export type FileNode = {
   /** Present on files only; used to decide whether a reindex is needed. */
   mtime?: number
   size?: number
+  /** Present on files only: when it was made, Obsidian's last tie-break between same-named files (shared/obsidian-links.ts). */
+  ctime?: number
 }
 
 /** What the watcher reports. One event per path, already debounced by chokidar. */

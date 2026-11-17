@@ -1,7 +1,11 @@
 import { highlightsIn } from './highlights'
 import katex from 'katex'
+import { Facet } from '@codemirror/state'
 import { EditorView, WidgetType } from '@codemirror/view'
 import { resolveVaultFile, vaultFileUrl } from '../../app/vault-url'
+
+/** The note the text is in, read when an embed is drawn: `![[name]]` is found from there, as a click finds a link. */
+export const embedSource = Facet.define<() => string, () => string>({ combine: (values) => values[0] ?? (() => '') })
 
 /**
  * Widgets for the Obsidian syntax Live Preview renders: maths, tables,
@@ -231,7 +235,7 @@ export class EmbedWidget extends WidgetType {
     if (IMAGE_EXT.test(name)) {
       const wrap = document.createElement('span')
       wrap.className = 'cm-image'
-      const path = resolveVaultFile(name)
+      const path = resolveVaultFile(name, view.state.facet(embedSource)())
       if (path === null) {
         wrap.classList.add('is-missing')
         wrap.textContent = `Image not found: ${name}`

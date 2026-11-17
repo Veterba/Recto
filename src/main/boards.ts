@@ -222,7 +222,13 @@ export function createBoardOps({ relocate, listBoards }: Deps) {
           const card = item.link === null ? null : resolve(item.link, boardPath)
           if (card !== null && there.has(card)) continue
           // Its link written again for the board it goes to: the same words there could mean another note.
-          const line = card === null ? item.text : item.text.replace(/\[\[[^\]|]*/, () => formatLink(card, choice.to, linkFiles, linkFormat, { markdown: false }).slice(0, -2))
+          // A Markdown link stays one, its text kept.
+          const line =
+            card === null
+              ? item.text
+              : item.text.startsWith('[[')
+                ? item.text.replace(/\[\[[^\]|]*/, () => formatLink(card, choice.to, linkFiles, linkFormat, { markdown: false }).slice(0, -2))
+                : item.text.replace(/^\[([^\]]*)\]\([^)\n]*\)/, (_, label: string) => formatLink(card, choice.to, linkFiles, linkFormat, { markdown: true, alias: label }))
           next = insertItem(next, index, Number.MAX_SAFE_INTEGER, line.replace(/\n/g, '\n    '), item.checked)
         }
       }

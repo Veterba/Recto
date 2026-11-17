@@ -12,6 +12,7 @@ import { activeFormats } from './active-formats'
 import { markedLines } from './marked-lines'
 import { blockDecorations } from './blocks'
 import { imageDrop } from './images'
+import { embedSource } from './rich-widgets'
 import { noSetextHeadings, obsidianSyntax } from './obsidian-syntax'
 import { noteStructure } from './structure'
 import { foldAll, foldedLines, restoreFolds, toggleFoldAt, unfoldAll } from './folding'
@@ -291,6 +292,7 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Edito
         livePreviewCompartment.of(livePreview((v) => v.state.field(unresolvedField, false) ?? new Set<string>())),
         editorTheme(),
         imageDrop(options.getLinkSource ?? (() => '')),
+        embedSource.of(options.getLinkSource ?? (() => '')),
         linkClick,
         linkHover,
         EditorView.lineWrapping,

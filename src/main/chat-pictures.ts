@@ -136,10 +136,8 @@ export function preparePicture(bytes: Uint8Array, path: string): AiImage | null 
 
 const electronDeps: PictureDeps = {
   frames: (path, count) => videoFrames(`recto-file://vault/${path.split('/').map(encodeURIComponent).join('/')}`, count),
-  resolve: (target) => {
-    if (target.includes('/')) return target.replace(/^\.?\//, '')
-    return resolveLinkpath(target, '', currentLinkVault())
-  },
+  // As the chat shows it (ChatPictures.tsx): by Obsidian's rules, else the path as written.
+  resolve: (target) => resolveLinkpath(target, '', currentLinkVault()) ?? (target.includes('/') ? target.replace(/^\.?\//, '') : null),
   read: async (path) => {
     const read = await vaultFs.readBytes(path)
     return read.ok ? read.data : null

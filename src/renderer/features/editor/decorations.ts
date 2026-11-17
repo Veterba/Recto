@@ -1,5 +1,6 @@
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import { RangeSetBuilder, StateEffect, StateField, type Extension } from '@codemirror/state'
+import { WIKILINK } from '@shared/link-syntax'
 
 /**
  * Decorations for the syntax the markdown grammar does not know about:
@@ -14,7 +15,6 @@ import { RangeSetBuilder, StateEffect, StateField, type Extension } from '@codem
  * document. On a long note that is the difference between instant and janky.
  */
 
-const WIKILINK = /\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g
 const TAG = /(^|[\s(<])(#[\p{L}\p{N}][\p{L}\p{N}_/-]*)/gu
 const TASK = /^(\s*[-*+]\s+)(\[[ xX]\])/
 

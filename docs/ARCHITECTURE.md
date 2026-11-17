@@ -215,6 +215,18 @@ Several files may share a name; a folder holds one file of a name, in any case.
 - **Reading a link** is relative to the note it is in: `/path` from the vault's top, `./` and `../`
   from the note; an exact vault path first; else same-named files in the note's own folder or below,
   then the shorter path, then the file made first. Links to pictures and other files resolve too.
+  Embeds (`![[a.png]]`) in the editor and chats resolve the same way: the renderer's `app/vault-url.ts`
+  keeps a `linkVault` built from the file tree (which carries each file's creation time), and an embed
+  is read from the note it is in (the `embedSource` facet in `features/editor/rich-widgets.ts`).
+- **One link syntax.** `src/shared/link-syntax.ts` holds the wikilink pattern (`WIKILINK`, where a
+  table's `[[Note\|alias]]` is a link to Note), the Markdown-link pattern and `markdownTarget` (`<a b.md>`,
+  `%20`, a `"title"`, a `#subpath`). The index (`parse.ts`), the editor's link marks, both rename
+  rewriters, board cards (`kanban.ts`: a card may start with `[text](note.md)`) and the AI's link checks
+  read links with them.
+- **AI scope.** A link in a note means for the AI what it opens for the person: when Obsidian's pick is
+  an excluded note, it is no note. A name given to a tool (`scope.resolve` / `resolveFile` without a
+  source) is looked for among what the tool may see when Obsidian's pick is hidden; a link the AI writes
+  that would open the hidden note is refused with the form that reaches the visible one.
 - **The spec is measured.** `docs/dev/obsidian-link-rules.md` records what Obsidian 1.15.0 does.
   `test/fixtures/obsidian-links-measured.ts` holds its answers, shared by
   `test/shared/obsidian-links.test.ts` and `test/e2e/rename-links.test.ts`.

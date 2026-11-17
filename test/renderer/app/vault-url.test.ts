@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { hasVault, setVaultPath, vaultFileUrl } from '../../../src/renderer/app/vault-url'
+import { hasVault, resolveVaultFile, setVaultFiles, setVaultPath, vaultFileUrl } from '../../../src/renderer/app/vault-url'
+import type { FileNode } from '../../../src/shared/vault'
 
 /**
  * Image URLs.
@@ -53,5 +54,22 @@ describe('vaultFileUrl', () => {
   it('leaves traversal to the URL parser and to main', () => {
     setVaultPath('/Users/x/vault')
     expect(vaultFileUrl('../../.ssh/id_rsa')).toBe('recto-file://vault/../../.ssh/id_rsa')
+  })
+})
+
+describe('an embed finds its file as a link does', () => {
+  const file = (path: string, ctime = 0): FileNode => ({ path, name: path.slice(path.lastIndexOf('/') + 1), kind: 'file', ctime })
+  const folder = (path: string, children: FileNode[]): FileNode => ({ path, name: path, kind: 'folder', children })
+  setVaultFiles([folder('Work', [file('Work/x.md'), folder('Work/img', [file('Work/img/a.png'), file('Work/img/sub/b.png')])]), folder('Z', [file('Z/a.png')])])
+
+  it('the file near the note it is in comes first, as Obsidian has it', () => {
+    expect(resolveVaultFile('a.png', 'Work/x.md')).toBe('Work/img/a.png')
+    expect(resolveVaultFile('a.png', 'Other.md')).toBe('Z/a.png')
+  })
+
+  it('a partial or relative path finds the file, any case', () => {
+    expect(resolveVaultFile('sub/B.png', 'Work/x.md')).toBe('Work/img/sub/b.png')
+    expect(resolveVaultFile('./img/a.png', 'Work/x.md')).toBe('Work/img/a.png')
+    expect(resolveVaultFile('missing.png', 'Work/x.md')).toBeNull()
   })
 })
