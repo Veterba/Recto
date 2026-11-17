@@ -4,6 +4,10 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.74.1 — 2026-11-17
+### Changed
+- Recto is licensed under the GNU General Public License, version 3 or any later version (GPL-3.0-or-later), instead of MIT.
+
 ## v0.74.0 — 2026-11-17
 ### Added
 - A note, picture or other file on a canvas opens in a side peek beside the canvas, as in Notion: no new tab, the canvas staying where it was. Links in it open in it; ↗ opens it as a page in the canvas's tab (← comes back), » closes it.

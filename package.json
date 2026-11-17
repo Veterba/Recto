@@ -1,8 +1,8 @@
 {
   "name": "recto",
-  "version": "0.74.0",
+  "version": "0.74.1",
   "description": "Local-first, markdown-on-disk knowledge app",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
