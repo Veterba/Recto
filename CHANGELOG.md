@@ -4,6 +4,10 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.73.3 — 2026-11-17
+### Fixed
+- A damaged search index (.recto/index.db, after a crash or a sync conflict) no longer leaves search, backlinks, boards, the graph and topics empty on every launch: Recto moves it aside as index.db.corrupt-<time> and builds a new one from your notes. Version history from before stays only in that copy.
+
 ## v0.73.2 — 2026-11-17
 ### Fixed
 - Deleting a board that fails partway (a card the Trash will not take) no longer leaves it half done with no way back: it says so, and Undo puts back what was done. A board that could not go to the Trash leaves the board it was to merge into as it was.

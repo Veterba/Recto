@@ -49,6 +49,10 @@ Recto is an Electron app over a folder of markdown files. The files are the trut
 - **indexer** and **embedder** are utility processes so a first index of a large vault, or a model
   run, never blocks the window. Main talks to them with typed messages
   (`shared/indexer-protocol.ts`, `shared/embedder-protocol.ts`), one request id per message.
+  An `index.db` SQLite says is damaged on open (`SQLITE_NOTADB`, `SQLITE_CORRUPT*`) is moved to
+  `index.db.corrupt-<time>` (with its `-wal`/`-shm`) and a new one is built from the notes
+  (`open` in `workers/indexer/db.ts`); version history stays only in the set-aside copy. Any other
+  open or migration failure still throws and leaves the file alone.
 - The graph's force simulation is a Web Worker inside the renderer (`features/graph/simulation.worker.ts`);
   positions come back as a transferred buffer.
 
