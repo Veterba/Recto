@@ -176,6 +176,16 @@ function build(view: EditorView, unresolved: ReadonlySet<string>): DecorationSet
             })
           }
         }
+        // `URL` is hidden as the target of `[text](url)` and `![alt](url)`. A bare address - on a line of
+        // its own, after words, or in `<...>` - is the same node outside a link: hidden, it was gone,
+        // nothing left to select or copy. It stays text, drawn as a link, as Obsidian draws it.
+        if (node.name === 'URL') {
+          const parent = node.node.parent?.name
+          if (parent !== 'Link' && parent !== 'Image') {
+            ranges.push({ from: node.from, to: node.to, deco: mdLink(view.state.doc.sliceString(node.from, node.to)) })
+            return
+          }
+        }
         if (!MARKERS.has(node.name)) return
         if (active.has(view.state.doc.lineAt(node.from).number)) return
         if (node.to <= node.from) return

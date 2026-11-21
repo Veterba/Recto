@@ -4,6 +4,10 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.74.3 — 2026-11-21
+### Fixed
+- A bare web address in a note - on its own line, after other words, or in `<...>` - no longer disappears in Live Preview: it shows as a link that can be clicked, selected and copied, as in Obsidian.
+
 ## v0.74.2 — 2026-11-17
 ### Fixed
 - The graph no longer opens empty, showing its counts over a blank panel, when it is opened before its layout has its first numbers (just after Recto starts, say).
