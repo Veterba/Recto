@@ -4,6 +4,16 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.75.0 — 2026-11-21
+### Added
+- A description under a note's title, as in Notion: "Add a description…" shows when you point at the title, and it is kept as the note's `description` property, so Obsidian and search see it too.
+- Property types you choose, kept for the whole vault (`.recto/properties.json`; Obsidian's own types are read too): click a property's icon to change its type, and "+ Add a property" asks for the type first, then the name.
+- URL and email properties: an address with a button that opens it, or writes the email.
+
+### Changed
+- An empty property says "Empty", and its row lights up under the pointer; the ✕ that removes a property keeps clear of the value's own buttons.
+- The formatting bar floats at the foot of the note while you edit, above Linked mentions, instead of over the title; its menus open upwards when there is no room below.
+
 ## v0.74.3 — 2026-11-21
 ### Fixed
 - A bare web address in a note - on its own line, after other words, or in `<...>` - no longer disappears in Live Preview: it shows as a link that can be clicked, selected and copied, as in Obsidian.

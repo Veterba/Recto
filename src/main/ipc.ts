@@ -667,7 +667,8 @@ export function registerIpc(): void {
   handle(IPC.stateRead, (feature) => readState(feature))
   handle(IPC.stateWrite, (feature, data) => writeState(feature, data))
   handle(IPC.shellOpenExternal, async (url) => {
-    if (!/^https?:\/\//.test(url)) return { ok: false }
+    // A web page, or a new email (a property of type email): nothing that runs a program.
+    if (!/^https?:\/\//.test(url) && !/^mailto:[^\s]+$/i.test(url)) return { ok: false }
     await shell.openExternal(url)
     return { ok: true }
   })

@@ -91,6 +91,49 @@ describe.skipIf(!RUN)('properties', { timeout: 40_000 }, () => {
     expect(await page.locator('.cm-scroller').evaluate((e) => e.scrollTop)).toBe(top)
   })
 
+  it('a description under the title is the description property, written on Enter, and not a row', async () => {
+    const description = page.getByRole('textbox', { name: 'Description' })
+    // Empty, it takes no room: pointing at the title opens it.
+    await page.locator('.note-title__input').hover()
+    await description.click()
+    await page.keyboard.type('Where the editor is put through its paces')
+    await page.keyboard.press('Enter')
+    await expect.poll(handbook).toContain('description: Where the editor is put through its paces\n')
+    expect(await page.locator('.prop__keyname', { hasText: /^description$/ }).count()).toBe(0)
+    // Emptied, the property goes.
+    await description.click()
+    await page.keyboard.press('Meta+a')
+    await page.keyboard.press('Backspace')
+    await page.keyboard.press('Enter')
+    await expect.poll(handbook).not.toContain('description:')
+  })
+
+  it('a property is added by its type, then its name; a URL opens from its button; its type is the vault’s', async () => {
+    await page.locator('.props__add').click()
+    await page.getByRole('menu', { name: 'Property type' }).getByRole('menuitem', { name: 'URL' }).click()
+    const name = page.getByRole('textbox', { name: 'Property name' })
+    // The name starts as the type's, selected: typed over.
+    await page.keyboard.type('Site')
+    await page.keyboard.press('Enter')
+    await expect.poll(handbook).toContain('\nSite:\n')
+    expect(await name.count()).toBe(0)
+    const row = page.locator('.prop', { has: page.locator('.prop__keyname', { hasText: /^Site$/ }) })
+    await row.locator('input[type=url]').click()
+    await page.keyboard.type('https://example.org/guide')
+    await page.keyboard.press('Enter')
+    await expect.poll(handbook).toContain('Site: https://example.org/guide\n')
+    await row.getByRole('button', { name: 'Open the address' }).waitFor()
+    const settings = (): unknown => JSON.parse(fs.readFileSync(path.join(vault, '.recto', 'properties.json'), 'utf8'))
+    await expect.poll(settings).toEqual({ types: { Site: 'url' } })
+
+    // From its icon, another type: the value kept where it can be.
+    await row.getByRole('button', { name: 'Type of Site' }).click()
+    await page.getByRole('menu', { name: 'Property type' }).getByRole('menuitem', { name: 'Text' }).click()
+    await expect.poll(settings).toEqual({ types: { Site: 'text' } })
+    expect(handbook()).toContain('Site: https://example.org/guide\n')
+    expect(await row.getByRole('button', { name: 'Open the address' }).count()).toBe(0)
+  })
+
   it('a card changed on its board shows in its open note, whose next save keeps it', async () => {
     const card = 'Recto/Boards/Launch/Write the announcement.md'
     const file = (): string => fs.readFileSync(path.join(vault, card), 'utf8')

@@ -107,10 +107,11 @@
 .sidebar,
 .sidebar-stub,
 .tabs__bar,
-.md > .formatbar,
+.md__body > .formatbar,
 .md > .md__bar,
 .md > .note-title,
 .md > .note-title__notice,
+.md > .note-description,
 .md .cm-props,
 .md > .backlinks,
 .split__pane,
@@ -126,7 +127,7 @@
     transform 420ms var(--ease);
 }
 .tabs__bar,
-.md > .formatbar {
+.md__body > .formatbar {
   max-height: 64px;
 }
 .md > .md__bar {
@@ -154,10 +155,11 @@
     .sidebar,
     .sidebar-stub,
     .tabs__bar,
-    .md > .formatbar,
+    .md__body > .formatbar,
     .md > .md__bar,
     .md > .note-title,
     .md > .note-title__notice,
+    .md > .note-description,
     .md .cm-props,
     .md > .backlinks,
     .outline
@@ -178,7 +180,7 @@
   margin-left: -42px;
 }
 :root[data-focus='on']
-  :is(.tabs__bar, .md > .formatbar, .md > .md__bar, .md > .note-title, .md > .note-title__notice, .md .cm-props, .md > .backlinks) {
+  :is(.tabs__bar, .md__body > .formatbar, .md > .md__bar, .md > .note-title, .md > .note-title__notice, .md > .note-description, .md .cm-props, .md > .backlinks) {
   max-height: 0;
   padding-top: 0;
   padding-bottom: 0;

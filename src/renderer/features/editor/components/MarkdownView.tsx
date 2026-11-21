@@ -25,6 +25,7 @@ import { mergeLines } from '@shared/line-merge'
 import { registerView } from '../../../app/view-registry'
 import { IPC, IPC_EVENT } from '@shared/ipc'
 import { NoteTitle } from './NoteTitle'
+import { NoteDescription } from './NoteDescription'
 import { FileView } from './FileView'
 import { CodeView } from './CodeView'
 import { insertTableSpec } from '../table-editor'
@@ -391,21 +392,6 @@ function MarkdownEditor({
   return (
     <div className="md" data-path={path}>
       {writing.focus && <FocusBar active={active} text={text} onAfter={() => handle.current?.focus()} />}
-      <FormatBar
-        floating
-        active={active}
-        onRun={(id) => {
-          void commands.run(id)
-          handle.current?.focus()
-        }}
-        shortcutFor={(id) => {
-          const binding = commands.bindingFor(id)
-          return binding === null ? null : formatChord(binding)
-        }}
-        onInsertTable={(columns, rows) => {
-          handle.current?.run((state) => insertTableSpec(state, columns, rows))
-        }}
-      />
       {/* Drawn inside the note, where its frontmatter is (block-hiding.ts). */}
       {createPortal(
         <Properties
@@ -447,52 +433,79 @@ function MarkdownEditor({
         </span>
       </div>
       {showTitle && <NoteTitle path={path} onRename={renameTo} />}
-      {notice !== null && <p className="note-title__notice">{notice}</p>}
-      <Editor
-        docKey={path}
-        propertiesSlot={propertiesSlot}
-        initialValue={initial}
-        onChange={onChange}
-        onSave={flush}
-        onOpenLink={onOpenLink}
-        onDragLink={(target, heading, x, y) => beginPaneDrag({ kind: 'link', target, heading, source: path }, target, x, y)}
-        onLinkHover={(link) => hoverLink(link === null ? null : { target: link.target, source: path, element: link.element })}
-        getLinkCandidates={getLinkCandidates}
-        linkSource={path}
-        onSelectionChange={syncFormats}
-        onFoldsChange={(lines) => writeFolds(path, lines)}
-        onAuthorsChange={() => {
-          const ranges = handle.current?.getAuthors()
-          if (ranges !== undefined) saveAuthors(path, ranges)
-        }}
-        // With a split open, the editor you are in is not necessarily the one
-        // that mounted last, and editor commands must reach the one you are in.
-        onFocus={() => {
-          if (handle.current !== null) activeHandle = handle.current
-        }}
-        onReady={(editor: EditorHandle) => {
-          handle.current = editor
-          activeHandle = editor
-          if (focusOnOpen) {
-            focusOnOpen = false
-            editor.focus()
-          }
-          editor.setWriting(writing)
-          void loadAuthors(path).then((stored) => {
-            if (stored.length > 0 && handle.current === editor) editor.setAuthors(stored)
-          })
-          editor.setFolds(readFolds(path))
-          editor.setLivePreview(livePreview)
-          editor.setVim(vim)
-          setActive(editor.getActiveFormats())
-          refreshUnresolved(initial)
-          // A link with a #heading opened this note; land on that heading.
-          if (heading !== null && heading !== '') editor.revealHeading(heading)
-          // Back or forward to this note: where you were in it.
-          const at = leafId === undefined ? undefined : takeRestore(leafId)
-          if (at !== undefined) editor.setPlace(at)
+      <NoteDescription
+        text={text}
+        onChange={(next) => {
+          // Through the editor, as the properties write: one undoable edit.
+          handle.current?.setValue(next)
+          setText(next)
+          onChange(next)
         }}
       />
+      {notice !== null && <p className="note-title__notice">{notice}</p>}
+      {/* The text, and the format bar floating at its foot - above Linked mentions, not over them. */}
+      <div className="md__body">
+        <Editor
+          docKey={path}
+          propertiesSlot={propertiesSlot}
+          initialValue={initial}
+          onChange={onChange}
+          onSave={flush}
+          onOpenLink={onOpenLink}
+          onDragLink={(target, heading, x, y) => beginPaneDrag({ kind: 'link', target, heading, source: path }, target, x, y)}
+          onLinkHover={(link) => hoverLink(link === null ? null : { target: link.target, source: path, element: link.element })}
+          getLinkCandidates={getLinkCandidates}
+          linkSource={path}
+          onSelectionChange={syncFormats}
+          onFoldsChange={(lines) => writeFolds(path, lines)}
+          onAuthorsChange={() => {
+            const ranges = handle.current?.getAuthors()
+            if (ranges !== undefined) saveAuthors(path, ranges)
+          }}
+          // With a split open, the editor you are in is not necessarily the one
+          // that mounted last, and editor commands must reach the one you are in.
+          onFocus={() => {
+            if (handle.current !== null) activeHandle = handle.current
+          }}
+          onReady={(editor: EditorHandle) => {
+            handle.current = editor
+            activeHandle = editor
+            if (focusOnOpen) {
+              focusOnOpen = false
+              editor.focus()
+            }
+            editor.setWriting(writing)
+            void loadAuthors(path).then((stored) => {
+              if (stored.length > 0 && handle.current === editor) editor.setAuthors(stored)
+            })
+            editor.setFolds(readFolds(path))
+            editor.setLivePreview(livePreview)
+            editor.setVim(vim)
+            setActive(editor.getActiveFormats())
+            refreshUnresolved(initial)
+            // A link with a #heading opened this note; land on that heading.
+            if (heading !== null && heading !== '') editor.revealHeading(heading)
+            // Back or forward to this note: where you were in it.
+            const at = leafId === undefined ? undefined : takeRestore(leafId)
+            if (at !== undefined) editor.setPlace(at)
+          }}
+        />
+        <FormatBar
+          floating
+          active={active}
+          onRun={(id) => {
+            void commands.run(id)
+            handle.current?.focus()
+          }}
+          shortcutFor={(id) => {
+            const binding = commands.bindingFor(id)
+            return binding === null ? null : formatChord(binding)
+          }}
+          onInsertTable={(columns, rows) => {
+            handle.current?.run((state) => insertTableSpec(state, columns, rows))
+          }}
+        />
+      </div>
       <Backlinks path={path} revision={savedAt} onOpen={onOpenPath} />
       {outlineOpen && (
         <Outline

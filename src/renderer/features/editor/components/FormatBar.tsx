@@ -83,6 +83,8 @@ type Props = {
 }
 
 export function FormatBar({ active, onRun, shortcutFor, onInsertTable, trailing, floating = false }: Props): React.ReactElement {
+  // Floating at the foot of the note, its tips go above it; as the focus bar's row at the top, below.
+  const tipAt = floating ? 'top' : 'bottom'
   const [picker, setPicker] = useState<{ anchor: DOMRect; trigger: HTMLElement } | null>(null)
   return (
     <div className={`formatbar${floating ? ' formatbar--floating glass-surface' : ''}`} role="toolbar" aria-label="Formatting">
@@ -99,7 +101,7 @@ export function FormatBar({ active, onRun, shortcutFor, onInsertTable, trailing,
             const shortcut = shortcutFor('editor:highlight')
             return (
               <span key="highlight" className="formatbar__split">
-                <Tip label="Highlight" hint={shortcut ?? undefined} placement="bottom">
+                <Tip label="Highlight" hint={shortcut ?? undefined} placement={tipAt}>
                   <button
                     className={`formatbar__btn${active.has('highlight') ? ' is-active' : ''}`}
                     aria-label="Highlight"
@@ -112,7 +114,7 @@ export function FormatBar({ active, onRun, shortcutFor, onInsertTable, trailing,
                     <Icon name="highlighter" size={15} />
                   </button>
                 </Tip>
-                <Tip label="Highlight colour" hint={shortcutFor('editor:highlight-picker') ?? undefined} placement="bottom">
+                <Tip label="Highlight colour" hint={shortcutFor('editor:highlight-picker') ?? undefined} placement={tipAt}>
                   <button
                     className="formatbar__btn formatbar__more"
                     aria-label="Highlight colour"
@@ -133,7 +135,7 @@ export function FormatBar({ active, onRun, shortcutFor, onInsertTable, trailing,
                 key="table"
                 label="Table"
                 hint={['Pick a size', shortcutFor('editor:insert-table')].filter(Boolean).join(' · ')}
-                placement="bottom"
+                placement={tipAt}
               >
                 <button
                   className={`formatbar__btn${picker !== null ? ' is-active' : ''}`}
@@ -159,7 +161,7 @@ export function FormatBar({ active, onRun, shortcutFor, onInsertTable, trailing,
           const hint = [item.hint, shortcut].filter(Boolean).join(' · ')
 
           return (
-            <Tip key={item.commandId} label={item.label} hint={hint} placement="bottom">
+            <Tip key={item.commandId} label={item.label} hint={hint} placement={tipAt}>
               <button
                 className={`formatbar__btn${isActive ? ' is-active' : ''}${item.text === undefined ? '' : ' formatbar__btn--text'}`}
                 aria-label={item.label}

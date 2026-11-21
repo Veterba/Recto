@@ -27,6 +27,7 @@ import { useAppearance, type Theme } from '../appearance'
 import { commands } from '../commands'
 import { getSection, type SectionId } from '../sections'
 import { setVaultFiles, setVaultPath } from '../vault-url'
+import { loadPropertyTypes } from '../../features/editor/property-types-store'
 import { useVault } from '../vault-store'
 import { setActiveNote, useNoteBus } from '../note-bus'
 import { useWorkspace } from '../hooks/use-workspace'
@@ -142,6 +143,7 @@ export function VaultShell({ vault, onCloseVault, onSwitchVault }: Props): React
 
   // Image widgets resolve `attachments/x.png` against this.
   useEffect(() => setVaultPath(vault.path), [vault.path])
+  useEffect(() => void loadPropertyTypes(), [vault.path])
 
   // The overview's time in Recto and "last opened"; where it was left, read now so ⌃⌘H never waits.
   useUsageTracking(activePath)

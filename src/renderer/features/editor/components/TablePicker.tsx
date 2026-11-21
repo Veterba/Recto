@@ -25,7 +25,10 @@ export function TablePicker({ anchor, trigger, onPick, onClose }: Props): React.
   useLayoutEffect(() => {
     const el = ref.current
     if (el === null) return
-    setAt({ left: Math.max(8, Math.min(anchor.left, window.innerWidth - el.offsetWidth - 8)), top: anchor.bottom + 6 })
+    // Under its button when it fits, else above it: the format bar sits at the foot of the note.
+    const below = anchor.bottom + 6
+    const top = below + el.offsetHeight <= window.innerHeight - 8 ? below : Math.max(8, anchor.top - el.offsetHeight - 6)
+    setAt({ left: Math.max(8, Math.min(anchor.left, window.innerWidth - el.offsetWidth - 8)), top })
   }, [anchor])
 
   useEffect(() => {

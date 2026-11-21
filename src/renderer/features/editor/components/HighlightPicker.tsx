@@ -87,7 +87,9 @@ function Picker({
     if (el === null) return
     const left = Math.max(8, Math.min(at.left, window.innerWidth - el.offsetWidth - 8))
     const above = at.top - el.offsetHeight - 6
-    const top = below || above < 8 ? at.bottom + 6 : above
+    // Under a toolbar button when it fits; the format bar sits at the foot of the note, where it does not.
+    const fitsBelow = at.bottom + 6 + el.offsetHeight <= window.innerHeight - 8
+    const top = (below && fitsBelow) || above < 8 ? at.bottom + 6 : above
     setPosition({ left, top })
     el.focus()
   }, [at, below])

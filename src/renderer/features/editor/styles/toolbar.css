@@ -14,13 +14,14 @@
 }
 
 /*
- * The note's own bar floats: glass, like the find card, centred over the top
- * of the note, there while you are editing it and gone when you are not. It
- * takes no row of its own, so the tab you are on runs straight into the page.
+ * The note's own bar floats: glass, like the find card, centred at the foot of
+ * the text (above Linked mentions), there while you are editing it and gone
+ * when you are not. It takes no row of its own, and over the top of the note it
+ * sat on the title.
  */
 .formatbar--floating {
   position: absolute;
-  top: var(--size-2);
+  bottom: var(--size-3);
   left: 50%;
   z-index: 20;
   max-width: calc(100% - 2 * var(--size-4));
@@ -31,15 +32,15 @@
     opacity var(--anim-base) var(--ease),
     transform var(--anim-base) var(--ease);
 }
-.md:not(:focus-within) > .formatbar--floating {
+.md:not(:focus-within) .md__body > .formatbar--floating {
   opacity: 0;
-  transform: translate(-50%, -6px);
+  transform: translate(-50%, 6px);
   pointer-events: none;
 }
 
 /* "Show formatting toolbar" off: the row goes from every editor pane. The
    focus bar's own copy stays - in focus mode it is the way out. */
-:root[data-formatbar='off'] .md > .formatbar {
+:root[data-formatbar='off'] .md__body > .formatbar {
   display: none;
 }
 

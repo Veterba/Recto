@@ -6,7 +6,9 @@ import { linksIn, writeLinks } from '@shared/link-property'
 import { Icon } from '../../../ui/Icon'
 import { LinkInput } from './LinkInput'
 import { Tip } from '../../../ui/Tip'
-import { parseFrontmatter, removeField, renameField, setField, splitItems, type Field, type FieldType } from '@shared/frontmatter'
+import { parseFrontmatter, removeField, renameField, setField, splitItems, type Field } from '@shared/frontmatter'
+import { convertValue, DESCRIPTION_KEY, emptyValue, KINDS, kindInfo, kindOf, type PropertyKind } from '@shared/property-types'
+import { setPropertyType, usePropertyTypes } from '../property-types-store'
 import { IPC } from '@shared/ipc'
 import { Toggle } from '../../../ui/Toggle'
 import { summary } from '../property-summary'
@@ -22,16 +24,6 @@ import { summary } from '../property-summary'
  * This is also the data layer the Tasks board reads: a card's `status`,
  * `board` and `order` are just properties on a note.
  */
-
-const TYPE_ICON: Record<FieldType, string> = {
-  text: 'type',
-  number: 'hash',
-  boolean: 'toggle-left',
-  list: 'tags',
-  date: 'calendar',
-  link: 'link',
-  empty: 'minus',
-}
 
 type Part = { kind: 'text'; text: string } | { kind: 'link'; target: string; heading: string | null; label: string }
 
@@ -191,66 +183,122 @@ function TopicChips({ links, onRemove }: { links: string[]; onRemove: (link: str
   )
 }
 
-/** Editing widget per type; text is the fallback for anything else. */
+/** Editing widget per kind; text is the fallback for anything else. */
 function ValueEditor({
   field,
+  kind,
   onChange,
   onOpenLink,
   getCandidates,
   source,
 }: {
   field: Field
+  kind: PropertyKind
   onChange: (value: Field['value']) => void
   onOpenLink: (target: string, heading: string | null) => void
   getCandidates: () => readonly LinkCandidate[]
   /** The note the properties are in: its links are read from there. */
   source: string
 }): React.ReactElement {
-  const linked =
-    field.type === 'link' || (field.type === 'list' && Array.isArray(field.value) && field.value.some((item) => HAS_LINK.test(item)))
+  const linked = kind === 'link' || (kind === 'list' && Array.isArray(field.value) && field.value.some((item) => HAS_LINK.test(item)))
   if (linked) return <LinkValue field={field} onChange={onChange} onOpenLink={onOpenLink} getCandidates={getCandidates} source={source} />
 
-  if (field.type === 'boolean') {
+  if (kind === 'checkbox') {
     return <Toggle on={field.value === true} onChange={() => onChange(field.value !== true)} small />
   }
 
-  if (field.type === 'number') {
+  if (kind === 'number') {
     return <NumberDraft value={typeof field.value === 'number' ? field.value : null} onChange={onChange} />
   }
 
-  if (field.type === 'date') {
+  if (kind === 'date') {
     return (
       <input
         className="prop__input"
         type="date"
         // The stored value may carry a time; the picker only wants the date.
         value={typeof field.value === 'string' ? field.value.slice(0, 10) : ''}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(event.target.value === '' ? null : event.target.value)}
       />
     )
   }
 
-  if (field.type === 'list') {
-    const items = Array.isArray(field.value) ? field.value : []
+  if (kind === 'list') {
+    const items = Array.isArray(field.value) ? field.value : typeof field.value === 'string' && field.value !== '' ? [field.value] : []
     return (
       <TextDraft
         value={items.join(', ')}
-        placeholder="comma, separated"
+        placeholder="Empty"
         getCandidates={getCandidates}
         source={source}
-        onCommit={(next) => onChange(splitItems(next))}
+        onCommit={(next) => onChange(next.trim() === '' ? null : splitItems(next))}
       />
     )
   }
 
+  const text = typeof field.value === 'string' ? field.value : field.value === null ? '' : String(field.value)
+  if (kind === 'url' || kind === 'email') return <AddressDraft kind={kind} value={text} onChange={onChange} />
+
   return (
     <TextDraft
-      value={typeof field.value === 'string' ? field.value : ''}
-      placeholder="empty — type [[ to link a note"
+      value={text}
+      placeholder="Empty"
       getCandidates={getCandidates}
       source={source}
-      onCommit={(next) => onChange(next)}
+      onCommit={(next) => onChange(next === '' ? null : next)}
     />
+  )
+}
+
+/** A web address or an email: typed as text, opened with the button beside it. */
+function AddressDraft({ kind, value, onChange }: { kind: 'url' | 'email'; value: string; onChange: (value: Field['value']) => void }): React.ReactElement {
+  const draft = useDraft(value, (next) => onChange(next.trim() === '' ? null : next.trim()))
+  const target = kind === 'email' ? `mailto:${value}` : /^https?:\/\//i.test(value) ? value : `https://${value}`
+  return (
+    <span className="prop__address">
+      <input
+        className="prop__input"
+        type={kind === 'email' ? 'email' : 'url'}
+        value={draft.shown}
+        placeholder="Empty"
+        onChange={(event) => draft.setDraft(event.target.value)}
+        onBlur={draft.onBlur}
+        onKeyDown={draft.onKeyDown}
+      />
+      {value !== '' && (
+        <Tip label={kind === 'email' ? `Write to ${value}` : `Open ${value}`}>
+          <button className="prop__open" aria-label={kind === 'email' ? 'Write an email' : 'Open the address'} onClick={() => void api.invoke(IPC.shellOpenExternal, target)}>
+            <Icon name={kind === 'email' ? 'at-sign' : 'external-link'} size={12} />
+          </button>
+        </Tip>
+      )}
+    </span>
+  )
+}
+
+/** The kinds a property can be, to pick one: for a new property, or from a property's icon. */
+function KindMenu({ current, onPick, onClose }: { current: PropertyKind | null; onPick: (kind: PropertyKind) => void; onClose: () => void }): React.ReactElement {
+  return (
+    <div
+      className="prop-kinds"
+      role="menu"
+      aria-label="Property type"
+      tabIndex={-1}
+      ref={(el) => el?.focus()}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onClose()
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose()
+      }}
+    >
+      {KINDS.map((k) => (
+        <button key={k.kind} role="menuitem" className={`prop-kinds__item${k.kind === current ? ' is-current' : ''}`} onClick={() => onPick(k.kind)}>
+          <Icon name={k.icon} size={13} />
+          {k.label}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -354,23 +402,39 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates, path
    * count in the header says whether there is anything in there worth opening.
    */
   const [collapsed, setCollapsed] = useState(true)
-  const [adding, setAdding] = useState(false)
+  /** Adding a property: first its type is picked (`picking`), then it is named. */
+  const [adding, setAdding] = useState<'picking' | PropertyKind | null>(null)
   const [newKey, setNewKey] = useState('')
   const [renaming, setRenaming] = useState<string | null>(null)
+  /** The property whose type menu is open. */
+  const [retyping, setRetyping] = useState<string | null>(null)
+  const types = usePropertyTypes()
 
   const parsed = useMemo(() => parseFrontmatter(text), [text])
-  const count = parsed.fields.length + parsed.opaque.length
+  // The description is shown under the title (NoteDescription), not as a row.
+  const fields = parsed.fields.filter((field) => field.key !== DESCRIPTION_KEY)
+  const count = fields.length + parsed.opaque.length
+  const kindFor = (field: Field): PropertyKind => kindOf(field, types.own, types.obsidian)
 
   const addKey = (): void => {
     const key = newKey.trim()
-    setAdding(false)
+    const kind = adding === null || adding === 'picking' ? 'text' : adding
+    setAdding(null)
     setNewKey('')
     // Nothing typed on a note with no properties: back to the faint line.
     if (key === '' && count === 0) setCollapsed(true)
     if (key === '' || parsed.fields.some((field) => field.key === key)) return
-    // `null`, not `''`: an empty string serialises to `key: ""` whereas null
-    // gives a bare `key:`, which is what a human would have typed.
-    onChange(setField(text, key, null))
+    // Its type is the vault's from now on, as Obsidian keeps one per name. Empty: a bare `key:`
+    // (null, not `''`, which would be `key: ""`), what a human would have typed.
+    if (kind !== 'text' || types.own[key] !== undefined) setPropertyType(key, kind)
+    onChange(setField(text, key, emptyValue(kind)))
+  }
+
+  const retype = (field: Field, kind: PropertyKind): void => {
+    setRetyping(null)
+    setPropertyType(field.key, kind)
+    const value = convertValue(field.value, kind)
+    if (JSON.stringify(value) !== JSON.stringify(field.value)) onChange(setField(text, field.key, value))
   }
 
   return (
@@ -379,9 +443,9 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates, path
         <button
           className="props__head"
           onClick={() => {
-            // Straight to the name field: there is no table yet to open.
+            // Straight to the type menu: there is no table yet to open.
             setCollapsed(false)
-            setAdding(true)
+            setAdding('picking')
           }}
         >
           <Icon name="plus" size={12} />
@@ -391,26 +455,26 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates, path
         <button className="props__head" onClick={() => setCollapsed(!collapsed)} aria-expanded={!collapsed}>
           <span className={`props__chevron${collapsed ? '' : ' is-open'}`}>{'›'}</span>
           <span className="props__summary">
-            {parsed.fields.map((field, i) => (
+            {fields.map((field, i) => (
               <span key={field.key}>
                 {i > 0 && <span className="props__dot"> · </span>}
                 <span className="props__key">{field.key}</span> {summary(field.value)}
               </span>
             ))}
-            {parsed.fields.length === 0 && 'Properties'}
+            {fields.length === 0 && 'Properties'}
           </span>
         </button>
       )}
 
       {!collapsed && (
         <div className="props__body">
-          {parsed.fields.map((field) => (
+          {fields.map((field) => (
             <div className="prop" key={field.key}>
               <span className="prop__key">
-                <Tip label={`${field.type} property`} placement="right">
-                  <span className="prop__type">
-                    <Icon name={TYPE_ICON[field.type]} size={13} />
-                  </span>
+                <Tip label={`${kindInfo(kindFor(field)).label} · change type`} placement="right">
+                  <button className="prop__type" aria-label={`Type of ${field.key}`} onClick={() => setRetyping(retyping === field.key ? null : field.key)}>
+                    <Icon name={kindInfo(kindFor(field)).icon} size={13} />
+                  </button>
                 </Tip>
                 {renaming === field.key ? (
                   <input
@@ -452,6 +516,7 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates, path
               ) : (
                 <ValueEditor
                   field={field}
+                  kind={kindFor(field)}
                   onChange={(value) => onChange(setField(text, field.key, value))}
                   onOpenLink={onOpenLink}
                   getCandidates={getLinkCandidates}
@@ -464,6 +529,8 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates, path
                   <Icon name="x" size={12} />
                 </button>
               </Tip>
+              {/* Under the row, across it: the panel scrolls, and a menu floating out of it would be cut. */}
+              {retyping === field.key && <KindMenu current={kindFor(field)} onPick={(kind) => retype(field, kind)} onClose={() => setRetyping(null)} />}
             </div>
           ))}
 
@@ -474,28 +541,49 @@ export function Properties({ text, onChange, onOpenLink, getLinkCandidates, path
             </div>
           )}
 
-          {adding ? (
-            <div className="prop">
-              <input
-                className="prop__input prop__input--key"
-                placeholder="property name"
-                value={newKey}
-                autoFocus
-                onChange={(event) => setNewKey(event.target.value)}
-                onBlur={addKey}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') addKey()
-                  if (event.key === 'Escape') {
-                    setAdding(false)
-                    setNewKey('')
-                  }
+          {adding === 'picking' ? (
+            <div className="prop prop--adding">
+              <KindMenu
+                current={null}
+                onPick={(kind) => {
+                  setAdding(kind)
+                  setNewKey(kindInfo(kind).label)
+                }}
+                onClose={() => {
+                  setAdding(null)
+                  if (count === 0) setCollapsed(true)
                 }}
               />
             </div>
+          ) : adding !== null ? (
+            <div className="prop">
+              <span className="prop__key">
+                <span className="prop__type">
+                  <Icon name={kindInfo(adding).icon} size={13} />
+                </span>
+                <input
+                  className="prop__input prop__input--key"
+                  aria-label="Property name"
+                  placeholder="Property name"
+                  value={newKey}
+                  autoFocus
+                  onFocus={(event) => event.currentTarget.select()}
+                  onChange={(event) => setNewKey(event.target.value)}
+                  onBlur={addKey}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') addKey()
+                    if (event.key === 'Escape') {
+                      setAdding(null)
+                      setNewKey('')
+                    }
+                  }}
+                />
+              </span>
+            </div>
           ) : (
-            <button className="props__add" onClick={() => setAdding(true)}>
+            <button className="props__add" onClick={() => setAdding('picking')}>
               <Icon name="plus" size={13} />
-              Add property
+              Add a property
             </button>
           )}
         </div>

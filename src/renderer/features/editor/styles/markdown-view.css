@@ -70,6 +70,14 @@
 }
 
 /* CodeMirror owns everything inside this element; React never touches it. */
+/* The text and, floating at its foot, the format bar (toolbar.css). */
+.md__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .cm-host {
   flex: 1;
   min-height: 0;
@@ -287,4 +295,54 @@
 }
 .note-title__notice {
   color: var(--text-muted);
+}
+
+/* The description under the name (NoteDescription.tsx): quieter than the text, centred under the name.
+   Empty, it shows "Add a description…" only while the name or it is hovered, or it has the caret. */
+.note-description {
+  flex: none;
+  padding: 2px var(--size-6) var(--size-3);
+  text-align: center;
+}
+.note-description__input {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2px var(--size-2);
+  resize: none;
+  overflow: hidden;
+  font-size: var(--font-size-14, 14px);
+  line-height: 1.45;
+  text-align: center;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  caret-color: var(--accent);
+}
+.note-description__input::placeholder {
+  color: var(--text-muted);
+}
+/* Empty, it takes no room - a note without one is laid out as it always was. Pointed at (the name or
+   it) or written in, it opens to a line of its own with the room under it - laid over what follows,
+   the hint sat on the properties. */
+.note-description.is-empty {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-height 160ms var(--ease),
+    padding 160ms var(--ease),
+    opacity 160ms var(--ease);
+}
+.note-title:hover + .note-description.is-empty,
+.note-description.is-empty:hover,
+.note-description.is-empty:focus-within {
+  max-height: 120px;
+  padding-top: 2px;
+  padding-bottom: var(--size-3);
+  opacity: 1;
 }

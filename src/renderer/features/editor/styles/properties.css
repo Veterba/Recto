@@ -128,10 +128,92 @@
   grid-column: 1;
 }
 
+/* The type's icon: a button that opens the type menu. */
+.prop__type {
+  all: unset;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.prop__type:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.prop:hover {
+  background: color-mix(in srgb, var(--bg-hover) 50%, transparent);
+  border-radius: 5px;
+}
+
+/* The types to pick from, under the row it is for (or in place of "Add a property"), across it. */
+.prop-kinds {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 2px;
+  margin: 2px 0 var(--size-1);
+  padding: var(--size-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-md);
+  outline: none;
+}
+.prop-kinds__item {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: 5px var(--size-2);
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-12-5);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.prop-kinds__item:hover,
+.prop-kinds__item:focus-visible {
+  background: var(--bg-hover);
+}
+.prop-kinds__item.is-current {
+  color: var(--accent);
+}
+.prop--adding {
+  display: block;
+}
+
+/* A web address or an email, with the button that opens it. */
+.prop__address {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.prop__open {
+  all: unset;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.prop__open:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
 .prop__remove {
   all: unset;
   width: 20px;
   height: 20px;
+  /* Clear of whatever ends the value - an address's button, a date's picker, a switch. */
+  margin: 0 var(--size-1) 0 var(--size-2);
   display: grid;
   place-items: center;
   border-radius: 4px;
