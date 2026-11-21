@@ -251,6 +251,29 @@ async function shoot(page, dir, name, settle = 700) {
   console.log(`  ${name}`)
 }
 
+/**
+ * Until the graph has drawn something: it settles in a worker and draws in requestAnimationFrame,
+ * and a window that is never shown may wait for a frame - a screenshot makes it draw one, so one is
+ * taken (and thrown away) meanwhile. A graph that draws nothing at all - its camera at NaN, as when
+ * it opened before its layout had numbers - stops the run here instead of passing as a picture of
+ * an empty panel over the right counts.
+ */
+async function graphDrawn(page) {
+  const inked = () =>
+    page.evaluate(() => {
+      const canvas = document.querySelector('.graph__canvas canvas, canvas.graph__canvas')
+      const data = canvas?.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data
+      if (data === undefined) return false
+      for (let i = 3; i < data.length; i += 4) if (data[i] > 0) return true
+      return false
+    })
+  for (let tries = 0; !(await inked()); tries++) {
+    if (tries === 50) throw new Error('The graph drew nothing.')
+    await page.screenshot()
+    await sleep(100)
+  }
+}
+
 /** Scroll the open note end to end, so CodeMirror has measured every line instead of estimating it. */
 async function measureNote(page) {
   for (let y = 0; y <= 20_000; y += 500) {
@@ -324,6 +347,7 @@ async function screens(page, dir, vault) {
   await page
     .waitForFunction(() => !document.querySelector('.graph__stat')?.textContent?.includes('settling'), null, { timeout: 30_000 })
     .catch(() => {})
+  await graphDrawn(page)
   await shoot(page, dir, '06-graph', 1500)
   await key(page, 'Mod+G')
   await page.waitForSelector('.graph__canvas', { state: 'detached' })
@@ -1117,6 +1141,7 @@ async function boardShots(dir, theme) {
     await page
       .waitForFunction(() => !document.querySelector('.graph__stat')?.textContent?.includes('settling'), null, { timeout: 30_000 })
       .catch(() => {})
+    await graphDrawn(page)
     await shoot(page, dir, '31d-graph-boards', 1500)
     console.log('  31-board-note, 31e-card-panel-empty, 31b-board-markdown, 31c-link-icons, 31d-graph-boards')
   } finally {

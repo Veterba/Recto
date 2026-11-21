@@ -79,11 +79,16 @@ export function fit(positions: Float32Array, count: number, width: number, heigh
   for (let i = 0; i < count; i++) {
     const x = positions[i * 2] ?? 0
     const y = positions[i * 2 + 1] ?? 0
+    // A node not laid out yet (NaN) is left out: counted, it made the centre NaN, and a camera
+    // at NaN drew nothing - the graph opened just after launch stayed empty for good.
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue
     if (x < minX) minX = x
     if (x > maxX) maxX = x
     if (y < minY) minY = y
     if (y > maxY) maxY = y
   }
+
+  if (minX === Infinity) return { x: 0, y: 0, zoom: 1 }
 
   const spanX = Math.max(1, maxX - minX)
   const spanY = Math.max(1, maxY - minY)

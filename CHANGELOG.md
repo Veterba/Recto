@@ -4,6 +4,11 @@ Entries up to v0.47.1 were reconstructed on 2026-10-15 from git commit messages 
 lost). They say only what the commit messages say. Versions with internal changes only (refactors,
 merges, tooling, README and CLAUDE.md edits) are left out.
 
+## v0.74.2 — 2026-11-17
+### Fixed
+- The graph no longer opens empty, showing its counts over a blank panel, when it is opened before its layout has its first numbers (just after Recto starts, say).
+- Turning a graph filter on or off (Tasks, boards, canvases, chats, unlinked notes, local only, link range) frames the whole graph again once it settles, instead of leaving the new nodes out of view.
+
 ## v0.74.1 — 2026-11-17
 ### Changed
 - Recto is licensed under the GNU General Public License, version 3 or any later version (GPL-3.0-or-later), instead of MIT.

@@ -75,6 +75,14 @@ describe('fit', () => {
     }
   })
 
+  it('leaves out nodes not laid out yet: the camera stays a number, so the graph is drawn', () => {
+    const camera = fit(new Float32Array([Number.NaN, Number.NaN, -100, -50, 100, 50]), 3, WIDTH, HEIGHT)
+    expect(camera).toMatchObject({ x: 0, y: 0 })
+    expect(Number.isFinite(camera.zoom)).toBe(true)
+    // None laid out yet: the plain camera, not NaN.
+    expect(fit(new Float32Array([Number.NaN, Number.NaN, Number.NaN, Number.NaN]), 2, WIDTH, HEIGHT)).toEqual({ x: 0, y: 0, zoom: 1 })
+  })
+
   it('does not divide by zero when every node sits on one point', () => {
     const camera = fit(new Float32Array([7, 7, 7, 7]), 2, WIDTH, HEIGHT)
     expect(Number.isFinite(camera.zoom)).toBe(true)

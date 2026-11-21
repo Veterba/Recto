@@ -73,8 +73,9 @@ export function useSimulation(
         // A layout change travels further than the early fit can predict, so
         // the frame is settled again once the nodes have arrived.
         const host = hostRef.current
-        if (refitOnSettle.current && host !== null) {
+        if ((refitOnSettle.current || !fitted.current) && host !== null) {
           refitOnSettle.current = false
+          fitted.current = true
           glideCamera(fit(framePositions(), view.nodes.length, host.clientWidth, host.clientHeight))
         }
         return
@@ -103,8 +104,11 @@ export function useSimulation(
         if (host !== null) {
           // Glides into frame rather than cutting: the graph visibly settles
           // into view, the way Obsidian's does.
-          glideCamera(fit(framePositions(), view.nodes.length, host.clientWidth, host.clientHeight))
-          fitted.current = true
+          const positions = framePositions()
+          glideCamera(fit(positions, view.nodes.length, host.clientWidth, host.clientHeight))
+          // A node with no position yet is left out of the fit, so it is fitted again on the next tick
+          // until every node has one - framed on the first few alone, the rest stayed out of view.
+          fitted.current = positions.subarray(0, view.nodes.length * 2).every(Number.isFinite)
         }
       }
 

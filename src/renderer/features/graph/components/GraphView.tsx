@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../../ui/Icon'
 import { Tip } from '../../../ui/Tip'
 import { registerView } from '../../../app/view-registry'
@@ -109,6 +109,16 @@ function GraphView({ activePath, onOpenNote, onOpenCard, editable = false }: Pro
 
   // --- worker lifecycle ---------------------------------------------------
   useSimulation(refs, view, { tunables, layout, look }, setSettling)
+
+  // A filter turned on or off is a new picture: framed again once it settles. An edit to a note keeps
+  // the camera where it was put (use-simulation.ts); turning on Tasks, say, left its new nodes out of view.
+  const filters = `${showOrphans}|${showBoards}|${showTasks}|${showChats}|${showCanvases}|${localOnly}|${JSON.stringify(linkRange)}`
+  const shownFilters = useRef(filters)
+  useEffect(() => {
+    if (shownFilters.current === filters) return
+    shownFilters.current = filters
+    refs.refitOnSettle.current = true
+  }, [filters, refs])
 
   // --- the highlight ------------------------------------------------------
   useEffect(() => {

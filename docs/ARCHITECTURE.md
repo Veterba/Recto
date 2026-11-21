@@ -55,6 +55,9 @@ Recto is an Electron app over a folder of markdown files. The files are the trut
   open or migration failure still throws and leaves the file alone.
 - The graph's force simulation is a Web Worker inside the renderer (`features/graph/simulation.worker.ts`);
   positions come back as a transferred buffer.
+  The camera is framed on them (`fit` in `graph/geometry.ts`, leaving out nodes without a position
+  yet) once the layout spreads, again on every tick until every node has one, and again when it settles
+  after a filter in the bar changes (`refitOnSettle`); an edit to a note keeps the camera where it was.
 
 ## What crosses IPC
 
